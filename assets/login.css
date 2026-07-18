@@ -1,0 +1,45 @@
+/* SpaceLink Unified — login / entry screen styling (scoped under .sl-login) */
+.sl-login *{box-sizing:border-box}
+.sl-login{
+  margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+  font:14px/1.55 'IBM Plex Sans Thai','Inter',Tahoma,sans-serif;color:#201B2E;
+  background:linear-gradient(135deg,#251149 0%,#4C1D95 45%,#0E7490 130%);
+}
+.sl-login-card{
+  width:min(430px,100%);background:#fffdff;border-radius:24px;padding:38px 34px;
+  box-shadow:0 30px 80px rgba(15,8,40,.45);text-align:center;
+}
+.sl-login-mark{
+  width:56px;height:56px;margin:0 auto;border-radius:16px;display:grid;place-items:center;
+  color:#fff;background:linear-gradient(145deg,#9F7AEA,#6D28D9);box-shadow:0 10px 24px #7C3AED55;
+}
+.sl-login-mark svg{width:26px;height:26px}
+.sl-login h1{margin:16px 0 4px;font-size:28px;letter-spacing:-.8px;color:#4C1D95}
+.sl-login .sub{margin:0 0 24px;color:#726B80;font-size:13px}
+.sl-role-toggle{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px}
+.sl-role{
+  border:1.5px solid #E9E6F0;background:#fff;border-radius:15px;padding:16px 12px;cursor:pointer;
+  display:grid;gap:6px;justify-items:center;transition:.18s;color:#524b5a;
+}
+.sl-role svg{width:26px;height:26px;color:#8B5CF6}
+.sl-role b{font-size:14px}
+.sl-role small{font-size:11px;color:#8b8394}
+.sl-role:hover{border-color:#bfa8f3}
+.sl-role.active{border-color:#7C3AED;background:#F7F2FF;box-shadow:0 0 0 3px #ede8ff}
+.sl-role.active svg{color:#6D28D9}
+.sl-login form{text-align:left}
+.sl-login label{display:block;margin:12px 0 6px;font-size:11px;font-weight:700;color:#554c60;letter-spacing:.3px}
+.sl-login input{
+  width:100%;padding:12px 13px;border:1px solid #E0DAEC;border-radius:11px;outline:0;background:#fff;color:#201B2E;
+}
+.sl-login input:focus{border-color:#7C3AED;box-shadow:0 0 0 3px #ece4fb}
+.sl-signin{
+  width:100%;margin:22px 0 12px;border:0;border-radius:12px;padding:13px;font-weight:700;font-size:14px;color:#fff;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(135deg,#6d28d9 0%,#8b5cf6 48%,#3b82f6 100%);
+  box-shadow:0 12px 26px rgba(109,40,217,.30);transition:.18s;
+}
+.sl-signin:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(109,40,217,.38)}
+.sl-signin svg{width:18px;height:18px}
+.sl-hint{font-size:11px;color:#8b8394;margin:6px 0 0;text-align:center;line-height:1.6}
+.sl-hint code{background:#F2EDFF;color:#6331C4;border-radius:6px;padding:1px 6px;font-size:10px}

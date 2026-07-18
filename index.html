@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4C1D95">
+  <title>SpaceLink — Sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="assets/lucide.min.js"></script>
+  <script src="assets/store.js"></script>
+  <link rel="stylesheet" href="assets/login.css">
+</head>
+<body class="sl-login">
+  <div class="sl-login-card">
+    <div class="sl-login-mark"><i data-lucide="orbit"></i></div>
+    <h1>SpaceLink</h1>
+    <p class="sub">Unified platform · sign in to continue</p>
+
+    <div class="sl-role-toggle" id="role-toggle">
+      <button type="button" class="sl-role active" data-role="vendor">
+        <i data-lucide="store"></i><b>Vendor</b><small>จองบูธและพื้นที่</small>
+      </button>
+      <button type="button" class="sl-role" data-role="admin">
+        <i data-lucide="shield-check"></i><b>Admin</b><small>Manage the platform</small>
+      </button>
+    </div>
+
+    <form id="login-form">
+      <label id="email-label">EMAIL</label>
+      <input id="email" type="email" required value="arun@example.com" autocomplete="username">
+      <label>PASSWORD</label>
+      <input id="password" type="password" required value="spacelink" autocomplete="current-password">
+      <button class="sl-signin" type="submit"><i data-lucide="log-in"></i><span id="signin-label">Enter Vendor App</span></button>
+    </form>
+    <p class="sl-hint">Demo access is prefilled. Vendor: <code>arun@example.com</code> · Admin: <code>admin@spacelink.local</code></p>
+  </div>
+
+  <script>
+    (function () {
+      if (window.lucide) lucide.createIcons();
+      let role = 'vendor';
+      const emailInput = document.getElementById('email');
+      const signinLabel = document.getElementById('signin-label');
+      const presets = {
+        vendor: { email: 'arun@example.com',      label: 'Enter Vendor App'    },
+        admin:  { email: 'admin@spacelink.local', label: 'Enter Admin Console'  }
+      };
+
+      // If already signed in, jump straight to the right app.
+      const existing = SpaceLinkStore.getSession();
+      if (existing && presets[existing.role]) {
+        location.href = existing.role === 'admin' ? 'admin/index.html' : 'vendor/index.html';
+        return;
+      }
+
+      document.getElementById('role-toggle').addEventListener('click', e => {
+        const b = e.target.closest('.sl-role');
+        if (!b) return;
+        role = b.dataset.role;
+        document.querySelectorAll('.sl-role').forEach(x => x.classList.toggle('active', x === b));
+        emailInput.value = presets[role].email;
+        signinLabel.textContent = presets[role].label;
+      });
+
+      document.getElementById('login-form').addEventListener('submit', e => {
+        e.preventDefault();
+        SpaceLinkStore.setSession(role, emailInput.value.trim());
+        location.href = role === 'admin' ? 'admin/index.html' : 'vendor/index.html';
+      });
+    })();
+  </script>
+</body>
+</html>

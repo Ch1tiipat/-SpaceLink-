@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#7C3AED">
+  <title>SpaceLink — จองพื้นที่ให้งานของคุณเกิดขึ้น</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="assets/lucide.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app"></div>
+  <div id="modal"></div>
+  <div id="toast"></div>
+  <script src="../assets/store.js"></script>
+  <script>
+    // Unified-login guard: must be signed in as a vendor, else back to login.
+    if (!window.SpaceLinkStore.requireRole('vendor', '../index.html')) {
+      throw new Error('redirecting to login');
+    }
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
