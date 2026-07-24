@@ -35,7 +35,8 @@ spacelink/
 │        ├─ migrations/
 │        ├─ sql/            SQL เสริมที่ Prisma ประกาศไม่ได้
 │        └─ seed.ts
-├─ CLAUDE.md              context สำหรับ AI coding agent
+├─ AGENTS.md              กติกาสำหรับ AI coding agent ทุกตัว (Codex, Claude Code)
+├─ CLAUDE.md              ตัวชี้ทาง 5 บรรทัด — import AGENTS.md · ห้ามใส่กติกาในนี้
 └─ README.md
 ```
 
@@ -143,7 +144,7 @@ PORT=3000
 - ทุก module ใน NestJS ใช้รูปแบบเดียวกัน: `x.module.ts` / `x.controller.ts` / `x.service.ts` / `dto/`
 - โค้ดและ comment เป็นภาษาอังกฤษ ข้อความบน UI เป็นภาษาไทย
 
-รายละเอียดทั้งหมด (invariants 9 ข้อ, booking flow, auth flow, naming convention) อยู่ใน **[`CLAUDE.md`](./CLAUDE.md)** — อ่านก่อนเริ่มเขียนโค้ด และเป็นไฟล์เดียวกับที่ AI agent อ่าน
+รายละเอียดทั้งหมด (invariants 9 ข้อ, booking flow, auth flow, naming convention, กติกาความปลอดภัย) อยู่ใน **[`AGENTS.md`](./AGENTS.md)** — อ่านก่อนเริ่มเขียนโค้ด และเป็นไฟล์เดียวกับที่ AI agent ทุกตัวอ่าน
 
 ---
 
@@ -164,4 +165,4 @@ PORT=3000
 
 สมาชิกในทีมและอาจารย์ผู้สอนขอเข้าถึงได้จาก Product Owner (บุ๊ค)
 
-ส่วนกติกาการพัฒนา โครงสร้างข้อมูล และ convention ที่ต้องใช้เขียนโค้ด อยู่ใน [`CLAUDE.md`](./CLAUDE.md) ครบแล้ว
+ส่วนกติกาการพัฒนา โครงสร้างข้อมูล และ convention ที่ต้องใช้เขียนโค้ด อยู่ใน [`AGENTS.md`](./AGENTS.md) ครบแล้ว
