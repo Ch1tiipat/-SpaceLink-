@@ -12,9 +12,28 @@
 
 Codex อ่านไฟล์นี้อัตโนมัติตอนเปิด session และ Claude Code ก็อ่านเหมือนกัน ไม่ต้องก๊อปกติกาไปแปะใน prompt ทุกครั้ง
 
-> **สำคัญ:** ห้ามสร้างไฟล์กติกาซ้ำ (`CLAUDE.md`, `.cursorrules`, `copilot-instructions.md`)
+ใน repo มี `CLAUDE.md` อยู่ด้วย แต่เป็น **ไฟล์ตัวชี้ทาง 5 บรรทัด** ที่ `@AGENTS.md`-import เนื้อหาจริงเข้ามา
+(Claude Code อ่าน `CLAUDE.md` เป็นหลัก ส่วน Codex อ่าน `AGENTS.md`) — **ห้ามใส่กติกาลงใน `CLAUDE.md`**
+
+> **สำคัญ:** นอกจากตัวชี้ทางนั้นแล้ว ห้ามสร้างไฟล์กติกาเพิ่ม (`.cursorrules`, `copilot-instructions.md`, `GEMINI.md`)
 > สองไฟล์จะเริ่มขัดกันภายในสัปดาห์เดียว แล้ว AI จะเลือกเองว่าจะเชื่ออันไหน
-> อยากแก้กติกา → แก้ `AGENTS.md` แล้ว commit
+> อยากแก้กติกา → แก้ `AGENTS.md` ที่เดียว แล้ว commit
+
+### เช็คก่อนว่า AI อ่านติดจริง
+
+ครั้งแรกที่เปิด Codex ใน repo นี้ ให้ถามคำถามนี้ **ก่อนสั่งงานจริง**:
+
+```
+Without reading any files, answer from your loaded context only:
+what authentication approach does this project use, and does the API have a register endpoint?
+```
+
+| ตอบว่า | แปลว่า |
+|---|---|
+| Supabase Auth เป็น IdP · NestJS แค่ verify token · **ไม่มี** register/login | ✅ อ่านติด สั่งงานได้ |
+| ไม่รู้ / ขอเปิดไฟล์ก่อน / ตอบมั่ว | ❌ ยังไม่ติด **อย่าให้มันแตะโค้ด** แจ้งบุ๊ค |
+
+ถ้าปล่อยให้มันทำงานทั้งที่ไม่รู้กติกา จะแย่กว่าไม่ใช้ AI เลย — มันจะแก้ `schema.prisma`, สร้าง endpoint register, หรือลง package เพิ่มเอง โดยที่ผลลัพธ์ดูเหมือนปกติทุกอย่าง
 
 ---
 
@@ -55,7 +74,8 @@ spacelink/
 │     ├─ config/          env validation
 │     └─ prisma/          PrismaService (global)
 ├─ prototype/         ต้นแบบ HTML เดิม · อ้างอิงเท่านั้น ห้ามแก้ ห้ามต่อ API
-├─ AGENTS.md          กติกาสำหรับ AI ทุกตัว
+├─ AGENTS.md          กติกาสำหรับ AI ทุกตัว · เนื้อหาจริงอยู่ที่นี่
+├─ CLAUDE.md          ตัวชี้ทางเท่านั้น · @AGENTS.md-import · ห้ามใส่กติกา
 ├─ README.md
 └─ .gitignore         มี .env และ docs/
 ```
