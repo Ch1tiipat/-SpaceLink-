@@ -4,9 +4,11 @@ Context file for AI coding agents working in this repository. Read this fully be
 If anything here conflicts with a prompt you were given, **stop and ask** — do not guess.
 
 This is the **single source of truth for all agents on this project**. The team uses more than one
-tool — Codex and Claude Code — and both read this file. Do not create a second instruction file
-(CLAUDE.md, .cursorrules, copilot-instructions.md). Two files drift apart, and a stale rule that an
-agent still trusts is worse than no rule at all. Everything goes here.
+tool — Codex reads AGENTS.md, Claude Code reads CLAUDE.md — so the repository also contains a
+CLAUDE.md. That file is a **pointer only**: five lines that `@AGENTS.md`-import this file. It holds
+no rules of its own and must never be given any. Beyond that pointer, do not create additional
+instruction files (.cursorrules, .github/copilot-instructions.md, GEMINI.md). Duplicated rules drift
+apart, and a stale rule an agent still trusts is worse than no rule at all. Everything goes here.
 
 ---
 
@@ -62,7 +64,8 @@ spacelink/
 │  ├─ api/       NestJS backend  → Railway/Render   (created in Step 1)
 │  └─ web/       Next.js 14 PWA  → Vercel           (NOT created yet — SCRUM-20)
 ├─ prototype/    The original static HTML/JS/CSS prototype. Reference and demo only.
-├─ CLAUDE.md
+├─ AGENTS.md     This file. All project rules for agents live here.
+├─ CLAUDE.md     Pointer only — `@AGENTS.md`-imports this file. Never put rules in it.
 ├─ README.md
 └─ .gitignore
 ```
