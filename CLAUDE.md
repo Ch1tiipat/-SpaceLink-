@@ -57,15 +57,15 @@ spacelink/
 │  ├─ api/       NestJS backend  → Railway/Render   (created in Step 1)
 │  └─ web/       Next.js 14 PWA  → Vercel           (NOT created yet — SCRUM-20)
 ├─ prototype/    The original static HTML/JS/CSS prototype. Reference and demo only.
-├─ docs/
-│  ├─ spec/          Master Spec v4, Design System Brief v6
-│  ├─ erd/           ERD levels 1–3, system architecture diagram
-│  ├─ decisions/     Schema change logs v2–v4, architecture decisions
-│  └─ status/        Project status, per-class changelogs
 ├─ CLAUDE.md
 ├─ README.md
 └─ .gitignore
 ```
+
+**Design documents are deliberately not in this repository.** The master spec, ERD, design system
+brief, schema change log, and status reports are kept outside version control (`docs/` is gitignored).
+Everything you need to work in this codebase is in this file. If a task seems to require information
+from one of those documents, **stop and ask** — do not infer it and do not reconstruct it from the code.
 
 **About `prototype/`:** it is plain HTML, CSS, and vanilla JS with `localStorage` as its data store — no build step, no framework, no `package.json`. It is **not** the frontend that will ship. Treat it as a design artifact: read it to understand intended screens and flows, but **never modify it**, never import from it, and never wire it to the API. The real frontend will be scaffolded separately in `apps/web`.
 
@@ -112,7 +112,9 @@ Budget ceiling is ~1,000–1,500 THB/month. Do not introduce paid services.
 **Roles.** `UserRole` on `app_user` is `SUPER_ADMIN | ORG_ADMIN | VENDOR` (platform-level).
 `OrgMembership.role` is `OWNER | ADMIN` and defines **which organizations** an ORG_ADMIN may act on. Both live in our database, **never in the JWT**.
 
-**Schema size:** 26 models, 18 enums. Full annotated source and rationale: `docs/decisions/`.
+**Schema size:** 26 models, 18 enums. The annotated source and the rationale for every design
+decision are held outside this repository by the team. `apps/api/prisma/schema.prisma` is the only
+in-repo source of truth for structure.
 
 ---
 

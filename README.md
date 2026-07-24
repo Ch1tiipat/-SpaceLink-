@@ -35,11 +35,6 @@ spacelink/
 │        ├─ migrations/
 │        ├─ sql/            SQL เสริมที่ Prisma ประกาศไม่ได้
 │        └─ seed.ts
-├─ docs/
-│  ├─ spec/               Master Spec v4 · Design System Brief v6
-│  ├─ erd/                ERD Level 1–3 · System Architecture
-│  ├─ decisions/          Schema Changes v2–v4 · decision log
-│  └─ status/             Project Status · changelog รายคาบ
 ├─ CLAUDE.md              context สำหรับ AI coding agent
 └─ README.md
 ```
@@ -162,12 +157,11 @@ PORT=3000
 
 ---
 
-## เอกสาร
+## เอกสารโครงงาน
 
-| ไฟล์ | เนื้อหา |
-|---|---|
-| `docs/spec/SpaceLink_Master_Spec_v4.md` | สเปกระบบฉบับสมบูรณ์ |
-| `docs/spec/SpaceLink_Design_System_Brief_v6.md` | ระบบสี typography และ component |
-| `docs/erd/SpaceLink_ERD_3Levels_v2.md` | ERD ระดับ 1–3 |
-| `docs/decisions/SpaceLink_Schema_Changes_v2–v4.md` | เหตุผลของทุกการเปลี่ยน schema |
-| `docs/status/SpaceLink_Project_Status_v2.md` | สถานะงานและแผนคงเหลือ |
+เอกสารออกแบบทั้งหมด (Master Spec, ERD 3 ระดับ, Design System Brief, decision log, รายงานสถานะ)
+**เก็บแยกนอก repo นี้** ไม่ได้อยู่ใน version control
+
+สมาชิกในทีมและอาจารย์ผู้สอนขอเข้าถึงได้จาก Product Owner (บุ๊ค)
+
+ส่วนกติกาการพัฒนา โครงสร้างข้อมูล และ convention ที่ต้องใช้เขียนโค้ด อยู่ใน [`CLAUDE.md`](./CLAUDE.md) ครบแล้ว

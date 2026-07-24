@@ -5,3 +5,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Design documents are kept outside version control (team decision).
+# If you add a file under docs/ and git seems to ignore it, this is why.
+docs/
