@@ -255,6 +255,9 @@ npm run build
 
 1. **Plan before acting.** For any task touching more than two files, list the files you will create or modify and wait for approval.
 2. **One task, one commit.** Message format: `SCRUM-18: setup NestJS + Prisma skeleton`.
+   When committing, use a heredoc (`<<'EOF'`) or a plain `-m` string. Do **not** use PowerShell
+   here-string syntax (`@'...'@`) — the Bash tool is Git Bash and passes `@` through literally,
+   which corrupts the commit message.
 3. **Read before writing.** Open the file first; never overwrite a file you have not read.
 4. **Match existing structure.** Every NestJS module is `x.module.ts` / `x.controller.ts` / `x.service.ts` / `dto/`. Follow it exactly, including in new modules.
 5. **Report honestly.** If something did not work, say so plainly. A wrong "done" costs the team far more than a clear failure.
