@@ -1,7 +1,12 @@
-# CLAUDE.md — SpaceLink
+# AGENTS.md — SpaceLink
 
 Context file for AI coding agents working in this repository. Read this fully before any task.
-Written for Claude CLI. If anything here conflicts with a prompt you were given, **stop and ask** — do not guess.
+If anything here conflicts with a prompt you were given, **stop and ask** — do not guess.
+
+This is the **single source of truth for all agents on this project**. The team uses more than one
+tool — Codex and Claude Code — and both read this file. Do not create a second instruction file
+(CLAUDE.md, .cursorrules, copilot-instructions.md). Two files drift apart, and a stale rule that an
+agent still trusts is worse than no rule at all. Everything goes here.
 
 ---
 
