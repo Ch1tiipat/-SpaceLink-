@@ -29,6 +29,21 @@ export const validationSchema = Joi.object({
     .default('development'),
   CORS_ORIGIN: Joi.string().empty(''),
   PORT: Joi.number().empty('').default(3000),
+
+  // Which slip verifier to bind (src/slips/slips.module.ts). `slipok` is a
+  // valid value but has no implementation yet — it is accepted here and
+  // rejected at boot by the module, so the error names the missing ticket
+  // rather than an unknown env value.
+  SLIP_VERIFIER: Joi.string()
+    .valid('mock', 'manual', 'slipok')
+    .empty('')
+    .default('mock'),
+
+  // Only read when SLIP_VERIFIER=mock.
+  SLIP_VERIFIER_MODE: Joi.string()
+    .valid('always-verified', 'always-invalid')
+    .empty('')
+    .default('always-verified'),
 })
   .or('SUPABASE_JWT_SECRET', 'SUPABASE_JWKS_URL')
   .messages({
