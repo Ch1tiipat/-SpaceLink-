@@ -7,6 +7,13 @@ import { RecommendationSource } from '@prisma/client';
  */
 export const ZONE_RECOMMENDER = Symbol('ZONE_RECOMMENDER');
 
+/**
+ * How many booths a recommender returns when the caller passes no `limit`.
+ * Lives here rather than in a provider because it is part of the contract every
+ * implementation answers to.
+ */
+export const DEFAULT_RECOMMENDATION_LIMIT = 5;
+
 /** What the caller hands a recommender. */
 export interface ZoneRecommendationInput {
   /** The event to recommend booths in. Only booths at this event's venue count. */
@@ -25,7 +32,10 @@ export interface ZoneRecommendationInput {
    */
   productCategoryIds: string[];
 
-  /** How many booths to return. Defaults to 5 when omitted. */
+  /**
+   * How many booths to return. Defaults to `DEFAULT_RECOMMENDATION_LIMIT` when
+   * omitted. Zero or negative means zero booths, never "all of them".
+   */
   limit?: number;
 }
 
@@ -43,6 +53,16 @@ export interface ZoneRecommendationInput {
  * 0–100 with at most two decimals so that conversion is always exact.
  */
 export interface RecommendedBooth {
+  /**
+   * A booth the vendor can actually book at this event — at the event's venue,
+   * AVAILABLE, and not already held by an active booking.
+   *
+   * `ZoneRecommendationService` checks every id against that set and throws the
+   * whole answer away if any one of them is not in it. Return an id you were
+   * not given and your recommendations silently never reach a vendor, so build
+   * this from the booths you were handed rather than from anything a model
+   * wrote.
+   */
   boothId: string;
 
   /** Ranking score, higher is better. See the note above — this is not money. */
@@ -64,9 +84,15 @@ export interface RecommendedBooth {
  * interface only, so swapping rule → gemini is an env-var change and touches no
  * calling code.
  *
- * The returned array is ordered best-first and is at most `limit` long. An
- * event with no free booth returns an empty array — that is a normal answer,
- * not an error.
+ * The returned array is ordered best-first, holds each `boothId` at most once,
+ * and is at most `limit` long. An event with no free booth returns an empty
+ * array — that is a normal answer, not an error.
+ *
+ * Implement those three properties anyway, but do not rely on being the only
+ * thing that does: `ZoneRecommendationService` re-applies the dedupe and the
+ * limit to whatever comes back. A remote model that repeats a booth or ignores
+ * `limit` is a likely failure, and it must not reach the vendor or turn into
+ * extra `recommendation_log` rows.
  */
 export interface ZoneRecommender {
   recommend(input: ZoneRecommendationInput): Promise<RecommendedBooth[]>;

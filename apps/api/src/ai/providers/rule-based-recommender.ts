@@ -6,14 +6,12 @@ import {
   RecommendationSource,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DEFAULT_RECOMMENDATION_LIMIT } from '../zone-recommender.interface';
 import type {
   RecommendedBooth,
   ZoneRecommendationInput,
   ZoneRecommender,
 } from '../zone-recommender.interface';
-
-/** Returned when the caller passes no `limit`. */
-const DEFAULT_LIMIT = 5;
 
 /**
  * A booking in one of these states holds its booth (AGENTS.md §8, invariant
@@ -39,8 +37,11 @@ const PRICE_WEIGHT = 30;
 const CHEAP_RATIO = 0.95;
 const PRICEY_RATIO = 1.05;
 
-/** What the booth query returns. Declared so the scoring code stays typed. */
-type CandidateBooth = {
+/**
+ * What the booth query returns. Declared so the scoring code stays typed, and
+ * exported because `candidateBooths` is part of this class's public surface.
+ */
+export type CandidateBooth = {
   id: string;
   code: string;
   boothPrice: Prisma.Decimal;
@@ -76,13 +77,42 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
   constructor(private readonly prisma: PrismaService) {}
 
   async recommend(input: ZoneRecommendationInput): Promise<RecommendedBooth[]> {
-    const limit = input.limit ?? DEFAULT_LIMIT;
+    const limit = input.limit ?? DEFAULT_RECOMMENDATION_LIMIT;
     if (limit <= 0) {
       return [];
     }
 
+    const candidates = await this.candidateBooths(input.eventId);
+    const median = medianPrice(candidates.map((booth) => booth.boothPrice));
+
+    const scored = candidates.map((booth) => this.score(booth, input, median));
+
+    scored.sort(compareRecommendations);
+
+    return scored.slice(0, limit).map(({ boothId, score, reason, source }) => ({
+      boothId,
+      score,
+      reason,
+      source,
+    }));
+  }
+
+  /**
+   * Every booth that may legitimately be recommended for this event, and
+   * nothing else. Throws NotFoundException for an unknown event.
+   *
+   * Public because `ZoneRecommendationService` checks any provider's answer
+   * against this set — a remote model can return a plausible UUID for a booth
+   * that does not exist, belongs to another venue, or is already booked, and
+   * "recommended" has to mean "bookable" or the vendor is sent to a dead end.
+   *
+   * It is one method rather than a `where` clause copied into the service on
+   * purpose: two definitions of "candidate" would drift, and the half that
+   * drifted would be the one deciding what counts as a hallucination.
+   */
+  async candidateBooths(eventId: string): Promise<CandidateBooth[]> {
     const event = await this.prisma.event.findUnique({
-      where: { id: input.eventId },
+      where: { id: eventId },
       select: { venueId: true },
     });
 
@@ -99,7 +129,7 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
         status: BoothStatus.AVAILABLE,
         bookings: {
           none: {
-            eventId: input.eventId,
+            eventId,
             status: { in: ACTIVE_BOOKING_STATUSES },
           },
         },
@@ -125,7 +155,7 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
         // see `isFree`.
         bookings: {
           where: {
-            eventId: input.eventId,
+            eventId,
             status: { in: ACTIVE_BOOKING_STATUSES },
           },
           select: { status: true },
@@ -133,19 +163,7 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
       },
     });
 
-    const candidates = booths.filter(isFree);
-    const median = medianPrice(candidates.map((booth) => booth.boothPrice));
-
-    const scored = candidates.map((booth) => this.score(booth, input, median));
-
-    scored.sort(compareRecommendations);
-
-    return scored.slice(0, limit).map(({ boothId, score, reason, source }) => ({
-      boothId,
-      score,
-      reason,
-      source,
-    }));
+    return dedupeById(booths.filter(isFree));
   }
 
   private score(
@@ -204,6 +222,29 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
  */
 function isFree(booth: CandidateBooth): boolean {
   return booth.status === BoothStatus.AVAILABLE && booth.bookings.length === 0;
+}
+
+/**
+ * One entry per booth, for the same reason `isFree` is duplicated above: the
+ * property belongs to the code, not to the shape of the current query.
+ *
+ * `findMany` selecting by primary key cannot return a booth twice today, so
+ * this is a no-op against the query as written. It stops being one the moment
+ * somebody adds a `where` that fans out over a to-many relation — and the cost
+ * of missing that is not just a repeated card in the UI: a duplicated price
+ * would drag the median, and every other booth's score with it.
+ */
+function dedupeById(booths: CandidateBooth[]): CandidateBooth[] {
+  const seen = new Set<string>();
+
+  return booths.filter((booth) => {
+    if (seen.has(booth.id)) {
+      return false;
+    }
+
+    seen.add(booth.id);
+    return true;
+  });
 }
 
 /**

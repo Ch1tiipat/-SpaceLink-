@@ -42,6 +42,20 @@ const RULE_RESULT: RecommendedBooth[] = [
   },
 ];
 
+/**
+ * Every booth id the stubs in this file hand back as a legitimate answer. The
+ * service checks the configured provider's result against the event's real
+ * candidates, so an id missing from here reads as an invented one.
+ */
+const BOOKABLE_BOOTH_IDS = [
+  'booth-A01',
+  'booth-A02',
+  'booth-A03',
+  'booth-B01',
+  'booth-B02',
+  ...Array.from({ length: 9 }, (_value, index) => `booth-${index}`),
+];
+
 /** The `recommendation_log` rows the service is expected to build. */
 type LoggedRow = {
   vendorUserId: string;
@@ -61,7 +75,7 @@ function loggedRows(createMany: jest.Mock): LoggedRow[] {
 describe('ZoneRecommendationService', () => {
   let prisma: { recommendationLog: { createMany: jest.Mock } };
   let configured: { recommend: jest.Mock };
-  let ruleBased: { recommend: jest.Mock };
+  let ruleBased: { recommend: jest.Mock; candidateBooths: jest.Mock };
   let warn: jest.SpyInstance;
 
   function createService(
@@ -77,7 +91,12 @@ describe('ZoneRecommendationService', () => {
   beforeEach(() => {
     prisma = { recommendationLog: { createMany: jest.fn() } };
     configured = { recommend: jest.fn().mockResolvedValue(GEMINI_RESULT) };
-    ruleBased = { recommend: jest.fn().mockResolvedValue(RULE_RESULT) };
+    ruleBased = {
+      recommend: jest.fn().mockResolvedValue(RULE_RESULT),
+      candidateBooths: jest
+        .fn()
+        .mockResolvedValue(BOOKABLE_BOOTH_IDS.map((id) => ({ id }))),
+    };
     warn = jest
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
@@ -136,6 +155,57 @@ describe('ZoneRecommendationService', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('malformed') as string,
     );
+  });
+
+  /*
+   * The shape is perfect and every field is legal — only the booth is not real.
+   * Nothing downstream would catch it: the vendor would be shown a booth they
+   * cannot book, and `recommendation_log` would take the id as a foreign key
+   * and fail inside a write whose errors are deliberately swallowed.
+   */
+  it('falls back when the provider names a booth that is not bookable at this event', async () => {
+    configured.recommend.mockResolvedValue([
+      {
+        boothId: 'booth-A01',
+        score: 95,
+        reason: 'ตรงกับหมวดสินค้าที่เลือก',
+        source: RecommendationSource.AI_GEMINI,
+      },
+      {
+        boothId: '99999999-9999-4999-8999-999999999999',
+        score: 90,
+        reason: 'อยู่ใกล้ทางเข้า',
+        source: RecommendationSource.AI_GEMINI,
+      },
+    ]);
+
+    const result = await createService().recommend(INPUT);
+
+    // The whole answer goes, including the entry that was real — one invented
+    // booth means the ranking it came from is not trustworthy either.
+    expect(result).toEqual(RULE_RESULT);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not bookable at this event') as string,
+    );
+
+    // Nothing invented reached the log, and nothing reached the vendor.
+    const rows = loggedRows(prisma.recommendationLog.createMany);
+    expect(rows.map((row) => row.recommendedBoothId)).toEqual([
+      'booth-B01',
+      'booth-B02',
+    ]);
+  });
+
+  // Validating the fallback's own output would be a round trip to confirm that
+  // booths it just queried are booths.
+  it('does not re-check the rule-based engine against its own candidate set', async () => {
+    ruleBased.recommend.mockResolvedValue(RULE_RESULT);
+
+    await createService(ruleBased as unknown as ZoneRecommender).recommend(
+      INPUT,
+    );
+
+    expect(ruleBased.candidateBooths).not.toHaveBeenCalled();
   });
 
   it('writes one recommendation_log row per returned booth', async () => {
@@ -201,6 +271,110 @@ describe('ZoneRecommendationService', () => {
     expect(ruleBased.recommend).toHaveBeenCalledTimes(1);
     // Nothing was recommended, so nothing may be logged as recommended.
     expect(prisma.recommendationLog.createMany).not.toHaveBeenCalled();
+  });
+
+  /*
+   * A provider that ignores `limit` or repeats a booth is not malformed — every
+   * entry is valid — so it does not fall back. The service trims instead, and
+   * the trim has to happen before the log write or `recommendation_log` ends up
+   * holding rows for booths the vendor was never shown.
+   */
+  describe('result contract', () => {
+    function booth(id: string, score: number): RecommendedBooth {
+      return {
+        boothId: id,
+        score,
+        reason: 'เหตุผล',
+        source: RecommendationSource.AI_GEMINI,
+      };
+    }
+
+    it('keeps only the first entry for a repeated boothId', async () => {
+      configured.recommend.mockResolvedValue([
+        booth('booth-A01', 90),
+        booth('booth-B01', 80),
+        booth('booth-A01', 70),
+      ]);
+
+      const result = await createService().recommend(INPUT);
+
+      expect(result.map((entry) => entry.boothId)).toEqual([
+        'booth-A01',
+        'booth-B01',
+      ]);
+      // The higher-ranked copy is the one kept.
+      expect(result[0].score).toBe(90);
+      expect(ruleBased.recommend).not.toHaveBeenCalled();
+
+      const rows = loggedRows(prisma.recommendationLog.createMany);
+      expect(rows.map((row) => row.recommendedBoothId)).toEqual([
+        'booth-A01',
+        'booth-B01',
+      ]);
+    });
+
+    it('returns at most `limit` booths and logs no more than it returned', async () => {
+      configured.recommend.mockResolvedValue([
+        booth('booth-A01', 90),
+        booth('booth-A02', 80),
+        booth('booth-A03', 70),
+      ]);
+
+      const result = await createService().recommend({ ...INPUT, limit: 2 });
+
+      expect(result.map((entry) => entry.boothId)).toEqual([
+        'booth-A01',
+        'booth-A02',
+      ]);
+      expect(loggedRows(prisma.recommendationLog.createMany)).toHaveLength(2);
+    });
+
+    it('applies the default limit when the caller passes none', async () => {
+      configured.recommend.mockResolvedValue(
+        Array.from({ length: 9 }, (_value, index) =>
+          booth(`booth-${index}`, 90 - index),
+        ),
+      );
+
+      const result = await createService().recommend(INPUT);
+
+      expect(result).toHaveLength(5);
+    });
+
+    // slice() reads a negative second argument as an offset from the end, which
+    // would quietly return everything but the last booth.
+    it('returns nothing for a limit of zero or less', async () => {
+      configured.recommend.mockResolvedValue([
+        booth('booth-A01', 90),
+        booth('booth-A02', 80),
+      ]);
+
+      await expect(
+        createService().recommend({ ...INPUT, limit: 0 }),
+      ).resolves.toEqual([]);
+      await expect(
+        createService().recommend({ ...INPUT, limit: -1 }),
+      ).resolves.toEqual([]);
+
+      expect(prisma.recommendationLog.createMany).not.toHaveBeenCalled();
+    });
+
+    // The rule-based engine applies the limit itself, but it is the configured
+    // provider here, so it takes the early-return path in `rank`. The trim must
+    // still happen on that path.
+    it('trims the rule-based engine too when it is the configured provider', async () => {
+      ruleBased.recommend.mockResolvedValue([
+        booth('booth-B01', 90),
+        booth('booth-B01', 85),
+        booth('booth-B02', 80),
+      ]);
+
+      const result = await createService(
+        ruleBased as unknown as ZoneRecommender,
+      ).recommend({ ...INPUT, limit: 1 });
+
+      expect(result.map((entry) => entry.boothId)).toEqual(['booth-B01']);
+    });
   });
 
   // With ZONE_RECOMMENDER=rule the configured provider IS the fallback, so

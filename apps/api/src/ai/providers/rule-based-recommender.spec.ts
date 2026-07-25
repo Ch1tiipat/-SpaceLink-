@@ -214,6 +214,27 @@ describe('RuleBasedZoneRecommender', () => {
     ]);
   });
 
+  /*
+   * `ZoneRecommender` promises each boothId at most once. A `where` that fanned
+   * out over a to-many relation would break that, and the mocked findMany is
+   * the only place that can be shown — the same reason `isFree` is checked in
+   * TypeScript rather than left to the query.
+   */
+  it('returns a booth once even when the query hands it back twice', async () => {
+    prisma.booth.findMany.mockResolvedValue([
+      makeBooth({ code: 'A01', price: '1000.00', categories: [FOOD] }),
+      makeBooth({ code: 'A01', price: '1000.00', categories: [FOOD] }),
+      makeBooth({ code: 'B01', price: '2000.00', zoneCode: 'Z2' }),
+    ]);
+
+    const result = await recommender.recommend(makeInput());
+
+    expect(result.map((booth) => booth.boothId)).toEqual([
+      'booth-A01',
+      'booth-B01',
+    ]);
+  });
+
   it('scores on price alone when the vendor gives no categories', async () => {
     prisma.booth.findMany.mockResolvedValue([
       makeBooth({ code: 'A01', price: '3000.00', categories: [FOOD, CRAFT] }),

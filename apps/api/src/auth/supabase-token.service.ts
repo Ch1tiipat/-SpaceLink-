@@ -19,6 +19,15 @@ export interface SupabaseTokenClaims {
  * made by environment variable alone — no code change when a teammate's
  * project turns out to use the other one.
  */
+/**
+ * Algorithms accepted from an asymmetric Supabase project. Supabase signs with
+ * ECC P-256 or RSA depending on the key you generate, and nothing else.
+ */
+const JWKS_ALGORITHMS = ['ES256', 'RS256'];
+
+/** The one algorithm a legacy shared-secret project ever signs with. */
+const SECRET_ALGORITHMS = ['HS256'];
+
 @Injectable()
 export class SupabaseTokenService {
   /**
@@ -28,16 +37,49 @@ export class SupabaseTokenService {
    */
   private readonly key: JWTVerifyGetKey | Uint8Array;
 
+  /**
+   * Pinned to the one scheme this project actually uses, rather than left to
+   * whatever `alg` header the token arrives with. jose already refuses `none`
+   * and refuses an asymmetric `alg` against a symmetric key, so this is not the
+   * classic confusion attack — it is keeping the accepted set as small as the
+   * truth allows, which is what the deleted passport strategy did with
+   * `algorithms: ['HS256']`.
+   */
+  private readonly algorithms: string[];
+
+  /**
+   * Supabase stamps `iss: <project-url>/auth/v1`. Checking it means a validly
+   * signed token from a *different* Supabase project cannot be replayed here —
+   * relevant the moment anyone spins up a second project for staging.
+   */
+  private readonly issuer: string;
+
   constructor(config: ConfigService) {
     const jwksUrl = config.get<string>('SUPABASE_JWKS_URL');
     const secret = config.get<string>('SUPABASE_JWT_SECRET');
+    const supabaseUrl = config.get<string>('SUPABASE_URL');
+
+    if (!supabaseUrl) {
+      throw new Error(
+        'SUPABASE_URL is required to verify tokens — it is what the expected ' +
+          'issuer is derived from.',
+      );
+    }
+
+    // Built by hand rather than with `new URL`, which would throw on the
+    // placeholder value .env carries until Supabase setup is finished. A
+    // placeholder must still boot (CLAUDE.md §9); it just cannot verify a real
+    // token, which is correct.
+    this.issuer = `${supabaseUrl.replace(/\/+$/, '')}/auth/v1`;
 
     if (jwksUrl) {
       // Asymmetric project: keys are public and fetched from Supabase.
       this.key = createRemoteJWKSet(new URL(jwksUrl));
+      this.algorithms = JWKS_ALGORITHMS;
     } else if (secret) {
       // Legacy project: one shared HS256 secret.
       this.key = new TextEncoder().encode(secret);
+      this.algorithms = SECRET_ALGORITHMS;
     } else {
       throw new Error(
         'Supabase token verification is not configured. Set SUPABASE_JWKS_URL ' +
@@ -49,13 +91,21 @@ export class SupabaseTokenService {
 
   /**
    * Verifies a raw bearer token and returns the two claims we use. Anything
-   * that fails — bad signature, expired, wrong audience, missing claim — is an
-   * UnauthorizedException; the caller never has to distinguish them.
+   * that fails — bad signature, expired, wrong issuer or audience, unexpected
+   * algorithm, missing claim — is an UnauthorizedException; the caller never
+   * has to distinguish them.
+   *
+   * `exp` needs no option here: jose rejects an expired token by default, and
+   * `verify` is called on every request rather than once at sign-in.
    */
   async verify(token: string): Promise<SupabaseTokenClaims> {
     // Supabase stamps `aud: authenticated` on user tokens; checking it stops
     // an anon or service token being accepted as a signed-in user.
-    const options = { audience: 'authenticated' };
+    const options = {
+      audience: 'authenticated',
+      issuer: this.issuer,
+      algorithms: this.algorithms,
+    };
 
     let payload: JWTPayload;
     try {
