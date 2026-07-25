@@ -44,6 +44,15 @@ export const validationSchema = Joi.object({
     .valid('always-verified', 'always-invalid')
     .empty('')
     .default('always-verified'),
+
+  // Which zone recommender to bind (src/ai/ai.module.ts). `gemini` is a valid
+  // value but has no implementation yet — same arrangement as SLIP_VERIFIER
+  // above: accepted here, rejected at boot by the module, so the error names
+  // the missing ticket rather than an unknown env value.
+  ZONE_RECOMMENDER: Joi.string()
+    .valid('rule', 'gemini')
+    .empty('')
+    .default('rule'),
 })
   .or('SUPABASE_JWT_SECRET', 'SUPABASE_JWKS_URL')
   .messages({
