@@ -12,6 +12,29 @@ export const validationSchema = Joi.object({
   DIRECT_URL: Joi.string().required(),
   SUPABASE_URL: Joi.string().required(),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().required(),
-  SUPABASE_JWT_SECRET: Joi.string().required(),
-  PORT: Joi.number().default(3000),
-});
+
+  // A Supabase project signs its tokens one of two ways depending on when it
+  // was created, so neither variable can be required on its own — but one of
+  // them must be set or no token can ever be verified.
+  //
+  // `.empty('')` throughout this block: .env.example ships these keys with no
+  // value, so an untouched line must read as unset rather than as the empty
+  // string — otherwise `.or()` below would accept `SUPABASE_JWT_SECRET=`.
+  SUPABASE_JWT_SECRET: Joi.string().empty(''),
+  SUPABASE_JWKS_URL: Joi.string().uri().empty(''),
+
+  NODE_ENV: Joi.string()
+    .valid('development', 'production', 'test')
+    .empty('')
+    .default('development'),
+  CORS_ORIGIN: Joi.string().empty(''),
+  PORT: Joi.number().empty('').default(3000),
+})
+  .or('SUPABASE_JWT_SECRET', 'SUPABASE_JWKS_URL')
+  .messages({
+    'object.missing':
+      'Set exactly one of SUPABASE_JWKS_URL or SUPABASE_JWT_SECRET. ' +
+      'Newer Supabase projects sign tokens with asymmetric keys — use ' +
+      'SUPABASE_JWKS_URL (Dashboard → Project Settings → API → JWT Keys). ' +
+      'Older projects use a shared HS256 secret — use SUPABASE_JWT_SECRET.',
+  });
