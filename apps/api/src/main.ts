@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,6 +22,10 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // Prisma errors would otherwise surface as a 500 carrying Prisma's message,
+  // which names tables and columns (CLAUDE.md §14.5).
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   app.setGlobalPrefix('api');
 
