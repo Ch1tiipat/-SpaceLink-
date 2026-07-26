@@ -14,8 +14,7 @@ import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 
 type CaughtPrismaError =
-  | Prisma.PrismaClientKnownRequestError
-  | Prisma.PrismaClientInitializationError;
+  Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientInitializationError;
 
 /**
  * Turns Prisma errors into ordinary HTTP responses.
@@ -44,7 +43,9 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       exception.stack,
     );
 
-    response.status(httpException.getStatus()).json(httpException.getResponse());
+    response
+      .status(httpException.getStatus())
+      .json(httpException.getResponse());
   }
 
   private toHttpException(exception: CaughtPrismaError): HttpException {

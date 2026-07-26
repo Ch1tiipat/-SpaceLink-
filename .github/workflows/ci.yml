@@ -64,4 +64,29 @@ jobs:
       # The acceptance check for every backend task (AGENTS.md §10).
       - run: npm run build
 
+      # Typechecks what `nest build` deliberately does not.
+      #
+      # tsconfig.build.json excludes prisma/ so that the emitted layout stays
+      # dist/main.js rather than dist/src/main.js — a correct decision, but it
+      # leaves prisma/seed.ts compiled by nothing. `tsc --noEmit` runs against
+      # the base tsconfig.json, which has no such exclude, so the seed is
+      # typechecked here or nowhere. It matters because SCRUM-22 is the ticket
+      # that fills that file in: today it is a stub, and by then it will be the
+      # one place in the repo writing rows by hand.
+      #
+      # --noEmit, so this never competes with `nest build` over dist/.
+      - run: npx tsc --noEmit
+
+      # `npx eslint`, not `npm run lint` — the lint script passes --fix, which
+      # would quietly rewrite files in the runner and report success on code
+      # that is not what was committed. CI checks, it does not edit.
+      #
+      # `src prisma`, for the same reason the tsc step exists: prisma/ is
+      # outside src/ and would otherwise be linted by nothing.
+      #
+      # Runs after build so a type error is reported as a type error. Several
+      # rules here are type-aware and would otherwise fail with confusing
+      # lint messages about the same broken types.
+      - run: npx eslint src prisma
+
       - run: npm test

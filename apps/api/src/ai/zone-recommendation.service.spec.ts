@@ -201,9 +201,7 @@ describe('ZoneRecommendationService', () => {
   it('does not re-check the rule-based engine against its own candidate set', async () => {
     ruleBased.recommend.mockResolvedValue(RULE_RESULT);
 
-    await createService(ruleBased as unknown as ZoneRecommender).recommend(
-      INPUT,
-    );
+    await createService(ruleBased).recommend(INPUT);
 
     expect(ruleBased.candidateBooths).not.toHaveBeenCalled();
   });
@@ -369,9 +367,10 @@ describe('ZoneRecommendationService', () => {
         booth('booth-B02', 80),
       ]);
 
-      const result = await createService(
-        ruleBased as unknown as ZoneRecommender,
-      ).recommend({ ...INPUT, limit: 1 });
+      const result = await createService(ruleBased).recommend({
+        ...INPUT,
+        limit: 1,
+      });
 
       expect(result.map((entry) => entry.boothId)).toEqual(['booth-B01']);
     });

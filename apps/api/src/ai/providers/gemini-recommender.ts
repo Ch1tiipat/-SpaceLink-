@@ -1,4 +1,4 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type {
   RecommendedBooth,
   ZoneRecommendationInput,
@@ -36,12 +36,27 @@ import type {
  */
 @Injectable()
 export class GeminiZoneRecommender implements ZoneRecommender {
+  constructor() {
+    // A plain Error at construction time, matching how ai.module.ts and
+    // slips.module.ts report an unimplemented provider. It used to be a
+    // NotImplementedException thrown from `recommend`, which is HTTP 501 — a
+    // status a vendor would have seen, describing an unwritten ticket as if it
+    // were an answer to their request. Registering this class anywhere now
+    // stops the server at boot instead, where a missing implementation belongs.
+    throw new Error(
+      'ZONE_RECOMMENDER=gemini is not implemented yet. The real client ' +
+        '(src/ai/providers/gemini-recommender.ts) is a separate ticket — see ' +
+        'src/ai/README.md. Use ZONE_RECOMMENDER=rule.',
+    );
+  }
+
   recommend(input: ZoneRecommendationInput): Promise<RecommendedBooth[]> {
     void input;
 
-    throw new NotImplementedException(
-      'GeminiZoneRecommender is not implemented yet — it is a separate ' +
-        'ticket. Use ZONE_RECOMMENDER=rule. See src/ai/README.md.',
+    // Unreachable — the constructor never returns. Present only because
+    // `ZoneRecommender` requires it.
+    throw new Error(
+      'GeminiZoneRecommender is not implemented yet — see src/ai/README.md.',
     );
   }
 }

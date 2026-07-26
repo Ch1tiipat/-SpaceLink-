@@ -13,6 +13,9 @@ import { OrgScopeGuard } from './org-scope.guard';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
 const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
+const VENUE_ID = '33333333-3333-4333-8333-333333333333';
+const EVENT_ID = '44444444-4444-4444-8444-444444444444';
+const ZONE_ID = '55555555-5555-4555-8555-555555555555';
 
 /**
  * A real controller carrying real decorators, read back through a real
@@ -23,6 +26,21 @@ class TestController {
   // the tests may pass them around detached from the prototype.
   @OrgScope('organizationId')
   byOrganization(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
+  @OrgScope('venueId')
+  byVenue(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
+  @OrgScope('eventId')
+  byEvent(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
+  @OrgScope('zoneId')
+  byZone(this: void) {
     // Route target; the guard only ever reads its metadata.
   }
 
@@ -60,6 +78,9 @@ function createUser(id: string, role: UserRole): User {
 describe('OrgScopeGuard', () => {
   let prisma: {
     organization: { findUnique: jest.Mock };
+    venue: { findUnique: jest.Mock };
+    event: { findUnique: jest.Mock };
+    zone: { findUnique: jest.Mock };
     booth: { findUnique: jest.Mock };
     orgMembership: { findUnique: jest.Mock };
   };
@@ -68,6 +89,9 @@ describe('OrgScopeGuard', () => {
   beforeEach(() => {
     prisma = {
       organization: { findUnique: jest.fn() },
+      venue: { findUnique: jest.fn() },
+      event: { findUnique: jest.fn() },
+      zone: { findUnique: jest.fn() },
       booth: { findUnique: jest.fn() },
       orgMembership: { findUnique: jest.fn() },
     };
@@ -205,6 +229,134 @@ describe('OrgScopeGuard', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('resolves a venue by reading its own organizationId', async () => {
+    prisma.venue.findUnique.mockResolvedValue({ organizationId: ORG_ID });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { venueId: VENUE_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byVenue, request),
+      ),
+    ).resolves.toBe(true);
+
+    // One query, on `venue`, selecting nothing but the id needed to continue —
+    // a wider select would pull a whole row through a guard that only decides.
+    expect(prisma.venue.findUnique).toHaveBeenCalledWith({
+      where: { id: VENUE_ID },
+      select: { organizationId: true },
+    });
+    expect(prisma.venue.findUnique).toHaveBeenCalledTimes(1);
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  // The path SCRUM-19 puts on nearly every route, hence the fullest coverage:
+  // the query shape, the membership check built from its result, and both 404s.
+  it('resolves an event by reading its own organizationId', async () => {
+    prisma.event.findUnique.mockResolvedValue({ organizationId: ORG_ID });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { eventId: EVENT_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byEvent, request),
+      ),
+    ).resolves.toBe(true);
+
+    expect(prisma.event.findUnique).toHaveBeenCalledWith({
+      where: { id: EVENT_ID },
+      select: { organizationId: true },
+    });
+    expect(prisma.event.findUnique).toHaveBeenCalledTimes(1);
+    // An event carries its own organizationId, so nothing else is walked.
+    expect(prisma.venue.findUnique).not.toHaveBeenCalled();
+    // The membership is checked against the *resolved* org, never against a
+    // route param (§14.2) — the request only ever named an event.
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: { organizationId: ORG_ID, userId: 'user-1' },
+      },
+      select: { id: true },
+    });
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('answers 404 for an event owned by another organization', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    prisma.event.findUnique.mockResolvedValue({ organizationId: ORG_ID });
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { eventId: EVENT_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    const error: unknown = await guard
+      .canActivate(createContext(TestController.prototype.byEvent, request))
+      .catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    // Byte-identical to the unknown-event response below: a foreign event and a
+    // non-existent one must be indistinguishable to the caller (§14.1).
+    expect((error as NotFoundException).getResponse()).toEqual({
+      statusCode: 404,
+      message: 'Resource not found',
+      error: 'Not Found',
+    });
+    expect(request.organizationId).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it('rejects an unknown event before checking membership', async () => {
+    prisma.event.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { eventId: EVENT_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byEvent, request),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('resolves a zone through venue -> organization', async () => {
+    prisma.zone.findUnique.mockResolvedValue({
+      venue: { organizationId: ORG_ID },
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { zoneId: ZONE_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byZone, request),
+      ),
+    ).resolves.toBe(true);
+
+    // A zone has no organizationId of its own; the chain is walked inside the
+    // single query rather than with a second round trip.
+    expect(prisma.zone.findUnique).toHaveBeenCalledWith({
+      where: { id: ZONE_ID },
+      select: { venue: { select: { organizationId: true } } },
+    });
+    expect(prisma.zone.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.venue.findUnique).not.toHaveBeenCalled();
+    expect(request.organizationId).toBe(ORG_ID);
   });
 
   it('resolves a booth through zone -> venue -> organization', async () => {

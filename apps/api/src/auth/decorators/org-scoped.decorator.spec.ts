@@ -32,7 +32,10 @@ function orgScopeParamOn(handler: object): unknown {
 class ScopedController {
   @Get(':venueId')
   @OrgScoped('venueId')
-  findOne(): string {
+  // `this: void` is type-only and erased at compile: it says the handler never
+  // touches `this`, so the tests may read it off the prototype detached from
+  // its instance. Same annotation the OrgScopeGuard suite uses.
+  findOne(this: void): string {
     return 'ok';
   }
 }
@@ -41,7 +44,7 @@ class ScopedController {
 class MetadataOnlyController {
   @Get(':venueId')
   @OrgScope('venueId')
-  findOne(): string {
+  findOne(this: void): string {
     return 'ok';
   }
 }

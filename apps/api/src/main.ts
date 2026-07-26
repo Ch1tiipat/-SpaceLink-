@@ -31,4 +31,9 @@ async function bootstrap() {
 
   await app.listen(config.get<number>('PORT', 3000));
 }
-bootstrap();
+// `void`, not a bare call: nothing can await the entry point, so the promise is
+// deliberately unhandled and says so. A rejection here — a failed env
+// validation, a port already in use — still surfaces as an unhandled rejection
+// and stops the process, which is the correct outcome for a server that could
+// not start.
+void bootstrap();

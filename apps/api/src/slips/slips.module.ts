@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ManualSlipVerifier } from './providers/manual-slip-verifier';
 import { MockSlipVerifier } from './providers/mock-slip-verifier';
+import { SlipVerificationService } from './slip-verification.service';
 import { SLIP_VERIFIER } from './slip-verifier.interface';
 import type { SlipVerifier } from './slip-verifier.interface';
 
@@ -10,11 +11,15 @@ type SlipVerifierName = 'mock' | 'manual' | 'slipok';
 
 /**
  * Binds one implementation to the SLIP_VERIFIER token, chosen by the
- * SLIP_VERIFIER environment variable. Consumers inject the token and never
- * learn which one they got.
+ * SLIP_VERIFIER environment variable. Consumers never learn which one they got.
  *
  * The factory runs at boot, so an unusable configuration stops the server
  * immediately instead of failing on the first vendor who uploads a slip.
+ *
+ * Only `SlipVerificationService` is exported, the same arrangement AiModule
+ * uses for `ZoneRecommendationService`. The token stays internal on purpose:
+ * reaching past the service would skip the `verified_slip` write, and a
+ * verification nobody recorded is one an ORG_ADMIN cannot review.
  */
 @Module({
   providers: [
@@ -50,7 +55,8 @@ type SlipVerifierName = 'mock' | 'manual' | 'slipok';
         }
       },
     },
+    SlipVerificationService,
   ],
-  exports: [SLIP_VERIFIER],
+  exports: [SlipVerificationService],
 })
 export class SlipsModule {}

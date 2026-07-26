@@ -46,13 +46,15 @@ export const validationSchema = Joi.object({
     .empty('')
     .when('NODE_ENV', {
       is: 'production',
-      then: Joi.string().required().messages({
-        'any.required':
-          'SLIP_VERIFIER must be set explicitly when NODE_ENV=production. ' +
-          'There is no default in production: the mock verifier approves ' +
-          'every slip, which would confirm bookings that were never paid for. ' +
-          'Use SLIP_VERIFIER=manual until the SlipOK client exists.',
-      }),
+      then: Joi.string()
+        .required()
+        .messages({
+          'any.required':
+            'SLIP_VERIFIER must be set explicitly when NODE_ENV=production. ' +
+            'There is no default in production: the mock verifier approves ' +
+            'every slip, which would confirm bookings that were never paid for. ' +
+            'Use SLIP_VERIFIER=manual until the SlipOK client exists.',
+        }),
       otherwise: Joi.string().default('mock'),
     }),
 
@@ -66,12 +68,14 @@ export const validationSchema = Joi.object({
       is: 'production',
       then: Joi.when('SLIP_VERIFIER', {
         is: 'mock',
-        then: Joi.string().required().messages({
-          'any.required':
-            'SLIP_VERIFIER_MODE must be set explicitly when NODE_ENV=production ' +
-            'and SLIP_VERIFIER=mock. It would otherwise default to ' +
-            'always-verified and auto-confirm every booking.',
-        }),
+        then: Joi.string()
+          .required()
+          .messages({
+            'any.required':
+              'SLIP_VERIFIER_MODE must be set explicitly when NODE_ENV=production ' +
+              'and SLIP_VERIFIER=mock. It would otherwise default to ' +
+              'always-verified and auto-confirm every booking.',
+          }),
       }),
       otherwise: Joi.string().default('always-verified'),
     }),

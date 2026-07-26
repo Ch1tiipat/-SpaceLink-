@@ -66,7 +66,14 @@ const prisma = new PrismaClient();
  * Money (`Booth.boothPrice`, `Zone.defaultBoothPrice`) is `Decimal(10,2)`.
  * Pass it as a string — `'1500.00'`, never `1500.0` (CLAUDE.md §6.1).
  */
-async function main() {
+/*
+ * Not `async` yet, on purpose: every numbered step below is still a comment, and
+ * an `async` function containing no `await` is a promise for nothing. The first
+ * `await prisma.*.upsert()` that SCRUM-22 adds puts the keyword back and lets
+ * the explicit `Promise.resolve()` go — the call site already expects a promise
+ * either way, so that change is one word in one place.
+ */
+function main(): Promise<void> {
   console.log('Seeding...');
 
   // 1. Organization
@@ -80,6 +87,8 @@ async function main() {
   // 9. Shop
 
   console.log('Nothing to seed yet — this script is a structure stub.');
+
+  return Promise.resolve();
 }
 
 main()

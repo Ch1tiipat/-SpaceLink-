@@ -1,29 +1,58 @@
+import * as Joi from 'joi';
 import { validationSchema } from './env.validation';
 
 /** The variables every environment needs, so a case can vary only what it tests. */
 const REQUIRED = {
-  DATABASE_URL: 'postgresql://placeholder:placeholder@localhost:5432/placeholder',
+  DATABASE_URL:
+    'postgresql://placeholder:placeholder@localhost:5432/placeholder',
   DIRECT_URL: 'postgresql://placeholder:placeholder@localhost:5432/placeholder',
   SUPABASE_URL: 'https://placeholder.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'placeholder',
   SUPABASE_JWT_SECRET: 'placeholder',
 };
 
-/** Matches how @nestjs/config calls the schema. */
-function validate(env: Record<string, string>) {
+/**
+ * Matches how @nestjs/config calls the schema.
+ *
+ * The return type is written out rather than inferred: `Joi.object({...})` is
+ * an `ObjectSchema<any>`, so an inferred `value` is `any` and every read of it
+ * is an unchecked assignment. Naming the shape once here keeps that out of the
+ * cases below.
+ */
+function validate(
+  env: Record<string, string>,
+): Joi.ValidationResult<Record<string, unknown>> {
   return validationSchema.validate(
     { ...REQUIRED, ...env },
     { allowUnknown: true, abortEarly: false },
   );
 }
 
+/**
+ * The environment the schema produced, for the cases that assert on defaults it
+ * filled in.
+ *
+ * `Joi.ValidationResult` is a discriminated union, and its *failure* branch
+ * declares `value: any` — so no type argument on `validate` can make `value`
+ * safe to read. It has to be narrowed on `error` first, which is what this
+ * does. Throwing rather than asserting is what makes the narrowing real to the
+ * compiler; an unexpected validation error still fails the test, and does it
+ * with joi's own message instead of as an `undefined` two assertions later.
+ */
+function validatedEnv(env: Record<string, string>): Record<string, unknown> {
+  const result = validate(env);
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result.value;
+}
+
 describe('env validation', () => {
   describe('slip verifier defaults', () => {
     it('defaults to the mock verifier outside production', () => {
-      const { error, value } = validate({});
-
-      expect(error).toBeUndefined();
-      expect(value).toMatchObject({
+      expect(validatedEnv({})).toMatchObject({
         SLIP_VERIFIER: 'mock',
         SLIP_VERIFIER_MODE: 'always-verified',
       });
@@ -62,14 +91,13 @@ describe('env validation', () => {
     });
 
     it('accepts an explicit production configuration', () => {
-      const { error, value } = validate({
-        NODE_ENV: 'production',
-        SLIP_VERIFIER: 'mock',
-        SLIP_VERIFIER_MODE: 'always-invalid',
-      });
-
-      expect(error).toBeUndefined();
-      expect(value).toMatchObject({ SLIP_VERIFIER_MODE: 'always-invalid' });
+      expect(
+        validatedEnv({
+          NODE_ENV: 'production',
+          SLIP_VERIFIER: 'mock',
+          SLIP_VERIFIER_MODE: 'always-invalid',
+        }),
+      ).toMatchObject({ SLIP_VERIFIER_MODE: 'always-invalid' });
     });
   });
 

@@ -57,14 +57,10 @@ export class SupabaseTokenService {
   constructor(config: ConfigService) {
     const jwksUrl = config.get<string>('SUPABASE_JWKS_URL');
     const secret = config.get<string>('SUPABASE_JWT_SECRET');
-    const supabaseUrl = config.get<string>('SUPABASE_URL');
-
-    if (!supabaseUrl) {
-      throw new Error(
-        'SUPABASE_URL is required to verify tokens — it is what the expected ' +
-          'issuer is derived from.',
-      );
-    }
+    // `getOrThrow`, not a hand-written presence check: SUPABASE_URL is already
+    // `.required()` in the Joi schema, so a check here could never fire and
+    // only read as if the variable were optional.
+    const supabaseUrl = config.getOrThrow<string>('SUPABASE_URL');
 
     // Built by hand rather than with `new URL`, which would throw on the
     // placeholder value .env carries until Supabase setup is finished. A
