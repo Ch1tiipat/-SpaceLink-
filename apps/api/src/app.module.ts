@@ -6,6 +6,13 @@ import { validationSchema } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SlipsModule } from './slips/slips.module';
+import { UsersModule } from './users/users.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { VenuesModule } from './venues/venues.module';
+import { ZonesModule } from './zones/zones.module';
+import { EventsModule } from './events/events.module';
+import { BoothsModule } from './booths/booths.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
   imports: [
@@ -15,6 +22,13 @@ import { SlipsModule } from './slips/slips.module';
     HealthModule,
     SlipsModule,
     AiModule,
+    UsersModule,
+    OrganizationsModule,
+    VenuesModule,
+    ZonesModule,
+    EventsModule,
+    BoothsModule,
+    BookingsModule,
   ],
 })
 export class AppModule {}
