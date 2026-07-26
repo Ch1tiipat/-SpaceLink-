@@ -1,4 +1,9 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  // `prisma` is excluded because prisma/seed.ts is not part of the application.
+  // Compiling it would drag the common source root up from src/ to the project
+  // root, so `nest build` would emit dist/src/main.js and `npm run start:prod`
+  // (`node dist/main`) would stop finding it. The seed runs through ts-node,
+  // which typechecks it on the way (see the "prisma.seed" entry in package.json).
+  "exclude": ["node_modules", "test", "dist", "prisma", "**/*spec.ts"]
 }

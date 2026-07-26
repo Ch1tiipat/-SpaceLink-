@@ -1,0 +1,25 @@
+# Line endings — all three of us develop on Windows, CI runs on Ubuntu.
+#
+# `text=auto eol=lf` stores every text file as LF in the repository and checks
+# it out as LF, whatever a given machine has `core.autocrlf` set to. Without
+# this, one teammate's config turns a one-line change into a whole-file diff and
+# the review is unreadable.
+#
+# This applies to files as they are written from here on. Existing files are
+# already stored LF, so nothing is rewritten by adding it.
+* text=auto eol=lf
+
+# Binary — never diffed, never line-ending normalized. Normalizing a PNG
+# corrupts it.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.avif binary
+*.bmp  binary
+*.pdf  binary
+
+# Not listed on purpose: *.svg. The zone map is rendered as inline SVG
+# (AGENTS.md §4), so SVG is source we want to diff — it is text.
