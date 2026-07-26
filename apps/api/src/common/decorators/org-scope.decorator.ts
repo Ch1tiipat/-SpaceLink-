@@ -4,7 +4,7 @@ export const ORG_SCOPE_KEY = 'orgScope';
 
 /**
  * The route params OrgScopeGuard knows how to resolve to an organization.
- * Each one is a step on the ownership chain (CLAUDE.md §5):
+ * Each one is a step on the ownership chain (AGENTS.md §5):
  * Organization -> Venue -> Zone -> Booth, with Event hanging off Organization.
  */
 export type OrgScopeParam =

@@ -1,0 +1,33 @@
+# Paths where a wrong change is expensive and easy to miss in review:
+# the frozen schema, the auth and multi-tenant chain, boot-time config, the
+# agent rules themselves, and this directory.
+
+# The frontend does not exist yet (SCRUM-20). Listed now so the first PR that
+# creates it is reviewed rather than merged on its own.
+/apps/web/                @Ch1tiipat
+
+# Token verification, role lookup, org scoping. A mistake here is a
+# cross-tenant data leak that shows up as a successful request (AGENTS.md §14.2).
+/apps/api/src/auth/       @Ch1tiipat
+
+# Guards, decorators and filters that the auth chain is assembled from.
+/apps/api/src/common/     @Ch1tiipat
+
+# Boot-time env validation. Loosening a rule here is how a misconfigured
+# deploy starts booting green (AGENTS.md §9).
+/apps/api/src/config/     @Ch1tiipat
+
+# PrismaService must stay lazily connected (AGENTS.md §6.4).
+/apps/api/src/prisma/     @Ch1tiipat
+
+# schema.prisma is frozen at v4 (AGENTS.md §2.1). Any diff under here needs
+# a human who knows that.
+/apps/api/prisma/         @Ch1tiipat
+
+# The single source of truth for agent rules, and its pointer.
+/AGENTS.md                @Ch1tiipat
+/CLAUDE.md                @Ch1tiipat
+
+# Including this file and the CI workflow — otherwise the protection can be
+# removed by the same PR it would have caught.
+/.github/                 @Ch1tiipat

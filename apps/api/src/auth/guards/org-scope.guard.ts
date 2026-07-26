@@ -29,7 +29,7 @@ interface OrgScopeRequest extends OrgScopedRequest {
 const RESOURCE_NOT_FOUND = 'Resource not found';
 
 /**
- * Last guard in the chain (CLAUDE.md §7, step 6). Takes the resource id from
+ * Last guard in the chain (AGENTS.md §7, step 6). Takes the resource id from
  * the route, walks the ownership chain to the organization that owns it, and
  * refuses the request unless the caller is a member of that organization.
  *

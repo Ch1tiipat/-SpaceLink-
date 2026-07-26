@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api:
+    name: apps/api
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    # Dummy values, and they must stay dummy.
+    #
+    # env.validation.ts checks that these variables are PRESENT, not that the
+    # credentials work (AGENTS.md §9). Nothing in this job opens a connection:
+    # `prisma generate` reads the schema file, `nest build` is a compile, and the
+    # tests mock PrismaService. So CI needs no Supabase project and no secret.
+    #
+    # Never point any of these at a real value or a ${{ secrets.* }} reference.
+    # A CI job that can reach the real database is a CI job that can drop it.
+    env:
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      DIRECT_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      SUPABASE_URL: https://placeholder.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: placeholder
+
+      # EXACTLY ONE of SUPABASE_JWT_SECRET / SUPABASE_JWKS_URL.
+      #
+      # env.validation.ts ends in `.xor('SUPABASE_JWT_SECRET',
+      # 'SUPABASE_JWKS_URL')` — a deliberate rule: with both set the token
+      # service silently picks JWKS and ignores the secret. Adding the other
+      # variable here does not make the job safer, it fails the job.
+      SUPABASE_JWT_SECRET: placeholder
+
+      # Keeps the run off the production branches of the schema. Under
+      # NODE_ENV=production, SLIP_VERIFIER and SLIP_VERIFIER_MODE become
+      # required; outside it they default to mock / always-verified, which is
+      # what CI wants. npm still installs devDependencies at NODE_ENV=test —
+      # only `production` omits them.
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # `npm ci`, not `npm install` — it installs exactly package-lock.json and
+      # fails if the lockfile and package.json disagree, which is a thing we
+      # want CI to catch rather than paper over.
+      - run: npm ci
+
+      # The Prisma client is generated code and is not committed, so it has to
+      # be built before anything can typecheck against it. Offline: it reads
+      # prisma/schema.prisma and touches no database.
+      - run: npx prisma generate
+
+      # The acceptance check for every backend task (AGENTS.md §10).
+      - run: npm run build
+
+      # Typechecks what `nest build` deliberately does not.
+      #
+      # tsconfig.build.json excludes prisma/ so that the emitted layout stays
+      # dist/main.js rather than dist/src/main.js — a correct decision, but it
+      # leaves prisma/seed.ts compiled by nothing. `tsc --noEmit` runs against
+      # the base tsconfig.json, which has no such exclude, so the seed is
+      # typechecked here or nowhere. It matters because SCRUM-22 is the ticket
+      # that fills that file in: today it is a stub, and by then it will be the
+      # one place in the repo writing rows by hand.
+      #
+      # --noEmit, so this never competes with `nest build` over dist/.
+      - run: npx tsc --noEmit
+
+      # `npx eslint`, not `npm run lint` — the lint script passes --fix, which
+      # would quietly rewrite files in the runner and report success on code
+      # that is not what was committed. CI checks, it does not edit.
+      #
+      # `src prisma`, for the same reason the tsc step exists: prisma/ is
+      # outside src/ and would otherwise be linted by nothing.
+      #
+      # Runs after build so a type error is reported as a type error. Several
+      # rules here are type-aware and would otherwise fail with confusing
+      # lint messages about the same broken types.
+      - run: npx eslint src prisma
+
+      - run: npm test

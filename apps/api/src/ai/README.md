@@ -47,6 +47,18 @@
 6. ห้ามส่งข้อมูลส่วนบุคคลเข้า prompt — ส่งได้แค่รหัสบูธ ชื่อโซน ราคา และชื่อหมวดสินค้า
    ห้ามส่งชื่อ อีเมล เบอร์โทร หรือข้อมูลสลิป (AGENTS.md §14.5)
 
+## `vendorUserId` ต้องมาจาก token เท่านั้น
+
+ตอนสร้าง controller ที่เรียก `ZoneRecommendationService.recommend()`
+**`vendorUserId` ต้องมาจาก `req.user.id` ที่ `SupabaseAuthGuard` ใส่ไว้ให้เท่านั้น
+ห้ามรับจาก request body, query string หรือ path param เด็ดขาด**
+
+เพราะค่านี้ถูกเขียนลง `recommendation_log.vendorUserId` ตรง ๆ ถ้ารับมาจาก client
+vendor คนหนึ่งก็ขอคำแนะนำ "ในนามของ" vendor อีกคนได้ ทำให้ log ของอีกคนเพี้ยน
+และเป็นการอ้างตัวตนคนอื่น (AGENTS.md §14.2 — ค่าที่ client ส่งมาไม่พิสูจน์อะไรเลย)
+ถ้าต่อไปมีหน้าให้ ORG_ADMIN ดูคำแนะนำแทน vendor ให้คุยกับทีมก่อน อย่าเปิดรับ
+พารามิเตอร์นี้จาก client เองเงียบ ๆ
+
 ## การบันทึกลง `recommendation_log`
 
 `ZoneRecommendationService` เขียนให้เอง 1 แถวต่อ 1 บูธที่แนะนำ

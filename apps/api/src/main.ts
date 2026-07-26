@@ -14,7 +14,7 @@ async function bootstrap() {
   app.enableCors({ origin: corsOrigin ?? true });
 
   // whitelist strips undeclared fields and forbidNonWhitelisted rejects the
-  // request outright (CLAUDE.md §14.4) — every request body needs a DTO.
+  // request outright (AGENTS.md §14.4) — every request body needs a DTO.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -24,11 +24,16 @@ async function bootstrap() {
   );
 
   // Prisma errors would otherwise surface as a 500 carrying Prisma's message,
-  // which names tables and columns (CLAUDE.md §14.5).
+  // which names tables and columns (AGENTS.md §14.5).
   app.useGlobalFilters(new PrismaExceptionFilter());
 
   app.setGlobalPrefix('api');
 
   await app.listen(config.get<number>('PORT', 3000));
 }
-bootstrap();
+// `void`, not a bare call: nothing can await the entry point, so the promise is
+// deliberately unhandled and says so. A rejection here — a failed env
+// validation, a port already in use — still surfaces as an unhandled rejection
+// and stops the process, which is the correct outcome for a server that could
+// not start.
+void bootstrap();

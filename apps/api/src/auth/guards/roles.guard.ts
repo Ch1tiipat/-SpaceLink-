@@ -9,7 +9,7 @@ import { User, UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 
 /**
- * Runs after SupabaseAuthGuard (CLAUDE.md §7, step 5).
+ * Runs after SupabaseAuthGuard (AGENTS.md §7, step 5).
  *
  * `req.user` is the `app_user` row the strategy loaded, so `user.role` already
  * comes from the database — this guard never reads a token claim.

@@ -14,14 +14,13 @@ import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 
 type CaughtPrismaError =
-  | Prisma.PrismaClientKnownRequestError
-  | Prisma.PrismaClientInitializationError;
+  Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientInitializationError;
 
 /**
  * Turns Prisma errors into ordinary HTTP responses.
  *
  * Prisma's own message names the table, column, and constraint that failed
- * (CLAUDE.md §14.5) — it is logged, never sent. The client gets a fixed string
+ * (AGENTS.md §14.5) — it is logged, never sent. The client gets a fixed string
  * built by the matching Nest exception class, so the body is identical in shape
  * to every other error the API returns: { statusCode, message, error }.
  *
@@ -44,7 +43,9 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       exception.stack,
     );
 
-    response.status(httpException.getStatus()).json(httpException.getResponse());
+    response
+      .status(httpException.getStatus())
+      .json(httpException.getResponse());
   }
 
   private toHttpException(exception: CaughtPrismaError): HttpException {

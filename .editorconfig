@@ -1,0 +1,14 @@
+# Editor defaults, so a file looks the same before Prettier runs as after.
+#
+# These values match apps/api/.prettierrc and Prettier's own defaults (2-space
+# indent, LF). Do not set anything here that Prettier would then undo — an
+# editor and a formatter disagreeing produces a diff on every save.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true

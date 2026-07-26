@@ -12,6 +12,17 @@ apart, and a stale rule an agent still trusts is worse than no rule at all. Ever
 
 ---
 
+## Getting started
+
+1. `git pull` on `main`
+2. `cd apps/api`
+3. `npm install`
+4. `cp .env.example .env` and fill it in (§9)
+5. `npm run build` — must exit 0
+6. Read the section for your area below. This list is a pointer, not a tutorial.
+
+---
+
 ## 1. What this project is
 
 SpaceLink is a **multi-tenant SaaS PWA marketplace for booking vendor booths at markets and events in Thailand**.
@@ -91,6 +102,7 @@ from one of those documents, **stop and ask** — do not infer it and do not rec
 | Database | PostgreSQL on **Supabase Pro** | |
 | File storage | **Supabase Storage** | Payment slips, venue map images. Not Cloudinary — the old proposal says Cloudinary, it is outdated. |
 | Auth | **Supabase Auth** (see §7) | **Email OTP / magic link.** Phone OTP requires a paid third-party SMS provider — out of budget, not in this phase. `phone` stays a profile field only. |
+| Token verification | **`jose`** | The backend only verifies tokens, so it needs a JWT library and nothing more. **Not passport / `@nestjs/passport`, not `@nestjs/jwt`** — a strategy framework and a token *issuer* are both more than this project does (§7). |
 | AI | **Gemini API — Flash / Flash-Lite only** | **Pro tier is forbidden** (cost control). Always have a rule-based fallback. |
 | Slip verification | SlipOK API (OK BASIC, free tier) | |
 | Push | `web-push` + VAPID | |
@@ -151,11 +163,13 @@ Prisma and foreign keys cannot express these. Every one must be enforced in a se
 
 1. **Venue match** — `booking.booth.zone.venue` must equal `booking.event.venue`
 2. **Date range** — booking start/end must fall inside event start/end
-3. **No double-booking** — one active booking per `(event, booth)`, active = `PENDING_PAYMENT` or `CONFIRMED`. Schema has a full `@@unique`; a **partial unique index** replacing it is pending in `prisma/sql/`
+3. **No double-booking** — one active booking per `(event, booth)`, active = `PENDING_PAYMENT` or `CONFIRMED`. Schema has a full `@@unique`, which also blocks a *cancelled* booking from being re-made; the **partial unique index** that replaces it is raw SQL and is not applied yet, so this invariant holds only in service code until someone applies it (§12, "Raw SQL")
 4. **Config authority** — `platform_config` writable by SUPER_ADMIN only; `org_config` by that org's ORG_ADMIN only
 5. **Blacklist** — `app_user.is_blacklisted` is a cache derived from accumulated `penalty.points`; never treat it as the source of truth
 6. **Quota** — active bookings per vendor per event ≤ `org_config.booking_quota_per_vendor`, falling back to `platform_config.default_booking_quota` (default 2)
-7. **Slip** — `verified_slip.amount` should equal `booking.booth_price`; `trans_ref` must be unique (duplicate-slip protection)
+7. **Slip** — `verified_slip.amount` should equal `booking.booth_price`; `trans_ref` must be unique (duplicate-slip protection).
+   **Check the status first: the comparison is only meaningful when `slipok_status === VERIFIED`.** A slip that was never read is still persisted, with `amount` set to `Decimal(0)` (`SlipVerificationService`) — so on a zero-price booth, or one that took the payment-exempt path, an amount-only comparison would happily pass for a slip nobody ever verified. Comparing amounts alone is not sufficient; gate on the status before the amounts are compared at all.
+   **Compare `Prisma.Decimal` with `.equals()`, never `==` or `===`.** Those compare object identity and are therefore always false, which fails silently in the safe-looking direction: the check appears to run and never matches.
 8. **Hold expiry** — a `PENDING_PAYMENT` booking past `hold_expires_at` is auto-cancelled by a scheduled job with `cancelled_by_role = SYSTEM`
 9. **Refund** — `refund_request.approved_amount` ≤ `booking.booth_price`
 
@@ -212,14 +226,32 @@ Because bookings may be payment-exempt, **never assume a `CONFIRMED` booking has
 
 ## 9. Environment variables (`apps/api`)
 
+The full list, as validated by `src/config/env.validation.ts`. `.env.example` documents every one of them.
+
 ```
-DATABASE_URL=      # Supabase pooled — port 6543, ends with ?pgbouncer=true&connection_limit=1
-DIRECT_URL=        # Supabase direct/session — port 5432, used for migrations only
+DATABASE_URL=              # Supabase pooled — port 6543, ends with ?pgbouncer=true&connection_limit=1
+DIRECT_URL=                # Supabase direct/session — port 5432, used for migrations only
 SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_JWT_SECRET=
+SUPABASE_SERVICE_ROLE_KEY= # backend only (§14.3)
+
+# Token signing — set EXACTLY ONE of these two
+SUPABASE_JWKS_URL=         # newer projects: asymmetric keys
+SUPABASE_JWT_SECRET=       # older projects: shared HS256 secret
+
+NODE_ENV=                  # development | production | test — defaults to development
+CORS_ORIGIN=               # blank allows any origin, which suits local dev
 PORT=3000
+
+SLIP_VERIFIER=mock                    # mock | manual | slipok
+SLIP_VERIFIER_MODE=always-verified    # always-verified | always-invalid — only read when SLIP_VERIFIER=mock
+ZONE_RECOMMENDER=rule                 # rule | gemini — defaults to rule
 ```
+
+**`SUPABASE_JWKS_URL` and `SUPABASE_JWT_SECRET` are mutually exclusive.** The schema ends in `.xor()` on the pair, so setting **both** fails the boot on purpose — it is not an oversight to be relaxed. A Supabase project signs one way or the other; with both set `SupabaseTokenService` silently picks JWKS and ignores the secret, so a half-finished migration would verify against whichever one nobody meant and look fine until it did not. Setting neither fails too, for the obvious reason.
+
+**`SLIP_VERIFIER` has no default when `NODE_ENV=production`** — it must be set explicitly there, and so must `SLIP_VERIFIER_MODE` when the verifier is `mock`. The mock verifier approves *every* slip, and an approved slip auto-confirms its booking with no human in the loop (§8 step 3), so a deploy that simply forgot the variable would hand out free bookings while looking completely healthy. Refusing to boot is the only failure mode anyone would notice. Outside production both default (`mock` / `always-verified`), which is what local dev and CI want.
+
+`slipok` and `gemini` are accepted by validation but have no implementation yet: their modules throw at boot, so the error names the missing ticket rather than an unknown env value.
 
 **Copy real values from the Supabase dashboard. Never hand-write them.** The pooled and direct URLs use different ports and different usernames; a typed-from-memory string will fail in ways that look like application bugs.
 
@@ -237,8 +269,13 @@ cd apps/api
 npm install
 npx prisma generate      # safe, run freely
 npx prisma validate      # safe
-npm run build            # the real gate — must exit 0
 npm run start:dev
+
+# the four gates — all must exit 0 (see "Definition of Done")
+npm run build
+npx tsc --noEmit
+npx eslint src prisma
+npm test
 
 # frontend
 cd apps/web
@@ -247,14 +284,14 @@ npm run dev
 npm run build
 ```
 
-`npm run build` is the acceptance check for every backend task. TypeScript must compile with zero errors.
+`npm run db:seed` opens a real connection, so it is a local command only — never run it in CI (see "Definition of Done").
 
 ---
 
 ## 11. How to work in this repo
 
 1. **Plan before acting.** For any task touching more than two files, list the files you will create or modify and wait for approval.
-2. **One task, one commit.** Message format: `SCRUM-18: setup NestJS + Prisma skeleton`.
+2. **One task, one commit.** For the message format, see "Definition of Done" below.
    When committing, use a heredoc (`<<'EOF'`) or a plain `-m` string. Do **not** use PowerShell
    here-string syntax (`@'...'@`) — the Bash tool is Git Bash and passes `@` through literally,
    which corrupts the commit message.
@@ -265,26 +302,123 @@ npm run build
 
 ---
 
-## 12. Current state (update this section as things change)
+## Definition of Done
 
-| | Status |
-|---|---|
-| Architecture design | Done |
-| ERD + schema v4 | Done, frozen |
-| Schema review vs requirements (SCRUM-16) | Done |
-| Frontend prototype (`prototype/`) | Exists as static HTML/JS/CSS with `localStorage`. Books at **Zone** level, has a fake login and a fake admin approval step — all three are obsolete under schema v4. Reference only. |
-| `apps/web` (real Next.js frontend) | **Not created yet** — SCRUM-20 |
-| Supabase project | **Not created yet** |
-| Database tables | **Do not exist yet** — no migration has ever been run |
-| Backend API | Not started (Sprint 6, SCRUM-18 onwards) |
-| Supplementary SQL (`prisma/sql/`) | Partial — review-rating CHECK written; partial unique index, blacklist trigger, hold-expiry check still to do |
-| Seed data | Not started |
+### Commit messages — two cases
 
-**What this means in practice:**
-- `npm run build` and `npm run start:dev` **must succeed** even with no database. Prisma connects lazily (§6.4) and `.env` holds placeholders (§9). A booting server is the expected outcome, not a lucky one.
-- Any command that actually opens a connection **will** fail: `prisma migrate`, `prisma studio`, or any endpoint that runs a query. This is expected — **it is not a code defect.** Report it and move on; do not attempt to fix it.
-- Never run `prisma migrate` yourself. A human runs the first migration after creating the Supabase project.
-- Runtime tests that need real data or a real token are **deferred**. Verify with `npm run build` and, where applicable, an unauthenticated `401` response.
+- **Work that delivers user-facing value** (feature, bugfix, endpoint, screen) **must have a Jira ticket**, and its commits start with that id:
+  `SCRUM-24: add booking endpoint`
+- **Maintenance work** (chore, docs, ci, refactor, test) uses a **conventional-commit prefix** instead:
+  `chore: add zone recommender seam`. **Do not create a Jira ticket only to satisfy the message format.**
+
+Infrastructure and scaffolding count as **maintenance even when they add new files** — guards, seams, filters and CI are `chore:`, not `feat:`. "New file" is not the test; "a user can now do something they could not do before" is.
+
+Two commits on `main` (`9c6ecba`, `fa36435`) used `feat:` before this rule existed. They were **not** rewritten: `main` is shared, and force-pushing it is forbidden. Leave them.
+
+### Gates — all four must exit 0
+
+```bash
+cd apps/api
+npm run build
+npx tsc --noEmit
+npx eslint src prisma
+npm test
+```
+
+All four run in CI on every pull request (`.github/workflows/ci.yml`), and `main` is protected, so they cannot be skipped by merging around them.
+
+**`tsc --noEmit` is not redundant with `npm run build`.** `tsconfig.build.json` excludes `prisma/` so that `nest build` emits `dist/main.js` rather than `dist/src/main.js` — a deliberate choice, but it leaves `prisma/seed.ts` compiled by nothing. `tsc --noEmit` runs against the base `tsconfig.json`, which has no such exclude, so the seed is typechecked there or nowhere. `npx eslint src prisma` covers `prisma/` for the same reason, and it is `npx eslint`, not `npm run lint`, because the lint script passes `--fix` — CI checks, it does not edit.
+
+### `prisma/seed.ts`
+
+It is a **typed stub**: it declares the foreign-key-safe insert order and inserts nothing. `npm run db:seed` **must never run in CI** — it opens a real database connection, and nothing in CI may be able to reach the real database. CI covers the file through `tsc --noEmit` and `eslint` only.
+
+**SCRUM-22** is the ticket that fills it in. Whoever takes it runs `db:seed` locally, against their own database.
+
+---
+
+## Seams
+
+`SLIP_VERIFIER` and `ZONE_RECOMMENDER` are **plug points** — the two places where a teammate's work drops in behind an interface the rest of the codebase already depends on.
+
+- **Their interfaces must not change without the PO.** Booking-side code binds to them, including code nobody has written yet. Adding a field is a change. Name any seam you touched in the PR template.
+- **Persistence and fallback live in the module's wrapper service** — `SlipVerificationService`, `ZoneRecommendationService` — **never in a provider.** A provider is a **pure adapter**: it converts one wire format into our types and returns. It does not write to the database, does not fall back to another provider, and does not swallow its own errors. It throws; the wrapper decides what that means.
+- The DI tokens stay internal to their module. Inject the wrapper service, never the token — injecting the token skips the fallback and the log row, which is exactly the failure nobody would notice.
+
+Entry points: **`src/slips/README.md`** and **`src/ai/README.md`**. Read the one for your seam before writing a provider.
+
+---
+
+## Guards and route protection
+
+- **`AuthModule` is `@Global()`.** Feature modules use `SupabaseAuthGuard`, `RolesGuard` and `OrgScopeGuard` without importing it. Do not add `AuthModule` to a feature module's `imports`.
+- **Every org-scoped route uses `@OrgScoped(param)`** (`src/auth/decorators/org-scoped.decorator.ts`). It applies the guards *and* the metadata together, in the order §7 requires.
+
+  **Do not take it apart into `@OrgScope` + `@UseGuards`.** `@OrgScope` alone is only metadata: it compiles, the tests pass, the endpoint returns 200, and it enforces **nothing**, because the guard that reads the metadata was never put on the route. There is no error to notice — the only symptom is that any authenticated vendor can read another organization's data.
+- **404, not 403.** A resource that belongs to another organization answers **404**, identical to a resource that does not exist. 403 would confirm the id is real to a caller with no right to know that. §14.1 already required this for payment slips; it now applies to **every** org-scoped route.
+
+---
+
+## 12. Where current status lives
+
+**Current status lives in Jira only.** This file holds rules, which do not change per sprint — a status table here goes stale between the day it is written and the day it is read, and a stale rule an agent still trusts is worse than no rule at all.
+
+### Raw SQL (`prisma/sql/`)
+
+Two invariants cannot be expressed in the Prisma schema and need raw SQL:
+
+- the **partial unique index** for double-booking (§6.3.3) — `@@unique` cannot be conditioned on status
+- the **blacklist trigger** (§6.3.5)
+
+The decision: **raw SQL lives in `prisma/sql/*.sql`, is committed to the repository, and is applied by hand** with `psql` against `DIRECT_URL` **after `prisma migrate` completes**. Prisma does not run these files; nothing runs them automatically.
+
+**Whoever runs a migration is responsible for applying the SQL files afterwards.** Until they are applied, **invariant §6.3.3 is not enforced by the database** and holds only as far as service code enforces it.
+
+### Working without a database
+
+**Permanent — this rule does not expire.** `npm run build` and `npm run start:dev` **must succeed with
+no database at all.** `PrismaService` connects lazily (§6.4) and `.env` may hold placeholders (§9), so
+a booting server is the expected outcome, not a lucky one. Any change that makes the boot depend on a
+reachable database is a defect no matter whose database happens to be up.
+
+**Conditional — true only while no real Supabase project is configured in the `.env` in front of you.**
+Once the first migration has run, connection errors stop being background noise and become ordinary
+bugs, so decide which situation you are in before you dismiss one. Start the API and ask it:
+
+```bash
+curl http://localhost:3000/api/health/db
+```
+
+- **503** (`database: "down"`) — nothing is reachable. Connection failures from `prisma studio`, the
+  seed, or any endpoint that runs a query are **expected and not a code defect.** Report and move on;
+  do not attempt to fix them.
+- **200** (`database: "up"`) — the database is up. A connection error is now a **real defect.**
+  Investigate it; do not cite this section to excuse it.
+
+The answer is per-reader — it reflects your own `.env`, not the state of the project as a whole.
+
+**Never run `prisma migrate` against a shared or team database** — the team's Supabase project, or any
+environment someone else depends on. A human coordinates those, and whoever runs one is responsible
+for applying the raw SQL above afterwards. Migrating **your own** scratch database is not what this
+forbids.
+
+**Tests that need a real token or real seeded data are deferred.** Verify with the four gates in
+"Definition of Done" — `npm run build`, `npx tsc --noEmit`, `npx eslint src prisma`, `npm test` — and,
+where a protected route is involved, an unauthenticated **401** is the available substitute.
+
+---
+
+## File ownership
+
+`.github/CODEOWNERS` is the authoritative list; it exists so a change to the frozen schema, the auth
+and multi-tenant chain, boot-time config, or the agent rules themselves cannot be merged without a
+human who knows what those files are for. If you touch a path listed there, expect review — do not
+work around it by splitting the change across paths.
+
+**`app.module.ts` is touched by everyone.** The only permitted edit is **adding your own module to
+the `imports` array, one line**. Do not reorder the array, do not modify `ConfigModule`, do not
+remove or "tidy" anyone else's entry. Every unnecessary edit to this file is a merge conflict for
+two other people.
 
 ---
 
