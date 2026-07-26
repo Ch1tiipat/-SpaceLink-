@@ -10,7 +10,7 @@ export interface SupabaseTokenClaims {
 }
 
 /**
- * Verifies Supabase-issued access tokens (CLAUDE.md §7). This backend only
+ * Verifies Supabase-issued access tokens (AGENTS.md §7). This backend only
  * verifies; it never signs or issues a token.
  *
  * Supabase issues either asymmetric keys (verified against a public JWKS
@@ -64,7 +64,7 @@ export class SupabaseTokenService {
 
     // Built by hand rather than with `new URL`, which would throw on the
     // placeholder value .env carries until Supabase setup is finished. A
-    // placeholder must still boot (CLAUDE.md §9); it just cannot verify a real
+    // placeholder must still boot (AGENTS.md §9); it just cannot verify a real
     // token, which is correct.
     this.issuer = `${supabaseUrl.replace(/\/+$/, '')}/auth/v1`;
 
@@ -113,7 +113,7 @@ export class SupabaseTokenService {
           : await jwtVerify(token, this.key, options));
     } catch {
       // The underlying error names the key, the algorithm and sometimes the
-      // token itself, so it is not passed on (CLAUDE.md §14.3).
+      // token itself, so it is not passed on (AGENTS.md §14.3).
       throw new UnauthorizedException('Invalid or expired token');
     }
 

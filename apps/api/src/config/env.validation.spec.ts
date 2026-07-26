@@ -61,7 +61,7 @@ describe('env validation', () => {
     /*
      * The finding this guards: an unset SLIP_VERIFIER in production used to
      * default to a mock that returns VERIFIED for every slip, which confirms a
-     * booking nobody paid for (CLAUDE.md §8 step 3). A deploy that forgot the
+     * booking nobody paid for (AGENTS.md §8 step 3). A deploy that forgot the
      * variable booted green.
      */
     it('refuses to boot in production when SLIP_VERIFIER is unset', () => {

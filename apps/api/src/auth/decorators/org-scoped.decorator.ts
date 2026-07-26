@@ -31,7 +31,7 @@ import { SupabaseAuthGuard } from '../guards/supabase-auth.guard';
  * on the route, which is exactly what this decorator does and why splitting it
  * back apart is not a refactor.
  *
- * Guard order is the chain in CLAUDE.md §7: SupabaseAuthGuard (verify token,
+ * Guard order is the chain in AGENTS.md §7: SupabaseAuthGuard (verify token,
  * provision `app_user`) → OrgScopeGuard (resolve organization, check
  * OrgMembership). `@Roles`/RolesGuard, where a route needs one, goes between
  * them via its own `@UseGuards` — this decorator deliberately does not bundle a

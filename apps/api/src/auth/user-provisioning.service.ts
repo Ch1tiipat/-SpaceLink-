@@ -3,7 +3,7 @@ import { Prisma, User, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * Just-in-time provisioning of `app_user` (CLAUDE.md §7, step 4).
+ * Just-in-time provisioning of `app_user` (AGENTS.md §7, step 4).
  *
  * Supabase Auth owns identity; it never writes to our database. The first time
  * a verified token arrives for an `auth_user_id` we have not seen, we create

@@ -37,7 +37,7 @@ export const validationSchema = Joi.object({
   //
   // No default in production, on purpose. The mock verifier returns VERIFIED
   // for every slip, and a VERIFIED slip auto-confirms its booking with no human
-  // in the loop (CLAUDE.md §8 step 3) — so a deploy that simply forgot this
+  // in the loop (AGENTS.md §8 step 3) — so a deploy that simply forgot this
   // variable would take payment-free bookings and look completely healthy doing
   // it. The only signal would be a per-call logger.warn nobody reads on a
   // hosted platform. Refusing to boot is the one failure mode that gets noticed.

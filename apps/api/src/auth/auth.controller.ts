@@ -5,7 +5,7 @@ import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
 
 /**
  * The only auth endpoint. There is no register, login, logout or refresh route
- * here by design (CLAUDE.md §7) — the browser talks to Supabase Auth directly.
+ * here by design (AGENTS.md §7) — the browser talks to Supabase Auth directly.
  */
 @Controller('auth')
 export class AuthController {

@@ -14,7 +14,7 @@ interface AuthenticatedRequest {
 }
 
 /**
- * First guard in the chain (CLAUDE.md §7): verifies the Supabase token and
+ * First guard in the chain (AGENTS.md §7): verifies the Supabase token and
  * puts the provisioned `app_user` row on `req.user`. Rejects with 401.
  *
  * `req.user` is always a database record, never the raw token — role and

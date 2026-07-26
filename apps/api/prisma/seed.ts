@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 /**
  * Seed script — STRUCTURE ONLY. It inserts nothing yet.
  *
- * No Supabase project exists and no migration has ever been run (CLAUDE.md
+ * No Supabase project exists and no migration has ever been run (AGENTS.md
  * §12), so there are no tables to write into. This file exists now so the
  * ordering decision below is made once, in the repository, rather than
  * rediscovered by whoever writes the first row against a live database.
@@ -29,7 +29,7 @@ const prisma = new PrismaClient();
  *
  * Steps 1-7 build the venue side, steps 8-9 the vendor side. `Booking` is
  * deliberately absent: it is the only row that both sides point at, and seeding
- * one would have to satisfy every invariant in CLAUDE.md §6.3 by hand. Seed the
+ * one would have to satisfy every invariant in AGENTS.md §6.3 by hand. Seed the
  * fixtures a booking needs; let the API create the booking.
  *
  * ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ const prisma = new PrismaClient();
  * their ids here.
  *
  * Money (`Booth.boothPrice`, `Zone.defaultBoothPrice`) is `Decimal(10,2)`.
- * Pass it as a string — `'1500.00'`, never `1500.0` (CLAUDE.md §6.1).
+ * Pass it as a string — `'1500.00'`, never `1500.0` (AGENTS.md §6.1).
  */
 /*
  * Not `async` yet, on purpose: every numbered step below is still a comment, and

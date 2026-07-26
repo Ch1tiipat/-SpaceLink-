@@ -20,7 +20,7 @@ type CaughtPrismaError =
  * Turns Prisma errors into ordinary HTTP responses.
  *
  * Prisma's own message names the table, column, and constraint that failed
- * (CLAUDE.md §14.5) — it is logged, never sent. The client gets a fixed string
+ * (AGENTS.md §14.5) — it is logged, never sent. The client gets a fixed string
  * built by the matching Nest exception class, so the body is identical in shape
  * to every other error the API returns: { statusCode, message, error }.
  *

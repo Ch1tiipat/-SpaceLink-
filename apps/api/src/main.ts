@@ -14,7 +14,7 @@ async function bootstrap() {
   app.enableCors({ origin: corsOrigin ?? true });
 
   // whitelist strips undeclared fields and forbidNonWhitelisted rejects the
-  // request outright (CLAUDE.md §14.4) — every request body needs a DTO.
+  // request outright (AGENTS.md §14.4) — every request body needs a DTO.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -24,7 +24,7 @@ async function bootstrap() {
   );
 
   // Prisma errors would otherwise surface as a 500 carrying Prisma's message,
-  // which names tables and columns (CLAUDE.md §14.5).
+  // which names tables and columns (AGENTS.md §14.5).
   app.useGlobalFilters(new PrismaExceptionFilter());
 
   app.setGlobalPrefix('api');
