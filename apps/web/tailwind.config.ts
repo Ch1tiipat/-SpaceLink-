@@ -12,6 +12,8 @@ const config: Config = {
         violet: '#6d3ce8',
         mist: '#f6f3ff',
         emerald: '#13795b',
+        muted: '#777287',
+        line: '#e8e5ef',
       },
       boxShadow: {
         soft: '0 20px 60px rgba(38, 30, 72, 0.10)',

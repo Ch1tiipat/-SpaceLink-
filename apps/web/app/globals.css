@@ -28,7 +28,7 @@ body {
     radial-gradient(circle at 82% -8%, rgba(109, 60, 232, 0.12), transparent 31rem),
     var(--background);
   color: var(--ink);
-  font-family: "Noto Sans Thai", "Leelawadee UI", system-ui, -apple-system, sans-serif;
+  font-family: "IBM Plex Sans Thai", "Leelawadee UI", system-ui, -apple-system, sans-serif;
 }
 
 button,

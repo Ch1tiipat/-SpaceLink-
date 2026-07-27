@@ -208,7 +208,7 @@ export default function DiscoveryPage() {
                       href={`/events/${event.id}`}
                       className="mt-5 flex items-center justify-between rounded-xl bg-mist px-4 py-3 text-sm font-extrabold text-violet transition group-hover:bg-violet group-hover:text-white"
                     >
-                      ดูแผนผังและเลือกบูธ <span aria-hidden>→</span>
+                      ดูรายละเอียดและแผนผัง <span aria-hidden>→</span>
                     </Link>
                   </div>
                 </article>

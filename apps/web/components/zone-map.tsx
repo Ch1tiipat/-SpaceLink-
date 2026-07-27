@@ -13,6 +13,7 @@ const palette = [
 ];
 
 type ZoneMapProps = {
+  readOnly?: boolean;
   zones: EventZone[];
   focusedZoneId: string | null;
   selectedBoothId: string | null;
@@ -36,6 +37,7 @@ function boothFill(
 }
 
 export function ZoneMap({
+  readOnly = false,
   zones,
   focusedZoneId,
   selectedBoothId,
@@ -84,6 +86,7 @@ export function ZoneMap({
         {focusedZoneId ? (
           <FocusedZone
             zone={visibleZones[0]}
+            readOnly={readOnly}
             color={palette[Math.max(0, zones.findIndex((zone) => zone.id === focusedZoneId)) % palette.length]}
             selectedBoothId={selectedBoothId}
             recommendedBoothId={recommendedBoothId}
@@ -176,6 +179,12 @@ function OverviewZone({
       }}
       className="cursor-pointer outline-none"
     >
+      <title>
+        {`${zone.name ?? `โซน ${zone.code}`} รองรับ ${
+          zone.categories.map((category) => category.name).join(', ') ||
+          'สินค้าตามที่ผู้จัดกำหนด'
+        } มี ${available} บูธว่าง`}
+      </title>
       <rect
         x={x}
         y={y}
@@ -248,12 +257,14 @@ function OverviewZone({
 
 function FocusedZone({
   zone,
+  readOnly,
   color,
   selectedBoothId,
   recommendedBoothId,
   onSelectBooth,
 }: {
   zone: EventZone | undefined;
+  readOnly: boolean;
   color: (typeof palette)[number];
   selectedBoothId: string | null;
   recommendedBoothId: string | null;
@@ -312,21 +323,41 @@ function FocusedZone({
         return (
           <g
             key={booth.id}
-            role="button"
-            tabIndex={unavailable ? -1 : 0}
+            role={readOnly ? undefined : 'button'}
+            tabIndex={readOnly || unavailable ? -1 : 0}
             aria-disabled={unavailable}
-            aria-label={`บูธ ${booth.code} ${booth.availability}`}
+            aria-label={
+              readOnly
+                ? undefined
+                : `บูธ ${booth.code} ${booth.availability}`
+            }
             onClick={(event) => {
               event.stopPropagation();
-              if (!unavailable) onSelectBooth(booth);
+              if (!readOnly && !unavailable) onSelectBooth(booth);
             }}
             onKeyDown={(event) => {
-              if (!unavailable && (event.key === 'Enter' || event.key === ' ')) {
+              if (
+                !readOnly &&
+                !unavailable &&
+                (event.key === 'Enter' || event.key === ' ')
+              ) {
                 onSelectBooth(booth);
               }
             }}
-            className={unavailable ? 'cursor-not-allowed' : 'cursor-pointer outline-none'}
+            className={
+              readOnly
+                ? undefined
+                : unavailable
+                  ? 'cursor-not-allowed'
+                  : 'cursor-pointer outline-none'
+            }
           >
+            <title>
+              {`บูธ ${booth.code} · ${booth.availability} · ${
+                zone.categories.map((category) => category.name).join(', ') ||
+                'สินค้าตามที่ผู้จัดกำหนด'
+              }`}
+            </title>
             {booth.id === recommendedBoothId && (
               <rect
                 x={x - 6}

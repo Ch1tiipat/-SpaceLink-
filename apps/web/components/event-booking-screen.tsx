@@ -191,8 +191,8 @@ export function EventBookingScreen({ eventId }: { eventId: string }) {
 
       <section className="border-b border-[#e9e5ef] bg-white">
         <div className="shell py-7">
-          <Link href="/" className="text-sm font-bold text-violet">
-            ← กลับไปค้นหา Event
+          <Link href={`/events/${eventId}`} className="text-sm font-bold text-violet">
+            ← กลับรายละเอียด Event
           </Link>
           <div className="mt-5 flex flex-wrap items-start justify-between gap-5">
             <div>
