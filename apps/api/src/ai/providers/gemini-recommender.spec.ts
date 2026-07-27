@@ -94,9 +94,13 @@ describe('GeminiZoneRecommender', () => {
       'gemini-secret',
     );
     const body = init?.body as string;
+    const request = JSON.parse(body) as {
+      generationConfig?: { temperature?: number };
+    };
     expect(body).toContain('booth-a1');
     expect(body).toContain('food-category');
     expect(body).not.toContain('private-user-id');
+    expect(request.generationConfig).not.toHaveProperty('temperature');
   });
 
   it('rejects a booth that was not in the candidate list', async () => {

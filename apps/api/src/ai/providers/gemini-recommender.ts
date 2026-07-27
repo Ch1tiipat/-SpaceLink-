@@ -190,7 +190,6 @@ function requestBody(
       },
     ],
     generationConfig: {
-      temperature: 0.2,
       maxOutputTokens: 1200,
       responseMimeType: 'application/json',
       responseSchema: {
