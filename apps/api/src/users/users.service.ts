@@ -16,8 +16,10 @@ export class UsersService {
     return this.prisma.user.findMany();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  findOne(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+    });
   }
 
   // TODO(SCRUM-24): implement Prisma create/update

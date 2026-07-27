@@ -3,6 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
 
+jest.mock('../auth/guards/supabase-auth.guard', () => ({
+  SupabaseAuthGuard: class SupabaseAuthGuard {},
+}));
+
 const mockPrismaService = {};
 
 describe('OrganizationsController', () => {

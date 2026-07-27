@@ -1,24 +1,15 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { BoothsService } from './booths.service';
-import { CreateBoothDto } from './dto/create-booth.dto';
-import { UpdateBoothDto } from './dto/update-booth.dto';
 
 @Controller('booths')
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
 export class BoothsController {
   constructor(private readonly boothsService: BoothsService) {}
-
-  @Post()
-  create(@Body() createBoothDto: CreateBoothDto) {
-    return this.boothsService.create(createBoothDto);
-  }
 
   @Get()
   findAll() {
@@ -28,15 +19,5 @@ export class BoothsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.boothsService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateBoothDto: UpdateBoothDto) {
-    return this.boothsService.update(id, updateBoothDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.boothsService.remove(id);
   }
 }

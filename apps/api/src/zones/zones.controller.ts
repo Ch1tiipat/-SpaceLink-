@@ -1,24 +1,15 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { ZonesService } from './zones.service';
-import { CreateZoneDto } from './dto/create-zone.dto';
-import { UpdateZoneDto } from './dto/update-zone.dto';
 
 @Controller('zones')
+@UseGuards(SupabaseAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN)
 export class ZonesController {
   constructor(private readonly zonesService: ZonesService) {}
-
-  @Post()
-  create(@Body() createZoneDto: CreateZoneDto) {
-    return this.zonesService.create(createZoneDto);
-  }
 
   @Get()
   findAll() {
@@ -28,15 +19,5 @@ export class ZonesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.zonesService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateZoneDto: UpdateZoneDto) {
-    return this.zonesService.update(id, updateZoneDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.zonesService.remove(id);
   }
 }
