@@ -1,11 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZonesController } from './zones.controller';
 import { ZonesService } from './zones.service';
-
-jest.mock('../auth/guards/supabase-auth.guard', () => ({
-  SupabaseAuthGuard: class SupabaseAuthGuard {},
-}));
 
 const mockPrismaService = {};
 
@@ -26,5 +23,14 @@ describe('ZonesController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('keeps public reads unguarded and exposes no mutation handlers', () => {
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, ZonesController),
+    ).toBeUndefined();
+    expect(ZonesController.prototype).not.toHaveProperty('create');
+    expect(ZonesController.prototype).not.toHaveProperty('update');
+    expect(ZonesController.prototype).not.toHaveProperty('remove');
   });
 });

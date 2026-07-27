@@ -1,11 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { BoothsController } from './booths.controller';
 import { BoothsService } from './booths.service';
-
-jest.mock('../auth/guards/supabase-auth.guard', () => ({
-  SupabaseAuthGuard: class SupabaseAuthGuard {},
-}));
 
 const mockPrismaService = {};
 
@@ -26,5 +23,14 @@ describe('BoothsController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('keeps public reads unguarded and exposes no mutation handlers', () => {
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, BoothsController),
+    ).toBeUndefined();
+    expect(BoothsController.prototype).not.toHaveProperty('create');
+    expect(BoothsController.prototype).not.toHaveProperty('update');
+    expect(BoothsController.prototype).not.toHaveProperty('remove');
   });
 });
