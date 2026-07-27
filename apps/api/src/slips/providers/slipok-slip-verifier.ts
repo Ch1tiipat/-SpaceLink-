@@ -50,9 +50,10 @@ export class SlipOkSlipVerifier implements SlipVerifier {
   async verify(input: SlipVerificationInput): Promise<SlipVerificationResult> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let response: Response;
 
     try {
-      const response = await fetch(
+      response = await fetch(
         `${SLIPOK_API_BASE_URL}/${encodeURIComponent(this.branchId)}`,
         {
           method: 'POST',
@@ -71,20 +72,18 @@ export class SlipOkSlipVerifier implements SlipVerifier {
           signal: controller.signal,
         },
       );
-
-      const payload = await parsePayload(response);
-      return mapResponse(response.ok, payload);
     } catch (error) {
-      return {
-        status: SlipStatus.ERROR,
-        message:
-          error instanceof DOMException && error.name === 'AbortError'
-            ? 'SlipOK request timed out'
-            : 'SlipOK service is unavailable',
-      };
+      throw new Error(
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'SlipOK request timed out'
+          : 'SlipOK service is unavailable',
+      );
     } finally {
       clearTimeout(timeout);
     }
+
+    const payload = await parsePayload(response);
+    return mapResponse(response.ok, payload);
   }
 }
 
@@ -153,13 +152,14 @@ function mapResponse(
   }
 
   // Authentication, quota, package, temporary bank delay, upstream failure,
-  // and unknown codes are operational failures. A genuine slip must never be
-  // labelled invalid merely because its verifier is unavailable.
-  return {
-    status: SlipStatus.ERROR,
-    raw: payload,
-    message,
-  };
+  // and unknown codes are operational failures rather than slip facts. Let the
+  // wrapper/caller decide whether to retry or use a fallback; a pure provider
+  // must not turn an unavailable upstream into a persisted slip outcome.
+  throw new Error(
+    code === undefined
+      ? `SlipOK request failed with HTTP status`
+      : `SlipOK request failed with provider code ${code}`,
+  );
 }
 
 function required(config: ConfigService, key: string): string {

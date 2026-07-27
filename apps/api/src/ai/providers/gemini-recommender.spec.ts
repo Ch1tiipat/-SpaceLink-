@@ -53,6 +53,7 @@ describe('GeminiZoneRecommender', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -130,6 +131,47 @@ describe('GeminiZoneRecommender', () => {
         productCategoryIds: [],
       }),
     ).rejects.toThrow('invalid JSON');
+  });
+
+  it('throws on Gemini HTTP errors so the service can fall back', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'rate limited' } }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      recommender().recommend({
+        eventId: 'event-1',
+        vendorUserId: 'vendor-1',
+        productCategoryIds: [],
+      }),
+    ).rejects.toThrow('Gemini returned HTTP 429');
+  });
+
+  it('aborts a slow Gemini request so the service can fall back', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(global, 'fetch').mockImplementation((_url, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const work = recommender().recommend({
+      eventId: 'event-1',
+      vendorUserId: 'vendor-1',
+      productCategoryIds: [],
+    });
+    const rejection = expect(work).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    await jest.advanceTimersByTimeAsync(4_000);
+
+    await rejection;
   });
 
   it('refuses a Pro model', () => {

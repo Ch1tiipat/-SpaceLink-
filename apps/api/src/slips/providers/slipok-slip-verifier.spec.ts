@@ -25,6 +25,7 @@ function response(body: unknown, status = 200): Response {
 
 describe('SlipOkSlipVerifier', () => {
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -97,28 +98,42 @@ describe('SlipOkSlipVerifier', () => {
   );
 
   it.each([1002, 1003, 1004, 1009, 1010])(
-    'maps provider/service code %s to ERROR',
+    'throws for provider/service code %s',
     async (code) => {
       jest
         .spyOn(global, 'fetch')
         .mockResolvedValue(response({ code, message: 'service error' }, 400));
 
-      const result = await verifier().verify(INPUT);
-
-      expect(result.status).toBe(SlipStatus.ERROR);
+      await expect(verifier().verify(INPUT)).rejects.toThrow(
+        `SlipOK request failed with provider code ${code}`,
+      );
     },
   );
 
-  it('returns ERROR when SlipOK is unreachable and does not leak inputs', async () => {
+  it('throws when SlipOK is unreachable and does not leak inputs', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
 
-    const result = await verifier().verify(INPUT);
+    const work = verifier().verify(INPUT);
 
-    expect(result).toEqual({
-      status: SlipStatus.ERROR,
-      message: 'SlipOK service is unavailable',
+    await expect(work).rejects.toThrow('SlipOK service is unavailable');
+    await expect(work).rejects.not.toThrow(INPUT.slipImageUrl);
+    await expect(work).rejects.not.toThrow('api-key-secret');
+  });
+
+  it('aborts and throws when SlipOK times out', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(global, 'fetch').mockImplementation((_url, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
     });
-    expect(result.message).not.toContain(INPUT.slipImageUrl);
-    expect(result.message).not.toContain('api-key-secret');
+
+    const work = verifier().verify(INPUT);
+    const rejection = expect(work).rejects.toThrow('SlipOK request timed out');
+    await jest.advanceTimersByTimeAsync(8_000);
+
+    await rejection;
   });
 });
