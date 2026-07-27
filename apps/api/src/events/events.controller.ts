@@ -25,6 +25,11 @@ export class EventsController {
     return this.eventsService.findAll();
   }
 
+  @Get(':id/map')
+  findMap(@Param('id') id: string) {
+    return this.eventsService.findMap(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
