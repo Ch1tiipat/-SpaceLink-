@@ -10,7 +10,22 @@ export type EventSummary = {
   status: string;
 };
 
+export type DiscoveryEvent = EventSummary & {
+  organization: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  };
+  venue: {
+    id: string;
+    name: string;
+    address: string | null;
+  };
+  categories: { id: string; name: string }[];
+};
+
 export type BoothAvailability = 'AVAILABLE' | 'HELD' | 'BOOKED' | 'UNAVAILABLE';
+export type BoothTier = 'S' | 'A' | 'B' | 'C';
 
 export type EventBooth = {
   id: string;
@@ -22,6 +37,7 @@ export type EventBooth = {
   posX: string | null;
   posY: string | null;
   availability: BoothAvailability;
+  tier: BoothTier | null;
 };
 
 export type EventZone = {
@@ -40,6 +56,13 @@ export type EventMap = {
     mapImageUrl: string | null;
     contactPhone: string | null;
     contactEmail: string | null;
+    organization: {
+      id: string;
+      name: string;
+      contactEmail: string;
+      contactPhone: string | null;
+      logoUrl: string | null;
+    };
     venue: { id: string; name: string; address: string | null };
     policy: {
       generalRules: string | null;
@@ -50,9 +73,7 @@ export type EventMap = {
   zones: EventZone[];
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ??
-  'http://localhost:3000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(
@@ -65,10 +86,29 @@ export class ApiError extends Error {
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    signal,
-    headers: { Accept: 'application/json' },
-  });
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      signal,
+      headers: { Accept: 'application/json' },
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw cause;
+    }
+
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง',
+      0,
+    );
+  }
 
   if (!response.ok) {
     throw new ApiError(
@@ -82,13 +122,16 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function getEvents(signal?: AbortSignal): Promise<EventSummary[]> {
-  return getJson<EventSummary[]>('/events', signal);
+export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
+  return getJson<DiscoveryEvent[]>('/events/discovery', signal);
 }
 
 export function getEventMap(
   eventId: string,
   signal?: AbortSignal,
 ): Promise<EventMap> {
-  return getJson<EventMap>(`/events/${encodeURIComponent(eventId)}/map`, signal);
+  return getJson<EventMap>(
+    `/events/${encodeURIComponent(eventId)}/map`,
+    signal,
+  );
 }

@@ -5,11 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
 
 const findUnique = jest.fn();
-const findMany = jest.fn();
+const findFirst = jest.fn();
+const eventFindMany = jest.fn();
+const zoneFindMany = jest.fn();
 
 const mockPrismaService = {
-  event: { findUnique },
-  zone: { findMany },
+  event: { findUnique, findFirst, findMany: eventFindMany },
+  zone: { findMany: zoneFindMany },
 };
 
 describe('EventsService', () => {
@@ -32,16 +34,97 @@ describe('EventsService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('findDiscovery', () => {
+    it('returns only public discovery fields with unique categories', async () => {
+      eventFindMany.mockResolvedValue([
+        {
+          id: 'event-1',
+          name: 'Future Tech Expo',
+          description: null,
+          startDate: new Date('2026-09-10'),
+          endDate: new Date('2026-09-12'),
+          startTime: '09:00',
+          endTime: '20:00',
+          bannerUrl: null,
+          status: 'PUBLISHED',
+          organization: {
+            id: 'org-1',
+            name: 'SpaceLink University',
+            logoUrl: null,
+          },
+          venue: {
+            id: 'venue-1',
+            name: 'Convention Center',
+            address: 'Nakhon Ratchasima',
+            zones: [
+              {
+                categories: [
+                  {
+                    category: {
+                      id: 'category-1',
+                      name: 'Technology',
+                    },
+                  },
+                ],
+              },
+              {
+                categories: [
+                  {
+                    category: {
+                      id: 'category-1',
+                      name: 'Technology',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ]);
+
+      const result = await service.findDiscovery();
+
+      expect(result[0]).toMatchObject({
+        id: 'event-1',
+        organization: { id: 'org-1', name: 'SpaceLink University' },
+        venue: {
+          id: 'venue-1',
+          name: 'Convention Center',
+          address: 'Nakhon Ratchasima',
+        },
+        categories: [{ id: 'category-1', name: 'Technology' }],
+      });
+      expect(result[0].venue).not.toHaveProperty('zones');
+      expect(eventFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: { in: ['PUBLISHED', 'ONGOING'] },
+          },
+        }),
+      );
+    });
+  });
+
   describe('findMap', () => {
     it('returns a public map and converts booking state to availability', async () => {
-      findUnique.mockResolvedValue({
+      findFirst.mockResolvedValue({
         id: 'event-1',
         venueId: 'venue-1',
         name: 'SUT Agri Fair 2026',
+        organization: {
+          id: 'org-1',
+          name: 'SUT',
+          contactEmail: 'contact@example.com',
+          contactPhone: null,
+          logoUrl: null,
+          orgConfig: {
+            tierThresholds: { S: 2000, A: 1500, B: 1000 },
+          },
+        },
         venue: { id: 'venue-1', name: 'SUT', address: null },
         policy: null,
       });
-      findMany.mockResolvedValue([
+      zoneFindMany.mockResolvedValue([
         {
           id: 'zone-1',
           code: 'A',
@@ -90,6 +173,7 @@ describe('EventsService', () => {
             boothPrice: '1500',
             widthM: '3',
             availability: 'AVAILABLE',
+            tier: 'A',
           },
           {
             code: 'A02',
@@ -102,13 +186,21 @@ describe('EventsService', () => {
     });
 
     it('marks a pending-payment booking as held', async () => {
-      findUnique.mockResolvedValue({
+      findFirst.mockResolvedValue({
         id: 'event-1',
         venueId: 'venue-1',
+        organization: {
+          id: 'org-1',
+          name: 'SUT',
+          contactEmail: 'contact@example.com',
+          contactPhone: null,
+          logoUrl: null,
+          orgConfig: null,
+        },
         venue: { id: 'venue-1', name: 'SUT', address: null },
         policy: null,
       });
-      findMany.mockResolvedValue([
+      zoneFindMany.mockResolvedValue([
         {
           id: 'zone-1',
           code: 'A',
@@ -140,12 +232,12 @@ describe('EventsService', () => {
     });
 
     it('throws 404 when the event does not exist', async () => {
-      findUnique.mockResolvedValue(null);
+      findFirst.mockResolvedValue(null);
 
       await expect(service.findMap('missing')).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(findMany).not.toHaveBeenCalled();
+      expect(zoneFindMany).not.toHaveBeenCalled();
     });
   });
 });

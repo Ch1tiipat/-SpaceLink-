@@ -7,7 +7,8 @@ import { ZoneMap } from '@/components/zone-map';
 import { getEventMap, type EventMap, type EventZone } from '@/lib/api';
 
 function availableCount(zone: EventZone) {
-  return zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length;
+  return zone.booths.filter((booth) => booth.availability === 'AVAILABLE')
+    .length;
 }
 
 export function EventMapScreen({ eventId }: { eventId: string }) {
@@ -21,8 +22,11 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     getEventMap(eventId, controller.signal)
       .then(setData)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
+        setError(
+          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
+        );
       });
 
     return () => controller.abort();
@@ -52,7 +56,10 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         <div className="shell py-20 text-center">
           <p className="text-2xl font-bold">เปิด Zone Map ไม่ได้</p>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
-          <Link href="/" className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white">
+          <Link
+            href="/"
+            className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white"
+          >
             กลับหน้าค้นหา Event
           </Link>
         </div>
@@ -65,10 +72,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       <AppHeader />
       <section className="border-b border-line bg-white">
         <div className="shell py-7">
-          <Link href={`/events/${eventId}`} className="text-sm font-bold text-violet">
+          <Link
+            href={`/events/${eventId}`}
+            className="text-sm font-bold text-violet"
+          >
             ← กลับรายละเอียด Event
           </Link>
-          <div className="mt-5 flex flex-wrap items-end justify-between gap-5">
+          <div className="mt-5">
             <div>
               <span className="rounded-full bg-mist px-3 py-1 text-xs font-bold text-violet">
                 Read-only zone map
@@ -80,12 +90,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                 สำรวจโซน ประเภทสินค้า และสถานะบูธ โดยยังไม่มีการสร้างรายการจอง
               </p>
             </div>
-            <Link
-              href={`/events/${eventId}/book`}
-              className="rounded-xl border border-violet/20 bg-white px-4 py-3 text-sm font-bold text-violet"
-            >
-              เปิด Booking Prototype
-            </Link>
           </div>
         </div>
       </section>
@@ -104,7 +108,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <option value="">ดูพื้นที่ทั้งหมด</option>
               {data.zones.map((zone) => (
                 <option key={zone.id} value={zone.id}>
-                  {zone.code} — {zone.name ?? 'ไม่ระบุชื่อ'} ({availableCount(zone)} ว่าง)
+                  {zone.code} — {zone.name ?? 'ไม่ระบุชื่อ'} (
+                  {availableCount(zone)} ว่าง)
                 </option>
               ))}
             </select>
@@ -113,6 +118,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           <div className="mt-5">
             <ZoneMap
               readOnly
+              mapImageUrl={data.event.mapImageUrl}
               zones={data.zones}
               focusedZoneId={focusedZoneId}
               selectedBoothId={null}
@@ -144,14 +150,16 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <InfoRow
                 label="สินค้า"
                 value={
-                  focusedZone.categories.map((category) => category.name).join(', ') ||
-                  'ยังไม่ระบุ'
+                  focusedZone.categories
+                    .map((category) => category.name)
+                    .join(', ') || 'ยังไม่ระบุ'
                 }
               />
             </dl>
           )}
           <div className="mt-5 rounded-2xl bg-mist p-4 text-sm leading-6 text-muted">
-            หน้านี้แสดงข้อมูลแบบอ่านอย่างเดียว การคลิกบูธจะไม่สร้างหรือยืนยันการจอง
+            หน้านี้แสดงข้อมูลแบบอ่านอย่างเดียว
+            การคลิกบูธจะไม่สร้างหรือยืนยันการจอง
           </div>
         </aside>
       </div>

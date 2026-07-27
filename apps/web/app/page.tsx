@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
-import { getEvents, type EventSummary } from '@/lib/api';
+import { getEvents, type DiscoveryEvent } from '@/lib/api';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -11,7 +11,7 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   year: 'numeric',
 });
 
-function formatDateRange(event: EventSummary) {
+function formatDateRange(event: DiscoveryEvent) {
   return `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(
     new Date(event.endDate),
   )}`;
@@ -20,9 +20,10 @@ function formatDateRange(event: EventSummary) {
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     DRAFT: 'เตรียมเปิดรับสมัคร',
-    OPEN: 'เปิดรับจอง',
-    PUBLISHED: 'เปิดรับจอง',
-    CLOSED: 'ปิดรับจอง',
+    OPEN: 'เผยแพร่แล้ว',
+    PUBLISHED: 'เผยแพร่แล้ว',
+    ONGOING: 'กำลังจัดงาน',
+    CLOSED: 'ปิดงาน',
     CANCELLED: 'ยกเลิก',
     COMPLETED: 'จบงานแล้ว',
   };
@@ -31,8 +32,11 @@ function statusLabel(status: string) {
 }
 
 export default function DiscoveryPage() {
-  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [query, setQuery] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
+  const [area, setArea] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,8 +46,11 @@ export default function DiscoveryPage() {
     getEvents(controller.signal)
       .then(setEvents)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
+        setError(
+          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
+        );
       })
       .finally(() => setLoading(false));
 
@@ -52,14 +59,55 @@ export default function DiscoveryPage() {
 
   const visibleEvents = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('th');
-    if (!keyword) return events;
 
-    return events.filter((event) =>
-      `${event.name} ${event.description ?? ''}`
-        .toLocaleLowerCase('th')
-        .includes(keyword),
-    );
-  }, [events, query]);
+    return events.filter((event) => {
+      const matchesKeyword =
+        !keyword ||
+        `${event.name} ${event.description ?? ''} ${event.organization.name} ${
+          event.venue.name
+        }`
+          .toLocaleLowerCase('th')
+          .includes(keyword);
+      const matchesOrganization =
+        !organizationId || event.organization.id === organizationId;
+      const matchesArea = !area || event.venue.address === area;
+      const matchesCategory =
+        !categoryId ||
+        event.categories.some((category) => category.id === categoryId);
+
+      return (
+        matchesKeyword && matchesOrganization && matchesArea && matchesCategory
+      );
+    });
+  }, [area, categoryId, events, organizationId, query]);
+
+  const filters = useMemo(
+    () => ({
+      organizations: uniqueOptions(
+        events.map((event) => ({
+          value: event.organization.id,
+          label: event.organization.name,
+        })),
+      ),
+      areas: uniqueOptions(
+        events
+          .filter((event) => event.venue.address)
+          .map((event) => ({
+            value: event.venue.address ?? '',
+            label: event.venue.address ?? '',
+          })),
+      ),
+      categories: uniqueOptions(
+        events.flatMap((event) =>
+          event.categories.map((category) => ({
+            value: category.id,
+            label: category.name,
+          })),
+        ),
+      ),
+    }),
+    [events],
+  );
 
   return (
     <main>
@@ -77,27 +125,54 @@ export default function DiscoveryPage() {
             </span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[#6f697d]">
-            รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง และจองพื้นที่ได้จากแผนผังจริง
+            รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
+            และตรวจสอบพื้นที่ได้จากแผนผังจริง
           </p>
 
-          <label className="mt-9 flex max-w-xl items-center gap-3 rounded-2xl border border-[#e8e3f1] bg-white p-2 pl-5 shadow-soft">
-            <span aria-hidden className="text-xl text-[#8b849a]">
-              ⌕
-            </span>
-            <span className="sr-only">ค้นหา Event</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base outline-none placeholder:text-[#aaa4b6]"
-              placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
-            />
-            <button
-              type="button"
-              className="rounded-xl bg-violet px-5 py-3 font-bold text-white shadow-lg shadow-violet/20"
-            >
-              ค้นหา
-            </button>
-          </label>
+          <form
+            className="mt-9 max-w-2xl"
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5 shadow-soft">
+              <span aria-hidden className="text-xl text-muted">
+                ⌕
+              </span>
+              <span className="sr-only">ค้นหา Event</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base outline-none placeholder:text-muted"
+                placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
+              />
+              <button
+                type="submit"
+                className="rounded-xl bg-violet px-5 py-3 font-bold text-white shadow-lg shadow-violet/20"
+              >
+                ค้นหา
+              </button>
+            </label>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <FilterSelect
+                label="ผู้จัดงาน"
+                value={organizationId}
+                onChange={setOrganizationId}
+                options={filters.organizations}
+              />
+              <FilterSelect
+                label="จังหวัด / พื้นที่"
+                value={area}
+                onChange={setArea}
+                options={filters.areas}
+              />
+              <FilterSelect
+                label="ประเภทสินค้า"
+                value={categoryId}
+                onChange={setCategoryId}
+                options={filters.categories}
+              />
+            </div>
+          </form>
         </div>
 
         <div className="relative hidden min-h-[390px] lg:block" aria-hidden>
@@ -117,13 +192,18 @@ export default function DiscoveryPage() {
                     <div
                       className={[
                         'mb-3 h-3 rounded-full',
-                        ['bg-orange-300', 'bg-green-400', 'bg-teal-400', 'bg-violet-400'][
-                          index
-                        ],
+                        [
+                          'bg-orange-300',
+                          'bg-green-400',
+                          'bg-teal-400',
+                          'bg-violet-400',
+                        ][index],
                       ].join(' ')}
                     />
                     <p className="text-sm font-extrabold">{name}</p>
-                    <p className="mt-1 text-xs text-[#918a9f]">{8 + index * 2} บูธว่าง</p>
+                    <p className="mt-1 text-xs text-[#918a9f]">
+                      {8 + index * 2} บูธว่าง
+                    </p>
                   </div>
                 ),
               )}
@@ -140,7 +220,7 @@ export default function DiscoveryPage() {
                 Events
               </p>
               <h2 className="mt-2 text-3xl font-black tracking-[-0.04em]">
-                งานที่กำลังเปิดให้จอง
+                งานที่เปิดให้สำรวจพื้นที่
               </h2>
             </div>
             <p className="text-sm text-[#817b8e]">
@@ -158,18 +238,28 @@ export default function DiscoveryPage() {
 
           {!loading && error && (
             <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-8">
-              <p className="font-extrabold text-red-800">โหลดรายการ Event ไม่สำเร็จ</p>
+              <p className="font-extrabold text-red-800">
+                โหลดรายการ Event ไม่สำเร็จ
+              </p>
               <p className="mt-2 text-sm text-red-700">
                 {error} — ตรวจสอบว่า NestJS API เปิดอยู่และตั้งค่า
-                NEXT_PUBLIC_API_BASE_URL ถูกต้อง
+                NEXT_PUBLIC_API_URL ถูกต้อง
               </p>
             </div>
           )}
 
           {!loading && !error && visibleEvents.length === 0 && (
             <div className="mt-8 rounded-3xl border border-dashed border-[#d9d3e5] bg-white p-12 text-center">
-              <p className="text-lg font-extrabold">ยังไม่พบ Event ที่ค้นหา</p>
-              <p className="mt-2 text-sm text-[#817b8e]">ลองใช้ชื่อหรือคำค้นอื่นอีกครั้ง</p>
+              <p className="text-lg font-extrabold">
+                {events.length === 0
+                  ? 'ยังไม่มี Event ที่เผยแพร่'
+                  : 'ยังไม่พบ Event ที่ค้นหา'}
+              </p>
+              <p className="mt-2 text-sm text-[#817b8e]">
+                {events.length === 0
+                  ? 'Event สถานะ PUBLISHED หรือ ONGOING จะแสดงที่หน้านี้'
+                  : 'ลองเปลี่ยนคำค้นหาหรือตัวกรองแล้วลองอีกครั้ง'}
+              </p>
             </div>
           )}
 
@@ -197,12 +287,18 @@ export default function DiscoveryPage() {
                     <div className="absolute right-16 top-12 h-14 w-14 rounded-2xl bg-white/10 rotate-12" />
                   </div>
                   <div className="p-6">
-                    <p className="text-xs font-bold text-violet">{formatDateRange(event)}</p>
+                    <p className="text-xs font-bold text-violet">
+                      {formatDateRange(event)}
+                    </p>
                     <h3 className="mt-2 line-clamp-2 text-xl font-black tracking-[-0.025em]">
                       {event.name}
                     </h3>
                     <p className="mt-3 line-clamp-2 min-h-11 text-sm leading-6 text-[#756f82]">
-                      {event.description || 'สำรวจโซนและเลือกบูธที่เหมาะกับร้านของคุณ'}
+                      {event.description ||
+                        'สำรวจโซนและเลือกบูธที่เหมาะกับร้านของคุณ'}
+                    </p>
+                    <p className="mt-3 text-xs font-bold text-muted">
+                      {event.organization.name} · {event.venue.name}
                     </p>
                     <Link
                       href={`/events/${event.id}`}
@@ -220,18 +316,37 @@ export default function DiscoveryPage() {
 
       <section id="how-it-works" className="shell py-16">
         <h2 className="text-center text-3xl font-black tracking-[-0.04em]">
-          จองพื้นที่ใน 3 ขั้นตอน
+          สำรวจพื้นที่ใน 3 ขั้นตอน
         </h2>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {[
-            ['01', 'เลือก Event', 'ดูรายละเอียด วันจัดงาน และเงื่อนไขของผู้จัด'],
-            ['02', 'เลือกโซนและบูธ', 'โฟกัสแผนผังตามประเภทสินค้าและตรวจสอบบูธว่าง'],
-            ['03', 'ยืนยันการจอง', 'ตรวจสอบราคาและดำเนินการชำระเงินภายในเวลาที่กำหนด'],
+            [
+              '01',
+              'เลือก Event',
+              'ดูรายละเอียด วันจัดงาน และเงื่อนไขของผู้จัด',
+            ],
+            [
+              '02',
+              'เลือกโซนและบูธ',
+              'โฟกัสแผนผังตามประเภทสินค้าและตรวจสอบบูธว่าง',
+            ],
+            [
+              '03',
+              'ดูตำแหน่งบูธ',
+              'ตรวจสอบตำแหน่ง ราคา สถานะ และระดับพื้นที่จากแผนผังจริง',
+            ],
           ].map(([number, title, description]) => (
-            <div key={number} className="rounded-3xl border border-[#e7e2ed] bg-white p-7">
-              <span className="text-3xl font-black text-violet/25">{number}</span>
+            <div
+              key={number}
+              className="rounded-3xl border border-[#e7e2ed] bg-white p-7"
+            >
+              <span className="text-3xl font-black text-violet/25">
+                {number}
+              </span>
               <h3 className="mt-5 text-lg font-extrabold">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-[#7a7487]">{description}</p>
+              <p className="mt-2 text-sm leading-6 text-[#7a7487]">
+                {description}
+              </p>
             </div>
           ))}
         </div>
@@ -244,5 +359,46 @@ export default function DiscoveryPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+type FilterOption = { value: string; label: string };
+
+function uniqueOptions(options: FilterOption[]): FilterOption[] {
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    if (!option.value || seen.has(option.value)) return false;
+    seen.add(option.value);
+    return true;
+  });
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: FilterOption[];
+}) {
+  return (
+    <label>
+      <span className="sr-only">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-bold text-ink outline-none"
+      >
+        <option value="">{label}: ทั้งหมด</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

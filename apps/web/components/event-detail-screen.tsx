@@ -21,8 +21,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     getEventMap(eventId, controller.signal)
       .then(setData)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
+        setError(
+          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
+        );
       });
 
     return () => controller.abort();
@@ -73,6 +76,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       zones.flatMap((zone) => zone.categories.map((category) => category.name)),
     ),
   ];
+  const contact =
+    event.contactPhone ??
+    event.contactEmail ??
+    event.organization.contactPhone ??
+    event.organization.contactEmail;
 
   return (
     <main className="min-h-screen pb-16">
@@ -104,7 +112,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </h1>
             <p className="mt-4 text-sm leading-7 text-white/85 sm:text-base">
               {dateFormatter.format(new Date(event.startDate))} –{' '}
-              {dateFormatter.format(new Date(event.endDate))} · {event.venue.name}
+              {dateFormatter.format(new Date(event.endDate))} ·{' '}
+              {event.venue.name}
             </p>
             <Link
               href={`/events/${event.id}/map`}
@@ -122,7 +131,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </span>
             <h2 className="mt-2 text-2xl font-bold">เกี่ยวกับงานนี้</h2>
             <p className="mt-4 whitespace-pre-line leading-8 text-muted">
-              {event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
+              {event.description ??
+                'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
 
             <h2 className="mt-9 text-xl font-bold">โซนและพื้นที่ว่าง</h2>
@@ -141,7 +151,9 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                     className="rounded-2xl border border-violet/15 bg-mist p-4"
                   >
                     <p className="text-xs font-bold text-violet">{zone.code}</p>
-                    <h3 className="mt-1 font-bold">{zone.name ?? 'ยังไม่ระบุชื่อโซน'}</h3>
+                    <h3 className="mt-1 font-bold">
+                      {zone.name ?? 'ยังไม่ระบุชื่อโซน'}
+                    </h3>
                     <p className="mt-2 text-sm text-muted">
                       {free} / {zone.booths.length} บูธว่าง
                     </p>
@@ -164,16 +176,14 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </span>
             <h2 className="mt-2 text-xl font-bold">ข้อมูลงาน</h2>
             <dl className="mt-5 divide-y divide-line text-sm">
+              <InfoRow label="ผู้จัดงาน" value={event.organization.name} />
               <InfoRow label="สถานที่" value={event.venue.name} />
               <InfoRow label="บูธว่าง" value={`${availableBooths} บูธ`} />
               <InfoRow
                 label="หมวดสินค้า"
                 value={categories.length ? categories.join(', ') : 'ยังไม่ระบุ'}
               />
-              <InfoRow
-                label="ติดต่อ"
-                value={event.contactPhone ?? event.contactEmail ?? 'ยังไม่ระบุ'}
-              />
+              <InfoRow label="ติดต่อ" value={contact ?? 'ยังไม่ระบุ'} />
             </dl>
 
             {(event.policy?.generalRules ||

@@ -14,6 +14,7 @@ const palette = [
 
 type ZoneMapProps = {
   readOnly?: boolean;
+  mapImageUrl?: string | null;
   zones: EventZone[];
   focusedZoneId: string | null;
   selectedBoothId: string | null;
@@ -36,8 +37,40 @@ function boothFill(
   return zoneColor;
 }
 
+function boothStroke(booth: EventBooth) {
+  if (booth.availability === 'BOOKED') return '#dc2626';
+  if (booth.availability === 'HELD') return '#ca8a04';
+  if (booth.availability === 'UNAVAILABLE') return '#6b7280';
+  return '#15803d';
+}
+
+const tierColor = {
+  S: '#4c1d95',
+  A: '#6d28d9',
+  B: '#8b5cf6',
+  C: '#c4b5fd',
+} as const;
+
+function positionedCoordinate(
+  rawValue: string | null,
+  min: number,
+  max: number,
+  itemSize: number,
+  fallback: number,
+) {
+  if (rawValue === null) return fallback;
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) return fallback;
+
+  const span = max - min - itemSize;
+  if (value >= 0 && value <= 1) return min + value * span;
+  if (value >= 0 && value <= 100) return min + (value / 100) * span;
+  return Math.min(Math.max(value, min), max - itemSize);
+}
+
 export function ZoneMap({
   readOnly = false,
+  mapImageUrl,
   zones,
   focusedZoneId,
   selectedBoothId,
@@ -47,14 +80,18 @@ export function ZoneMap({
 }: ZoneMapProps) {
   const visibleZones = useMemo(
     () =>
-      focusedZoneId
-        ? zones.filter((zone) => zone.id === focusedZoneId)
-        : zones,
+      focusedZoneId ? zones.filter((zone) => zone.id === focusedZoneId) : zones,
     [focusedZoneId, zones],
   );
 
   const rows = Math.max(1, Math.ceil(visibleZones.length / 2));
-  const viewHeight = focusedZoneId ? 650 : rows * 300 + 100;
+  const focusedRows = Math.max(
+    1,
+    Math.ceil((visibleZones[0]?.booths.length ?? 0) / 6),
+  );
+  const viewHeight = focusedZoneId
+    ? Math.max(650, 285 + focusedRows * 92)
+    : rows * 300 + 100;
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-[#ded9e7] bg-[#f3f0e9]">
@@ -63,13 +100,16 @@ export function ZoneMap({
         className="block h-auto min-h-[420px] w-full"
         role="img"
         aria-label={
-          focusedZoneId
-            ? 'แผนผังบูธในโซนที่เลือก'
-            : 'แผนผังภาพรวมทุกโซนของงาน'
+          focusedZoneId ? 'แผนผังบูธในโซนที่เลือก' : 'แผนผังภาพรวมทุกโซนของงาน'
         }
       >
         <defs>
-          <pattern id="walkway" width="24" height="24" patternUnits="userSpaceOnUse">
+          <pattern
+            id="walkway"
+            width="24"
+            height="24"
+            patternUnits="userSpaceOnUse"
+          >
             <path d="M0 12h24" stroke="#d8d2c8" strokeWidth="1" />
           </pattern>
           <filter id="mapShadow" x="-10%" y="-10%" width="120%" height="125%">
@@ -78,8 +118,26 @@ export function ZoneMap({
         </defs>
 
         <rect width="100%" height="100%" fill="#f6f3ed" />
+        {mapImageUrl && (
+          <image
+            href={mapImageUrl}
+            x="0"
+            y="58"
+            width="1000"
+            height={viewHeight - 118}
+            preserveAspectRatio="xMidYMid slice"
+            opacity="0.3"
+          />
+        )}
         <rect x="0" y="0" width="1000" height="58" fill="#205f48" />
-        <text x="500" y="37" textAnchor="middle" fill="white" fontSize="20" fontWeight="800">
+        <text
+          x="500"
+          y="37"
+          textAnchor="middle"
+          fill="white"
+          fontSize="20"
+          fontWeight="800"
+        >
           ทางเข้า • จุดลงทะเบียน
         </text>
 
@@ -87,7 +145,15 @@ export function ZoneMap({
           <FocusedZone
             zone={visibleZones[0]}
             readOnly={readOnly}
-            color={palette[Math.max(0, zones.findIndex((zone) => zone.id === focusedZoneId)) % palette.length]}
+            viewHeight={viewHeight}
+            color={
+              palette[
+                Math.max(
+                  0,
+                  zones.findIndex((zone) => zone.id === focusedZoneId),
+                ) % palette.length
+              ]
+            }
             selectedBoothId={selectedBoothId}
             recommendedBoothId={recommendedBoothId}
             onSelectBooth={onSelectBooth}
@@ -135,7 +201,13 @@ export function ZoneMap({
           </g>
         )}
 
-        <rect x="0" y={viewHeight - 60} width="1000" height="60" fill="#3c617d" />
+        <rect
+          x="0"
+          y={viewHeight - 60}
+          width="1000"
+          height="60"
+          fill="#3c617d"
+        />
         <text
           x="500"
           y={viewHeight - 23}
@@ -192,6 +264,7 @@ function OverviewZone({
         height="245"
         rx="24"
         fill={color.fill}
+        fillOpacity="0.9"
         stroke={color.stroke}
         strokeWidth="2"
         strokeDasharray="7 5"
@@ -208,7 +281,13 @@ function OverviewZone({
       >
         {zone.code}
       </text>
-      <text x={x + 74} y={y + 35} fill={color.stroke} fontSize="20" fontWeight="900">
+      <text
+        x={x + 74}
+        y={y + 35}
+        fill={color.stroke}
+        fontSize="20"
+        fontWeight="900"
+      >
         {zone.name ?? `โซน ${zone.code}`}
       </text>
       <text x={x + 74} y={y + 58} fill="#736d7b" fontSize="13">
@@ -236,8 +315,30 @@ function OverviewZone({
                       ? '#ef8179'
                       : '#b7b4bd'
               }
+              stroke={boothStroke(booth)}
+              strokeWidth="3"
               opacity={booth.availability === 'AVAILABLE' ? 0.9 : 0.75}
             />
+            {booth.tier && (
+              <g>
+                <circle
+                  cx={boothX + 43}
+                  cy={boothY + 6}
+                  r="9"
+                  fill={tierColor[booth.tier]}
+                />
+                <text
+                  x={boothX + 43}
+                  y={boothY + 10}
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize="9"
+                  fontWeight="900"
+                >
+                  {booth.tier}
+                </text>
+              </g>
+            )}
             <text
               x={boothX + 24.5}
               y={boothY + 24}
@@ -258,6 +359,7 @@ function OverviewZone({
 function FocusedZone({
   zone,
   readOnly,
+  viewHeight,
   color,
   selectedBoothId,
   recommendedBoothId,
@@ -265,6 +367,7 @@ function FocusedZone({
 }: {
   zone: EventZone | undefined;
   readOnly: boolean;
+  viewHeight: number;
   color: (typeof palette)[number];
   selectedBoothId: string | null;
   recommendedBoothId: string | null;
@@ -284,9 +387,10 @@ function FocusedZone({
         x="55"
         y="88"
         width="890"
-        height="482"
+        height={viewHeight - 168}
         rx="30"
         fill={color.fill}
+        fillOpacity="0.9"
         stroke={color.stroke}
         strokeWidth="3"
         filter="url(#mapShadow)"
@@ -306,12 +410,28 @@ function FocusedZone({
         {zone.name ?? `โซน ${zone.code}`}
       </text>
       <text x="150" y="160" fill="#756e7e" fontSize="15">
-        {zone.description ?? zone.categories.map((category) => category.name).join(' • ')}
+        {zone.description ??
+          zone.categories.map((category) => category.name).join(' • ')}
       </text>
 
       {zone.booths.map((booth, index) => {
-        const x = 94 + (index % columns) * (boothWidth + gapX);
-        const y = 205 + Math.floor(index / columns) * (boothHeight + gapY);
+        const fallbackX = 94 + (index % columns) * (boothWidth + gapX);
+        const fallbackY =
+          205 + Math.floor(index / columns) * (boothHeight + gapY);
+        const x = positionedCoordinate(
+          booth.posX,
+          75,
+          925,
+          boothWidth,
+          fallbackX,
+        );
+        const y = positionedCoordinate(
+          booth.posY,
+          190,
+          viewHeight - 80,
+          boothHeight,
+          fallbackY,
+        );
         const unavailable = booth.availability !== 'AVAILABLE';
         const fill = boothFill(
           booth,
@@ -327,9 +447,7 @@ function FocusedZone({
             tabIndex={readOnly || unavailable ? -1 : 0}
             aria-disabled={unavailable}
             aria-label={
-              readOnly
-                ? undefined
-                : `บูธ ${booth.code} ${booth.availability}`
+              readOnly ? undefined : `บูธ ${booth.code} ${booth.availability}`
             }
             onClick={(event) => {
               event.stopPropagation();
@@ -378,8 +496,32 @@ function FocusedZone({
               height={boothHeight}
               rx="11"
               fill={fill}
+              stroke={boothStroke(booth)}
+              strokeWidth="4"
               opacity={unavailable ? 0.72 : 1}
             />
+            {booth.tier && (
+              <g>
+                <rect
+                  x={x + boothWidth - 28}
+                  y={y}
+                  width="28"
+                  height="23"
+                  rx="8"
+                  fill={tierColor[booth.tier]}
+                />
+                <text
+                  x={x + boothWidth - 14}
+                  y={y + 16}
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize="12"
+                  fontWeight="900"
+                >
+                  {booth.tier}
+                </text>
+              </g>
+            )}
             <text
               x={x + boothWidth / 2}
               y={y + 29}
