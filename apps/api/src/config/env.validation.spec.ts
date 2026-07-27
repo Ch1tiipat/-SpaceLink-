@@ -31,7 +31,7 @@ describe('env validation', () => {
       SLIP_VERIFIER: 'mock',
       SLIP_VERIFIER_MODE: 'always-verified',
       ZONE_RECOMMENDER: 'rule',
-      GEMINI_MODEL: 'gemini-2.5-flash-lite',
+      GEMINI_MODEL: 'gemini-3.5-flash-lite',
     });
   });
 

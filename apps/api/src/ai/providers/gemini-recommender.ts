@@ -59,7 +59,7 @@ export class GeminiZoneRecommender implements ZoneRecommender {
     private readonly prisma: PrismaService,
   ) {
     this.apiKey = required(config, 'GEMINI_API_KEY');
-    this.model = config.get<string>('GEMINI_MODEL') ?? 'gemini-2.5-flash-lite';
+    this.model = config.get<string>('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite';
 
     if (!isAllowedModel(this.model)) {
       throw new Error(

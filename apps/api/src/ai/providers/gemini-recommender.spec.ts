@@ -10,7 +10,7 @@ const prisma = {
   booth: { findMany },
 } as unknown as PrismaService;
 
-function recommender(model = 'gemini-2.5-flash-lite') {
+function recommender(model = 'gemini-3.5-flash-lite') {
   return new GeminiZoneRecommender(
     new ConfigService({
       GEMINI_API_KEY: 'gemini-secret',
@@ -87,7 +87,7 @@ describe('GeminiZoneRecommender', () => {
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
     );
     expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(
       'gemini-secret',

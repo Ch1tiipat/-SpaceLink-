@@ -15,7 +15,7 @@
 ```env
 ZONE_RECOMMENDER=gemini
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 ระบบปฏิเสธโมเดล Pro ตั้งแต่ boot และ prompt ส่งเฉพาะรหัสบูธ ชื่อโซน ราคา

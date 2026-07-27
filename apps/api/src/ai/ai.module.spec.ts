@@ -51,7 +51,7 @@ describe('AiModule', () => {
   it('binds Gemini Flash when configured', async () => {
     process.env.ZONE_RECOMMENDER = 'gemini';
     process.env.GEMINI_API_KEY = 'key';
-    process.env.GEMINI_MODEL = 'gemini-2.5-flash-lite';
+    process.env.GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
     const moduleRef = await bootAiModule();
 
