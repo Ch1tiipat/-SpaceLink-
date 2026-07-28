@@ -415,6 +415,13 @@ and multi-tenant chain, boot-time config, or the agent rules themselves cannot b
 human who knows what those files are for. If you touch a path listed there, expect review — do not
 work around it by splitting the change across paths.
 
+**Modules are not personally owned.** Any team member may work in any feature module —
+whoever has the time takes the ticket. Two conditions apply: put the cross-module change
+in its own commit so it can be reviewed and reverted on its own, and tell whoever worked
+there last before the PR is merged, so two people are not halfway through the same file.
+A handoff doc or ticket that assigns a module to one person is describing that sprint's
+plan, not a permission boundary — this file wins (§11.6).
+
 **`app.module.ts` is touched by everyone.** The only permitted edit is **adding your own module to
 the `imports` array, one line**. Do not reorder the array, do not modify `ConfigModule`, do not
 remove or "tidy" anyone else's entry. Every unnecessary edit to this file is a merge conflict for
