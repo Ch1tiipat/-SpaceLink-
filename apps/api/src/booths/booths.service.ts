@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CreateBoothDto } from './dto/create-booth.dto';
+import { FindAllBoothsDto } from './dto/find-all-booths.dto';
 import { UpdateBoothDto } from './dto/update-booth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -14,7 +15,13 @@ export class BoothsService {
     });
   }
 
-  findAll() {
+  findAll(query: FindAllBoothsDto = {}) {
+    if (query.zoneId) {
+      return this.prisma.booth.findMany({
+        where: { zoneId: query.zoneId },
+      });
+    }
+
     return this.prisma.booth.findMany();
   }
 
