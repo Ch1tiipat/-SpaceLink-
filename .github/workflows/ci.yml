@@ -90,3 +90,36 @@ jobs:
       - run: npx eslint src prisma
 
       - run: npm test
+
+  web:
+    name: apps/web
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    # Build-time placeholder only. NEXT_PUBLIC_* values are embedded in the
+    # browser bundle, so CI must never point this job at the deployed API.
+    env:
+      NEXT_PUBLIC_API_URL: https://placeholder.invalid
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Installs exactly package-lock.json and fails when it has drifted from
+      # package.json.
+      - run: npm ci
+
+      # Builds the production Next.js bundle, including the PWA worker.
+      - run: npm run build
+
+      # Checks application and configuration TypeScript without emitting files.
+      - run: npx tsc --noEmit
+
+      # Runs the Next.js ESLint configuration as a check only.
+      - run: npx next lint
