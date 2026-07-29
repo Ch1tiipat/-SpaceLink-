@@ -1,4 +1,5 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { FindAllBoothsDto } from './dto/find-all-booths.dto';
 import { BoothsService } from './booths.service';
 
 @Controller('booths')
@@ -6,8 +7,8 @@ export class BoothsController {
   constructor(private readonly boothsService: BoothsService) {}
 
   @Get()
-  findAll() {
-    return this.boothsService.findAll();
+  findAll(@Query() query: FindAllBoothsDto) {
+    return this.boothsService.findAll(query);
   }
 
   @Get(':id')

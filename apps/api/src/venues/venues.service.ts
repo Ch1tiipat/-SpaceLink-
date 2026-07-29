@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CreateVenueDto } from './dto/create-venue.dto';
+import { FindAllVenuesDto } from './dto/find-all-venues.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -14,7 +15,13 @@ export class VenuesService {
     });
   }
 
-  findAll() {
+  findAll(query: FindAllVenuesDto = {}) {
+    if (query.organizationId) {
+      return this.prisma.venue.findMany({
+        where: { organizationId: query.organizationId },
+      });
+    }
+
     return this.prisma.venue.findMany();
   }
 
