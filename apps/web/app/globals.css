@@ -71,6 +71,20 @@ select {
   }
 }
 
+/* The two moving things in the app: the skeleton shimmer, which the header
+   shows while it resolves a session, and smooth scrolling. Both are motion a
+   reader can ask not to see. The skeleton keeps its background so it still
+   reads as a placeholder rather than an empty box. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .skeleton {
+    animation: none;
+  }
+}
+
 @media (max-width: 720px) {
   .shell {
     width: min(100% - 20px, 1180px);
