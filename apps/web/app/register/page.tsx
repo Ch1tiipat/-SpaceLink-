@@ -16,12 +16,11 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 const GENERIC_ERROR = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
 
-  // One route, two steps. A second route for the code would lose the email on
-  // reload and give the back button a meaning nobody wants here.
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [step, setStep] = useState<'form' | 'code'>('form');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
@@ -40,25 +39,28 @@ export default function LoginPage() {
     return () => window.clearTimeout(timer);
   }, [cooldown]);
 
-  /** Asks Supabase to mail a code. Returns whether it went out. */
-  async function sendCode(address: string): Promise<boolean> {
+  /** Asks Supabase to mail a code, creating the account if it does not exist.
+   * Returns whether it went out. */
+  async function sendCode(address: string, name: string): Promise<boolean> {
     setPending(true);
     setError(null);
 
     try {
-      // Called here, in an event handler — never during render. The client is
-      // built on first call and the build has no Supabase variables at all.
+      // Called from an event handler, never during render — the client is built
+      // on first call and the build has no Supabase variables at all.
       const supabase = getSupabaseBrowserClient();
 
       const { error: sendError } = await supabase.auth.signInWithOtp({
         email: address,
         options: {
-          // No account is ever created from this screen. Supabase applies user
-          // metadata only at creation time, so an account born here would lose
-          // the name /register collects — permanently (AGENTS.md §7, §A3.4).
-          shouldCreateUser: false,
+          data: { full_name: name },
+          // Account creation happens here and nowhere else. Supabase applies
+          // `data` only when it creates the user, so /login sends
+          // shouldCreateUser: false to keep this the only door in (§A3.4).
+          shouldCreateUser: true,
         },
       });
+      // TODO(SCRUM-54): backend ignores user_metadata.full_name — see PART E-1
 
       if (sendError) {
         setError(describeSendError(sendError));
@@ -75,8 +77,14 @@ export default function LoginPage() {
     }
   }
 
-  async function handleEmailSubmit(event: FormEvent) {
+  async function handleDetailsSubmit(event: FormEvent) {
     event.preventDefault();
+
+    const name = fullName.trim();
+    if (name.length === 0) {
+      setError('กรอกชื่อ-นามสกุลของคุณ');
+      return;
+    }
 
     const address = email.trim();
     if (!EMAIL_PATTERN.test(address)) {
@@ -84,8 +92,9 @@ export default function LoginPage() {
       return;
     }
 
+    setFullName(name);
     setEmail(address);
-    if (await sendCode(address)) {
+    if (await sendCode(address, name)) {
       setCode('');
       setStep('code');
     }
@@ -108,9 +117,9 @@ export default function LoginPage() {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email,
         token: code,
-        // 'email' for both a first sign-in and a returning one. The 'signup'
-        // and 'magiclink' types are deprecated, and Supabase picks the mail
-        // template from the account's state rather than from this (§A3.1).
+        // 'email' for a first sign-in and a returning one alike; 'signup' and
+        // 'magiclink' are deprecated and Supabase picks the mail template from
+        // the account's state rather than from this (§A3.1).
         type: 'email',
       });
 
@@ -121,13 +130,13 @@ export default function LoginPage() {
         return;
       }
 
-      // Role comes from our database, never from the token (AGENTS.md §7).
+      // First authenticated call provisions the `app_user` row (AGENTS.md §7).
+      // Role comes from our database, never from the token.
       const me = await getMe(data.session.access_token);
 
       if (me.isBlacklisted) {
-        // Signed out rather than left holding a valid session: the account is
-        // suspended, so it should not be able to call anything else meanwhile.
-        // The reason is admin-facing and is never shown here (§14.5).
+        // Reachable because an address that already has an account is signed in
+        // here rather than rejected. The reason is admin-facing (§14.5).
         await supabase.auth.signOut();
         setError(
           'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลองค์กรที่คุณจองบูธไว้',
@@ -137,11 +146,8 @@ export default function LoginPage() {
         return;
       }
 
-      // VENDOR, ORG_ADMIN and SUPER_ADMIN all land on Discovery for now.
-      // TODO(SCRUM-54): redirect admins to /admin once it exists
-      //
-      // `pending` stays true so the button remains disabled while the router
-      // navigates away.
+      // Every role lands on Discovery, as on /login. `pending` stays true so
+      // the button remains disabled while the router navigates away.
       router.replace('/');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : GENERIC_ERROR);
@@ -149,7 +155,7 @@ export default function LoginPage() {
     }
   }
 
-  const errorId = 'login-error';
+  const errorId = 'register-error';
   const errorBox = error ? (
     <p
       id={errorId}
@@ -162,22 +168,42 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      eyebrow="สำหรับผู้ขายและผู้ดูแลองค์กร"
-      headline="จองบูธในงานที่ใช่ ได้ในไม่กี่ขั้นตอน"
-      description="เข้าสู่ระบบด้วยอีเมล เราจะส่งรหัสยืนยัน 6 หลักไปให้ ไม่ต้องตั้งและไม่ต้องจำรหัสผ่าน"
+      eyebrow="สมัครใช้งานฟรี"
+      headline="เปิดร้านในงานถัดไป เริ่มจากบัญชีเดียว"
+      description="สร้างบัญชีด้วยอีเมล ไม่ต้องตั้งรหัสผ่าน แล้วเริ่มมองหาบูธที่ใช่ได้ทันที"
     >
-      {step === 'email' ? (
-        <form onSubmit={handleEmailSubmit} noValidate>
+      {step === 'form' ? (
+        <form onSubmit={handleDetailsSubmit} noValidate>
           <h1 className="text-[32px] font-black tracking-[-0.04em]">
-            เข้าสู่ระบบ
+            สร้างบัญชีใหม่
           </h1>
           <p className="mt-3 leading-7 text-muted">
-            กรอกอีเมลที่ใช้สมัคร เราจะส่งรหัสยืนยัน {OTP_LENGTH} หลักไปให้
+            กรอกชื่อและอีเมล เราจะส่งรหัสยืนยัน {OTP_LENGTH} หลักไปให้
           </p>
 
           <label
-            htmlFor="email"
+            htmlFor="fullName"
             className="mt-8 block text-sm font-bold text-ink"
+          >
+            ชื่อ-นามสกุล
+          </label>
+          <input
+            id="fullName"
+            type="text"
+            name="fullName"
+            autoComplete="name"
+            placeholder="เช่น สมชาย ใจดี"
+            value={fullName}
+            disabled={pending}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            onChange={(event) => setFullName(event.target.value)}
+            className="mt-2 h-[52px] w-full rounded-2xl border border-line bg-white px-4 text-ink transition-colors placeholder:text-muted/70 focus:border-violet disabled:bg-mist disabled:text-muted"
+          />
+
+          <label
+            htmlFor="email"
+            className="mt-5 block text-sm font-bold text-ink"
           >
             อีเมล
           </label>
@@ -207,12 +233,12 @@ export default function LoginPage() {
           </button>
 
           <p className="mt-7 text-center text-sm text-muted">
-            ยังไม่มีบัญชี?{' '}
+            มีบัญชีอยู่แล้ว?{' '}
             <Link
-              href="/register"
+              href="/login"
               className="font-bold text-violet underline-offset-4 hover:underline"
             >
-              สร้างบัญชีใหม่
+              เข้าสู่ระบบ
             </Link>
           </p>
         </form>
@@ -224,7 +250,7 @@ export default function LoginPage() {
           <p className="mt-3 leading-7 text-muted">
             เราส่งรหัส {OTP_LENGTH} หลักไปที่{' '}
             <span className="font-bold text-ink">{email}</span> แล้ว
-            กรอกรหัสเพื่อเข้าสู่ระบบ
+            กรอกรหัสเพื่อสร้างบัญชี
           </p>
 
           <div className="mt-8">
@@ -245,14 +271,14 @@ export default function LoginPage() {
             disabled={pending || code.length !== OTP_LENGTH}
             className="mt-7 h-[52px] w-full rounded-full bg-violet text-base font-bold text-white shadow-lg shadow-violet/25 transition-opacity disabled:opacity-55"
           >
-            {pending ? 'กำลังตรวจสอบ…' : 'เข้าสู่ระบบ'}
+            {pending ? 'กำลังสร้างบัญชี…' : 'สร้างบัญชี'}
           </button>
 
           <div className="mt-7 flex flex-col items-center gap-3 text-sm">
             <button
               type="button"
               disabled={pending || cooldown > 0}
-              onClick={() => void sendCode(email)}
+              onClick={() => void sendCode(email, fullName)}
               className="font-bold text-violet underline-offset-4 hover:underline disabled:text-muted disabled:no-underline"
             >
               {cooldown > 0
@@ -264,14 +290,14 @@ export default function LoginPage() {
               type="button"
               disabled={pending}
               onClick={() => {
-                // The email is kept, so coming back does not mean retyping it.
-                setStep('email');
+                // Name and email are kept, so coming back is not a retype.
+                setStep('form');
                 setCode('');
                 setError(null);
               }}
               className="text-muted underline-offset-4 hover:underline"
             >
-              ใช้อีเมลอื่น
+              แก้ไขชื่อหรืออีเมล
             </button>
           </div>
         </form>
@@ -282,26 +308,26 @@ export default function LoginPage() {
 
 /**
  * Turns a Supabase auth error into copy that says what happened and what to do
- * next. An unregistered address is the case worth naming: /login cannot create
- * an account (§A3.4), so Supabase rejects it and the only way forward is
- * /register.
+ * next. There is no "this address already exists" case to handle: with
+ * `shouldCreateUser: true` Supabase mails a code to a known address instead of
+ * refusing it, so that path signs the person in rather than failing.
  */
 function describeSendError(error: {
   code?: string;
   message: string;
 }): ReactNode {
   if (
-    error.code === 'otp_disabled' ||
+    error.code === 'signup_disabled' ||
     /signups? not allowed/i.test(error.message)
   ) {
     return (
       <>
-        อีเมลนี้ยังไม่ได้สมัครสมาชิก{' '}
+        ตอนนี้ระบบปิดรับสมัครสมาชิกใหม่ชั่วคราว หากคุณมีบัญชีอยู่แล้ว{' '}
         <Link
-          href="/register"
+          href="/login"
           className="font-bold underline underline-offset-2"
         >
-          สร้างบัญชีใหม่
+          เข้าสู่ระบบที่นี่
         </Link>
       </>
     );

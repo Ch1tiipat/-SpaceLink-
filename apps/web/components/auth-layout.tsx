@@ -1,15 +1,31 @@
 import type { ReactNode } from 'react';
 
+type AuthLayoutProps = {
+  /** Small pill above the headline. */
+  eyebrow: string;
+  headline: string;
+  description: string;
+  children: ReactNode;
+};
+
 /**
  * The two-column shell shared by every authentication screen: a decorative
  * brand panel on the left, the form column on the right. Below `lg` the panel
  * collapses to a compact header and the form takes the full width.
  *
+ * The panel's structure is fixed and its copy is not — signing in and signing
+ * up are different promises, and each page states its own.
+ *
  * Nothing here fetches. The login screen has to render completely while the
  * API is still cold-starting, so the most critical page in the product is not
  * coupled to decoration.
  */
-export function AuthLayout({ children }: { children: ReactNode }) {
+export function AuthLayout({
+  eyebrow,
+  headline,
+  description,
+  children,
+}: AuthLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col lg:grid lg:grid-cols-[1.05fr_1fr]">
       {/* Compact brand header — the panel's stand-in below `lg`. */}
@@ -22,16 +38,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 
         <div className="mt-auto pt-16">
           <span className="inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/90">
-            สำหรับผู้ขายและผู้ดูแลองค์กร
+            {eyebrow}
           </span>
 
           <h2 className="mt-7 max-w-[15ch] text-[42px] font-black leading-[1.1] tracking-[-0.045em]">
-            จองบูธในงานที่ใช่ ได้ในไม่กี่ขั้นตอน
+            {headline}
           </h2>
 
           <p className="mt-5 max-w-[42ch] text-[17px] leading-8 text-white/75">
-            เข้าสู่ระบบด้วยอีเมล เราจะส่งรหัสยืนยัน 6 หลักไปให้
-            ไม่ต้องตั้งและไม่ต้องจำรหัสผ่าน
+            {description}
           </p>
         </div>
 
