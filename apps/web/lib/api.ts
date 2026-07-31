@@ -73,6 +73,26 @@ export type EventMap = {
   zones: EventZone[];
 };
 
+/** The `app_user.role` values (AGENTS.md §5). Platform-level, not org-level. */
+export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'VENDOR';
+
+/**
+ * Exactly what `GET /auth/me` returns — no more. `blacklistReason` and penalty
+ * details are admin-facing and the endpoint deliberately withholds them
+ * (AGENTS.md §14.5), so there is nothing here to widen this type with.
+ */
+export type CurrentUser = {
+  id: string;
+  authUserId: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: UserRole;
+  isBlacklisted: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -85,7 +105,19 @@ export class ApiError extends Error {
   }
 }
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+type RequestOptions = {
+  signal?: AbortSignal;
+  /**
+   * A Supabase access token. Present only for routes behind SupabaseAuthGuard;
+   * public reads (events, venues, zones, booths) send no Authorization header.
+   */
+  token?: string;
+};
+
+async function getJson<T>(
+  path: string,
+  { signal, token }: RequestOptions = {},
+): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
       'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
@@ -93,11 +125,16 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     );
   }
 
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       signal,
-      headers: { Accept: 'application/json' },
+      headers,
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') {
@@ -123,15 +160,29 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
-  return getJson<DiscoveryEvent[]>('/events/discovery', signal);
+  return getJson<DiscoveryEvent[]>('/events/discovery', { signal });
 }
 
 export function getEventMap(
   eventId: string,
   signal?: AbortSignal,
 ): Promise<EventMap> {
-  return getJson<EventMap>(
-    `/events/${encodeURIComponent(eventId)}/map`,
+  return getJson<EventMap>(`/events/${encodeURIComponent(eventId)}/map`, {
     signal,
-  );
+  });
+}
+
+/**
+ * The only auth endpoint (AGENTS.md §7) — there is no login or register route
+ * on our API; the browser gets its token from Supabase Auth and this exchanges
+ * it for the `app_user` row, provisioning that row on first sight.
+ *
+ * The path is `/auth/me`, not `/api/auth/me`: NEXT_PUBLIC_API_URL already ends
+ * in the global prefix that main.ts sets.
+ */
+export function getMe(
+  token: string,
+  signal?: AbortSignal,
+): Promise<CurrentUser> {
+  return getJson<CurrentUser>('/auth/me', { signal, token });
 }
