@@ -2,10 +2,20 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { AuthLayout } from '@/components/auth-layout';
 import { OTP_LENGTH, OtpInput } from '@/components/otp-input';
-import { ApiError, getMe } from '@/lib/api';
+import { getMe } from '@/lib/api';
+import {
+  BLACKLISTED_MESSAGE,
+  INVALID_EMAIL_MESSAGE,
+  describeProfileError,
+  describeSendError,
+  describeUnexpectedSendError,
+  describeVerifyError,
+  incompleteCodeMessage,
+  type AuthErrorMessage,
+} from '@/lib/auth-errors';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 /** Deliberately loose. The address is proved by whether the code arrives; this
@@ -13,8 +23,6 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const RESEND_COOLDOWN_SECONDS = 60;
-
-const GENERIC_ERROR = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +33,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<ReactNode>(null);
+  const [error, setError] = useState<AuthErrorMessage | null>(null);
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -61,14 +69,14 @@ export default function LoginPage() {
       });
 
       if (sendError) {
-        setError(describeSendError(sendError));
+        setError(describeSendError(sendError, 'login'));
         return false;
       }
 
       setCooldown(RESEND_COOLDOWN_SECONDS);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : GENERIC_ERROR);
+      setError(describeUnexpectedSendError(cause));
       return false;
     } finally {
       setPending(false);
@@ -80,7 +88,7 @@ export default function LoginPage() {
 
     const address = email.trim();
     if (!EMAIL_PATTERN.test(address)) {
-      setError('รูปแบบอีเมลไม่ถูกต้อง กรุณากรอกใหม่ เช่น name@example.com');
+      setError(INVALID_EMAIL_MESSAGE);
       return;
     }
 
@@ -95,16 +103,27 @@ export default function LoginPage() {
     event.preventDefault();
 
     if (code.length !== OTP_LENGTH) {
-      setError(`กรอกรหัสยืนยันให้ครบ ${OTP_LENGTH} หลัก`);
+      setError(incompleteCodeMessage(OTP_LENGTH));
       return;
     }
 
     setPending(true);
     setError(null);
 
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
     try {
-      const supabase = getSupabaseBrowserClient();
+      supabase = getSupabaseBrowserClient();
+    } catch (cause) {
+      setError(describeUnexpectedSendError(cause));
+      setPending(false);
+      return;
+    }
 
+    // Verifying the code and reading the profile are separated so each failure
+    // gets its own message. Once the code is accepted, telling someone the code
+    // was wrong would send them back to retype one that was correct.
+    let accessToken: string;
+    try {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email,
         token: code,
@@ -115,23 +134,29 @@ export default function LoginPage() {
       });
 
       if (verifyError || !data.session) {
-        setError('รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว กรุณาขอรหัสใหม่');
+        setError(describeVerifyError(verifyError));
         setCode('');
         setPending(false);
         return;
       }
 
+      accessToken = data.session.access_token;
+    } catch {
+      setError(describeVerifyError(null));
+      setPending(false);
+      return;
+    }
+
+    try {
       // Role comes from our database, never from the token (AGENTS.md §7).
-      const me = await getMe(data.session.access_token);
+      const me = await getMe(accessToken);
 
       if (me.isBlacklisted) {
         // Signed out rather than left holding a valid session: the account is
         // suspended, so it should not be able to call anything else meanwhile.
         // The reason is admin-facing and is never shown here (§14.5).
         await supabase.auth.signOut();
-        setError(
-          'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลองค์กรที่คุณจองบูธไว้',
-        );
+        setError(BLACKLISTED_MESSAGE);
         setCode('');
         setPending(false);
         return;
@@ -144,7 +169,7 @@ export default function LoginPage() {
       // navigates away.
       router.replace('/');
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : GENERIC_ERROR);
+      setError(describeProfileError(cause));
       setPending(false);
     }
   }
@@ -156,7 +181,18 @@ export default function LoginPage() {
       role="alert"
       className="mt-4 rounded-2xl bg-danger/[0.06] px-4 py-3 text-sm font-semibold leading-6 text-danger"
     >
-      {error}
+      {error.text}
+      {error.link ? (
+        <>
+          {' '}
+          <Link
+            href={error.link.href}
+            className="font-bold underline underline-offset-2"
+          >
+            {error.link.label}
+          </Link>
+        </>
+      ) : null}
     </p>
   ) : null;
 
@@ -278,38 +314,4 @@ export default function LoginPage() {
       )}
     </AuthLayout>
   );
-}
-
-/**
- * Turns a Supabase auth error into copy that says what happened and what to do
- * next. An unregistered address is the case worth naming: /login cannot create
- * an account (§A3.4), so Supabase rejects it and the only way forward is
- * /register.
- */
-function describeSendError(error: {
-  code?: string;
-  message: string;
-}): ReactNode {
-  if (
-    error.code === 'otp_disabled' ||
-    /signups? not allowed/i.test(error.message)
-  ) {
-    return (
-      <>
-        อีเมลนี้ยังไม่ได้สมัครสมาชิก{' '}
-        <Link
-          href="/register"
-          className="font-bold underline underline-offset-2"
-        >
-          สร้างบัญชีใหม่
-        </Link>
-      </>
-    );
-  }
-
-  if (error.code === 'over_email_send_rate_limit') {
-    return 'ขอรหัสยืนยันบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง';
-  }
-
-  return 'ส่งรหัสยืนยันไม่สำเร็จ กรุณาตรวจสอบอีเมลแล้วลองใหม่อีกครั้ง';
 }

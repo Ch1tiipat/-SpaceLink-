@@ -2,10 +2,21 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { AuthLayout } from '@/components/auth-layout';
 import { OTP_LENGTH, OtpInput } from '@/components/otp-input';
-import { ApiError, getMe } from '@/lib/api';
+import { getMe } from '@/lib/api';
+import {
+  BLACKLISTED_MESSAGE,
+  INVALID_EMAIL_MESSAGE,
+  MISSING_NAME_MESSAGE,
+  describeProfileError,
+  describeSendError,
+  describeUnexpectedSendError,
+  describeVerifyError,
+  incompleteCodeMessage,
+  type AuthErrorMessage,
+} from '@/lib/auth-errors';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 /** Deliberately loose. The address is proved by whether the code arrives; this
@@ -13,8 +24,6 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const RESEND_COOLDOWN_SECONDS = 60;
-
-const GENERIC_ERROR = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -24,7 +33,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<ReactNode>(null);
+  const [error, setError] = useState<AuthErrorMessage | null>(null);
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -63,14 +72,14 @@ export default function RegisterPage() {
       // TODO(SCRUM-54): backend ignores user_metadata.full_name — see PART E-1
 
       if (sendError) {
-        setError(describeSendError(sendError));
+        setError(describeSendError(sendError, 'register'));
         return false;
       }
 
       setCooldown(RESEND_COOLDOWN_SECONDS);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : GENERIC_ERROR);
+      setError(describeUnexpectedSendError(cause));
       return false;
     } finally {
       setPending(false);
@@ -82,13 +91,13 @@ export default function RegisterPage() {
 
     const name = fullName.trim();
     if (name.length === 0) {
-      setError('กรอกชื่อ-นามสกุลของคุณ');
+      setError(MISSING_NAME_MESSAGE);
       return;
     }
 
     const address = email.trim();
     if (!EMAIL_PATTERN.test(address)) {
-      setError('รูปแบบอีเมลไม่ถูกต้อง กรุณากรอกใหม่ เช่น name@example.com');
+      setError(INVALID_EMAIL_MESSAGE);
       return;
     }
 
@@ -104,16 +113,27 @@ export default function RegisterPage() {
     event.preventDefault();
 
     if (code.length !== OTP_LENGTH) {
-      setError(`กรอกรหัสยืนยันให้ครบ ${OTP_LENGTH} หลัก`);
+      setError(incompleteCodeMessage(OTP_LENGTH));
       return;
     }
 
     setPending(true);
     setError(null);
 
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
     try {
-      const supabase = getSupabaseBrowserClient();
+      supabase = getSupabaseBrowserClient();
+    } catch (cause) {
+      setError(describeUnexpectedSendError(cause));
+      setPending(false);
+      return;
+    }
 
+    // Verifying the code and reading the profile are separated so each failure
+    // gets its own message. Once the code is accepted, telling someone the code
+    // was wrong would send them back to retype one that was correct.
+    let accessToken: string;
+    try {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email,
         token: code,
@@ -124,23 +144,29 @@ export default function RegisterPage() {
       });
 
       if (verifyError || !data.session) {
-        setError('รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว กรุณาขอรหัสใหม่');
+        setError(describeVerifyError(verifyError));
         setCode('');
         setPending(false);
         return;
       }
 
+      accessToken = data.session.access_token;
+    } catch {
+      setError(describeVerifyError(null));
+      setPending(false);
+      return;
+    }
+
+    try {
       // First authenticated call provisions the `app_user` row (AGENTS.md §7).
       // Role comes from our database, never from the token.
-      const me = await getMe(data.session.access_token);
+      const me = await getMe(accessToken);
 
       if (me.isBlacklisted) {
         // Reachable because an address that already has an account is signed in
         // here rather than rejected. The reason is admin-facing (§14.5).
         await supabase.auth.signOut();
-        setError(
-          'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลองค์กรที่คุณจองบูธไว้',
-        );
+        setError(BLACKLISTED_MESSAGE);
         setCode('');
         setPending(false);
         return;
@@ -150,7 +176,7 @@ export default function RegisterPage() {
       // the button remains disabled while the router navigates away.
       router.replace('/');
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : GENERIC_ERROR);
+      setError(describeProfileError(cause));
       setPending(false);
     }
   }
@@ -162,7 +188,18 @@ export default function RegisterPage() {
       role="alert"
       className="mt-4 rounded-2xl bg-danger/[0.06] px-4 py-3 text-sm font-semibold leading-6 text-danger"
     >
-      {error}
+      {error.text}
+      {error.link ? (
+        <>
+          {' '}
+          <Link
+            href={error.link.href}
+            className="font-bold underline underline-offset-2"
+          >
+            {error.link.label}
+          </Link>
+        </>
+      ) : null}
     </p>
   ) : null;
 
@@ -304,38 +341,4 @@ export default function RegisterPage() {
       )}
     </AuthLayout>
   );
-}
-
-/**
- * Turns a Supabase auth error into copy that says what happened and what to do
- * next. There is no "this address already exists" case to handle: with
- * `shouldCreateUser: true` Supabase mails a code to a known address instead of
- * refusing it, so that path signs the person in rather than failing.
- */
-function describeSendError(error: {
-  code?: string;
-  message: string;
-}): ReactNode {
-  if (
-    error.code === 'signup_disabled' ||
-    /signups? not allowed/i.test(error.message)
-  ) {
-    return (
-      <>
-        ตอนนี้ระบบปิดรับสมัครสมาชิกใหม่ชั่วคราว หากคุณมีบัญชีอยู่แล้ว{' '}
-        <Link
-          href="/login"
-          className="font-bold underline underline-offset-2"
-        >
-          เข้าสู่ระบบที่นี่
-        </Link>
-      </>
-    );
-  }
-
-  if (error.code === 'over_email_send_rate_limit') {
-    return 'ขอรหัสยืนยันบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้ง';
-  }
-
-  return 'ส่งรหัสยืนยันไม่สำเร็จ กรุณาตรวจสอบอีเมลแล้วลองใหม่อีกครั้ง';
 }
