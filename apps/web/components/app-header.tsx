@@ -100,7 +100,11 @@ export function AppHeader() {
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet text-lg font-black text-white shadow-lg shadow-violet/25">
             S
           </span>
-          <span className="text-xl font-extrabold tracking-[-0.03em]">
+          {/* Hidden on the narrowest screens so the auth controls always fit:
+              at 375px the shell is 355px wide, and the wordmark alone is about
+              105px of it. The link keeps its aria-label, so nothing is lost to
+              a screen reader. */}
+          <span className="hidden text-xl font-extrabold tracking-[-0.03em] sm:inline">
             SpaceLink
           </span>
         </Link>
@@ -119,7 +123,7 @@ export function AppHeader() {
             // header does not jump when it arrives.
             <span
               aria-hidden
-              className="skeleton h-10 w-[150px] rounded-full sm:w-[190px]"
+              className="skeleton h-10 w-[132px] rounded-full sm:w-[190px]"
             />
           )}
 
@@ -142,7 +146,7 @@ export function AppHeader() {
 
           {auth.status === 'signed-in' && (
             <>
-              <span className="max-w-[110px] truncate text-[13px] font-bold text-ink sm:max-w-[180px] sm:text-sm">
+              <span className="max-w-[84px] truncate text-[13px] font-bold text-ink sm:max-w-[180px] sm:text-sm">
                 {auth.fullName}
               </span>
               <button
