@@ -13,9 +13,36 @@ import { createBrowserClient } from '@supabase/ssr';
  * sign in, which is where a missing environment variable is worth reporting.
  */
 
-/** Inferred rather than imported: @supabase/supabase-js is a peer dependency
- * that npm installs on its own, and is not declared in our package.json. */
-type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
+function createClient() {
+  // Written as two literal `process.env.X` reads because Next.js inlines
+  // NEXT_PUBLIC_* by textual substitution at build time. A computed lookup
+  // (`process.env[name]`) is not substituted and would always be undefined.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
+    throw new Error(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ' +
+        'สำหรับ SpaceLink Web',
+    );
+  }
+
+  return createBrowserClient(url, anonKey);
+}
+
+/**
+ * Inferred from a call, not from `typeof createBrowserClient`.
+ *
+ * `createBrowserClient` is overloaded, and `ReturnType` over an overload set
+ * resolves to the last signature — which here collapses to `any`. Writing it
+ * that way compiles, lints and passes every gate while silently removing type
+ * checking from every Supabase call in the app. Going through a local,
+ * non-overloaded function is what keeps the real type.
+ *
+ * @supabase/supabase-js is still not imported: it is a peer dependency npm
+ * installs on its own and is not declared in our package.json.
+ */
+type SupabaseBrowserClient = ReturnType<typeof createClient>;
 
 /**
  * Memoised at module scope so repeated calls share one client. Supabase stores
@@ -34,23 +61,9 @@ let client: SupabaseBrowserClient | undefined;
  * @throws if the Supabase environment variables are missing.
  */
 export function getSupabaseBrowserClient(): SupabaseBrowserClient {
-  if (client) {
-    return client;
+  if (!client) {
+    client = createClient();
   }
 
-  // Written as two literal `process.env.X` reads because Next.js inlines
-  // NEXT_PUBLIC_* by textual substitution at build time. A computed lookup
-  // (`process.env[name]`) is not substituted and would always be undefined.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) {
-    throw new Error(
-      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ' +
-        'สำหรับ SpaceLink Web',
-    );
-  }
-
-  client = createBrowserClient(url, anonKey);
   return client;
 }
