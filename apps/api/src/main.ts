@@ -8,10 +8,18 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  // Locked to the deployed frontend when CORS_ORIGIN is set; otherwise left open
-  // so local development works before apps/web exists (SCRUM-20).
-  const corsOrigin = config.get<string>('CORS_ORIGIN');
-  app.enableCors({ origin: corsOrigin ?? true });
+  // CORS_ORIGIN is a comma-separated list because more than one origin is
+  // legitimate at the same time: the deployed frontend, plus http://localhost:3000
+  // when a teammate points a locally running page at the deployed API. A single
+  // string would force a choice between them. Unset means local API development,
+  // where reflecting whatever origin asks is the useful behaviour.
+  const allowedOrigins = config
+    .get<string>('CORS_ORIGIN')
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  app.enableCors({ origin: allowedOrigins ?? true });
 
   // whitelist strips undeclared fields and forbidNonWhitelisted rejects the
   // request outright (AGENTS.md §14.4) — every request body needs a DTO.
