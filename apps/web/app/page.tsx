@@ -352,6 +352,31 @@ export default function DiscoveryPage() {
         </div>
       </section>
 
+      <section className="shell pb-16">
+        <div className="rounded-[32px] border border-[#e7e2ed] bg-white px-8 py-12 text-center shadow-soft sm:px-14">
+          <h2 className="text-3xl font-black tracking-[-0.04em]">
+            พร้อมจองบูธในงานถัดไปแล้วหรือยัง
+          </h2>
+          <p className="mx-auto mt-4 max-w-[46ch] leading-8 text-[#7a7487]">
+            สมัครด้วยอีเมลอย่างเดียว ไม่ต้องตั้งรหัสผ่าน
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/register"
+              className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
+            >
+              สมัครสมาชิก
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
+            >
+              เข้าสู่ระบบ
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <footer id="support" className="border-t border-[#e9e5ef] bg-white py-8">
         <div className="shell flex flex-wrap items-center justify-between gap-3 text-sm text-[#7b7588]">
           <strong className="text-ink">SpaceLink</strong>
