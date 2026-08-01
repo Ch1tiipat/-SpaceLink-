@@ -73,6 +73,27 @@ export type EventMap = {
   zones: EventZone[];
 };
 
+export type VendorShop = {
+  id: string;
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  categories: { id: string; name: string }[];
+};
+
+export type ZoneRecommendation = {
+  boothId: string;
+  score: number;
+  reason: string;
+  source: 'AI_GEMINI' | 'RULE_BASED';
+};
+
+export type ZoneRecommendationInput = {
+  shopId: string;
+  productCategoryIds?: string[];
+  limit?: number;
+};
+
 /** The `app_user.role` values (AGENTS.md §5). Platform-level, not org-level. */
 export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'VENDOR';
 
@@ -91,6 +112,7 @@ export type CurrentUser = {
   isBlacklisted: boolean;
   createdAt: string;
   updatedAt: string;
+  shops: VendorShop[];
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
@@ -159,6 +181,62 @@ async function getJson<T>(
   return (await response.json()) as T;
 }
 
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  { signal, token }: RequestOptions = {},
+): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      signal,
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw cause;
+    }
+
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+
+    throw new ApiError(
+      detail || 'ระบบแนะนำโซนไม่สามารถทำงานได้ในขณะนี้',
+      response.status,
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
   return getJson<DiscoveryEvent[]>('/events/discovery', { signal });
 }
@@ -185,4 +263,17 @@ export function getMe(
   signal?: AbortSignal,
 ): Promise<CurrentUser> {
   return getJson<CurrentUser>('/auth/me', { signal, token });
+}
+
+export function getZoneRecommendations(
+  eventId: string,
+  input: ZoneRecommendationInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ZoneRecommendation[]> {
+  return postJson<ZoneRecommendation[]>(
+    `/events/${encodeURIComponent(eventId)}/recommendations`,
+    input,
+    { signal, token },
+  );
 }
