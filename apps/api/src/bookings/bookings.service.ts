@@ -29,7 +29,25 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
 const DEFAULT_BOOKING_QUOTA = 2;
 const HOLD_DURATION_MS = 5 * 60 * 1000;
 
+const bookingListInclude = {
+  event: { select: { id: true, name: true } },
+  booth: {
+    select: {
+      id: true,
+      code: true,
+      zone: { select: { id: true, code: true, name: true } },
+    },
+  },
+  shop: { select: { id: true, name: true } },
+} satisfies Prisma.BookingInclude;
+
 type BookingResponse = Omit<Booking, 'boothPrice'> & { boothPrice: string };
+type BookingListRecord = Prisma.BookingGetPayload<{
+  include: typeof bookingListInclude;
+}>;
+type BookingListResponse = Omit<BookingListRecord, 'boothPrice'> & {
+  boothPrice: string;
+};
 
 interface SlipBooking {
   id: string;
@@ -289,11 +307,13 @@ export class BookingsService {
     );
   }
 
-  async findAll(vendorUserId: string): Promise<BookingResponse[]> {
+  async findAll(vendorUserId: string): Promise<BookingListResponse[]> {
     const bookings = await this.prisma.booking.findMany({
       where: { vendorUserId },
+      include: bookingListInclude,
+      orderBy: { createdAt: 'desc' },
     });
-    return bookings.map((booking) => this.toResponse(booking));
+    return bookings.map((booking) => this.toListResponse(booking));
   }
 
   async cancel(
@@ -377,6 +397,11 @@ export class BookingsService {
   }
 
   private toResponse(booking: Booking): BookingResponse {
+    const { boothPrice, ...rest } = booking;
+    return { ...rest, boothPrice: boothPrice.toString() };
+  }
+
+  private toListResponse(booking: BookingListRecord): BookingListResponse {
     const { boothPrice, ...rest } = booking;
     return { ...rest, boothPrice: boothPrice.toString() };
   }

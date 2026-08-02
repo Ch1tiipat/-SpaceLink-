@@ -602,13 +602,39 @@ describe('BookingsService', () => {
   });
 
   it('lists only bookings owned by the authenticated vendor', async () => {
-    bookingFindMany.mockResolvedValue([CREATED_BOOKING]);
+    const listedBooking = {
+      ...CREATED_BOOKING,
+      event: { id: EVENT_ID, name: 'ตลาดนัดสร้างสรรค์' },
+      booth: {
+        id: BOOTH_ID,
+        code: 'A01',
+        zone: {
+          id: '88888888-8888-4888-8888-888888888888',
+          code: 'A',
+          name: 'อาหารและเครื่องดื่ม',
+        },
+      },
+      shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+    };
+    bookingFindMany.mockResolvedValue([listedBooking]);
 
     await expect(service.findAll(VENDOR_ID)).resolves.toEqual([
-      { ...CREATED_BOOKING, boothPrice: '1500' },
+      { ...listedBooking, boothPrice: '1500' },
     ]);
     expect(bookingFindMany).toHaveBeenCalledWith({
       where: { vendorUserId: VENDOR_ID },
+      include: {
+        event: { select: { id: true, name: true } },
+        booth: {
+          select: {
+            id: true,
+            code: true,
+            zone: { select: { id: true, code: true, name: true } },
+          },
+        },
+        shop: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   });
 });
