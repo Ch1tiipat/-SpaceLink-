@@ -6,10 +6,12 @@ import { RuleBasedZoneRecommender } from './providers/rule-based-recommender';
 import { ZoneRecommendationService } from './zone-recommendation.service';
 import { ZONE_RECOMMENDER } from './zone-recommender.interface';
 import type { ZoneRecommender } from './zone-recommender.interface';
+import { RecommendationsController } from './recommendations.controller';
 
 type ZoneRecommenderName = 'rule' | 'gemini';
 
 @Module({
+  controllers: [RecommendationsController],
   providers: [
     RuleBasedZoneRecommender,
     {
