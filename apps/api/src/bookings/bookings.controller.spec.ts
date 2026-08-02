@@ -8,6 +8,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import type { UploadedSlipFile } from './booking-slip-storage.service';
 import { BookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 jest.mock('../auth/guards/supabase-auth.guard', () => ({
@@ -35,15 +36,19 @@ const CREATE_DTO: CreateBookingDto = {
 const SLIP_FILE: UploadedSlipFile = {
   buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
 };
+const CANCEL_DTO: CancelBookingDto = {
+  cancelReason: 'ไม่สามารถเข้าร่วมงานได้',
+};
 
+const cancel = jest.fn();
 const create = jest.fn();
 const findAll = jest.fn();
 const findOne = jest.fn();
 const uploadSlip = jest.fn();
-const mockBookingsService = { create, findAll, findOne, uploadSlip };
+const mockBookingsService = { cancel, create, findAll, findOne, uploadSlip };
 
 function controllerHandler(
-  name: 'create' | 'findAll' | 'findOne' | 'uploadSlip',
+  name: 'cancel' | 'create' | 'findAll' | 'findOne' | 'uploadSlip',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     BookingsController.prototype,
@@ -93,6 +98,9 @@ describe('BookingsController', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('uploadSlip')),
     ).toEqual([UserRole.VENDOR]);
+    expect(Reflect.getMetadata(ROLES_KEY, controllerHandler('cancel'))).toEqual(
+      [UserRole.VENDOR],
+    );
     expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('findOne')),
     ).toBeUndefined();
@@ -114,6 +122,14 @@ describe('BookingsController', () => {
     await controller.findAll(CURRENT_USER);
 
     expect(findAll).toHaveBeenCalledWith(VENDOR_ID);
+  });
+
+  it('passes the cancellation reason and authenticated vendor id', async () => {
+    cancel.mockResolvedValue({ id: 'booking-id' });
+
+    await controller.cancel('booking-id', CANCEL_DTO, CURRENT_USER);
+
+    expect(cancel).toHaveBeenCalledWith('booking-id', CANCEL_DTO, VENDOR_ID);
   });
 
   it('passes the uploaded file and authenticated vendor id to the service', async () => {

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  CancelledByRole,
   Prisma,
   SlipStatus,
   type Booking,
@@ -17,6 +18,7 @@ import {
   BookingSlipStorageService,
   type UploadedSlipFile,
 } from './booking-slip-storage.service';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 
@@ -291,6 +293,62 @@ export class BookingsService {
       where: { vendorUserId },
     });
     return bookings.map((booking) => this.toResponse(booking));
+  }
+
+  async cancel(
+    bookingId: string,
+    cancelBookingDto: CancelBookingDto,
+    vendorUserId: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, vendorUserId },
+      select: {
+        id: true,
+        status: true,
+        bookingStartDate: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+    if (!ACTIVE_BOOKING_STATUSES.includes(booking.status)) {
+      throw new ConflictException('การจองนี้ไม่สามารถยกเลิกได้');
+    }
+
+    const cancelledAt = new Date();
+    if (booking.bookingStartDate <= cancelledAt) {
+      throw new ConflictException('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
+    }
+
+    const updated = await this.prisma.booking.updateMany({
+      where: {
+        id: booking.id,
+        vendorUserId,
+        status: { in: ACTIVE_BOOKING_STATUSES },
+        bookingStartDate: { gt: cancelledAt },
+      },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledByUserId: vendorUserId,
+        cancelledByRole: CancelledByRole.VENDOR,
+        cancelReason: cancelBookingDto.cancelReason,
+        cancelledAt,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new ConflictException('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+    }
+
+    const cancelledBooking = await this.prisma.booking.findUnique({
+      where: { id: booking.id },
+    });
+    if (!cancelledBooking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+
+    return this.toResponse(cancelledBooking);
   }
 
   findOne(id: string) {

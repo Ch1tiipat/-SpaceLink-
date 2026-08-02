@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -20,6 +21,7 @@ import {
   type UploadedSlipFile,
 } from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 @Controller('bookings')
@@ -53,6 +55,16 @@ export class BookingsController {
       throw new BadRequestException('กรุณาแนบไฟล์สลิป');
     }
     return this.bookingsService.uploadSlip(id, file, currentUser.id);
+  }
+
+  @Patch(':id/cancel')
+  @Roles(UserRole.VENDOR)
+  cancel(
+    @Param('id') id: string,
+    @Body() cancelBookingDto: CancelBookingDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.cancel(id, cancelBookingDto, currentUser.id);
   }
 
   @Get()

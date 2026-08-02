@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  CancelledByRole,
   Prisma,
   SlipStatus,
   type Booking,
@@ -17,6 +18,7 @@ import {
   type UploadedSlipFile,
 } from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -40,6 +42,9 @@ const CREATE_DTO: CreateBookingDto = {
   eventId: EVENT_ID,
   boothId: BOOTH_ID,
   shopId: SHOP_ID,
+};
+const CANCEL_DTO: CancelBookingDto = {
+  cancelReason: 'ไม่สามารถเข้าร่วมงานได้',
 };
 
 const CREATED_BOOKING: Booking = {
@@ -71,6 +76,7 @@ const shopFindFirst = jest.fn();
 const bookingFindFirst = jest.fn();
 const bookingCount = jest.fn();
 const bookingCreate = jest.fn();
+const bookingFindUnique = jest.fn();
 const bookingFindMany = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const bookingUpdateMany = jest.fn();
@@ -85,6 +91,7 @@ const mockPrismaService = {
     findFirst: bookingFindFirst,
     count: bookingCount,
     create: bookingCreate,
+    findUnique: bookingFindUnique,
     findMany: bookingFindMany,
     updateMany: bookingUpdateMany,
   },
@@ -135,6 +142,14 @@ describe('BookingsService', () => {
     bookingFindFirst.mockResolvedValue(null);
     bookingCount.mockResolvedValue(0);
     bookingCreate.mockResolvedValue(CREATED_BOOKING);
+    bookingFindUnique.mockResolvedValue({
+      ...CREATED_BOOKING,
+      status: BookingStatus.CANCELLED,
+      cancelledByUserId: VENDOR_ID,
+      cancelledByRole: CancelledByRole.VENDOR,
+      cancelReason: CANCEL_DTO.cancelReason,
+      cancelledAt: NOW,
+    });
     bookingFindMany.mockResolvedValue([]);
     bookingUpdateMany.mockResolvedValue({ count: 1 });
     platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 2 });
@@ -487,6 +502,97 @@ describe('BookingsService', () => {
       await expect(
         service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
       ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+    });
+  });
+
+  describe('cancel', () => {
+    beforeEach(() => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.CONFIRMED,
+        bookingStartDate: EVENT_START,
+      });
+    });
+
+    it('cancels an owned active booking as the vendor', async () => {
+      const result = await service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID);
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
+        select: {
+          id: true,
+          status: true,
+          bookingStartDate: true,
+        },
+      });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          vendorUserId: VENDOR_ID,
+          status: {
+            in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+          },
+          bookingStartDate: { gt: NOW },
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledByUserId: VENDOR_ID,
+          cancelledByRole: CancelledByRole.VENDOR,
+          cancelReason: CANCEL_DTO.cancelReason,
+          cancelledAt: NOW,
+        },
+      });
+      expect(result.status).toBe(BookingStatus.CANCELLED);
+      expect(result.cancelledByRole).toBe(CancelledByRole.VENDOR);
+      expect(result.boothPrice).toBe('1500');
+    });
+
+    it('returns 404 for a missing booking or another vendor booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      BookingStatus.CANCELLED,
+      BookingStatus.NO_SHOW,
+      BookingStatus.COMPLETED,
+    ])('rejects a booking in %s status', async (status) => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status,
+        bookingStartDate: EVENT_START,
+      });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancellation on or after the booking start date', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.CONFIRMED,
+        bookingStartDate: NOW,
+      });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toThrow('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cancellation race without overwriting the booking', async () => {
+      bookingUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+      expect(bookingFindUnique).not.toHaveBeenCalled();
     });
   });
 
