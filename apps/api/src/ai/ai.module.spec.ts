@@ -11,6 +11,10 @@ import { ZoneRecommendationService } from './zone-recommendation.service';
 import { ZONE_RECOMMENDER } from './zone-recommender.interface';
 import type { ZoneRecommender } from './zone-recommender.interface';
 
+jest.mock('../auth/guards/supabase-auth.guard', () => ({
+  SupabaseAuthGuard: class SupabaseAuthGuard {},
+}));
+
 function bootAiModule(): Promise<TestingModule> {
   return Test.createTestingModule({
     imports: [
