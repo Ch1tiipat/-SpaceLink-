@@ -34,6 +34,7 @@ const NOW = new Date('2026-08-02T00:00:00.000Z');
 const BOOTH_PRICE = new Prisma.Decimal('1500.00');
 const SIGNED_SLIP_URL =
   'https://project.supabase.co/storage/v1/object/sign/slips/path?token=secret';
+const SLIP_OBJECT_PATH = `${VENDOR_ID}/${BOOKING_ID}/stored-slip.jpg`;
 const SLIP_FILE: UploadedSlipFile = {
   buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
 };
@@ -81,7 +82,7 @@ const bookingFindMany = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const bookingUpdateMany = jest.fn();
 const verifySlip = jest.fn();
-const uploadAndCreateSignedUrl = jest.fn();
+const uploadForVerification = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -98,7 +99,7 @@ const mockPrismaService = {
   platformConfig: { findFirst: platformConfigFindFirst },
 };
 const mockSlipVerificationService = { verify: verifySlip };
-const mockSlipStorageService = { uploadAndCreateSignedUrl };
+const mockSlipStorageService = { uploadForVerification };
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
@@ -157,7 +158,10 @@ describe('BookingsService', () => {
       status: SlipStatus.VERIFIED,
       amount: new Prisma.Decimal('1500.00'),
     });
-    uploadAndCreateSignedUrl.mockResolvedValue(SIGNED_SLIP_URL);
+    uploadForVerification.mockResolvedValue({
+      objectPath: SLIP_OBJECT_PATH,
+      verificationUrl: SIGNED_SLIP_URL,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -337,7 +341,7 @@ describe('BookingsService', () => {
           confirmedAt: true,
         },
       });
-      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+      expect(uploadForVerification).not.toHaveBeenCalled();
       expect(verifySlip).not.toHaveBeenCalled();
     });
 
@@ -350,7 +354,7 @@ describe('BookingsService', () => {
       await expect(
         service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
       ).rejects.toBeInstanceOf(ConflictException);
-      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+      expect(uploadForVerification).not.toHaveBeenCalled();
     });
 
     it('rejects a booking whose payment hold has expired', async () => {
@@ -362,7 +366,7 @@ describe('BookingsService', () => {
       await expect(
         service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
       ).rejects.toThrow('หมดเวลาชำระเงินสำหรับการจองนี้แล้ว');
-      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+      expect(uploadForVerification).not.toHaveBeenCalled();
     });
 
     it('confirms when VERIFIED is returned with an equal Decimal amount', async () => {
@@ -378,7 +382,7 @@ describe('BookingsService', () => {
 
       const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
 
-      expect(uploadAndCreateSignedUrl).toHaveBeenCalledWith(
+      expect(uploadForVerification).toHaveBeenCalledWith(
         SLIP_FILE,
         BOOKING_ID,
         VENDOR_ID,
@@ -386,6 +390,7 @@ describe('BookingsService', () => {
       expect(verifySlip).toHaveBeenCalledWith({
         bookingId: BOOKING_ID,
         slipImageUrl: SIGNED_SLIP_URL,
+        storedObjectPath: SLIP_OBJECT_PATH,
         expectedAmount: BOOTH_PRICE,
       });
       expect(bookingUpdateMany).toHaveBeenCalledWith({

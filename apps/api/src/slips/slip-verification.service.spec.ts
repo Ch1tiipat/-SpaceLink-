@@ -8,11 +8,14 @@ import type {
 } from './slip-verifier.interface';
 
 const BOOKING_ID = '11111111-1111-4111-8111-111111111111';
-const SLIP_URL = 'https://example.invalid/signed/slip.jpg';
+const SLIP_URL =
+  'https://example.invalid/signed/slip.jpg?token=short-lived-secret';
+const SLIP_OBJECT_PATH = 'vendor-id/booking-id/stored-slip.jpg';
 
 const REQUEST: SlipVerificationRequest = {
   bookingId: BOOKING_ID,
   slipImageUrl: SLIP_URL,
+  storedObjectPath: SLIP_OBJECT_PATH,
   expectedAmount: new Prisma.Decimal('1500.00'),
 };
 
@@ -78,7 +81,8 @@ describe('SlipVerificationService', () => {
 
     const row = createdRow(prisma.verifiedSlip.create);
     expect(row.bookingId).toBe(BOOKING_ID);
-    expect(row.slipImageUrl).toBe(SLIP_URL);
+    expect(row.slipImageUrl).toBe(SLIP_OBJECT_PATH);
+    expect(row.slipImageUrl).not.toContain('token=');
     expect(row.slipokStatus).toBe(SlipStatus.VERIFIED);
     expect(row.transRef).toBe(VERIFIED.transRef);
     expect(row.sendingBank).toBe(VERIFIED.sendingBank);

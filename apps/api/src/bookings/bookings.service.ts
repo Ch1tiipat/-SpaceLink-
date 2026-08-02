@@ -208,7 +208,7 @@ export class BookingsService {
       throw new ConflictException('หมดเวลาชำระเงินสำหรับการจองนี้แล้ว');
     }
 
-    const slipImageUrl = await this.slipStorage.uploadAndCreateSignedUrl(
+    const storedSlip = await this.slipStorage.uploadForVerification(
       file,
       booking.id,
       vendorUserId,
@@ -218,7 +218,8 @@ export class BookingsService {
     try {
       result = await this.slipVerification.verify({
         bookingId: booking.id,
-        slipImageUrl,
+        slipImageUrl: storedSlip.verificationUrl,
+        storedObjectPath: storedSlip.objectPath,
         expectedAmount: booking.boothPrice,
       });
     } catch (error) {

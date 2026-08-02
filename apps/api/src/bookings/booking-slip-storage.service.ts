@@ -16,6 +16,11 @@ export interface UploadedSlipFile {
   buffer: Buffer;
 }
 
+export interface StoredSlipUpload {
+  objectPath: string;
+  verificationUrl: string;
+}
+
 interface ValidatedSlipImage {
   contentType: 'image/jpeg' | 'image/png';
   extension: 'jpg' | 'png';
@@ -40,16 +45,17 @@ export class BookingSlipStorageService {
     );
   }
 
-  async uploadAndCreateSignedUrl(
+  async uploadForVerification(
     file: UploadedSlipFile,
     bookingId: string,
     vendorUserId: string,
-  ): Promise<string> {
+  ): Promise<StoredSlipUpload> {
     const image = this.validateImage(file);
     const objectPath = `${vendorUserId}/${bookingId}/${randomUUID()}.${image.extension}`;
 
     await this.uploadObject(objectPath, file.buffer, image.contentType);
-    return this.createSignedUrl(objectPath);
+    const verificationUrl = await this.createSignedUrl(objectPath);
+    return { objectPath, verificationUrl };
   }
 
   private validateImage(file: UploadedSlipFile): ValidatedSlipImage {

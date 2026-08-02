@@ -51,7 +51,7 @@ describe('BookingSlipStorageService', () => {
           ),
         );
 
-      const result = await service.uploadAndCreateSignedUrl(
+      const result = await service.uploadForVerification(
         { buffer },
         'booking-id',
         'vendor-id',
@@ -75,7 +75,10 @@ describe('BookingSlipStorageService', () => {
           'x-upsert': 'false',
         },
       });
-      expect(result).toBe(
+      expect(result.objectPath).toMatch(
+        new RegExp(`^vendor-id/booking-id/[a-f0-9-]+\\.${extension}$`),
+      );
+      expect(result.verificationUrl).toBe(
         `${SUPABASE_URL}/storage/v1/object/sign/slips/vendor/booking/file?token=short-lived`,
       );
     },
@@ -91,7 +94,7 @@ describe('BookingSlipStorageService', () => {
         }),
       );
 
-    await service.uploadAndCreateSignedUrl(
+    await service.uploadForVerification(
       { buffer: PNG },
       'booking-id',
       'vendor-id',
@@ -109,7 +112,7 @@ describe('BookingSlipStorageService', () => {
 
   it('rejects content whose bytes are not JPEG or PNG', async () => {
     await expect(
-      service.uploadAndCreateSignedUrl(
+      service.uploadForVerification(
         { buffer: Buffer.from('not an image') },
         'booking-id',
         'vendor-id',
@@ -120,7 +123,7 @@ describe('BookingSlipStorageService', () => {
 
   it('rejects an empty file', async () => {
     await expect(
-      service.uploadAndCreateSignedUrl(
+      service.uploadForVerification(
         { buffer: Buffer.alloc(0) },
         'booking-id',
         'vendor-id',
@@ -134,7 +137,7 @@ describe('BookingSlipStorageService', () => {
     oversized.set(PNG);
 
     await expect(
-      service.uploadAndCreateSignedUrl(
+      service.uploadForVerification(
         { buffer: oversized },
         'booking-id',
         'vendor-id',
@@ -147,11 +150,7 @@ describe('BookingSlipStorageService', () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
 
     await expect(
-      service.uploadAndCreateSignedUrl(
-        { buffer: PNG },
-        'booking-id',
-        'vendor-id',
-      ),
+      service.uploadForVerification({ buffer: PNG }, 'booking-id', 'vendor-id'),
     ).rejects.toThrow('ไม่สามารถจัดเก็บสลิปได้');
   });
 
@@ -166,11 +165,7 @@ describe('BookingSlipStorageService', () => {
       );
 
     await expect(
-      service.uploadAndCreateSignedUrl(
-        { buffer: PNG },
-        'booking-id',
-        'vendor-id',
-      ),
+      service.uploadForVerification({ buffer: PNG }, 'booking-id', 'vendor-id'),
     ).rejects.toBeInstanceOf(BadGatewayException);
   });
 });
