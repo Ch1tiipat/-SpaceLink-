@@ -1,9 +1,26 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UserRole, type User } from '@prisma/client';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import {
+  MAX_SLIP_FILE_SIZE_BYTES,
+  type UploadedSlipFile,
+} from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
+import { CreateBookingDto } from './dto/create-booking.dto';
 
 @Controller('bookings')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -11,9 +28,37 @@ import { BookingsService } from './bookings.service';
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
+  @Post()
+  @Roles(UserRole.VENDOR)
+  create(
+    @Body() createBookingDto: CreateBookingDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.create(createBookingDto, currentUser.id);
+  }
+
+  @Post(':id/slip')
+  @Roles(UserRole.VENDOR)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { files: 1, fileSize: MAX_SLIP_FILE_SIZE_BYTES },
+    }),
+  )
+  uploadSlip(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedSlipFile | undefined,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (!file) {
+      throw new BadRequestException('กรุณาแนบไฟล์สลิป');
+    }
+    return this.bookingsService.uploadSlip(id, file, currentUser.id);
+  }
+
   @Get()
-  findAll() {
-    return this.bookingsService.findAll();
+  @Roles(UserRole.VENDOR)
+  findAll(@CurrentUser() currentUser: User) {
+    return this.bookingsService.findAll(currentUser.id);
   }
 
   @Get(':id')

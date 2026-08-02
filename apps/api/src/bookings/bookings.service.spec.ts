@@ -1,24 +1,503 @@
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  BookingStatus,
+  Prisma,
+  SlipStatus,
+  type Booking,
+} from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { SlipVerificationService } from '../slips/slip-verification.service';
+import {
+  BookingSlipStorageService,
+  type UploadedSlipFile,
+} from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
+import { CreateBookingDto } from './dto/create-booking.dto';
 
-const mockPrismaService = {};
+const EVENT_ID = '11111111-1111-4111-8111-111111111111';
+const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
+const SHOP_ID = '33333333-3333-4333-8333-333333333333';
+const VENDOR_ID = '44444444-4444-4444-8444-444444444444';
+const VENUE_ID = '55555555-5555-4555-8555-555555555555';
+const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
+const BOOKING_ID = '77777777-7777-4777-8777-777777777777';
+const EVENT_START = new Date('2026-09-10T00:00:00.000Z');
+const EVENT_END = new Date('2026-09-12T00:00:00.000Z');
+const NOW = new Date('2026-08-02T00:00:00.000Z');
+const BOOTH_PRICE = new Prisma.Decimal('1500.00');
+const SIGNED_SLIP_URL =
+  'https://project.supabase.co/storage/v1/object/sign/slips/path?token=secret';
+const SLIP_FILE: UploadedSlipFile = {
+  buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+};
+
+const CREATE_DTO: CreateBookingDto = {
+  eventId: EVENT_ID,
+  boothId: BOOTH_ID,
+  shopId: SHOP_ID,
+};
+
+const CREATED_BOOKING: Booking = {
+  id: BOOKING_ID,
+  bookingCode: 'BK-0123456789AB',
+  eventId: EVENT_ID,
+  boothId: BOOTH_ID,
+  shopId: SHOP_ID,
+  vendorUserId: VENDOR_ID,
+  bookingStartDate: EVENT_START,
+  bookingEndDate: EVENT_END,
+  boothPrice: BOOTH_PRICE,
+  isPaymentExempt: false,
+  paymentExemptReason: null,
+  status: BookingStatus.PENDING_PAYMENT,
+  holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
+  confirmedAt: null,
+  cancelledByUserId: null,
+  cancelledByRole: null,
+  cancelReason: null,
+  cancelledAt: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const eventFindUnique = jest.fn();
+const boothFindUnique = jest.fn();
+const shopFindFirst = jest.fn();
+const bookingFindFirst = jest.fn();
+const bookingCount = jest.fn();
+const bookingCreate = jest.fn();
+const bookingFindMany = jest.fn();
+const platformConfigFindFirst = jest.fn();
+const bookingUpdateMany = jest.fn();
+const verifySlip = jest.fn();
+const uploadAndCreateSignedUrl = jest.fn();
+
+const mockPrismaService = {
+  event: { findUnique: eventFindUnique },
+  booth: { findUnique: boothFindUnique },
+  shop: { findFirst: shopFindFirst },
+  booking: {
+    findFirst: bookingFindFirst,
+    count: bookingCount,
+    create: bookingCreate,
+    findMany: bookingFindMany,
+    updateMany: bookingUpdateMany,
+  },
+  platformConfig: { findFirst: platformConfigFindFirst },
+};
+const mockSlipVerificationService = { verify: verifySlip };
+const mockSlipStorageService = { uploadAndCreateSignedUrl };
+
+const PENDING_SLIP_BOOKING = {
+  id: BOOKING_ID,
+  status: BookingStatus.PENDING_PAYMENT,
+  boothPrice: BOOTH_PRICE,
+  holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
+  confirmedAt: null,
+};
+
+function bookingCreateData(): Prisma.BookingUncheckedCreateInput {
+  const [args] = bookingCreate.mock.calls[0] as [
+    { data: Prisma.BookingUncheckedCreateInput },
+  ];
+  return args.data;
+}
 
 describe('BookingsService', () => {
   let service: BookingsService;
 
   beforeEach(async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+    jest.clearAllMocks();
+
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: EVENT_START,
+      endDate: EVENT_END,
+      organization: {
+        orgConfig: { bookingQuotaPerVendor: 3 },
+      },
+    });
+    boothFindUnique.mockResolvedValue({
+      id: BOOTH_ID,
+      boothPrice: BOOTH_PRICE,
+      zone: { venueId: VENUE_ID },
+    });
+    shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+    bookingFindFirst.mockResolvedValue(null);
+    bookingCount.mockResolvedValue(0);
+    bookingCreate.mockResolvedValue(CREATED_BOOKING);
+    bookingFindMany.mockResolvedValue([]);
+    bookingUpdateMany.mockResolvedValue({ count: 1 });
+    platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 2 });
+    verifySlip.mockResolvedValue({
+      status: SlipStatus.VERIFIED,
+      amount: new Prisma.Decimal('1500.00'),
+    });
+    uploadAndCreateSignedUrl.mockResolvedValue(SIGNED_SLIP_URL);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BookingsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: SlipVerificationService,
+          useValue: mockSlipVerificationService,
+        },
+        {
+          provide: BookingSlipStorageService,
+          useValue: mockSlipStorageService,
+        },
       ],
     }).compile();
 
     service = module.get<BookingsService>(BookingsService);
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('creates a pending-payment booking with server-owned values', async () => {
+    const result = await service.create(CREATE_DTO, VENDOR_ID);
+
+    expect(result).toEqual({ ...CREATED_BOOKING, boothPrice: '1500' });
+
+    const data = bookingCreateData();
+    expect(data.bookingCode).toMatch(/^BK-[A-F0-9]{12}$/);
+    expect(data.eventId).toBe(EVENT_ID);
+    expect(data.boothId).toBe(BOOTH_ID);
+    expect(data.shopId).toBe(SHOP_ID);
+    expect(data.vendorUserId).toBe(VENDOR_ID);
+    expect(data.bookingStartDate).toBe(EVENT_START);
+    expect(data.bookingEndDate).toBe(EVENT_END);
+    expect(data.boothPrice).toBe(BOOTH_PRICE);
+    expect(data.isPaymentExempt).toBe(false);
+    expect(data.status).toBe(BookingStatus.PENDING_PAYMENT);
+    expect(data.holdExpiresAt).toEqual(new Date('2026-08-02T00:05:00.000Z'));
+    expect(shopFindFirst).toHaveBeenCalledWith({
+      where: { id: SHOP_ID, ownerUserId: VENDOR_ID },
+      select: { id: true },
+    });
+  });
+
+  it('rejects a booth that belongs to another venue', async () => {
+    boothFindUnique.mockResolvedValue({
+      id: BOOTH_ID,
+      boothPrice: BOOTH_PRICE,
+      zone: { venueId: '88888888-8888-4888-8888-888888888888' },
+    });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(bookingFindFirst).not.toHaveBeenCalled();
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects an active booking for the same event and booth', async () => {
+    bookingFindFirst.mockResolvedValue({ id: 'existing-booking' });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+      'บูธนี้ถูกจองไปแล้ว',
+    );
+    expect(bookingFindFirst).toHaveBeenCalledWith({
+      where: {
+        eventId: EVENT_ID,
+        boothId: BOOTH_ID,
+        status: {
+          in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+        },
+      },
+      select: { id: true },
+    });
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  it('translates a create-time P2002 race into a booking conflict', async () => {
+    bookingCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+      'บูธนี้ถูกจองไปแล้ว',
+    );
+  });
+
+  it('rejects a vendor who has reached the organization quota', async () => {
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: EVENT_START,
+      endDate: EVENT_END,
+      organization: {
+        orgConfig: { bookingQuotaPerVendor: 2 },
+      },
+    });
+    bookingCount.mockResolvedValue(2);
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+      'คุณจองบูธในงานนี้ครบโควตาแล้ว',
+    );
+    expect(bookingCount).toHaveBeenCalledWith({
+      where: {
+        eventId: EVENT_ID,
+        vendorUserId: VENDOR_ID,
+        status: {
+          in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+        },
+      },
+    });
+    expect(platformConfigFindFirst).not.toHaveBeenCalled();
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the platform quota when the organization has none', async () => {
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: EVENT_START,
+      endDate: EVENT_END,
+      organization: { orgConfig: null },
+    });
+    platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 1 });
+    bookingCount.mockResolvedValue(1);
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(platformConfigFindFirst).toHaveBeenCalledWith({
+      orderBy: { updatedAt: 'desc' },
+      select: { defaultBookingQuota: true },
+    });
+  });
+
+  it('returns 404 when the shop does not belong to the vendor', async () => {
+    shopFindFirst.mockResolvedValue(null);
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  describe('uploadSlip', () => {
+    beforeEach(() => {
+      bookingFindFirst.mockResolvedValue(PENDING_SLIP_BOOKING);
+    });
+
+    it('returns 404 for a missing booking or another vendor booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
+        select: {
+          id: true,
+          status: true,
+          boothPrice: true,
+          holdExpiresAt: true,
+          confirmedAt: true,
+        },
+      });
+      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+      expect(verifySlip).not.toHaveBeenCalled();
+    });
+
+    it('rejects a booking that is no longer pending payment', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...PENDING_SLIP_BOOKING,
+        status: BookingStatus.CONFIRMED,
+      });
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+    });
+
+    it('rejects a booking whose payment hold has expired', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...PENDING_SLIP_BOOKING,
+        holdExpiresAt: NOW,
+      });
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toThrow('หมดเวลาชำระเงินสำหรับการจองนี้แล้ว');
+      expect(uploadAndCreateSignedUrl).not.toHaveBeenCalled();
+    });
+
+    it('confirms when VERIFIED is returned with an equal Decimal amount', async () => {
+      verifySlip.mockResolvedValue({
+        status: SlipStatus.VERIFIED,
+        amount: new Prisma.Decimal('1500.00'),
+        transRef: 'sensitive-reference',
+        senderName: 'Sensitive Payer Name',
+        receiverName: 'Sensitive Receiver Name',
+        sendingBank: 'Sensitive Bank',
+        raw: { secret: 'provider payload' },
+      });
+
+      const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
+
+      expect(uploadAndCreateSignedUrl).toHaveBeenCalledWith(
+        SLIP_FILE,
+        BOOKING_ID,
+        VENDOR_ID,
+      );
+      expect(verifySlip).toHaveBeenCalledWith({
+        bookingId: BOOKING_ID,
+        slipImageUrl: SIGNED_SLIP_URL,
+        expectedAmount: BOOTH_PRICE,
+      });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          vendorUserId: VENDOR_ID,
+          status: BookingStatus.PENDING_PAYMENT,
+          holdExpiresAt: { gt: NOW },
+        },
+        data: {
+          status: BookingStatus.CONFIRMED,
+          confirmedAt: NOW,
+        },
+      });
+      expect(result).toEqual({
+        booking: {
+          id: BOOKING_ID,
+          status: BookingStatus.CONFIRMED,
+          confirmedAt: NOW,
+          holdExpiresAt: PENDING_SLIP_BOOKING.holdExpiresAt,
+        },
+        verification: {
+          status: SlipStatus.VERIFIED,
+          message: 'ตรวจสอบสลิปสำเร็จ',
+        },
+      });
+      expect(JSON.stringify(result)).not.toContain('Sensitive');
+      expect(JSON.stringify(result)).not.toContain('secret');
+      expect(JSON.stringify(result)).not.toContain('token=');
+    });
+
+    it.each([SlipStatus.INVALID, SlipStatus.DUPLICATE, SlipStatus.ERROR])(
+      'keeps the booking pending when verification returns %s',
+      async (status) => {
+        verifySlip.mockResolvedValue({
+          status,
+          amount: new Prisma.Decimal('1500.00'),
+          message: 'provider detail must not reach the vendor',
+        });
+
+        const result = await service.uploadSlip(
+          BOOKING_ID,
+          SLIP_FILE,
+          VENDOR_ID,
+        );
+
+        expect(result.booking.status).toBe(BookingStatus.PENDING_PAYMENT);
+        expect(result.verification.status).toBe(status);
+        expect(result.verification.message).not.toContain('provider detail');
+        expect(bookingUpdateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps pending and reports INVALID when a verified amount is wrong', async () => {
+      verifySlip.mockResolvedValue({
+        status: SlipStatus.VERIFIED,
+        amount: new Prisma.Decimal('1499.99'),
+      });
+
+      const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
+
+      expect(result.booking.status).toBe(BookingStatus.PENDING_PAYMENT);
+      expect(result.verification).toEqual({
+        status: SlipStatus.INVALID,
+        message: 'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ',
+      });
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not confirm a VERIFIED result with no amount', async () => {
+      verifySlip.mockResolvedValue({ status: SlipStatus.VERIFIED });
+
+      const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
+
+      expect(result.verification.status).toBe(SlipStatus.INVALID);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('maps a duplicate transaction P2002 to DUPLICATE', async () => {
+      verifySlip.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
+
+      expect(result.verification).toEqual({
+        status: SlipStatus.DUPLICATE,
+        message: 'สลิปนี้ถูกใช้แล้ว',
+      });
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns a sanitized ERROR when the verifier throws', async () => {
+      verifySlip.mockRejectedValue(
+        new Error(`SlipOK failed for ${SIGNED_SLIP_URL}`),
+      );
+
+      const result = await service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID);
+
+      expect(result.verification).toEqual({
+        status: SlipStatus.ERROR,
+        message: 'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่',
+      });
+      expect(JSON.stringify(result)).not.toContain(SIGNED_SLIP_URL);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not confirm if the booking changed during verification', async () => {
+      bookingUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+    });
+  });
+
+  it('lists only bookings owned by the authenticated vendor', async () => {
+    bookingFindMany.mockResolvedValue([CREATED_BOOKING]);
+
+    await expect(service.findAll(VENDOR_ID)).resolves.toEqual([
+      { ...CREATED_BOOKING, boothPrice: '1500' },
+    ]);
+    expect(bookingFindMany).toHaveBeenCalledWith({
+      where: { vendorUserId: VENDOR_ID },
+    });
   });
 });
