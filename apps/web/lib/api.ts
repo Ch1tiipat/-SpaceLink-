@@ -94,6 +94,32 @@ export type ZoneRecommendationInput = {
   limit?: number;
 };
 
+export type BookingStatus =
+  | 'PENDING_PAYMENT'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'NO_SHOW'
+  | 'COMPLETED';
+
+export type SlipVerificationStatus =
+  | 'VERIFIED'
+  | 'INVALID'
+  | 'DUPLICATE'
+  | 'ERROR';
+
+export type SlipUploadResponse = {
+  booking: {
+    id: string;
+    status: BookingStatus;
+    confirmedAt: string | null;
+    holdExpiresAt: string;
+  };
+  verification: {
+    status: SlipVerificationStatus;
+    message: string;
+  };
+};
+
 /** The `app_user.role` values (AGENTS.md §5). Platform-level, not org-level. */
 export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'VENDOR';
 
@@ -276,4 +302,76 @@ export function getZoneRecommendations(
     input,
     { signal, token },
   );
+}
+
+/**
+ * Uploads a payment slip to the guarded booking endpoint.
+ *
+ * Do not set Content-Type here. The browser must add the multipart boundary
+ * generated for this FormData body. The API owns storage and verification;
+ * the web app must never upload directly with a Supabase service-role key.
+ */
+export async function uploadBookingSlip(
+  bookingId: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<SlipUploadResponse> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  const form = new FormData();
+  form.append('file', file);
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/bookings/${encodeURIComponent(bookingId)}/slip`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      },
+    );
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw cause;
+    }
+
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดสลิปได้ กรุณาลองใหม่อีกครั้ง',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+    const fallbackByStatus: Record<number, string> = {
+      400: 'ไฟล์สลิปไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG',
+      404: 'ไม่พบรายการจองนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
+      409: 'รายการจองหมดเวลาหรืออยู่ในสถานะที่อัปโหลดสลิปไม่ได้',
+      413: 'ไฟล์สลิปมีขนาดเกิน 5 MB',
+      502: 'บริการจัดเก็บหรือตรวจสอบสลิปยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
+    };
+
+    throw new ApiError(
+      detail || fallbackByStatus[response.status] || 'อัปโหลดสลิปไม่สำเร็จ',
+      response.status,
+    );
+  }
+
+  return (await response.json()) as SlipUploadResponse;
 }
