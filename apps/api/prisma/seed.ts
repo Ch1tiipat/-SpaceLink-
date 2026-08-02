@@ -1,4 +1,11 @@
-import { BoothStatus, EventStatus, Prisma, PrismaClient } from '@prisma/client';
+import {
+  BookingStatus,
+  BoothStatus,
+  EventStatus,
+  Prisma,
+  PrismaClient,
+  UserRole,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -55,6 +62,17 @@ const ORIGINAL_ZONE_ID = '33333333-3333-3333-3333-333333333333';
 const ORIGINAL_EVENT_ID = '44444444-4444-4444-4444-444444444444';
 const USER_ID = '55555555-5555-5555-5555-555555555555';
 const SHOP_ID = '66666666-6666-6666-6666-666666666666';
+const PHASE6_VENDOR_B_ID = seedUuid(8, 2);
+const PHASE6_VENDOR_C_ID = seedUuid(8, 3);
+const PHASE6_VENDOR_A_SHOP_ID = seedUuid(9, 1);
+const PHASE6_VENDOR_B_SHOP_ID = seedUuid(9, 2);
+const PHASE6_VENDOR_C_SHOP_ONE_ID = seedUuid(9, 3);
+const PHASE6_VENDOR_C_SHOP_TWO_ID = seedUuid(9, 4);
+const PHASE6_BOOKING_EVENT_ID = seedUuid(10, 1);
+const PHASE6_QUOTA_EVENT_ID = seedUuid(10, 2);
+const PHASE6_ZONE_ID = seedUuid(11, 1);
+const PHASE6_VENDOR_B_BOOKING_ID = seedUuid(13, 1);
+const PHASE6_EXPIRED_HOLD_BOOKING_ID = seedUuid(13, 2);
 
 // Independent lookup data. These rows must exist before ZoneCategory links.
 const CATEGORY_SEEDS = [
@@ -580,6 +598,8 @@ async function main(): Promise<void> {
     },
   });
 
+  const phase6FixtureSummary = await seedPhase6Fixtures();
+
   console.log(
     `Seeding finished: ${ORGANIZATION_SEEDS.length} organizations, ` +
       `${ORGANIZATION_SEEDS.length} venues, ` +
@@ -587,6 +607,317 @@ async function main(): Promise<void> {
       `${boothSequence - 1} booths, ${CATEGORY_SEEDS.length} categories, ` +
       `${EVENT_SEEDS.length} events.`,
   );
+  console.log(
+    `Phase 6 fixtures: ${phase6FixtureSummary.vendors} vendors, ` +
+      `${phase6FixtureSummary.shops} shops, ` +
+      `${phase6FixtureSummary.events} events, ` +
+      `${phase6FixtureSummary.booths} booths, ` +
+      `${phase6FixtureSummary.bookings} bookings.`,
+  );
+}
+
+async function seedPhase6Fixtures(): Promise<{
+  vendors: number;
+  shops: number;
+  events: number;
+  booths: number;
+  bookings: number;
+}> {
+  const vendorAUserId = process.env.PHASE6_VENDOR_A_USER_ID?.trim();
+  if (!vendorAUserId) {
+    throw new Error(
+      'PHASE6_VENDOR_A_USER_ID is required to attach test shops safely.',
+    );
+  }
+
+  const vendorA = await prisma.user.findFirst({
+    where: { id: vendorAUserId, role: UserRole.VENDOR },
+    select: { id: true },
+  });
+  if (!vendorA) {
+    throw new Error(
+      'PHASE6_VENDOR_A_USER_ID must identify an existing vendor.',
+    );
+  }
+
+  const vendorB = await prisma.user.upsert({
+    where: { id: PHASE6_VENDOR_B_ID },
+    update: {
+      fullName: 'Phase 6 Vendor B',
+      role: UserRole.VENDOR,
+    },
+    create: {
+      id: PHASE6_VENDOR_B_ID,
+      authUserId: seedUuid(14, 2),
+      email: 'phase6.vendor-b@example.com',
+      fullName: 'Phase 6 Vendor B',
+      role: UserRole.VENDOR,
+    },
+  });
+
+  const vendorC = await prisma.user.upsert({
+    where: { id: PHASE6_VENDOR_C_ID },
+    update: {
+      fullName: 'Phase 6 Vendor C',
+      role: UserRole.VENDOR,
+    },
+    create: {
+      id: PHASE6_VENDOR_C_ID,
+      authUserId: seedUuid(14, 3),
+      email: 'phase6.vendor-c@example.com',
+      fullName: 'Phase 6 Vendor C',
+      role: UserRole.VENDOR,
+    },
+  });
+
+  const shopSeeds = [
+    {
+      id: PHASE6_VENDOR_A_SHOP_ID,
+      ownerUserId: vendorA.id,
+      name: 'Phase 6 Vendor A Shop',
+    },
+    {
+      id: PHASE6_VENDOR_B_SHOP_ID,
+      ownerUserId: vendorB.id,
+      name: 'Phase 6 Vendor B Shop',
+    },
+    {
+      id: PHASE6_VENDOR_C_SHOP_ONE_ID,
+      ownerUserId: vendorC.id,
+      name: 'Phase 6 Vendor C Shop One',
+    },
+    {
+      id: PHASE6_VENDOR_C_SHOP_TWO_ID,
+      ownerUserId: vendorC.id,
+      name: 'Phase 6 Vendor C Shop Two',
+    },
+  ];
+
+  for (const shopSeed of shopSeeds) {
+    await prisma.shop.upsert({
+      where: { id: shopSeed.id },
+      update: {
+        ownerUserId: shopSeed.ownerUserId,
+        name: shopSeed.name,
+      },
+      create: shopSeed,
+    });
+  }
+
+  const phase6Events = [
+    {
+      id: PHASE6_BOOKING_EVENT_ID,
+      name: 'Phase 6 Booking Flow Event',
+      description: 'Deterministic event for SCRUM-24 booking flow tests',
+      startDate: new Date('2026-09-20T00:00:00.000Z'),
+      endDate: new Date('2026-09-22T00:00:00.000Z'),
+    },
+    {
+      id: PHASE6_QUOTA_EVENT_ID,
+      name: 'Phase 6 Booking Quota Event',
+      description: 'Deterministic event for SCRUM-24 quota tests',
+      startDate: new Date('2026-10-01T00:00:00.000Z'),
+      endDate: new Date('2026-10-03T00:00:00.000Z'),
+    },
+  ];
+
+  for (const eventSeed of phase6Events) {
+    await prisma.event.upsert({
+      where: { id: eventSeed.id },
+      update: {
+        organizationId: ORIGINAL_ORG_ID,
+        venueId: ORIGINAL_VENUE_ID,
+        name: eventSeed.name,
+        description: eventSeed.description,
+        startDate: eventSeed.startDate,
+        endDate: eventSeed.endDate,
+        startTime: '09:00',
+        endTime: '18:00',
+        contactEmail: 'phase6.organizer@example.com',
+        status: EventStatus.PUBLISHED,
+      },
+      create: {
+        ...eventSeed,
+        organizationId: ORIGINAL_ORG_ID,
+        venueId: ORIGINAL_VENUE_ID,
+        startTime: '09:00',
+        endTime: '18:00',
+        contactEmail: 'phase6.organizer@example.com',
+        status: EventStatus.PUBLISHED,
+      },
+    });
+  }
+
+  const phase6Zone = await prisma.zone.upsert({
+    where: {
+      venueId_code: {
+        venueId: ORIGINAL_VENUE_ID,
+        code: 'PHASE6',
+      },
+    },
+    update: {
+      name: 'Phase 6 Test Zone',
+      description: 'Dedicated zone for SCRUM-24 Phase 6 fixtures',
+      defaultBoothPrice: '100.00',
+      posX: '5.0000',
+      posY: '85.0000',
+    },
+    create: {
+      id: PHASE6_ZONE_ID,
+      venueId: ORIGINAL_VENUE_ID,
+      code: 'PHASE6',
+      name: 'Phase 6 Test Zone',
+      description: 'Dedicated zone for SCRUM-24 Phase 6 fixtures',
+      defaultBoothPrice: '100.00',
+      posX: '5.0000',
+      posY: '85.0000',
+    },
+  });
+
+  const phase6Booths = [];
+  for (let sequence = 1; sequence <= 6; sequence += 1) {
+    const code = `P6${sequence.toString().padStart(2, '0')}`;
+    const booth = await prisma.booth.upsert({
+      where: {
+        zoneId_code: {
+          zoneId: phase6Zone.id,
+          code,
+        },
+      },
+      update: {
+        boothPrice: '100.00',
+        widthM: '3.00',
+        heightM: '3.00',
+        posX: `${5 + (sequence - 1) * 15}.0000`,
+        posY: '20.0000',
+        facilities: { phase6Fixture: true },
+        status: BoothStatus.AVAILABLE,
+      },
+      create: {
+        id: seedUuid(12, sequence),
+        zoneId: phase6Zone.id,
+        code,
+        boothPrice: '100.00',
+        widthM: '3.00',
+        heightM: '3.00',
+        posX: `${5 + (sequence - 1) * 15}.0000`,
+        posY: '20.0000',
+        facilities: { phase6Fixture: true },
+        status: BoothStatus.AVAILABLE,
+      },
+    });
+    phase6Booths.push(booth);
+  }
+
+  const now = new Date();
+  await prisma.booking.upsert({
+    where: { id: PHASE6_VENDOR_B_BOOKING_ID },
+    update: {
+      eventId: PHASE6_BOOKING_EVENT_ID,
+      boothId: phase6Booths[1].id,
+      shopId: PHASE6_VENDOR_B_SHOP_ID,
+      vendorUserId: vendorB.id,
+      bookingStartDate: phase6Events[0].startDate,
+      bookingEndDate: phase6Events[0].endDate,
+      boothPrice: phase6Booths[1].boothPrice,
+      status: BookingStatus.CONFIRMED,
+      holdExpiresAt: null,
+      confirmedAt: now,
+      cancelledByUserId: null,
+      cancelledByRole: null,
+      cancelReason: null,
+      cancelledAt: null,
+    },
+    create: {
+      id: PHASE6_VENDOR_B_BOOKING_ID,
+      bookingCode: 'P6-VENDOR-B-ACTIVE',
+      eventId: PHASE6_BOOKING_EVENT_ID,
+      boothId: phase6Booths[1].id,
+      shopId: PHASE6_VENDOR_B_SHOP_ID,
+      vendorUserId: vendorB.id,
+      bookingStartDate: phase6Events[0].startDate,
+      bookingEndDate: phase6Events[0].endDate,
+      boothPrice: phase6Booths[1].boothPrice,
+      status: BookingStatus.CONFIRMED,
+      confirmedAt: now,
+    },
+  });
+
+  await prisma.booking.upsert({
+    where: { id: PHASE6_EXPIRED_HOLD_BOOKING_ID },
+    update: {
+      eventId: PHASE6_BOOKING_EVENT_ID,
+      boothId: phase6Booths[2].id,
+      shopId: PHASE6_VENDOR_A_SHOP_ID,
+      vendorUserId: vendorA.id,
+      bookingStartDate: phase6Events[0].startDate,
+      bookingEndDate: phase6Events[0].endDate,
+      boothPrice: phase6Booths[2].boothPrice,
+      status: BookingStatus.PENDING_PAYMENT,
+      holdExpiresAt: new Date(now.getTime() - 60_000),
+      confirmedAt: null,
+      cancelledByUserId: null,
+      cancelledByRole: null,
+      cancelReason: null,
+      cancelledAt: null,
+    },
+    create: {
+      id: PHASE6_EXPIRED_HOLD_BOOKING_ID,
+      bookingCode: 'P6-EXPIRED-HOLD',
+      eventId: PHASE6_BOOKING_EVENT_ID,
+      boothId: phase6Booths[2].id,
+      shopId: PHASE6_VENDOR_A_SHOP_ID,
+      vendorUserId: vendorA.id,
+      bookingStartDate: phase6Events[0].startDate,
+      bookingEndDate: phase6Events[0].endDate,
+      boothPrice: phase6Booths[2].boothPrice,
+      status: BookingStatus.PENDING_PAYMENT,
+      holdExpiresAt: new Date(now.getTime() - 60_000),
+    },
+  });
+
+  for (let sequence = 0; sequence < 3; sequence += 1) {
+    await prisma.booking.upsert({
+      where: { id: seedUuid(13, sequence + 3) },
+      update: {
+        eventId: PHASE6_QUOTA_EVENT_ID,
+        boothId: phase6Booths[sequence].id,
+        shopId: PHASE6_VENDOR_A_SHOP_ID,
+        vendorUserId: vendorA.id,
+        bookingStartDate: phase6Events[1].startDate,
+        bookingEndDate: phase6Events[1].endDate,
+        boothPrice: phase6Booths[sequence].boothPrice,
+        status: BookingStatus.CONFIRMED,
+        holdExpiresAt: null,
+        confirmedAt: now,
+        cancelledByUserId: null,
+        cancelledByRole: null,
+        cancelReason: null,
+        cancelledAt: null,
+      },
+      create: {
+        id: seedUuid(13, sequence + 3),
+        bookingCode: `P6-QUOTA-${sequence + 1}`,
+        eventId: PHASE6_QUOTA_EVENT_ID,
+        boothId: phase6Booths[sequence].id,
+        shopId: PHASE6_VENDOR_A_SHOP_ID,
+        vendorUserId: vendorA.id,
+        bookingStartDate: phase6Events[1].startDate,
+        bookingEndDate: phase6Events[1].endDate,
+        boothPrice: phase6Booths[sequence].boothPrice,
+        status: BookingStatus.CONFIRMED,
+        confirmedAt: now,
+      },
+    });
+  }
+
+  return {
+    vendors: 3,
+    shops: shopSeeds.length,
+    events: phase6Events.length,
+    booths: phase6Booths.length,
+    bookings: 5,
+  };
 }
 
 function seedUuid(entityGroup: number, sequence: number): string {
