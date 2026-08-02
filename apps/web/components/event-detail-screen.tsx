@@ -115,12 +115,20 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               {dateFormatter.format(new Date(event.endDate))} ·{' '}
               {event.venue.name}
             </p>
-            <Link
-              href={`/events/${event.id}/map`}
-              className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 font-bold text-violet shadow-lg"
-            >
-              ดู Zone Map แบบอ่านอย่างเดียว →
-            </Link>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link
+                href={`/events/${event.id}/book`}
+                className="inline-flex rounded-xl bg-white px-5 py-3 font-bold text-violet shadow-lg"
+              >
+                เลือกบูธและจองพื้นที่ →
+              </Link>
+              <Link
+                href={`/events/${event.id}/map`}
+                className="inline-flex rounded-xl border border-white/40 bg-white/10 px-5 py-3 font-bold text-white backdrop-blur"
+              >
+                ดู Zone Map แบบอ่านอย่างเดียว
+              </Link>
+            </div>
           </div>
         </section>
 
