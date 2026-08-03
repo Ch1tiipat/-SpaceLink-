@@ -17,6 +17,13 @@ import type {
 export interface SlipVerificationRequest extends SlipVerificationInput {
   /** `booking.id`. Becomes `verifiedSlip.bookingId`. */
   bookingId: string;
+
+  /**
+   * Stable private object path stored in `verifiedSlip.slipImageUrl`. The
+   * short-lived `slipImageUrl` above is for the verifier only and must never be
+   * persisted because its token expires.
+   */
+  storedObjectPath: string;
 }
 
 /**
@@ -65,16 +72,17 @@ export class SlipVerificationService {
    */
   async verify(
     request: SlipVerificationRequest,
+    transaction: Prisma.TransactionClient = this.prisma,
   ): Promise<SlipVerificationResult> {
     const result = await this.verifier.verify({
       slipImageUrl: request.slipImageUrl,
       expectedAmount: request.expectedAmount,
     });
 
-    await this.prisma.verifiedSlip.create({
+    await transaction.verifiedSlip.create({
       data: {
         bookingId: request.bookingId,
-        slipImageUrl: request.slipImageUrl,
+        slipImageUrl: request.storedObjectPath,
         slipokStatus: result.status,
         // `amount` is NOT NULL, but a non-VERIFIED result read no amount off the
         // slip. Zero, never `expectedAmount`: filling the column with the price

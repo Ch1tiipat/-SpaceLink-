@@ -12,6 +12,11 @@ SlipOK adapter ส่ง signed URL อายุสั้นพร้อมย�
 เพื่อเช็กบัญชีผู้รับและสลิปซ้ำ การแปลงยอดเงินจาก JSON number เป็น
 `Prisma.Decimal` เกิดภายใน adapter เท่านั้น
 
+`SlipVerificationService` ส่ง signed URL ให้ provider เท่านั้น แต่บันทึก private
+object path ที่ไม่หมดอายุลง `verified_slip.slip_image_url` เพื่อให้ endpoint
+สำหรับผู้มีสิทธิ์สามารถสร้าง signed URL ใหม่ตอนอ่านได้ ห้ามบันทึก signed URL
+หรือ token ลงฐานข้อมูล
+
 สถานะที่แปลง:
 
 - ผ่านและยอดตรง → `VERIFIED`

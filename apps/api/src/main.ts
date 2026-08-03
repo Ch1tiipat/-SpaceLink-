@@ -19,7 +19,7 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
 
-  app.enableCors({ origin: allowedOrigins ?? true });
+  app.enableCors({ origin: allowedOrigins?.length ? allowedOrigins : true });
 
   // whitelist strips undeclared fields and forbidNonWhitelisted rejects the
   // request outright (AGENTS.md §14.4) — every request body needs a DTO.
