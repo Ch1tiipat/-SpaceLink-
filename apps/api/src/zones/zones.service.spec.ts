@@ -1,11 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateZoneDto } from './dto/create-zone.dto';
 import { ZonesService } from './zones.service';
 
 const findMany = jest.fn();
+const create = jest.fn();
 const mockPrismaService = {
   zone: {
     findMany,
+    create,
   },
 };
 
@@ -54,6 +57,17 @@ describe('ZonesService', () => {
     await expect(service.findAll({ venueId })).resolves.toEqual([]);
     expect(findMany).toHaveBeenCalledWith({
       where: { venueId },
+    });
+  });
+
+  it('creates a zone with venueId from the argument, not the DTO', async () => {
+    const dto: CreateZoneDto = { code: 'A1' };
+    const created = { id: 'zone-1', venueId, code: 'A1' };
+    create.mockResolvedValue(created);
+
+    await expect(service.create(venueId, dto)).resolves.toEqual(created);
+    expect(create).toHaveBeenCalledWith({
+      data: { code: 'A1', venueId },
     });
   });
 });
