@@ -146,6 +146,14 @@ export function AppHeader() {
 
           {auth.status === 'signed-in' && (
             <>
+              <Link
+                href="/bookings"
+                aria-label="การจองของฉัน"
+                className="inline-flex rounded-full border border-[#e4dff0] bg-white px-3 py-2 text-[13px] font-bold text-violet shadow-sm"
+              >
+                <span className="sm:hidden">การจอง</span>
+                <span className="hidden sm:inline">การจองของฉัน</span>
+              </Link>
               <span className="max-w-[84px] truncate text-[13px] font-bold text-ink sm:max-w-[180px] sm:text-sm">
                 {auth.fullName}
               </span>

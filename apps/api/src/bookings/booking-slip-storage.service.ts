@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   BadGatewayException,
   BadRequestException,
@@ -10,6 +11,9 @@ export const PAYMENT_SLIP_BUCKET = 'slips';
 export const MAX_SLIP_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const SIGNED_URL_TTL_SECONDS = 5 * 60;
+const STORAGE_REQUEST_TIMEOUT_MS = 15_000;
+const STORAGE_REQUEST_ATTEMPTS = 2;
+const STORAGE_RETRY_DELAY_MS = 200;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 export interface UploadedSlipFile {
@@ -25,6 +29,8 @@ interface ValidatedSlipImage {
   contentType: 'image/jpeg' | 'image/png';
   extension: 'jpg' | 'png';
 }
+
+class StorageTimeoutError extends Error {}
 
 /**
  * Stores payment slips without exposing the service-role key or a public URL.
@@ -53,9 +59,36 @@ export class BookingSlipStorageService {
     const image = this.validateImage(file);
     const objectPath = `${vendorUserId}/${bookingId}/${randomUUID()}.${image.extension}`;
 
-    await this.uploadObject(objectPath, file.buffer, image.contentType);
-    const verificationUrl = await this.createSignedUrl(objectPath);
-    return { objectPath, verificationUrl };
+    try {
+      await this.uploadObject(objectPath, file.buffer, image.contentType);
+      const verificationUrl = await this.createSignedUrl(objectPath);
+      return { objectPath, verificationUrl };
+    } catch (error) {
+      await this.removeObject(objectPath).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async removeObject(objectPath: string): Promise<void> {
+    let response: Response;
+    try {
+      response = await this.request(this.objectUrl(objectPath), {
+        method: 'DELETE',
+        headers: {
+          apikey: this.serviceRoleKey,
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+        },
+      });
+    } catch (error) {
+      if (error instanceof StorageTimeoutError) {
+        throw new BadGatewayException('หมดเวลารอลบไฟล์สลิปที่ไม่สมบูรณ์');
+      }
+      throw new BadGatewayException('ไม่สามารถลบไฟล์สลิปที่ไม่สมบูรณ์ได้');
+    }
+
+    if (!response.ok && response.status !== 404) {
+      throw new BadGatewayException('ไม่สามารถลบไฟล์สลิปที่ไม่สมบูรณ์ได้');
+    }
   }
 
   private validateImage(file: UploadedSlipFile): ValidatedSlipImage {
@@ -92,7 +125,7 @@ export class BookingSlipStorageService {
   ): Promise<void> {
     let response: Response;
     try {
-      response = await fetch(this.objectUrl(objectPath), {
+      response = await this.request(this.objectUrl(objectPath), {
         method: 'POST',
         headers: {
           apikey: this.serviceRoleKey,
@@ -102,7 +135,10 @@ export class BookingSlipStorageService {
         },
         body: new Uint8Array(body),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof StorageTimeoutError) {
+        throw new BadGatewayException('หมดเวลารอจัดเก็บสลิป');
+      }
       throw new BadGatewayException('ไม่สามารถจัดเก็บสลิปได้');
     }
 
@@ -114,7 +150,7 @@ export class BookingSlipStorageService {
   private async createSignedUrl(objectPath: string): Promise<string> {
     let response: Response;
     try {
-      response = await fetch(this.signUrl(objectPath), {
+      response = await this.request(this.signUrl(objectPath), {
         method: 'POST',
         headers: {
           apikey: this.serviceRoleKey,
@@ -123,7 +159,10 @@ export class BookingSlipStorageService {
         },
         body: JSON.stringify({ expiresIn: SIGNED_URL_TTL_SECONDS }),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof StorageTimeoutError) {
+        throw new BadGatewayException('หมดเวลารอสร้างลิงก์ตรวจสอบสลิป');
+      }
       throw new BadGatewayException('ไม่สามารถสร้างลิงก์ตรวจสอบสลิปได้');
     }
 
@@ -143,7 +182,14 @@ export class BookingSlipStorageService {
       throw new BadGatewayException('ไม่สามารถสร้างลิงก์ตรวจสอบสลิปได้');
     }
 
-    return new URL(signedUrl, this.supabaseUrl).toString();
+    const storagePath = signedUrl.startsWith('/storage/v1/')
+      ? signedUrl
+      : `/storage/v1/${signedUrl.replace(/^\/+/, '')}`;
+    const verificationUrl = new URL(storagePath, this.supabaseUrl);
+    if (verificationUrl.origin !== new URL(this.supabaseUrl).origin) {
+      throw new BadGatewayException('ไม่สามารถสร้างลิงก์ตรวจสอบสลิปได้');
+    }
+    return verificationUrl.toString();
   }
 
   private readSignedUrl(payload: unknown): string | null {
@@ -166,5 +212,36 @@ export class BookingSlipStorageService {
 
   private encodePath(objectPath: string): string {
     return objectPath.split('/').map(encodeURIComponent).join('/');
+  }
+
+  private async request(url: string, init: RequestInit): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= STORAGE_REQUEST_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          ...init,
+          signal: AbortSignal.timeout(STORAGE_REQUEST_TIMEOUT_MS),
+        });
+        if (response.status < 500 || attempt === STORAGE_REQUEST_ATTEMPTS) {
+          return response;
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt === STORAGE_REQUEST_ATTEMPTS) {
+          if (
+            error instanceof Error &&
+            (error.name === 'TimeoutError' || error.name === 'AbortError')
+          ) {
+            throw new StorageTimeoutError();
+          }
+          throw error;
+        }
+      }
+
+      await delay(STORAGE_RETRY_DELAY_MS * attempt);
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Storage failed');
   }
 }

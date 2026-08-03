@@ -100,8 +100,8 @@ export function SlipUploadPanel({
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-ink">แนบหลักฐานการชำระเงิน</h2>
         <p className="text-sm leading-6 text-muted">
-          เลือกรูปสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB ระบบจะตรวจสอบกับ
-          SlipOK โดยอัตโนมัติ
+          เลือกรูปสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB ระบบจะตรวจสอบสลิป
+          โดยอัตโนมัติ
         </p>
       </div>
 

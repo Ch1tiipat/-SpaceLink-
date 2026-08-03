@@ -94,6 +94,18 @@ describe('SlipVerificationService', () => {
     expect(row.verifiedAt).toBeInstanceOf(Date);
   });
 
+  it('writes through the caller transaction when one is provided', async () => {
+    const transactionCreate = jest.fn().mockResolvedValue({});
+    const transaction = {
+      verifiedSlip: { create: transactionCreate },
+    } as unknown as Prisma.TransactionClient;
+
+    await createService().verify(REQUEST, transaction);
+
+    expect(transactionCreate).toHaveBeenCalledTimes(1);
+    expect(prisma.verifiedSlip.create).not.toHaveBeenCalled();
+  });
+
   it('stores the amount the provider read, unchanged', async () => {
     await createService().verify(REQUEST);
 

@@ -101,6 +101,43 @@ export type BookingStatus =
   | 'NO_SHOW'
   | 'COMPLETED';
 
+export type BookingRecord = {
+  id: string;
+  bookingCode: string;
+  eventId: string;
+  boothId: string;
+  shopId: string;
+  vendorUserId: string;
+  bookingStartDate: string;
+  bookingEndDate: string;
+  boothPrice: string;
+  isPaymentExempt: boolean;
+  paymentExemptReason: string | null;
+  status: BookingStatus;
+  holdExpiresAt: string | null;
+  confirmedAt: string | null;
+  cancelReason: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MyBooking = BookingRecord & {
+  event: { id: string; name: string };
+  booth: {
+    id: string;
+    code: string;
+    zone: { id: string; code: string; name: string | null };
+  };
+  shop: { id: string; name: string };
+};
+
+export type CreateBookingInput = {
+  eventId: string;
+  boothId: string;
+  shopId: string;
+};
+
 export type SlipVerificationStatus =
   | 'VERIFIED'
   | 'INVALID'
@@ -207,10 +244,12 @@ async function getJson<T>(
   return (await response.json()) as T;
 }
 
-async function postJson<T>(
+async function sendJson<T>(
+  method: 'POST' | 'PATCH',
   path: string,
   body: unknown,
   { signal, token }: RequestOptions = {},
+  fallbackMessage = 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
@@ -230,7 +269,7 @@ async function postJson<T>(
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
+      method,
       signal,
       headers,
       body: JSON.stringify(body),
@@ -255,12 +294,30 @@ async function postJson<T>(
       : payload?.message;
 
     throw new ApiError(
-      detail || 'ระบบแนะนำโซนไม่สามารถทำงานได้ในขณะนี้',
+      detail || fallbackMessage,
       response.status,
     );
   }
 
   return (await response.json()) as T;
+}
+
+function postJson<T>(
+  path: string,
+  body: unknown,
+  options: RequestOptions = {},
+  fallbackMessage?: string,
+): Promise<T> {
+  return sendJson<T>('POST', path, body, options, fallbackMessage);
+}
+
+function patchJson<T>(
+  path: string,
+  body: unknown,
+  options: RequestOptions = {},
+  fallbackMessage?: string,
+): Promise<T> {
+  return sendJson<T>('PATCH', path, body, options, fallbackMessage);
 }
 
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
@@ -301,6 +358,35 @@ export function getZoneRecommendations(
     `/events/${encodeURIComponent(eventId)}/recommendations`,
     input,
     { signal, token },
+  );
+}
+
+export function createBooking(
+  input: CreateBookingInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord> {
+  return postJson<BookingRecord>('/bookings', input, { signal, token }, 'สร้างการจองไม่สำเร็จ');
+}
+
+export function getMyBookings(
+  token: string,
+  signal?: AbortSignal,
+): Promise<MyBooking[]> {
+  return getJson<MyBooking[]>('/bookings', { signal, token });
+}
+
+export function cancelBooking(
+  bookingId: string,
+  cancelReason: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord> {
+  return patchJson<BookingRecord>(
+    `/bookings/${encodeURIComponent(bookingId)}/cancel`,
+    { cancelReason: cancelReason.trim() },
+    { signal, token },
+    'ยกเลิกการจองไม่สำเร็จ',
   );
 }
 

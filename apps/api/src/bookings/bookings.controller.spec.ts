@@ -6,7 +6,10 @@ import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import type { UploadedSlipFile } from './booking-slip-storage.service';
-import { BookingsController } from './bookings.controller';
+import {
+  BookingsController,
+  PAYMENT_SLIP_UPLOAD_LIMITS,
+} from './bookings.controller';
 import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -145,5 +148,14 @@ describe('BookingsController', () => {
       controller.uploadSlip('booking-id', undefined, CURRENT_USER),
     ).toThrow(BadRequestException);
     expect(uploadSlip).not.toHaveBeenCalled();
+  });
+
+  it('limits the slip request to one file part and no text fields', () => {
+    expect(PAYMENT_SLIP_UPLOAD_LIMITS).toEqual({
+      files: 1,
+      fields: 0,
+      parts: 1,
+      fileSize: 5 * 1024 * 1024,
+    });
   });
 });

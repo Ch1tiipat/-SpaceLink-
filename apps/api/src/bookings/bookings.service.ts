@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  BoothStatus,
   CancelledByRole,
+  EventStatus,
   Prisma,
   SlipStatus,
   type Booking,
@@ -28,8 +30,31 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
 ];
 const DEFAULT_BOOKING_QUOTA = 2;
 const HOLD_DURATION_MS = 5 * 60 * 1000;
+const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
+const BOOKABLE_EVENT_STATUSES: EventStatus[] = [
+  EventStatus.PUBLISHED,
+  EventStatus.ONGOING,
+];
+
+const bookingListInclude = {
+  event: { select: { id: true, name: true } },
+  booth: {
+    select: {
+      id: true,
+      code: true,
+      zone: { select: { id: true, code: true, name: true } },
+    },
+  },
+  shop: { select: { id: true, name: true } },
+} satisfies Prisma.BookingInclude;
 
 type BookingResponse = Omit<Booking, 'boothPrice'> & { boothPrice: string };
+type BookingListRecord = Prisma.BookingGetPayload<{
+  include: typeof bookingListInclude;
+}>;
+type BookingListResponse = Omit<BookingListRecord, 'boothPrice'> & {
+  boothPrice: string;
+};
 
 interface SlipBooking {
   id: string;
@@ -59,12 +84,60 @@ export class BookingsService {
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
   ): Promise<BookingResponse> {
+    for (
+      let attempt = 1;
+      attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          (transaction) =>
+            this.createWithinTransaction(
+              transaction,
+              createBookingDto,
+              vendorUserId,
+            ),
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS) {
+            continue;
+          }
+          throw new ConflictException(
+            'มีการจองพร้อมกัน กรุณาตรวจสอบรายการจองแล้วลองใหม่',
+          );
+        }
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException('บูธนี้ถูกจองไปแล้ว');
+        }
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'มีการจองพร้อมกัน กรุณาตรวจสอบรายการจองแล้วลองใหม่',
+    );
+  }
+
+  private async createWithinTransaction(
+    transaction: Prisma.TransactionClient,
+    createBookingDto: CreateBookingDto,
+    vendorUserId: string,
+  ): Promise<BookingResponse> {
     const { eventId, boothId, shopId } = createBookingDto;
     const [event, booth, shop] = await Promise.all([
-      this.prisma.event.findUnique({
+      transaction.event.findUnique({
         where: { id: eventId },
         select: {
           id: true,
+          status: true,
           organizationId: true,
           venueId: true,
           startDate: true,
@@ -78,15 +151,16 @@ export class BookingsService {
           },
         },
       }),
-      this.prisma.booth.findUnique({
+      transaction.booth.findUnique({
         where: { id: boothId },
         select: {
           id: true,
+          status: true,
           boothPrice: true,
           zone: { select: { venueId: true } },
         },
       }),
-      this.prisma.shop.findFirst({
+      transaction.shop.findFirst({
         where: { id: shopId, ownerUserId: vendorUserId },
         select: { id: true },
       }),
@@ -95,8 +169,14 @@ export class BookingsService {
     if (!event) {
       throw new NotFoundException('ไม่พบอีเวนต์');
     }
+    if (!BOOKABLE_EVENT_STATUSES.includes(event.status)) {
+      throw new ConflictException('อีเวนต์นี้ยังไม่เปิดให้จอง');
+    }
     if (!booth) {
       throw new NotFoundException('ไม่พบบูธ');
+    }
+    if (booth.status !== BoothStatus.AVAILABLE) {
+      throw new ConflictException('บูธนี้ไม่พร้อมให้จอง');
     }
     if (!shop) {
       throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
@@ -116,7 +196,7 @@ export class BookingsService {
       throw new BadRequestException('ช่วงวันที่จองไม่อยู่ในช่วงวันที่จัดงาน');
     }
 
-    const activeBooking = await this.prisma.booking.findFirst({
+    const activeBooking = await transaction.booking.findFirst({
       where: {
         eventId,
         boothId,
@@ -128,7 +208,7 @@ export class BookingsService {
       throw new ConflictException('บูธนี้ถูกจองไปแล้ว');
     }
 
-    const activeBookingCount = await this.prisma.booking.count({
+    const activeBookingCount = await transaction.booking.count({
       where: {
         eventId,
         vendorUserId,
@@ -139,7 +219,7 @@ export class BookingsService {
       event.organization.orgConfig?.bookingQuotaPerVendor ?? null;
     const platformConfig =
       orgQuota === null
-        ? await this.prisma.platformConfig.findFirst({
+        ? await transaction.platformConfig.findFirst({
             orderBy: { updatedAt: 'desc' },
             select: { defaultBookingQuota: true },
           })
@@ -166,18 +246,8 @@ export class BookingsService {
       holdExpiresAt: new Date(now.getTime() + HOLD_DURATION_MS),
     };
 
-    try {
-      const booking = await this.prisma.booking.create({ data });
-      return this.toResponse(booking);
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictException('บูธนี้ถูกจองไปแล้ว');
-      }
-      throw error;
-    }
+    const booking = await transaction.booking.create({ data });
+    return this.toResponse(booking);
   }
 
   async uploadSlip(
@@ -193,6 +263,8 @@ export class BookingsService {
         boothPrice: true,
         holdExpiresAt: true,
         confirmedAt: true,
+        event: { select: { status: true } },
+        booth: { select: { status: true } },
       },
     });
 
@@ -201,6 +273,12 @@ export class BookingsService {
     }
     if (booking.status !== BookingStatus.PENDING_PAYMENT) {
       throw new ConflictException('การจองนี้ไม่อยู่ในสถานะรอชำระเงิน');
+    }
+    if (!BOOKABLE_EVENT_STATUSES.includes(booking.event.status)) {
+      throw new ConflictException('อีเวนต์นี้ไม่เปิดรับการจองแล้ว');
+    }
+    if (booking.booth.status !== BoothStatus.AVAILABLE) {
+      throw new ConflictException('บูธนี้ไม่พร้อมสำหรับการจองแล้ว');
     }
 
     const checkedAt = new Date();
@@ -214,15 +292,73 @@ export class BookingsService {
       vendorUserId,
     );
 
-    let result;
     try {
-      result = await this.slipVerification.verify({
-        bookingId: booking.id,
-        slipImageUrl: storedSlip.verificationUrl,
-        storedObjectPath: storedSlip.objectPath,
-        expectedAmount: booking.boothPrice,
+      return await this.prisma.$transaction(async (transaction) => {
+        const result = await this.slipVerification.verify(
+          {
+            bookingId: booking.id,
+            slipImageUrl: storedSlip.verificationUrl,
+            storedObjectPath: storedSlip.objectPath,
+            expectedAmount: booking.boothPrice,
+          },
+          transaction,
+        );
+
+        if (
+          result.status === SlipStatus.VERIFIED &&
+          result.amount?.equals(booking.boothPrice) === true
+        ) {
+          const confirmedAt = new Date();
+          const updated = await transaction.booking.updateMany({
+            where: {
+              id: booking.id,
+              vendorUserId,
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { gt: confirmedAt },
+            },
+            data: {
+              status: BookingStatus.CONFIRMED,
+              confirmedAt,
+            },
+          });
+
+          if (updated.count !== 1) {
+            throw new ConflictException('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+          }
+
+          return this.toSlipResponse(
+            {
+              ...booking,
+              status: BookingStatus.CONFIRMED,
+              confirmedAt,
+            },
+            SlipStatus.VERIFIED,
+            'ตรวจสอบสลิปสำเร็จ',
+          );
+        }
+
+        if (result.status === SlipStatus.VERIFIED) {
+          return this.toSlipResponse(
+            booking,
+            SlipStatus.INVALID,
+            'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ',
+          );
+        }
+
+        return this.toSlipResponse(
+          booking,
+          result.status,
+          this.safeSlipMessage(result.status),
+        );
       });
     } catch (error) {
+      await this.slipStorage
+        .removeObject(storedSlip.objectPath)
+        .catch(() => undefined);
+
+      if (error instanceof ConflictException) {
+        throw error;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
@@ -240,60 +376,15 @@ export class BookingsService {
         'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่',
       );
     }
-
-    if (
-      result.status === SlipStatus.VERIFIED &&
-      result.amount?.equals(booking.boothPrice) === true
-    ) {
-      const confirmedAt = new Date();
-      const updated = await this.prisma.booking.updateMany({
-        where: {
-          id: booking.id,
-          vendorUserId,
-          status: BookingStatus.PENDING_PAYMENT,
-          holdExpiresAt: { gt: confirmedAt },
-        },
-        data: {
-          status: BookingStatus.CONFIRMED,
-          confirmedAt,
-        },
-      });
-
-      if (updated.count !== 1) {
-        throw new ConflictException('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
-      }
-
-      return this.toSlipResponse(
-        {
-          ...booking,
-          status: BookingStatus.CONFIRMED,
-          confirmedAt,
-        },
-        SlipStatus.VERIFIED,
-        'ตรวจสอบสลิปสำเร็จ',
-      );
-    }
-
-    if (result.status === SlipStatus.VERIFIED) {
-      return this.toSlipResponse(
-        booking,
-        SlipStatus.INVALID,
-        'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ',
-      );
-    }
-
-    return this.toSlipResponse(
-      booking,
-      result.status,
-      this.safeSlipMessage(result.status),
-    );
   }
 
-  async findAll(vendorUserId: string): Promise<BookingResponse[]> {
+  async findAll(vendorUserId: string): Promise<BookingListResponse[]> {
     const bookings = await this.prisma.booking.findMany({
       where: { vendorUserId },
+      include: bookingListInclude,
+      orderBy: { createdAt: 'desc' },
     });
-    return bookings.map((booking) => this.toResponse(booking));
+    return bookings.map((booking) => this.toListResponse(booking));
   }
 
   async cancel(
@@ -306,6 +397,7 @@ export class BookingsService {
       select: {
         id: true,
         status: true,
+        holdExpiresAt: true,
         bookingStartDate: true,
       },
     });
@@ -318,7 +410,33 @@ export class BookingsService {
     }
 
     const cancelledAt = new Date();
-    if (booking.bookingStartDate <= cancelledAt) {
+    if (
+      booking.status === BookingStatus.PENDING_PAYMENT &&
+      (!booking.holdExpiresAt || booking.holdExpiresAt <= cancelledAt)
+    ) {
+      await this.prisma.booking.updateMany({
+        where: {
+          id: booking.id,
+          vendorUserId,
+          status: BookingStatus.PENDING_PAYMENT,
+          OR: [
+            { holdExpiresAt: null },
+            { holdExpiresAt: { lte: cancelledAt } },
+          ],
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledByUserId: null,
+          cancelledByRole: CancelledByRole.SYSTEM,
+          cancelledAt,
+        },
+      });
+      throw new ConflictException('การจองหมดเวลาชำระเงินแล้ว');
+    }
+    if (
+      this.thailandDateKey(booking.bookingStartDate) <=
+      this.thailandDateKey(cancelledAt)
+    ) {
       throw new ConflictException('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
     }
 
@@ -326,7 +444,13 @@ export class BookingsService {
       where: {
         id: booking.id,
         vendorUserId,
-        status: { in: ACTIVE_BOOKING_STATUSES },
+        OR: [
+          { status: BookingStatus.CONFIRMED },
+          {
+            status: BookingStatus.PENDING_PAYMENT,
+            holdExpiresAt: { gt: cancelledAt },
+          },
+        ],
         bookingStartDate: { gt: cancelledAt },
       },
       data: {
@@ -376,7 +500,24 @@ export class BookingsService {
     return `BK-${token}`;
   }
 
+  private thailandDateKey(value: Date): string {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(value);
+    const valueOf = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((part) => part.type === type)?.value ?? '';
+    return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`;
+  }
+
   private toResponse(booking: Booking): BookingResponse {
+    const { boothPrice, ...rest } = booking;
+    return { ...rest, boothPrice: boothPrice.toString() };
+  }
+
+  private toListResponse(booking: BookingListRecord): BookingListResponse {
     const { boothPrice, ...rest } = booking;
     return { ...rest, boothPrice: boothPrice.toString() };
   }

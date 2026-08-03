@@ -72,13 +72,14 @@ export class SlipVerificationService {
    */
   async verify(
     request: SlipVerificationRequest,
+    transaction: Prisma.TransactionClient = this.prisma,
   ): Promise<SlipVerificationResult> {
     const result = await this.verifier.verify({
       slipImageUrl: request.slipImageUrl,
       expectedAmount: request.expectedAmount,
     });
 
-    await this.prisma.verifiedSlip.create({
+    await transaction.verifiedSlip.create({
       data: {
         bookingId: request.bookingId,
         slipImageUrl: request.storedObjectPath,
