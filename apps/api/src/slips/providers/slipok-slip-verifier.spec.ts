@@ -84,7 +84,7 @@ describe('SlipOkSlipVerifier', () => {
     expect(result.transRef).toBeUndefined();
   });
 
-  it.each([1006, 1007, 1008, 1011, 1013, 1014])(
+  it.each([1005, 1006, 1007, 1008, 1011, 1013, 1014])(
     'maps invalid slip code %s to INVALID',
     async (code) => {
       jest
@@ -109,6 +109,45 @@ describe('SlipOkSlipVerifier', () => {
       );
     },
   );
+
+  it('maps a successful response without transaction details to ERROR', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      response({
+        success: true,
+        data: { success: true, message: 'missing transaction details' },
+      }),
+    );
+
+    const result = await verifier().verify(INPUT);
+
+    expect(result).toMatchObject({
+      status: SlipStatus.ERROR,
+      message: 'SlipOK response is missing transaction details',
+    });
+  });
+
+  it('sanitizes malformed JSON without leaking the key or signed URL', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response('{not-json', {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const work = verifier().verify(INPUT);
+
+    await expect(work).rejects.toThrow('SlipOK returned invalid JSON');
+    await expect(work).rejects.not.toThrow(INPUT.slipImageUrl);
+    await expect(work).rejects.not.toThrow('api-key-secret');
+  });
+
+  it('rejects an array response as malformed', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(response([]));
+
+    await expect(verifier().verify(INPUT)).rejects.toThrow(
+      'SlipOK returned a malformed response',
+    );
+  });
 
   it('throws when SlipOK is unreachable and does not leak inputs', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
