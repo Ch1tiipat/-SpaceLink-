@@ -42,7 +42,7 @@ describe('BookingSlipStorageService', () => {
           new Response(
             JSON.stringify({
               signedURL:
-                '/storage/v1/object/sign/slips/vendor/booking/file?token=short-lived',
+                '/object/sign/slips/vendor/booking/file?token=short-lived',
             }),
             {
               status: 200,
@@ -108,6 +108,7 @@ describe('BookingSlipStorageService', () => {
       /^https:\/\/project\.supabase\.co\/storage\/v1\/object\/sign\/slips\/vendor-id\/booking-id\/[a-f0-9-]+\.png$/,
     );
     expect(signInit.body).toBe(JSON.stringify({ expiresIn: 300 }));
+    expect(signInit.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('rejects content whose bytes are not JPEG or PNG', async () => {
@@ -147,11 +148,29 @@ describe('BookingSlipStorageService', () => {
   });
 
   it('returns a safe error when storage upload fails', async () => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
 
     await expect(
       service.uploadForVerification({ buffer: PNG }, 'booking-id', 'vendor-id'),
     ).rejects.toThrow('ไม่สามารถจัดเก็บสลิปได้');
+  });
+
+  it('bounds repeated storage timeouts and cleans up safely', async () => {
+    const timeout = Object.assign(new Error('private timeout detail'), {
+      name: 'TimeoutError',
+    });
+    fetchMock
+      .mockRejectedValueOnce(timeout)
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    await expect(
+      service.uploadForVerification({ buffer: PNG }, 'booking-id', 'vendor-id'),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('returns a safe error when signing has no URL', async () => {
@@ -162,10 +181,34 @@ describe('BookingSlipStorageService', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
-      );
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     await expect(
       service.uploadForVerification({ buffer: PNG }, 'booking-id', 'vendor-id'),
     ).rejects.toBeInstanceOf(BadGatewayException);
+
+    const [removeUrl, removeInit] = fetchMock.mock.calls[2] as [
+      string,
+      RequestInit,
+    ];
+    expect(removeUrl).toMatch(
+      /^https:\/\/project\.supabase\.co\/storage\/v1\/object\/slips\/vendor-id\/booking-id\/[a-f0-9-]+\.png$/,
+    );
+    expect(removeInit.method).toBe('DELETE');
+  });
+
+  it('deletes a stored object through the private storage API', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    await service.removeObject('vendor-id/booking-id/file name.png');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${SUPABASE_URL}/storage/v1/object/slips/vendor-id/booking-id/file%20name.png`,
+      expect.objectContaining({
+        method: 'DELETE',
+        signal: expect.any(AbortSignal) as AbortSignal,
+      }),
+    );
   });
 });

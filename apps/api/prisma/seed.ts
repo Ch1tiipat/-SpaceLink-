@@ -11,6 +11,8 @@ const prisma = new PrismaClient();
 
 type BoothTier = 'S' | 'A' | 'B' | 'C';
 
+class SeedPreconditionError extends Error {}
+
 type ZoneSeed = {
   id: string;
   code: string;
@@ -371,6 +373,8 @@ const BOOTH_STATUSES = [
 async function main(): Promise<void> {
   console.log('Seeding SpaceLink multi-organization demo data...');
 
+  const phase6VendorA = await findPhase6VendorA();
+
   // 1. Product categories are independent and safe to seed first.
   const categoryIds = new Map<string, string>();
 
@@ -598,7 +602,9 @@ async function main(): Promise<void> {
     },
   });
 
-  const phase6FixtureSummary = await seedPhase6Fixtures();
+  const phase6FixtureSummary = phase6VendorA
+    ? await seedPhase6Fixtures(phase6VendorA)
+    : null;
 
   console.log(
     `Seeding finished: ${ORGANIZATION_SEEDS.length} organizations, ` +
@@ -607,27 +613,25 @@ async function main(): Promise<void> {
       `${boothSequence - 1} booths, ${CATEGORY_SEEDS.length} categories, ` +
       `${EVENT_SEEDS.length} events.`,
   );
-  console.log(
-    `Phase 6 fixtures: ${phase6FixtureSummary.vendors} vendors, ` +
-      `${phase6FixtureSummary.shops} shops, ` +
-      `${phase6FixtureSummary.events} events, ` +
-      `${phase6FixtureSummary.booths} booths, ` +
-      `${phase6FixtureSummary.bookings} bookings.`,
-  );
+  if (phase6FixtureSummary) {
+    console.log(
+      `Phase 6 fixtures: ${phase6FixtureSummary.vendors} vendors, ` +
+        `${phase6FixtureSummary.shops} shops, ` +
+        `${phase6FixtureSummary.events} events, ` +
+        `${phase6FixtureSummary.booths} booths, ` +
+        `${phase6FixtureSummary.bookings} bookings.`,
+    );
+  } else {
+    console.log(
+      'Phase 6 fixtures skipped: PHASE6_VENDOR_A_USER_ID is not set.',
+    );
+  }
 }
 
-async function seedPhase6Fixtures(): Promise<{
-  vendors: number;
-  shops: number;
-  events: number;
-  booths: number;
-  bookings: number;
-}> {
+async function findPhase6VendorA(): Promise<{ id: string } | null> {
   const vendorAUserId = process.env.PHASE6_VENDOR_A_USER_ID?.trim();
   if (!vendorAUserId) {
-    throw new Error(
-      'PHASE6_VENDOR_A_USER_ID is required to attach test shops safely.',
-    );
+    return null;
   }
 
   const vendorA = await prisma.user.findFirst({
@@ -635,11 +639,21 @@ async function seedPhase6Fixtures(): Promise<{
     select: { id: true },
   });
   if (!vendorA) {
-    throw new Error(
+    throw new SeedPreconditionError(
       'PHASE6_VENDOR_A_USER_ID must identify an existing vendor.',
     );
   }
 
+  return vendorA;
+}
+
+async function seedPhase6Fixtures(vendorA: { id: string }): Promise<{
+  vendors: number;
+  shops: number;
+  events: number;
+  booths: number;
+  bookings: number;
+}> {
   const vendorB = await prisma.user.upsert({
     where: { id: PHASE6_VENDOR_B_ID },
     update: {
@@ -928,7 +942,11 @@ function seedUuid(entityGroup: number, sequence: number): string {
 
 main()
   .catch((error) => {
-    console.error('Seed failed:', error);
+    if (error instanceof SeedPreconditionError) {
+      console.error(`Seed precondition failed: ${error.message}`);
+    } else {
+      console.error('Seed failed. Check the database connection and input.');
+    }
     process.exitCode = 1;
   })
   .finally(() => {

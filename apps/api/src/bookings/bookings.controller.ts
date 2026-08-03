@@ -24,6 +24,13 @@ import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
+export const PAYMENT_SLIP_UPLOAD_LIMITS = {
+  files: 1,
+  fields: 0,
+  parts: 1,
+  fileSize: MAX_SLIP_FILE_SIZE_BYTES,
+} as const;
+
 @Controller('bookings')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN)
@@ -43,7 +50,7 @@ export class BookingsController {
   @Roles(UserRole.VENDOR)
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { files: 1, fileSize: MAX_SLIP_FILE_SIZE_BYTES },
+      limits: PAYMENT_SLIP_UPLOAD_LIMITS,
     }),
   )
   uploadSlip(

@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  BoothStatus,
   CancelledByRole,
+  EventStatus,
   Prisma,
   SlipStatus,
   type Booking,
@@ -83,6 +85,8 @@ const platformConfigFindFirst = jest.fn();
 const bookingUpdateMany = jest.fn();
 const verifySlip = jest.fn();
 const uploadForVerification = jest.fn();
+const removeObject = jest.fn();
+const prismaTransaction = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -97,9 +101,10 @@ const mockPrismaService = {
     updateMany: bookingUpdateMany,
   },
   platformConfig: { findFirst: platformConfigFindFirst },
+  $transaction: prismaTransaction,
 };
 const mockSlipVerificationService = { verify: verifySlip };
-const mockSlipStorageService = { uploadForVerification };
+const mockSlipStorageService = { removeObject, uploadForVerification };
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
@@ -107,6 +112,8 @@ const PENDING_SLIP_BOOKING = {
   boothPrice: BOOTH_PRICE,
   holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
   confirmedAt: null,
+  event: { status: EventStatus.PUBLISHED },
+  booth: { status: BoothStatus.AVAILABLE },
 };
 
 function bookingCreateData(): Prisma.BookingUncheckedCreateInput {
@@ -124,8 +131,14 @@ describe('BookingsService', () => {
     jest.setSystemTime(NOW);
     jest.clearAllMocks();
 
+    prismaTransaction.mockImplementation(
+      (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+        operation(mockPrismaService as unknown as Prisma.TransactionClient),
+    );
+
     eventFindUnique.mockResolvedValue({
       id: EVENT_ID,
+      status: EventStatus.PUBLISHED,
       organizationId: ORGANIZATION_ID,
       venueId: VENUE_ID,
       startDate: EVENT_START,
@@ -136,6 +149,7 @@ describe('BookingsService', () => {
     });
     boothFindUnique.mockResolvedValue({
       id: BOOTH_ID,
+      status: BoothStatus.AVAILABLE,
       boothPrice: BOOTH_PRICE,
       zone: { venueId: VENUE_ID },
     });
@@ -162,6 +176,7 @@ describe('BookingsService', () => {
       objectPath: SLIP_OBJECT_PATH,
       verificationUrl: SIGNED_SLIP_URL,
     });
+    removeObject.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -210,11 +225,52 @@ describe('BookingsService', () => {
       where: { id: SHOP_ID, ownerUserId: VENDOR_ID },
       select: { id: true },
     });
+    expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
   });
+
+  it.each([EventStatus.DRAFT, EventStatus.COMPLETED, EventStatus.CANCELLED])(
+    'rejects an event in %s status',
+    async (status) => {
+      eventFindUnique.mockResolvedValue({
+        id: EVENT_ID,
+        status,
+        organizationId: ORGANIZATION_ID,
+        venueId: VENUE_ID,
+        startDate: EVENT_START,
+        endDate: EVENT_END,
+        organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+      });
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'อีเวนต์นี้ยังไม่เปิดให้จอง',
+      );
+      expect(bookingCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([BoothStatus.BOOKED, BoothStatus.MAINTENANCE, BoothStatus.INACTIVE])(
+    'rejects a booth in %s status',
+    async (status) => {
+      boothFindUnique.mockResolvedValue({
+        id: BOOTH_ID,
+        status,
+        boothPrice: BOOTH_PRICE,
+        zone: { venueId: VENUE_ID },
+      });
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'บูธนี้ไม่พร้อมให้จอง',
+      );
+      expect(bookingCreate).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a booth that belongs to another venue', async () => {
     boothFindUnique.mockResolvedValue({
       id: BOOTH_ID,
+      status: BoothStatus.AVAILABLE,
       boothPrice: BOOTH_PRICE,
       zone: { venueId: '88888888-8888-4888-8888-888888888888' },
     });
@@ -261,9 +317,30 @@ describe('BookingsService', () => {
     );
   });
 
+  it('retries a serializable transaction conflict before creating', async () => {
+    const serializationError = new Prisma.PrismaClientKnownRequestError(
+      'Transaction write conflict',
+      { code: 'P2034', clientVersion: 'test' },
+    );
+    prismaTransaction
+      .mockRejectedValueOnce(serializationError)
+      .mockImplementationOnce(
+        (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+          operation(mockPrismaService as unknown as Prisma.TransactionClient),
+      );
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).resolves.toEqual({
+      ...CREATED_BOOKING,
+      boothPrice: '1500',
+    });
+    expect(prismaTransaction).toHaveBeenCalledTimes(2);
+    expect(bookingCreate).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a vendor who has reached the organization quota', async () => {
     eventFindUnique.mockResolvedValue({
       id: EVENT_ID,
+      status: EventStatus.PUBLISHED,
       organizationId: ORGANIZATION_ID,
       venueId: VENUE_ID,
       startDate: EVENT_START,
@@ -293,6 +370,7 @@ describe('BookingsService', () => {
   it('falls back to the platform quota when the organization has none', async () => {
     eventFindUnique.mockResolvedValue({
       id: EVENT_ID,
+      status: EventStatus.PUBLISHED,
       organizationId: ORGANIZATION_ID,
       venueId: VENUE_ID,
       startDate: EVENT_START,
@@ -339,6 +417,8 @@ describe('BookingsService', () => {
           boothPrice: true,
           holdExpiresAt: true,
           confirmedAt: true,
+          event: { select: { status: true } },
+          booth: { select: { status: true } },
         },
       });
       expect(uploadForVerification).not.toHaveBeenCalled();
@@ -356,6 +436,40 @@ describe('BookingsService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
       expect(uploadForVerification).not.toHaveBeenCalled();
     });
+
+    it.each([EventStatus.DRAFT, EventStatus.COMPLETED, EventStatus.CANCELLED])(
+      'rejects slip confirmation after the event becomes %s',
+      async (status) => {
+        bookingFindFirst.mockResolvedValue({
+          ...PENDING_SLIP_BOOKING,
+          event: { status },
+        });
+
+        await expect(
+          service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+        ).rejects.toThrow('อีเวนต์นี้ไม่เปิดรับการจองแล้ว');
+        expect(uploadForVerification).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      BoothStatus.BOOKED,
+      BoothStatus.MAINTENANCE,
+      BoothStatus.INACTIVE,
+    ])(
+      'rejects slip confirmation after the booth becomes %s',
+      async (status) => {
+        bookingFindFirst.mockResolvedValue({
+          ...PENDING_SLIP_BOOKING,
+          booth: { status },
+        });
+
+        await expect(
+          service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+        ).rejects.toThrow('บูธนี้ไม่พร้อมสำหรับการจองแล้ว');
+        expect(uploadForVerification).not.toHaveBeenCalled();
+      },
+    );
 
     it('rejects a booking whose payment hold has expired', async () => {
       bookingFindFirst.mockResolvedValue({
@@ -387,12 +501,15 @@ describe('BookingsService', () => {
         BOOKING_ID,
         VENDOR_ID,
       );
-      expect(verifySlip).toHaveBeenCalledWith({
-        bookingId: BOOKING_ID,
-        slipImageUrl: SIGNED_SLIP_URL,
-        storedObjectPath: SLIP_OBJECT_PATH,
-        expectedAmount: BOOTH_PRICE,
-      });
+      expect(verifySlip).toHaveBeenCalledWith(
+        {
+          bookingId: BOOKING_ID,
+          slipImageUrl: SIGNED_SLIP_URL,
+          storedObjectPath: SLIP_OBJECT_PATH,
+          expectedAmount: BOOTH_PRICE,
+        },
+        mockPrismaService,
+      );
       expect(bookingUpdateMany).toHaveBeenCalledWith({
         where: {
           id: BOOKING_ID,
@@ -484,6 +601,7 @@ describe('BookingsService', () => {
         message: 'สลิปนี้ถูกใช้แล้ว',
       });
       expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
     });
 
     it('returns a sanitized ERROR when the verifier throws', async () => {
@@ -499,6 +617,7 @@ describe('BookingsService', () => {
       });
       expect(JSON.stringify(result)).not.toContain(SIGNED_SLIP_URL);
       expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
     });
 
     it('does not confirm if the booking changed during verification', async () => {
@@ -507,6 +626,7 @@ describe('BookingsService', () => {
       await expect(
         service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
       ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+      expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
     });
   });
 
@@ -515,6 +635,7 @@ describe('BookingsService', () => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
         status: BookingStatus.CONFIRMED,
+        holdExpiresAt: null,
         bookingStartDate: EVENT_START,
       });
     });
@@ -527,6 +648,7 @@ describe('BookingsService', () => {
         select: {
           id: true,
           status: true,
+          holdExpiresAt: true,
           bookingStartDate: true,
         },
       });
@@ -534,9 +656,13 @@ describe('BookingsService', () => {
         where: {
           id: BOOKING_ID,
           vendorUserId: VENDOR_ID,
-          status: {
-            in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
-          },
+          OR: [
+            { status: BookingStatus.CONFIRMED },
+            {
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { gt: NOW },
+            },
+          ],
           bookingStartDate: { gt: NOW },
         },
         data: {
@@ -569,6 +695,7 @@ describe('BookingsService', () => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
         status,
+        holdExpiresAt: null,
         bookingStartDate: EVENT_START,
       });
 
@@ -582,7 +709,50 @@ describe('BookingsService', () => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
         status: BookingStatus.CONFIRMED,
+        holdExpiresAt: null,
         bookingStartDate: NOW,
+      });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toThrow('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('records an expired pending hold as a system cancellation', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+        holdExpiresAt: new Date('2026-08-01T23:59:59.000Z'),
+        bookingStartDate: EVENT_START,
+      });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toThrow('การจองหมดเวลาชำระเงินแล้ว');
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          vendorUserId: VENDOR_ID,
+          status: BookingStatus.PENDING_PAYMENT,
+          OR: [{ holdExpiresAt: null }, { holdExpiresAt: { lte: NOW } }],
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledByUserId: null,
+          cancelledByRole: CancelledByRole.SYSTEM,
+          cancelledAt: NOW,
+        },
+      });
+    });
+
+    it('uses the Thailand calendar date for the cancellation cutoff', async () => {
+      jest.setSystemTime(new Date('2026-09-09T18:00:00.000Z'));
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.CONFIRMED,
+        holdExpiresAt: null,
+        bookingStartDate: EVENT_START,
       });
 
       await expect(
