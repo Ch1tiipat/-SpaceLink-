@@ -88,9 +88,18 @@ export class SlipOkSlipVerifier implements SlipVerifier {
 }
 
 async function parsePayload(response: Response): Promise<SlipOkResponse> {
-  const value: unknown = await response.json();
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    // Do not forward the parser error or upstream response body. Either can
+    // contain provider diagnostics that are not safe for a client-facing
+    // error, while the caller only needs to know that the provider response
+    // could not be trusted.
+    throw new Error('SlipOK returned invalid JSON');
+  }
 
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('SlipOK returned a malformed response');
   }
 
