@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { CreateBoothDto } from './dto/create-booth.dto';
 import { FindAllBoothsDto } from './dto/find-all-booths.dto';
 import { UpdateBoothDto } from './dto/update-booth.dto';
@@ -9,9 +8,14 @@ import { PrismaService } from '../prisma/prisma.service';
 export class BoothsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createBoothDto: CreateBoothDto) {
+  /**
+   * `zoneId` is the id `OrgScopeGuard` already resolved and verified from the
+   * `:zoneId` route param on the caller — it is never taken from
+   * `createBoothDto`, which has no `zoneId` field at all.
+   */
+  create(zoneId: string, createBoothDto: CreateBoothDto) {
     return this.prisma.booth.create({
-      data: createBoothDto as Prisma.BoothUncheckedCreateInput,
+      data: { ...createBoothDto, zoneId },
     });
   }
 

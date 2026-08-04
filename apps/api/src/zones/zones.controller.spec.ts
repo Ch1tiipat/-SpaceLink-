@@ -18,6 +18,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { BoothsService } from '../booths/booths.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZonesController } from './zones.controller';
 import { ZonesService } from './zones.service';
@@ -46,6 +47,7 @@ describe('ZonesController', () => {
   beforeEach(() => {
     controller = new ZonesController(
       new ZonesService(mockPrismaService as unknown as PrismaService),
+      new BoothsService(mockPrismaService as unknown as PrismaService),
     );
   });
 
@@ -71,7 +73,7 @@ describe('ZonesController', () => {
    * RolesGuard. See the comment on OrgScoped in org-scoped.decorator.ts for
    * why RolesGuard cannot literally sit between the other two.
    */
-  it.each(['update', 'remove'])(
+  it.each(['update', 'remove', 'createBooth'])(
     'guards %s with the full org-scope + role chain on zoneId',
     (name) => {
       const handler = handlerOf(ZonesController.prototype, name);

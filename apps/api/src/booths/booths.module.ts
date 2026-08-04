@@ -5,5 +5,6 @@ import { BoothsController } from './booths.controller';
 @Module({
   controllers: [BoothsController],
   providers: [BoothsService],
+  exports: [BoothsService],
 })
 export class BoothsModule {}
