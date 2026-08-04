@@ -33,9 +33,34 @@ import { SupabaseAuthGuard } from '../guards/supabase-auth.guard';
  *
  * Guard order is the chain in AGENTS.md §7: SupabaseAuthGuard (verify token,
  * provision `app_user`) → OrgScopeGuard (resolve organization, check
- * OrgMembership). `@Roles`/RolesGuard, where a route needs one, goes between
- * them via its own `@UseGuards` — this decorator deliberately does not bundle a
- * role check, because most org-scoped routes are open to both OWNER and ADMIN.
+ * OrgMembership). This decorator deliberately does not bundle a role check,
+ * because most org-scoped routes are open to more than one role.
+ *
+ * **Adding `@Roles`/RolesGuard cannot literally land it between the two guards
+ * above.** `UseGuards(SupabaseAuthGuard, OrgScopeGuard)` always lands as one
+ * adjacent pair (that's the point of this decorator), so a separate
+ * `@UseGuards(RolesGuard)` can only end up entirely before that pair or
+ * entirely after it — never sliced into the middle. Putting it before throws:
+ * RolesGuard would run with no `request.user` yet. The only safe placement is
+ * after, which resolves to `[SupabaseAuthGuard, OrgScopeGuard, RolesGuard]`:
+ *
+ * ```ts
+ * @Patch(':zoneId')
+ * @UseGuards(RolesGuard)
+ * @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+ * @OrgScoped('zoneId')
+ * update(...) {}
+ * ```
+ *
+ * This is still correct: SupabaseAuthGuard always runs first, so both
+ * OrgScopeGuard and RolesGuard have `request.user` by the time they run, and
+ * the two check independent things (tenant membership vs. platform role) so
+ * their order relative to each other doesn't change the outcome — only that
+ * a wrong-role request pays for one extra membership lookup before being
+ * rejected. Include SUPER_ADMIN in `@Roles` on any route using this pattern:
+ * OrgScopeGuard already bypasses the membership check for that role, so
+ * leaving it out of `@Roles` would let a super admin pass OrgScopeGuard and
+ * then get wrongly rejected by RolesGuard.
  */
 export function OrgScoped(param: OrgScopeParam) {
   return applyDecorators(

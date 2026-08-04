@@ -1,11 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateBoothDto } from './dto/create-booth.dto';
 import { BoothsService } from './booths.service';
 
 const findMany = jest.fn();
+const create = jest.fn();
 const mockPrismaService = {
   booth: {
     findMany,
+    create,
   },
 };
 
@@ -54,6 +57,17 @@ describe('BoothsService', () => {
     await expect(service.findAll({ zoneId })).resolves.toEqual([]);
     expect(findMany).toHaveBeenCalledWith({
       where: { zoneId },
+    });
+  });
+
+  it('creates a booth with zoneId from the argument, not the DTO', async () => {
+    const dto: CreateBoothDto = { code: 'A01', boothPrice: '1500.00' };
+    const created = { id: 'booth-1', zoneId, code: 'A01' };
+    create.mockResolvedValue(created);
+
+    await expect(service.create(zoneId, dto)).resolves.toEqual(created);
+    expect(create).toHaveBeenCalledWith({
+      data: { code: 'A01', boothPrice: '1500.00', zoneId },
     });
   });
 });

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { FindAllZonesDto } from './dto/find-all-zones.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
@@ -9,9 +8,14 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ZonesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createZoneDto: CreateZoneDto) {
+  /**
+   * `venueId` is the id `OrgScopeGuard` already resolved and verified from the
+   * `:venueId` route param on the caller (`VenuesController.createZone`) — it
+   * is never taken from `createZoneDto`, which has no `venueId` field at all.
+   */
+  create(venueId: string, createZoneDto: CreateZoneDto) {
     return this.prisma.zone.create({
-      data: createZoneDto as Prisma.ZoneUncheckedCreateInput,
+      data: { ...createZoneDto, venueId },
     });
   }
 
