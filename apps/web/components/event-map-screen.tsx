@@ -247,7 +247,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
       <div className="shell mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className="glass min-w-0 rounded-[28px] p-4 shadow-soft sm:p-6">
-          <label className="block max-w-sm">
+          <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block min-w-0 flex-1">
             <span className="mb-2 block text-xs font-bold uppercase tracking-[.12em] text-muted">
               เลือกโซนเพื่อดูรายละเอียด
             </span>
@@ -265,6 +266,17 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               ))}
             </select>
           </label>
+
+          {focusedZoneId && (
+            <button
+              type="button"
+              onClick={() => setFocusedZoneId(null)}
+              className="rounded-xl border border-[#ded2ff] bg-[#f7f3ff] px-4 py-3 text-sm font-bold text-violet transition hover:border-violet/40 hover:bg-white"
+            >
+              ← กลับไปดูทุกโซน
+            </button>
+          )}
+          </div>
 
           <div className="mt-5 rounded-2xl border border-[#ded2ff] bg-[#f7f3ff] p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -410,6 +422,22 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             {focusedZone?.description ??
               'เลือกโซนบนแผนผังหรือจากรายการเพื่อดูหมวดสินค้าและสถานะบูธ'}
           </p>
+          {!focusedZone && (
+            <dl className="mt-5 divide-y divide-line text-sm">
+              <InfoRow
+                label="โซนทั้งหมด"
+                value={`${data.zones.length} โซน`}
+              />
+              <InfoRow
+                label="บูธทั้งหมด"
+                value={`${data.zones.reduce((total, zone) => total + zone.booths.length, 0)} บูธ`}
+              />
+              <InfoRow
+                label="บูธว่าง"
+                value={`${data.zones.reduce((total, zone) => total + availableCount(zone), 0)} บูธ`}
+              />
+            </dl>
+          )}
           {focusedZone && (
             <dl className="mt-5 divide-y divide-line text-sm">
               <InfoRow label="รหัสโซน" value={focusedZone.code} />

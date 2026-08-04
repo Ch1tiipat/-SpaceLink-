@@ -27,10 +27,31 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col lg:grid lg:grid-cols-[1.05fr_1fr]">
+    <div className="flex min-h-screen flex-col bg-[#f8f6ff] lg:grid lg:grid-cols-[1.05fr_1fr]">
       {/* Compact brand header — the panel's stand-in below `lg`. */}
-      <div className="bg-gradient-to-r from-violet to-[#4e21bd] px-5 py-4 lg:hidden">
-        <BrandMark />
+      <div className="relative overflow-hidden bg-gradient-to-br from-violet via-[#6330d9] to-[#4e21bd] px-5 pb-16 pt-4 text-white lg:hidden">
+        <div className="absolute -right-16 -top-12 h-48 w-48 rounded-full border-[34px] border-white/[0.07]" />
+        <div className="absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-[#a442e8]/25 blur-2xl" />
+
+        <div className="relative">
+          <BrandMark />
+
+          <div className="mt-10">
+            <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
+              {eyebrow}
+            </span>
+            <h2 className="mt-4 max-w-[18ch] text-[28px] font-black leading-[1.18] tracking-[-0.04em]">
+              {headline}
+            </h2>
+            <p className="mt-3 max-w-[42ch] text-sm leading-6 text-white/75">
+              {description}
+            </p>
+          </div>
+
+          <div className="mt-7">
+            <MobileBoothStrip />
+          </div>
+        </div>
       </div>
 
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-violet to-[#4e21bd] px-14 py-16 text-white lg:flex lg:flex-col">
@@ -55,9 +76,29 @@ export function AuthLayout({
         </div>
       </aside>
 
-      <main className="flex flex-1 items-center justify-center bg-white px-5 py-14">
-        <div className="w-full max-w-[390px]">{children}</div>
+      <main className="relative flex flex-1 items-start justify-center px-4 pb-12 lg:items-center lg:bg-white lg:px-5 lg:py-14">
+        <div className="-mt-9 w-full max-w-[430px] rounded-[28px] border border-white/80 bg-white p-6 shadow-[0_20px_60px_rgba(67,34,139,0.14)] sm:p-8 lg:mt-0 lg:max-w-[390px] lg:rounded-none lg:border-0 lg:p-0 lg:shadow-none">
+          {children}
+        </div>
       </main>
+    </div>
+  );
+}
+
+function MobileBoothStrip() {
+  return (
+    <div aria-hidden="true" className="flex max-w-[320px] gap-2">
+      {Array.from({ length: 9 }, (_, index) => (
+        <span
+          key={index}
+          className={[
+            'h-3 flex-1 rounded-full',
+            BOOKED_BOOTHS.has(index)
+              ? 'bg-white shadow-sm'
+              : 'border border-white/30 bg-white/10',
+          ].join(' ')}
+        />
+      ))}
     </div>
   );
 }
