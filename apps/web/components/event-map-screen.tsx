@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { ZoneMap } from '@/components/zone-map';
 import {
   getEventMap,
@@ -191,7 +190,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   if (!data && !error) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-10">
           <div className="skeleton h-24 rounded-3xl" />
           <div className="skeleton mt-6 h-[620px] rounded-3xl" />
@@ -203,7 +201,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   if (error || !data) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-20 text-center">
           <p className="text-2xl font-bold">เปิด Zone Map ไม่ได้</p>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
@@ -219,8 +216,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }
 
   return (
-    <main className="min-h-screen pb-16">
-      <AppHeader />
+    <main className="pb-16">
       <section className="border-b border-line bg-white">
         <div className="shell py-7">
           <Link

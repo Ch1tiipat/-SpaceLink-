@@ -103,8 +103,8 @@ function MobileBoothStrip() {
   );
 }
 
-/** The `S` tile and wordmark, matching the treatment in `AppHeader` but
- * inverted for a dark panel. */
+/** The `S` tile and wordmark, inverted for a dark panel. Authentication
+ * screens render outside `AppShell`, so this is their only branding. */
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">

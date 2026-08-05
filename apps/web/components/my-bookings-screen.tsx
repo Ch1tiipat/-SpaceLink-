@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
@@ -194,8 +193,7 @@ export function MyBookingsScreen() {
   }
 
   return (
-    <main className="min-h-screen pb-16">
-      <AppHeader />
+    <main className="pb-16">
       <div className="shell py-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>

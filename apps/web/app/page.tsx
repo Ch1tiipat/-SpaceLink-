@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { getEvents, type DiscoveryEvent } from '@/lib/api';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
@@ -111,8 +110,6 @@ export default function DiscoveryPage() {
 
   return (
     <main>
-      <AppHeader />
-
       <section className="shell grid min-h-[500px] items-center gap-12 py-16 lg:grid-cols-[1.08fr_.92fr] lg:py-24">
         <div>
           <span className="inline-flex rounded-full border border-violet/15 bg-white px-4 py-2 text-sm font-bold text-violet shadow-sm">

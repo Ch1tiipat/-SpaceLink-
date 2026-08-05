@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import { ZoneMap } from '@/components/zone-map';
@@ -201,7 +200,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   if (!data && !loadError) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-10">
           <div className="skeleton h-24 rounded-3xl" />
           <div className="skeleton mt-6 h-[620px] rounded-3xl" />
@@ -213,7 +211,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   if (!data || loadError) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-20 text-center">
           <h1 className="text-2xl font-bold">เปิดหน้าจองบูธไม่ได้</h1>
           <p className="mt-3 text-muted">{loadError ?? 'ไม่พบข้อมูล Event'}</p>
@@ -226,8 +223,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   }
 
   return (
-    <main className="min-h-screen pb-16">
-      <AppHeader />
+    <main className="pb-16">
       <div className="shell py-8">
         <Link href={`/events/${eventId}`} className="text-sm font-bold text-violet">
           ← กลับหน้ารายละเอียด Event
