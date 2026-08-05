@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { ZoneMap } from '@/components/zone-map';
+import { SelectMenu } from '@/components/select-menu';
 import {
   getEventMap,
   getMe,
@@ -191,7 +191,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   if (!data && !error) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-10">
           <div className="skeleton h-24 rounded-3xl" />
           <div className="skeleton mt-6 h-[620px] rounded-3xl" />
@@ -203,7 +202,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   if (error || !data) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-20 text-center">
           <p className="text-2xl font-bold">เปิด Zone Map ไม่ได้</p>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
@@ -219,8 +217,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }
 
   return (
-    <main className="min-h-screen pb-16">
-      <AppHeader />
+    <main className="pb-16">
       <section className="border-b border-line bg-white">
         <div className="shell py-7">
           <Link
@@ -248,24 +245,21 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       <div className="shell mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className="glass min-w-0 rounded-[28px] p-4 shadow-soft sm:p-6">
           <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="block min-w-0 flex-1">
-            <span className="mb-2 block text-xs font-bold uppercase tracking-[.12em] text-muted">
-              เลือกโซนเพื่อดูรายละเอียด
-            </span>
-            <select
-              value={focusedZoneId ?? ''}
-              onChange={(event) => setFocusedZoneId(event.target.value || null)}
-              className="w-full rounded-xl border border-line bg-white px-4 py-3 font-bold outline-none"
-            >
-              <option value="">ดูพื้นที่ทั้งหมด</option>
-              {data.zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.code} — {zone.name ?? 'ไม่ระบุชื่อ'} (
-                  {availableCount(zone)} ว่าง)
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectMenu
+            className="flex-1"
+            label="เลือกโซนเพื่อดูรายละเอียด"
+            placeholder="ดูพื้นที่ทั้งหมด"
+            value={focusedZoneId ?? ''}
+            onChange={(value) => setFocusedZoneId(value || null)}
+            options={[
+              { value: '', label: 'ดูพื้นที่ทั้งหมด' },
+              ...data.zones.map((zone) => ({
+                value: zone.id,
+                label: `${zone.code} — ${zone.name ?? 'ไม่ระบุชื่อ'}`,
+                hint: `${availableCount(zone)} ว่าง`,
+              })),
+            ]}
+          />
 
           {focusedZoneId && (
             <button
@@ -316,30 +310,28 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
                 {vendorAccess.status === 'ready' &&
                   vendorAccess.profile.shops.length > 0 && (
-                    <label className="mt-3 block">
-                      <span className="mb-1.5 block text-xs font-bold text-muted">
-                        ร้านค้าที่ต้องการหาพื้นที่
-                      </span>
-                      <select
-                        value={selectedShopId}
-                        onChange={(event) => {
-                          setSelectedShopId(event.target.value);
-                          setRecommendation(null);
-                          setRecommendationError(null);
-                          setRecommendationIsEmpty(false);
-                        }}
-                        className="w-full rounded-xl border border-[#d8ccf7] bg-white px-4 py-3 font-bold outline-none"
-                      >
-                        {vendorAccess.profile.shops.map((shop) => (
-                          <option key={shop.id} value={shop.id}>
-                            {shop.name}
-                            {shop.categories.length > 0
-                              ? ` — ${shop.categories.map((category) => category.name).join(', ')}`
-                              : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <SelectMenu
+                      className="mt-3"
+                      label="ร้านค้าที่ต้องการหาพื้นที่"
+                      placeholder="เลือกร้านค้า"
+                      value={selectedShopId}
+                      onChange={(value) => {
+                        setSelectedShopId(value);
+                        setRecommendation(null);
+                        setRecommendationError(null);
+                        setRecommendationIsEmpty(false);
+                      }}
+                      options={vendorAccess.profile.shops.map((shop) => ({
+                        value: shop.id,
+                        label: shop.name,
+                        hint:
+                          shop.categories.length > 0
+                            ? shop.categories
+                                .map((category) => category.name)
+                                .join(', ')
+                            : undefined,
+                      }))}
+                    />
                   )}
               </div>
 

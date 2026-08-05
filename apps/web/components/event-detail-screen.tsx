@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { getEventMap, type EventMap } from '@/lib/api';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
@@ -34,7 +33,6 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   if (!data && !error) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-10">
           <div className="skeleton h-72 rounded-[32px]" />
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -49,7 +47,6 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   if (error || !data) {
     return (
       <main>
-        <AppHeader />
         <div className="shell py-20 text-center">
           <p className="text-2xl font-bold">เปิดรายละเอียด Event ไม่ได้</p>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
@@ -83,9 +80,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     event.organization.contactEmail;
 
   return (
-    <main className="min-h-screen pb-16">
-      <AppHeader />
-
+    <main className="pb-16">
       <div className="shell py-8">
         <Link href="/" className="text-sm font-bold text-violet">
           ← กลับไปค้นหา Event

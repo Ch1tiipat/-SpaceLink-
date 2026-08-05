@@ -4,6 +4,7 @@ import '@fontsource/ibm-plex-sans-thai/500.css';
 import '@fontsource/ibm-plex-sans-thai/600.css';
 import '@fontsource/ibm-plex-sans-thai/700.css';
 import './globals.css';
+import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
   title: 'SpaceLink — ค้นหาและจองบูธ',
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#6d3ce8',
+  themeColor: '#7c3aed',
   width: 'device-width',
   initialScale: 1,
 };
@@ -22,7 +23,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
