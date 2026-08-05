@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import { ZoneMap } from '@/components/zone-map';
+import { SelectMenu } from '@/components/select-menu';
 import {
   createBooking,
   getEventMap,
@@ -310,26 +311,23 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         ) : (
           <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="glass min-w-0 rounded-[28px] p-4 shadow-soft sm:p-6">
-              <label className="block max-w-sm">
-                <span className="mb-2 block text-xs font-bold uppercase tracking-[.12em] text-muted">
-                  เลือกโซน
-                </span>
-                <select
-                  value={focusedZoneId ?? ''}
-                  onChange={(event) => {
-                    setFocusedZoneId(event.target.value || null);
-                    setSelectedBooth(null);
-                  }}
-                  className="w-full rounded-xl border border-line bg-white px-4 py-3 font-bold outline-none"
-                >
-                  <option value="">ดูพื้นที่ทั้งหมด</option>
-                  {data.zones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>
-                      {zone.code} — {zone.name ?? 'ไม่ระบุชื่อโซน'}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectMenu
+                className="max-w-sm"
+                label="เลือกโซน"
+                placeholder="ดูพื้นที่ทั้งหมด"
+                value={focusedZoneId ?? ''}
+                onChange={(value) => {
+                  setFocusedZoneId(value || null);
+                  setSelectedBooth(null);
+                }}
+                options={[
+                  { value: '', label: 'ดูพื้นที่ทั้งหมด' },
+                  ...data.zones.map((zone) => ({
+                    value: zone.id,
+                    label: `${zone.code} — ${zone.name ?? 'ไม่ระบุชื่อโซน'}`,
+                  })),
+                ]}
+              />
 
               <div className="mt-5">
                 <ZoneMap
@@ -381,28 +379,30 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   )}
                 {vendorAccess.status === 'ready' &&
                   vendorAccess.profile.shops.length > 0 && (
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-bold">ร้านค้าที่เข้าร่วม</span>
-                      <select
+                    <div>
+                      <SelectMenu
+                        label="ร้านค้าที่เข้าร่วม"
+                        placeholder="เลือกร้านค้า"
                         value={selectedShopId}
-                        onChange={(event) => setSelectedShopId(event.target.value)}
-                        className="w-full rounded-xl border border-line bg-white px-4 py-3 outline-none"
-                      >
-                        {vendorAccess.profile.shops.length > 1 && (
-                          <option value="">เลือกร้านค้า</option>
-                        )}
-                        {vendorAccess.profile.shops.map((shop) => (
-                          <option key={shop.id} value={shop.id}>
-                            {shop.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setSelectedShopId}
+                        options={[
+                          // Only offered when there is a choice to make, as the
+                          // native select's empty option was.
+                          ...(vendorAccess.profile.shops.length > 1
+                            ? [{ value: '', label: 'เลือกร้านค้า' }]
+                            : []),
+                          ...vendorAccess.profile.shops.map((shop) => ({
+                            value: shop.id,
+                            label: shop.name,
+                          })),
+                        ]}
+                      />
                       {vendorAccess.profile.shops.length > 1 && !selectedShopId && (
                         <p className="mt-2 text-xs text-muted">
                           กรุณาเลือกร้านค้าที่ต้องการใช้สำหรับการจองนี้
                         </p>
                       )}
-                    </label>
+                    </div>
                   )}
               </div>
 

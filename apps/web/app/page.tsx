@@ -1,8 +1,32 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, Search } from 'lucide-react';
+import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import { getEvents, type DiscoveryEvent } from '@/lib/api';
+import { useAuthState } from '@/lib/use-auth-state';
+
+/** Anchor for the hero's "Explore Event" button. */
+const EVENTS_SECTION_ID = 'events';
+
+/**
+ * `Venue` has no province column and the schema is frozen (§2.1), so the
+ * province is recovered from the free-text address.
+ *
+ * Thai addresses spell it `จังหวัดนครราชสีมา` — prefix attached, no space —
+ * except Bangkok, which is written `กรุงเทพมหานคร` with no prefix at all.
+ * Anything matching neither keeps its full address as the option label: a
+ * filter that silently dropped those events would hide real results, which is
+ * worse than one ugly entry in the list.
+ */
+function provinceFromAddress(address: string): string {
+  const prefixed = /จังหวัด(\S+)/.exec(address);
+  if (prefixed) return prefixed[1];
+  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
+  return address;
+}
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -69,7 +93,10 @@ export default function DiscoveryPage() {
           .includes(keyword);
       const matchesOrganization =
         !organizationId || event.organization.id === organizationId;
-      const matchesArea = !area || event.venue.address === area;
+      const matchesArea =
+        !area ||
+        (event.venue.address !== null &&
+          provinceFromAddress(event.venue.address) === area);
       const matchesCategory =
         !categoryId ||
         event.categories.some((category) => category.id === categoryId);
@@ -91,10 +118,10 @@ export default function DiscoveryPage() {
       areas: uniqueOptions(
         events
           .filter((event) => event.venue.address)
-          .map((event) => ({
-            value: event.venue.address ?? '',
-            label: event.venue.address ?? '',
-          })),
+          .map((event) => {
+            const province = provinceFromAddress(event.venue.address ?? '');
+            return { value: province, label: province };
+          }),
       ),
       categories: uniqueOptions(
         events.flatMap((event) =>
@@ -110,106 +137,111 @@ export default function DiscoveryPage() {
 
   return (
     <main>
-      <section className="shell grid min-h-[500px] items-center gap-12 py-16 lg:grid-cols-[1.08fr_.92fr] lg:py-24">
-        <div>
-          <span className="inline-flex rounded-full border border-violet/15 bg-white px-4 py-2 text-sm font-bold text-violet shadow-sm">
-            พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
-          </span>
-          <h1 className="mt-7 max-w-[720px] text-5xl font-black leading-[1.08] tracking-[-0.055em] sm:text-6xl">
-            ค้นหาพื้นที่ขาย
-            <span className="block bg-gradient-to-r from-violet to-[#a442e8] bg-clip-text text-transparent">
-              ที่เหมาะกับร้านคุณ
+      {/* `.hero` from the prototype: the photo carries no information the
+          heading does not already state, so it is decorative (`alt=""`) and
+          the gradient over it is what keeps the text legible. */}
+      <section className="shell pt-7">
+        <div className="relative flex min-h-[263px] items-end overflow-hidden rounded-[19px] p-[25px] text-white sm:min-h-[315px] sm:rounded-[26px] sm:p-[42px]">
+          <Image
+            src="/hero-spacelink.png"
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 1200px) 100vw, 1180px"
+            className="object-cover"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[linear-gradient(100deg,#251149F2_0%,#4C1D95C0_100%)] sm:bg-[linear-gradient(95deg,#251149_0%,#4C1D95DD_45%,#4C1D9520_100%)]"
+          />
+
+          <div className="relative max-w-[560px]">
+            <span className="inline-flex rounded-full border border-white/30 bg-white/[0.18] px-3 py-1.5 text-xs font-bold backdrop-blur">
+              พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
             </span>
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-[#6f697d]">
-            รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
-            และตรวจสอบพื้นที่ได้จากแผนผังจริง
-          </p>
+            <h1 className="my-3 text-[28px] font-black leading-[1.2] tracking-[-0.9px] sm:text-[37px] sm:tracking-[-1.1px]">
+              ค้นหาพื้นที่ขายที่เหมาะกับร้านคุณ
+            </h1>
+            <p className="text-[13px] leading-relaxed text-[#E9E2F8] sm:text-[15px]">
+              รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
+              และตรวจสอบพื้นที่ได้จากแผนผังจริง
+            </p>
 
-          <form
-            className="mt-9 max-w-2xl"
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5 shadow-soft">
-              <span aria-hidden className="text-xl text-muted">
-                ⌕
-              </span>
-              <span className="sr-only">ค้นหา Event</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base outline-none placeholder:text-muted"
-                placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
-              />
-              <button
-                type="submit"
-                className="rounded-xl bg-violet px-5 py-3 font-bold text-white shadow-lg shadow-violet/20"
-              >
-                ค้นหา
-              </button>
-            </label>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <FilterSelect
-                label="ผู้จัดงาน"
-                value={organizationId}
-                onChange={setOrganizationId}
-                options={filters.organizations}
-              />
-              <FilterSelect
-                label="จังหวัด / พื้นที่"
-                value={area}
-                onChange={setArea}
-                options={filters.areas}
-              />
-              <FilterSelect
-                label="ประเภทสินค้า"
-                value={categoryId}
-                onChange={setCategoryId}
-                options={filters.categories}
-              />
-            </div>
-          </form>
-        </div>
-
-        <div className="relative hidden min-h-[390px] lg:block" aria-hidden>
-          <div className="absolute inset-7 rotate-3 rounded-[44px] bg-gradient-to-br from-[#eadfff] to-[#d8ecff]" />
-          <div className="absolute inset-12 -rotate-2 overflow-hidden rounded-[38px] border border-white bg-white p-7 shadow-soft">
-            <div className="h-24 rounded-3xl bg-gradient-to-r from-[#176c50] to-[#6f9f38] p-6 text-white">
-              <p className="text-sm font-bold opacity-80">งานแนะนำ</p>
-              <p className="mt-1 text-2xl font-black">SUT Agri Fair 2026</p>
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              {['โซนอาหาร', 'โซนสินค้าเกษตร', 'โซนผ้าไหม', 'โซนกิจกรรม'].map(
-                (name, index) => (
-                  <div
-                    key={name}
-                    className="rounded-2xl border border-[#ebe7f2] p-4"
-                  >
-                    <div
-                      className={[
-                        'mb-3 h-3 rounded-full',
-                        [
-                          'bg-orange-300',
-                          'bg-green-400',
-                          'bg-teal-400',
-                          'bg-violet-400',
-                        ][index],
-                      ].join(' ')}
-                    />
-                    <p className="text-sm font-extrabold">{name}</p>
-                    <p className="mt-1 text-xs text-[#918a9f]">
-                      {8 + index * 2} บูธว่าง
-                    </p>
-                  </div>
-                ),
-              )}
-            </div>
+            {/* A plain anchor rather than a scroll handler: `scroll-behavior`
+                is already smooth in `globals.css`, and its
+                `prefers-reduced-motion` override then applies for free — which
+                a scripted `scrollIntoView({ behavior: 'smooth' })` would
+                bypass. */}
+            <a
+              href={`#${EVENTS_SECTION_ID}`}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#5B21B6] shadow-lg transition hover:-translate-y-0.5"
+            >
+              Explore Event
+              <ArrowDown aria-hidden className="h-4 w-4" />
+            </a>
           </div>
         </div>
       </section>
 
-      <section className="border-y border-[#ece8f2] bg-white/70 py-16">
+      {/* `.search`: overlaps the hero's lower edge, as in the prototype. */}
+      <section className="shell relative z-10 -mt-7">
+        <form
+          className="rounded-surface border border-line bg-card p-3.5 shadow-surface"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5">
+            <Search aria-hidden className="h-5 w-5 shrink-0 text-violet" />
+            <span className="sr-only">ค้นหา Event</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base outline-none placeholder:text-muted"
+              placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
+            />
+            <button
+              type="submit"
+              className="rounded-xl bg-violet px-5 py-2.5 font-bold text-white shadow-lg shadow-violet/20"
+            >
+              ค้นหา
+            </button>
+          </label>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <SelectMenu
+              label="ผู้จัดงาน"
+              placeholder="ผู้จัดงาน: ทั้งหมด"
+              value={organizationId}
+              onChange={setOrganizationId}
+              options={withAllOption(filters.organizations, 'ผู้จัดงาน: ทั้งหมด')}
+            />
+            <SelectMenu
+              label="จังหวัด / พื้นที่"
+              placeholder="จังหวัด / พื้นที่: ทั้งหมด"
+              value={area}
+              onChange={setArea}
+              options={withAllOption(
+                filters.areas,
+                'จังหวัด / พื้นที่: ทั้งหมด',
+              )}
+            />
+            <SelectMenu
+              label="ประเภทสินค้า"
+              placeholder="ประเภทสินค้า: ทั้งหมด"
+              value={categoryId}
+              onChange={setCategoryId}
+              options={withAllOption(
+                filters.categories,
+                'ประเภทสินค้า: ทั้งหมด',
+              )}
+            />
+          </div>
+        </form>
+      </section>
+
+      <section
+        id={EVENTS_SECTION_ID}
+        className="mt-10 border-y border-[#ece8f2] bg-white/70 py-16"
+      >
         <div className="shell">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -349,30 +381,7 @@ export default function DiscoveryPage() {
         </div>
       </section>
 
-      <section className="shell pb-16">
-        <div className="rounded-[32px] border border-[#e7e2ed] bg-white px-8 py-12 text-center shadow-soft sm:px-14">
-          <h2 className="text-3xl font-black tracking-[-0.04em]">
-            พร้อมจองบูธในงานถัดไปแล้วหรือยัง
-          </h2>
-          <p className="mx-auto mt-4 max-w-[46ch] leading-8 text-[#7a7487]">
-            สมัครด้วยอีเมลอย่างเดียว ไม่ต้องตั้งรหัสผ่าน
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/register"
-              className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
-            >
-              สมัครสมาชิก
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
-            >
-              เข้าสู่ระบบ
-            </Link>
-          </div>
-        </div>
-      </section>
+      <ClosingCta />
 
       <footer id="support" className="border-t border-[#e9e5ef] bg-white py-8">
         <div className="shell flex flex-wrap items-center justify-between gap-3 text-sm text-[#7b7588]">
@@ -395,32 +404,82 @@ function uniqueOptions(options: FilterOption[]): FilterOption[] {
   });
 }
 
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: FilterOption[];
-}) {
+/**
+ * The native `<select>` this replaced used an `<option value="">` for the
+ * unfiltered case; the listbox needs it as a real row so it can be chosen
+ * again to clear the filter.
+ */
+function withAllOption(
+  options: FilterOption[],
+  allLabel: string,
+): SelectMenuOption[] {
+  return [{ value: '', label: allLabel }, ...options];
+}
+
+/**
+ * Issue 1: this block used to offer สมัครสมาชิก / เข้าสู่ระบบ unconditionally,
+ * so a signed-in visitor was invited to register moments after seeing their own
+ * name in the topbar. Signed in, it points at what they can actually do next
+ * instead — browse the open events, or open their bookings.
+ */
+function ClosingCta() {
+  const { auth } = useAuthState();
+  const signedIn = auth.status === 'signed-in';
+
   return (
-    <label>
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-bold text-ink outline-none"
-      >
-        <option value="">{label}: ทั้งหมด</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <section className="shell pb-16">
+      <div className="rounded-[32px] border border-[#e7e2ed] bg-white px-8 py-12 text-center shadow-soft sm:px-14">
+        <h2 className="text-3xl font-black tracking-[-0.04em]">
+          พร้อมจองบูธในงานถัดไปแล้วหรือยัง
+        </h2>
+        <p className="mx-auto mt-4 max-w-[46ch] leading-8 text-[#7a7487]">
+          {signedIn
+            ? 'เลือกงานที่เปิดรับสมัคร แล้วดูผังบูธว่างได้ทันที'
+            : 'สมัครด้วยอีเมลอย่างเดียว ไม่ต้องตั้งรหัสผ่าน'}
+        </p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {auth.status === 'loading' && (
+            // Holds the row's height so the card does not resize when the
+            // session resolves.
+            <span aria-hidden className="skeleton h-[52px] w-[280px] rounded-full" />
+          )}
+
+          {auth.status === 'signed-out' && (
+            <>
+              <Link
+                href="/register"
+                className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
+              >
+                สมัครสมาชิก
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
+              >
+                เข้าสู่ระบบ
+              </Link>
+            </>
+          )}
+
+          {signedIn && (
+            <>
+              <a
+                href={`#${EVENTS_SECTION_ID}`}
+                className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
+              >
+                ดูงานที่เปิดรับสมัคร
+              </a>
+              <Link
+                href="/bookings"
+                className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
+              >
+                การจองของฉัน
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
