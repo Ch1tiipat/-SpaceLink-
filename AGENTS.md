@@ -69,17 +69,9 @@ Do not say "done" or "should work". Run the command, paste the real output, repo
 
 ## 3. Repository layout
 
-```
-spacelink/
-├─ apps/
-│  ├─ api/       NestJS backend  → Railway/Render   (created in Step 1)
-│  └─ web/       Next.js 14 PWA  → Vercel           (NOT created yet — SCRUM-20)
-├─ prototype/    The original static HTML/JS/CSS prototype. Reference and demo only.
-├─ AGENTS.md     This file. All project rules for agents live here.
-├─ CLAUDE.md     Pointer only — `@AGENTS.md`-imports this file. Never put rules in it.
-├─ README.md
-└─ .gitignore
-```
+`apps/api` is the NestJS backend (deployed to Railway or Render), `apps/web` the Next.js PWA
+(Vercel). For the current tree, run `ls` — it is authoritative and this file is not. What `ls`
+cannot tell you is below.
 
 **Design documents are deliberately not in this repository.** The master spec, ERD, design system
 brief, schema change log, and status reports are kept outside version control (`docs/` is gitignored).
@@ -226,26 +218,10 @@ Because bookings may be payment-exempt, **never assume a `CONFIRMED` booking has
 
 ## 9. Environment variables (`apps/api`)
 
-The full list, as validated by `src/config/env.validation.ts`. `.env.example` documents every one of them.
-
-```
-DATABASE_URL=              # Supabase pooled — port 6543, ends with ?pgbouncer=true&connection_limit=1
-DIRECT_URL=                # Supabase direct/session — port 5432, used for migrations only
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY= # backend only (§14.3)
-
-# Token signing — set EXACTLY ONE of these two
-SUPABASE_JWKS_URL=         # newer projects: asymmetric keys
-SUPABASE_JWT_SECRET=       # older projects: shared HS256 secret
-
-NODE_ENV=                  # development | production | test — defaults to development
-CORS_ORIGIN=               # blank allows any origin, which suits local dev
-PORT=3000
-
-SLIP_VERIFIER=mock                    # mock | manual | slipok
-SLIP_VERIFIER_MODE=always-verified    # always-verified | always-invalid — only read when SLIP_VERIFIER=mock
-ZONE_RECOMMENDER=rule                 # rule | gemini — defaults to rule
-```
+**`apps/api/.env.example` is the list.** It documents every variable, and
+`src/config/env.validation.ts` is what enforces them at boot. Read those two; do not keep a
+second copy of the list here, because a copy drifts and a stale rule is worse than none.
+What neither file can tell you is why some of them behave the way they do:
 
 **`SUPABASE_JWKS_URL` and `SUPABASE_JWT_SECRET` are mutually exclusive.** The schema ends in `.xor()` on the pair, so setting **both** fails the boot on purpose — it is not an oversight to be relaxed. A Supabase project signs one way or the other; with both set `SupabaseTokenService` silently picks JWKS and ignores the secret, so a half-finished migration would verify against whichever one nobody meant and look fine until it did not. Setting neither fails too, for the obvious reason.
 
@@ -263,26 +239,10 @@ Validate env at boot and fail fast with a clear message if a variable is **missi
 
 ## 10. Commands
 
-```bash
-# backend
-cd apps/api
-npm install
-npx prisma generate      # safe, run freely
-npx prisma validate      # safe
-npm run start:dev
-
-# the four gates — all must exit 0 (see "Definition of Done")
-npm run build
-npx tsc --noEmit
-npx eslint src prisma
-npm test
-
-# frontend
-cd apps/web
-npm install
-npm run dev
-npm run build
-```
+Scripts live in each app's `package.json` — read them there, and run them from inside `apps/api`
+or `apps/web`, never from the repo root (§3). `npx prisma generate` and `npx prisma validate` are
+always safe to run (§2.2 lists the ones that are not). The four gates every change must pass, and
+the reason each one exists, are under **Definition of Done** below.
 
 `npm run db:seed` opens a real connection, so it is a local command only — never run it in CI (see "Definition of Done").
 
