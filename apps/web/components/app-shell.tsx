@@ -60,7 +60,13 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         icon: Ticket,
         matches: (pathname) => pathname.startsWith('/bookings'),
       },
-      { kind: 'soon', label: 'ช่วยเหลือ', icon: MessageCircle },
+      {
+        kind: 'link',
+        label: 'ช่วยเหลือ',
+        href: '/help',
+        icon: MessageCircle,
+        matches: (pathname) => pathname.startsWith('/help'),
+      },
     ],
   },
   {
