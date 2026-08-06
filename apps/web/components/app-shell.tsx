@@ -65,7 +65,15 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
   {
     label: 'Account',
-    items: [{ kind: 'soon', label: 'โปรไฟล์', icon: UserRound }],
+    items: [
+      {
+        kind: 'link',
+        label: 'โปรไฟล์',
+        href: '/profile',
+        icon: UserRound,
+        matches: (pathname) => pathname.startsWith('/profile'),
+      },
+    ],
   },
 ];
 

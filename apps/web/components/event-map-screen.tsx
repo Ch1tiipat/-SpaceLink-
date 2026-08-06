@@ -6,34 +6,23 @@ import { ZoneMap } from '@/components/zone-map';
 import { SelectMenu } from '@/components/select-menu';
 import {
   getEventMap,
-  getMe,
   getZoneRecommendations,
-  type CurrentUser,
   type EventMap,
   type EventZone,
   type ZoneRecommendation,
 } from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 function availableCount(zone: EventZone) {
   return zone.booths.filter((booth) => booth.availability === 'AVAILABLE')
     .length;
 }
 
-type VendorAccess =
-  | { status: 'loading' }
-  | { status: 'signed-out' }
-  | { status: 'ready'; token: string; profile: CurrentUser }
-  | { status: 'error'; message: string };
-
 export function EventMapScreen({ eventId }: { eventId: string }) {
+  const { state: vendor } = useVendorProfile();
   const [data, setData] = useState<EventMap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
-  const [vendorAccess, setVendorAccess] = useState<VendorAccess>({
-    status: 'loading',
-  });
-  const [selectedShopId, setSelectedShopId] = useState('');
   const [recommendation, setRecommendation] =
     useState<ZoneRecommendation | null>(null);
   const [recommendationError, setRecommendationError] = useState<
@@ -58,82 +47,19 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  // A vendor owns one shop at most, so there is nothing to pick: the
+  // recommendation is asked for the shop the account already has.
+  const shop = vendor.status === 'ready' ? vendor.shop : null;
+  const shopId = shop?.id ?? null;
+
+  // Signing in or out changes whose shop a recommendation was made for, so the
+  // previous answer no longer describes anything. The local resolver this
+  // replaced cleared the same three pieces of state on the same transitions.
   useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-
-    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch (cause) {
-      setVendorAccess({
-        status: 'error',
-        message:
-          cause instanceof Error
-            ? cause.message
-            : 'ยังไม่ได้ตั้งค่าระบบเข้าสู่ระบบ',
-      });
-      return;
-    }
-
-    async function resolve(token: string | undefined) {
-      setRecommendation(null);
-      setRecommendationError(null);
-      setRecommendationIsEmpty(false);
-
-      if (!token) {
-        if (active) {
-          setVendorAccess({ status: 'signed-out' });
-          setSelectedShopId('');
-        }
-        return;
-      }
-
-      try {
-        const profile = await getMe(token, controller.signal);
-        if (!active) return;
-
-        setVendorAccess({ status: 'ready', token, profile });
-        setSelectedShopId((current) =>
-          profile.shops.some((shop) => shop.id === current)
-            ? current
-            : (profile.shops[0]?.id ?? ''),
-        );
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          return;
-        }
-        if (active) {
-          setVendorAccess({
-            status: 'error',
-            message:
-              cause instanceof Error
-                ? cause.message
-                : 'ไม่สามารถอ่านข้อมูลร้านค้าได้',
-          });
-        }
-      }
-    }
-
-    void supabase.auth
-      .getSession()
-      .then(({ data: sessionData }) =>
-        resolve(sessionData.session?.access_token),
-      );
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'INITIAL_SESSION') return;
-        void resolve(session?.access_token);
-      },
-    );
-
-    return () => {
-      active = false;
-      controller.abort();
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+    setRecommendation(null);
+    setRecommendationError(null);
+    setRecommendationIsEmpty(false);
+  }, [shopId]);
 
   const focusedZone = useMemo(
     () => data?.zones.find((zone) => zone.id === focusedZoneId) ?? null,
@@ -154,7 +80,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }, [data, recommendation]);
 
   async function handleRecommendation() {
-    if (vendorAccess.status !== 'ready' || !selectedShopId) return;
+    if (vendor.status !== 'ready' || !vendor.shop) return;
 
     setIsRecommending(true);
     setRecommendation(null);
@@ -164,8 +90,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     try {
       const recommendations = await getZoneRecommendations(
         eventId,
-        { shopId: selectedShopId, limit: 1 },
-        vendorAccess.token,
+        { shopId: vendor.shop.id, limit: 1 },
+        vendor.token,
       );
       const best = recommendations[0] ?? null;
       setRecommendation(best);
@@ -279,13 +205,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   ให้ SpaceLink ช่วยเลือกพื้นที่ที่เหมาะกับร้านของคุณ
                 </p>
 
-                {vendorAccess.status === 'loading' && (
+                {vendor.status === 'loading' && (
                   <p className="mt-2 text-sm text-muted">
                     กำลังตรวจสอบข้อมูลร้านค้า…
                   </p>
                 )}
 
-                {vendorAccess.status === 'signed-out' && (
+                {vendor.status === 'signed-out' && (
                   <p className="mt-2 text-sm text-muted">
                     กรุณา{' '}
                     <Link href="/login" className="font-bold text-violet">
@@ -295,54 +221,41 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   </p>
                 )}
 
-                {vendorAccess.status === 'error' && (
+                {vendor.status === 'error' && (
                   <p className="mt-2 text-sm text-[#b42318]">
-                    {vendorAccess.message}
+                    {vendor.message}
                   </p>
                 )}
 
-                {vendorAccess.status === 'ready' &&
-                  vendorAccess.profile.shops.length === 0 && (
-                    <p className="mt-2 text-sm text-muted">
+                {vendor.status === 'ready' && !shop && (
+                  <p className="mt-2 text-sm">
+                    <Link href="/profile" className="font-bold text-violet underline">
                       บัญชีนี้ยังไม่มีร้านค้า กรุณาเพิ่มข้อมูลร้านและหมวดสินค้าก่อน
-                    </p>
-                  )}
+                    </Link>
+                  </p>
+                )}
 
-                {vendorAccess.status === 'ready' &&
-                  vendorAccess.profile.shops.length > 0 && (
-                    <SelectMenu
-                      className="mt-3"
-                      label="ร้านค้าที่ต้องการหาพื้นที่"
-                      placeholder="เลือกร้านค้า"
-                      value={selectedShopId}
-                      onChange={(value) => {
-                        setSelectedShopId(value);
-                        setRecommendation(null);
-                        setRecommendationError(null);
-                        setRecommendationIsEmpty(false);
-                      }}
-                      options={vendorAccess.profile.shops.map((shop) => ({
-                        value: shop.id,
-                        label: shop.name,
-                        hint:
-                          shop.categories.length > 0
-                            ? shop.categories
-                                .map((category) => category.name)
-                                .join(', ')
-                            : undefined,
-                      }))}
-                    />
-                  )}
+                {vendor.status === 'ready' && shop && (
+                  <div className="mt-3">
+                    <span className="block text-[10px] font-bold uppercase tracking-[.12em] text-muted">
+                      ร้านค้าที่ต้องการหาพื้นที่
+                    </span>
+                    <b className="mt-1.5 block text-sm">{shop.name}</b>
+                    {shop.categories.length > 0 && (
+                      <span className="block text-[11px] font-medium text-muted">
+                        {shop.categories
+                          .map((category) => category.name)
+                          .join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <button
                 type="button"
                 onClick={() => void handleRecommendation()}
-                disabled={
-                  isRecommending ||
-                  vendorAccess.status !== 'ready' ||
-                  !selectedShopId
-                }
+                disabled={isRecommending || vendor.status !== 'ready' || !shop}
                 className="rounded-xl bg-gradient-to-r from-violet to-[#9349e8] px-5 py-3 font-bold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
               >
                 {isRecommending ? 'กำลังวิเคราะห์พื้นที่…' : 'แนะนำโซนให้ฉัน'}
