@@ -9,20 +9,12 @@ import { SelectMenu } from '@/components/select-menu';
 import {
   createBooking,
   getEventMap,
-  getMe,
   getMyBookings,
   type BookingRecord,
-  type CurrentUser,
   type EventBooth,
   type EventMap,
 } from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
-
-type VendorAccess =
-  | { status: 'loading' }
-  | { status: 'signed-out' }
-  | { status: 'ready'; token: string; profile: CurrentUser }
-  | { status: 'error'; message: string };
+import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
@@ -38,14 +30,11 @@ function formatMoney(value: string): string {
 }
 
 export function BookingScreen({ eventId }: { eventId: string }) {
+  const { state: vendor } = useVendorProfile();
   const [data, setData] = useState<EventMap | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [vendorAccess, setVendorAccess] = useState<VendorAccess>({
-    status: 'loading',
-  });
   const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
   const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
-  const [selectedShopId, setSelectedShopId] = useState('');
   const [createdBooking, setCreatedBooking] = useState<BookingRecord | null>(
     null,
   );
@@ -66,71 +55,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-
-    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch (cause) {
-      setVendorAccess({
-        status: 'error',
-        message:
-          cause instanceof Error
-            ? cause.message
-            : 'ยังไม่ได้ตั้งค่าระบบเข้าสู่ระบบ',
-      });
-      return;
-    }
-
-    async function resolve(token: string | undefined) {
-      if (!token) {
-        if (active) {
-          setVendorAccess({ status: 'signed-out' });
-          setSelectedShopId('');
-        }
-        return;
-      }
-
-      try {
-        const profile = await getMe(token, controller.signal);
-        if (!active) return;
-        setVendorAccess({ status: 'ready', token, profile });
-        setSelectedShopId(profile.shops.length === 1 ? profile.shops[0].id : '');
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        if (active) {
-          setVendorAccess({
-            status: 'error',
-            message:
-              cause instanceof Error
-                ? cause.message
-                : 'ไม่สามารถอ่านข้อมูลร้านค้าได้',
-          });
-        }
-      }
-    }
-
-    void supabase.auth
-      .getSession()
-      .then(({ data: sessionData }) =>
-        resolve(sessionData.session?.access_token),
-      );
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'INITIAL_SESSION') return;
-        void resolve(session?.access_token);
-      },
-    );
-
-    return () => {
-      active = false;
-      controller.abort();
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
   const selectedZone = useMemo(
     () =>
       data?.zones.find((zone) =>
@@ -138,19 +62,12 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       ) ?? null,
     [data, selectedBooth],
   );
-  const selectedShop =
-    vendorAccess.status === 'ready'
-      ? (vendorAccess.profile.shops.find(
-          (shop) => shop.id === selectedShopId,
-        ) ?? null)
-      : null;
+  // A vendor owns one shop at most, so there is nothing to pick: the booking
+  // uses the shop the account already has, or it cannot be made at all.
+  const shop = vendor.status === 'ready' ? vendor.shop : null;
 
   async function handleCreate() {
-    if (
-      vendorAccess.status !== 'ready' ||
-      !selectedBooth ||
-      !selectedShopId
-    ) {
+    if (vendor.status !== 'ready' || !vendor.shop || !selectedBooth) {
       return;
     }
 
@@ -158,8 +75,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     setActionError(null);
     try {
       const booking = await createBooking(
-        { eventId, boothId: selectedBooth.id, shopId: selectedShopId },
-        vendorAccess.token,
+        { eventId, boothId: selectedBooth.id, shopId: vendor.shop.id },
+        vendor.token,
       );
       setCreatedBooking(booking);
       setHoldExpired(false);
@@ -174,11 +91,11 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
   async function handleHoldExpired() {
     setHoldExpired(true);
-    if (vendorAccess.status !== 'ready' || !createdBooking) return;
+    if (vendor.status !== 'ready' || !createdBooking) return;
 
     for (let attempt = 0; attempt < HOLD_STATUS_REFRESH_ATTEMPTS; attempt += 1) {
       try {
-        const bookings = await getMyBookings(vendorAccess.token);
+        const bookings = await getMyBookings(vendor.token);
         const refreshed = bookings.find(
           (booking) => booking.id === createdBooking.id,
         );
@@ -258,7 +175,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   label="บูธ / โซน"
                   value={`${selectedBooth?.code ?? createdBooking.boothId} / ${selectedZone?.name ?? selectedZone?.code ?? '-'}`}
                 />
-                <SummaryRow label="ร้านค้า" value={selectedShop?.name ?? '-'} />
+                <SummaryRow label="ร้านค้า" value={shop?.name ?? '-'} />
                 <SummaryRow
                   label="ราคา"
                   value={`${formatMoney(createdBooking.boothPrice)} บาท`}
@@ -288,11 +205,11 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               </Link>
             </div>
 
-            {vendorAccess.status === 'ready' &&
+            {vendor.status === 'ready' &&
               createdBooking.status === 'PENDING_PAYMENT' && (
                 <SlipUploadPanel
                   bookingId={createdBooking.id}
-                  token={vendorAccess.token}
+                  token={vendor.token}
                   disabled={holdExpired}
                   onConfirmed={(response) =>
                     setCreatedBooking((current) =>
@@ -360,50 +277,32 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               )}
 
               <div className="mt-6 border-t border-line pt-5">
-                {vendorAccess.status === 'loading' && (
+                {vendor.status === 'loading' && (
                   <p className="text-sm text-muted">กำลังตรวจสอบบัญชีผู้ขาย…</p>
                 )}
-                {vendorAccess.status === 'signed-out' && (
+                {vendor.status === 'signed-out' && (
                   <p className="text-sm text-muted">
                     กรุณา <Link href="/login" className="font-bold text-violet">เข้าสู่ระบบ</Link> ก่อนจองบูธ
                   </p>
                 )}
-                {vendorAccess.status === 'error' && (
-                  <p className="text-sm text-[#b42318]">{vendorAccess.message}</p>
+                {vendor.status === 'error' && (
+                  <p className="text-sm text-[#b42318]">{vendor.message}</p>
                 )}
-                {vendorAccess.status === 'ready' &&
-                  vendorAccess.profile.shops.length === 0 && (
-                    <p className="text-sm text-muted">
+                {vendor.status === 'ready' && !shop && (
+                  <p className="text-sm">
+                    <Link href="/profile" className="font-bold text-violet underline">
                       บัญชีนี้ยังไม่มีร้านค้า จึงยังไม่สามารถสร้างการจองได้
-                    </p>
-                  )}
-                {vendorAccess.status === 'ready' &&
-                  vendorAccess.profile.shops.length > 0 && (
-                    <div>
-                      <SelectMenu
-                        label="ร้านค้าที่เข้าร่วม"
-                        placeholder="เลือกร้านค้า"
-                        value={selectedShopId}
-                        onChange={setSelectedShopId}
-                        options={[
-                          // Only offered when there is a choice to make, as the
-                          // native select's empty option was.
-                          ...(vendorAccess.profile.shops.length > 1
-                            ? [{ value: '', label: 'เลือกร้านค้า' }]
-                            : []),
-                          ...vendorAccess.profile.shops.map((shop) => ({
-                            value: shop.id,
-                            label: shop.name,
-                          })),
-                        ]}
-                      />
-                      {vendorAccess.profile.shops.length > 1 && !selectedShopId && (
-                        <p className="mt-2 text-xs text-muted">
-                          กรุณาเลือกร้านค้าที่ต้องการใช้สำหรับการจองนี้
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    </Link>
+                  </p>
+                )}
+                {vendor.status === 'ready' && shop && (
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-[.12em] text-muted">
+                      ร้านค้าที่เข้าร่วม
+                    </span>
+                    <b className="mt-1.5 block text-sm">{shop.name}</b>
+                  </div>
+                )}
               </div>
 
               {actionError && (
@@ -418,8 +317,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 disabled={
                   isCreating ||
                   !selectedBooth ||
-                  !selectedShopId ||
-                  vendorAccess.status !== 'ready'
+                  !shop ||
+                  vendor.status !== 'ready'
                 }
                 className="mt-6 w-full rounded-xl bg-violet px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
