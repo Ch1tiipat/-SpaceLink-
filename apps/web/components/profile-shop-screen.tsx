@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Mail,
   Package,
@@ -12,27 +12,25 @@ import {
 } from 'lucide-react';
 import { MultiSelectMenu } from '@/components/multi-select-menu';
 import type { SelectMenuOption } from '@/components/select-menu';
-import type { CurrentUser, VendorShop } from '@/lib/api';
+import {
+  ApiError,
+  createShop,
+  getCategories,
+  updateMe,
+  updateShop,
+  type CurrentUser,
+  type ProductCategory,
+  type VendorShop,
+} from '@/lib/api';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
-/* ------------------------------------------------------------------ *
- * Phase 1 mock data
- *
- * Everything in this block is hardcoded so both branches of the page —
- * "no shop yet" and "has exactly one shop" — can be built and looked at
- * before the endpoints behind them exist. Each value carries the TODO naming
- * the call that replaces it. Nothing here reaches the network.
- * ------------------------------------------------------------------ */
-
-/** TODO(Phase 4): GET /categories */
-const MOCK_CATEGORY_OPTIONS: SelectMenuOption[] = [
-  { value: 'cat-food', label: 'อาหารและเครื่องดื่ม' },
-  { value: 'cat-fashion', label: 'แฟชั่นและเครื่องแต่งกาย' },
-  { value: 'cat-craft', label: 'งานคราฟต์และแฮนด์เมด' },
-  { value: 'cat-beauty', label: 'ความงามและสุขภาพ' },
-  { value: 'cat-home', label: 'ของแต่งบ้านและต้นไม้' },
-  { value: 'cat-secondhand', label: 'สินค้ามือสอง' },
-];
+/**
+ * Digits only, matching THAI_PHONE_PATTERN in the API's update-me.dto.ts:
+ * a leading zero then 8 or 9 more, covering 10-digit mobile and 9-digit
+ * landline. Checked here as well so a mistyped number gets a Thai message
+ * rather than the backend's raw class-validator string.
+ */
+const THAI_PHONE_PATTERN = /^0\d{8,9}$/;
 
 /**
  * Vendor Score and Blacklist Point are in the approved design but on no wire
@@ -50,52 +48,43 @@ type VendorStats = {
 /** TODO(Phase 4): the endpoint that exposes a vendor's own score and points. */
 const MOCK_STATS: VendorStats = { averageRating: 4.9, blacklistPoints: 0 };
 
-/** TODO(Phase 4): GET /auth/me, through `useVendorProfile()` below. */
-const MOCK_PROFILE: CurrentUser = {
-  id: '00000000-0000-4000-8000-000000000001',
-  authUserId: '00000000-0000-4000-8000-000000000002',
-  email: 'vendor@example.com',
-  fullName: 'สมหญิง ใจดี',
-  phone: '081-234-5678',
-  role: 'VENDOR',
-  isBlacklisted: false,
-  createdAt: '2026-01-12T03:00:00.000Z',
-  updatedAt: '2026-07-30T08:15:00.000Z',
-  shops: [],
-};
-
-/** TODO(Phase 4): GET /shops/me — served today by `CurrentUser.shops[0]`. */
-const MOCK_SHOP: VendorShop = {
-  id: '00000000-0000-4000-8000-000000000003',
-  name: 'ครัวคุณหญิง',
-  description:
-    'อาหารตามสั่งและของหวานไทยทำสด ขายในตลาดนัดและงานอีเวนต์ทั่วภาคอีสาน',
-  logoUrl: null,
-  categories: [
-    { id: 'cat-food', name: 'อาหารและเครื่องดื่ม' },
-    { id: 'cat-craft', name: 'งานคราฟต์และแฮนด์เมด' },
-  ],
-};
-
-/**
- * Which mock branch renders. Flip to `'no-shop'` to see the create-shop form;
- * both branches are driven from the same mock profile.
- */
-const MOCK_VARIANT: 'with-shop' | 'no-shop' = 'with-shop';
-
-const PENDING_BACKEND_NOTICE =
-  'ยังบันทึกไม่ได้ในตอนนี้ — หน้านี้ยังไม่ได้เชื่อมต่อ API ร้านค้า ข้อมูลที่กรอกจะยังไม่ถูกส่งไปที่ระบบ';
-
 export function ProfileShopScreen() {
-  const { state } = useVendorProfile();
+  const { state, refresh } = useVendorProfile();
   const [isEditing, setIsEditing] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[] | null>(null);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  // Phase 1 renders mock data even once the session resolves, so the layout can
-  // be reviewed without a database behind it. The hook still drives loading,
-  // signed-out and error, which are real.
-  // TODO(Phase 4): read `state.profile` and `state.shop` here instead.
-  const profile = MOCK_PROFILE;
-  const shop = MOCK_VARIANT === 'with-shop' ? MOCK_SHOP : null;
+  // Narrowed once, so profile, shop and token cannot drift apart below: all
+  // three come from the same `ready` branch of the same render.
+  const ready = state.status === 'ready' ? state : null;
+
+  // Product categories are public reference data (GET /categories has no
+  // guard), so this is deliberately not gated behind the session — the form
+  // needs its options whether or not `/auth/me` has answered yet.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getCategories(controller.signal)
+      .then(setCategories)
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setCategoriesError(
+          cause instanceof Error ? cause.message : 'โหลดหมวดสินค้าไม่สำเร็จ',
+        );
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const categoryOptions = useMemo<SelectMenuOption[]>(
+    () =>
+      (categories ?? []).map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    [categories],
+  );
+  const categoriesLoading = categories === null && categoriesError === null;
 
   return (
     <main className="pb-16">
@@ -113,7 +102,7 @@ export function ProfileShopScreen() {
             </p>
           </div>
 
-          {state.status === 'ready' && shop && !isEditing && (
+          {ready && ready.shop && !isEditing && (
             <button
               type="button"
               onClick={() => setIsEditing(true)}
@@ -155,7 +144,7 @@ export function ProfileShopScreen() {
           </p>
         )}
 
-        {state.status === 'ready' && !shop && (
+        {ready && !ready.shop && (
           <section className="mt-8 rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-8">
             <h2 className="text-xl font-bold">เพิ่มข้อมูลร้านค้า</h2>
             <p className="mt-2 max-w-2xl text-muted">
@@ -163,23 +152,32 @@ export function ProfileShopScreen() {
               หนึ่งบัญชีมีได้หนึ่งร้าน
             </p>
             <div className="mt-6 max-w-2xl">
-              <ShopForm mode="create" profile={profile} shop={null} />
+              <ShopForm
+                mode="create"
+                profile={ready.profile}
+                shop={null}
+                token={ready.token}
+                refresh={refresh}
+                options={categoryOptions}
+                optionsLoading={categoriesLoading}
+                optionsError={categoriesError}
+              />
             </div>
           </section>
         )}
 
-        {state.status === 'ready' && shop && (
+        {ready && ready.shop && (
           <div className="mt-8 grid gap-[18px] lg:grid-cols-[290px_minmax(0,1fr)]">
             <aside className="rounded-[28px] border border-line bg-white p-6 text-center shadow-soft">
               <span
                 aria-hidden
                 className="mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white"
               >
-                {[...shop.name.trim()][0] ?? '?'}
+                {[...ready.shop.name.trim()][0] ?? '?'}
               </span>
-              <h2 className="mt-3.5 text-lg font-bold">{shop.name}</h2>
+              <h2 className="mt-3.5 text-lg font-bold">{ready.shop.name}</h2>
               <p className="mt-0.5 text-[13px] text-muted">
-                {profile.fullName}
+                {ready.profile.fullName}
               </p>
 
               <div className="mt-5 grid grid-cols-2 gap-2">
@@ -206,30 +204,43 @@ export function ProfileShopScreen() {
                 <div className="mt-4 max-w-2xl">
                   <ShopForm
                     mode="edit"
-                    profile={profile}
-                    shop={shop}
+                    profile={ready.profile}
+                    shop={ready.shop}
+                    token={ready.token}
+                    refresh={refresh}
+                    options={categoryOptions}
+                    optionsLoading={categoriesLoading}
+                    optionsError={categoriesError}
                     onCancel={() => setIsEditing(false)}
                   />
                 </div>
               ) : (
                 <dl className="mt-4 grid gap-3">
-                  <InfoLine icon={UserRound} label="ชื่อร้าน" value={shop.name} />
+                  <InfoLine
+                    icon={UserRound}
+                    label="ชื่อร้าน"
+                    value={ready.shop.name}
+                  />
                   <InfoLine
                     icon={Phone}
                     label="เบอร์โทรศัพท์"
-                    value={profile.phone ?? 'ยังไม่ระบุ'}
+                    value={ready.profile.phone ?? 'ยังไม่ระบุ'}
                   />
-                  <InfoLine icon={Mail} label="อีเมล" value={profile.email} />
+                  <InfoLine
+                    icon={Mail}
+                    label="อีเมล"
+                    value={ready.profile.email}
+                  />
                   <InfoLine
                     icon={Store}
                     label="รายละเอียดร้าน"
-                    value={shop.description ?? 'ยังไม่ระบุ'}
+                    value={ready.shop.description ?? 'ยังไม่ระบุ'}
                   />
                   <InfoLine
                     icon={Package}
                     label="สินค้าที่ขาย"
                     value={
-                      shop.categories
+                      ready.shop.categories
                         .map((category) => category.name)
                         .join(', ') || 'ยังไม่ระบุ'
                     }
@@ -295,11 +306,22 @@ function ShopForm({
   mode,
   profile,
   shop,
+  token,
+  refresh,
+  options,
+  optionsLoading,
+  optionsError,
   onCancel,
 }: {
   mode: 'create' | 'edit';
   profile: CurrentUser;
   shop: VendorShop | null;
+  token: string;
+  /** `refresh()` from `useVendorProfile()` — called only after a save wins. */
+  refresh: () => void;
+  options: SelectMenuOption[];
+  optionsLoading: boolean;
+  optionsError: string | null;
   onCancel?: () => void;
 }) {
   const [name, setName] = useState(shop?.name ?? '');
@@ -310,28 +332,71 @@ function ShopForm({
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [nameError, setNameError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
+    const trimmedPhone = phone.trim();
     const nextNameError = name.trim() ? null : 'กรุณากรอกชื่อร้าน';
     const nextCategoryError =
       categoryIds.length > 0 ? null : 'กรุณาเลือกหมวดสินค้าอย่างน้อย 1 หมวด';
+    const nextPhoneError =
+      trimmedPhone && !THAI_PHONE_PATTERN.test(trimmedPhone)
+        ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0'
+        : null;
 
     setNameError(nextNameError);
     setCategoryError(nextCategoryError);
+    setPhoneError(nextPhoneError);
 
-    if (nextNameError || nextCategoryError) {
+    if (nextNameError || nextCategoryError || nextPhoneError) {
       setNotice(null);
       return;
     }
 
-    // TODO(Phase 4): POST /shops when `mode === 'create'`,
-    // PATCH /shops/me when `mode === 'edit'`, then `refresh()` from
-    // `useVendorProfile()`. The phone field is a separate PATCH /users/me —
-    // it belongs to `app_user`, not to the shop.
-    setNotice(PENDING_BACKEND_NOTICE);
+    setIsSubmitting(true);
+    setNotice(null);
+
+    // Two endpoints, because the fields belong to two rows: the shop is
+    // POST /shops or PATCH /shops/me, and the phone is PATCH /users/me on
+    // `app_user`. `description` and `phone` are sent as `undefined` when empty
+    // rather than as null — the DTOs read an omitted key as "leave it alone"
+    // and answer 400 to an explicit null.
+    try {
+      const payload = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        categoryIds,
+      };
+
+      if (mode === 'create') {
+        await createShop(payload, token);
+      } else {
+        await updateShop(payload, token);
+      }
+
+      if (trimmedPhone) {
+        await updateMe({ phone: trimmedPhone }, token);
+      }
+
+      refresh();
+      // Editing closes back to the read-only card; the refreshed profile and
+      // shop then arrive as props. Creating has nothing to close — the page
+      // swaps to the shop card on its own once `refresh()` lands.
+      if (mode === 'edit') onCancel?.();
+    } catch (cause) {
+      setNotice(
+        cause instanceof ApiError
+          ? cause.message
+          : 'เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -371,18 +436,25 @@ function ShopForm({
       </label>
 
       <div>
-        <MultiSelectMenu
-          label="สินค้าที่ขาย"
-          placeholder="เลือกหมวดสินค้า"
-          value={categoryIds}
-          onChange={(value) => {
-            setCategoryIds(value);
-            if (value.length > 0) setCategoryError(null);
-          }}
-          options={MOCK_CATEGORY_OPTIONS}
-          invalid={Boolean(categoryError)}
-          describedBy={categoryError ? 'shop-categories-error' : undefined}
-        />
+        {/* MultiSelectMenu has no `disabled` prop, so while the options are
+            still loading the trigger is made inert here instead — opening an
+            empty picker would read as "there are no categories". */}
+        <div className={optionsLoading ? 'pointer-events-none opacity-60' : ''}>
+          <MultiSelectMenu
+            label="สินค้าที่ขาย"
+            placeholder={
+              optionsLoading ? 'กำลังโหลดหมวดสินค้า…' : 'เลือกหมวดสินค้า'
+            }
+            value={categoryIds}
+            onChange={(value) => {
+              setCategoryIds(value);
+              if (value.length > 0) setCategoryError(null);
+            }}
+            options={options}
+            invalid={Boolean(categoryError)}
+            describedBy={categoryError ? 'shop-categories-error' : undefined}
+          />
+        </div>
         {categoryError && (
           <p
             id="shop-categories-error"
@@ -390,6 +462,11 @@ function ShopForm({
             className="mt-2 text-sm text-danger"
           >
             {categoryError}
+          </p>
+        )}
+        {optionsError && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {optionsError}
           </p>
         )}
       </div>
@@ -401,9 +478,22 @@ function ShopForm({
           inputMode="tel"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
-          placeholder="08X-XXX-XXXX"
-          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm outline-none"
+          aria-invalid={phoneError ? true : undefined}
+          aria-describedby={phoneError ? 'shop-phone-error' : undefined}
+          placeholder="0812345678"
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none ${
+            phoneError ? 'border-danger' : 'border-line'
+          }`}
         />
+        {phoneError && (
+          <span
+            id="shop-phone-error"
+            role="alert"
+            className="mt-2 block text-sm text-danger"
+          >
+            {phoneError}
+          </span>
+        )}
       </label>
 
       <label className="block">
@@ -423,8 +513,8 @@ function ShopForm({
 
       {notice && (
         <p
-          role="status"
-          className="rounded-2xl bg-[#FFF7E6] px-4 py-3 text-sm text-[#8a5a00]"
+          role="alert"
+          className="rounded-2xl border border-[#f1c6d0] bg-[#fff4f6] px-4 py-3 text-sm text-danger"
         >
           {notice}
         </p>
@@ -433,15 +523,21 @@ function ShopForm({
       <div className="flex flex-wrap gap-3">
         <button
           type="submit"
-          className="rounded-xl bg-violet px-5 py-3 font-bold text-white"
+          disabled={isSubmitting || optionsLoading}
+          className="rounded-xl bg-violet px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {mode === 'create' ? 'สร้างร้านค้า' : 'บันทึกข้อมูล'}
+          {isSubmitting
+            ? 'กำลังบันทึก…'
+            : mode === 'create'
+              ? 'สร้างร้านค้า'
+              : 'บันทึกข้อมูล'}
         </button>
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-line px-5 py-3 font-bold text-ink"
+            disabled={isSubmitting}
+            className="rounded-xl border border-line px-5 py-3 font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
           >
             ยกเลิก
           </button>
