@@ -13,6 +13,8 @@ import { ZonesModule } from './zones/zones.module';
 import { EventsModule } from './events/events.module';
 import { BoothsModule } from './booths/booths.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { ShopsModule } from './shops/shops.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { BookingsModule } from './bookings/bookings.module';
     EventsModule,
     BoothsModule,
     BookingsModule,
+    ShopsModule,
+    CategoriesModule,
   ],
 })
 export class AppModule {}
