@@ -195,7 +195,7 @@ export default function DiscoveryPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base outline-none placeholder:text-muted"
+              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
               placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
             />
             <button

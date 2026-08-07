@@ -336,7 +336,7 @@ export function MyBookingsScreen() {
                             }))
                           }
                           rows={2}
-                          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm outline-none"
+                          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
                           placeholder="ระบุเหตุผลก่อนยกเลิกการจอง"
                         />
                       </label>

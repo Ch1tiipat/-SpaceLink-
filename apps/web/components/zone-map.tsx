@@ -325,7 +325,7 @@ function OverviewZone({
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') onFocusZone(zone.id);
       }}
-      className="cursor-pointer outline-none"
+      className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
     >
       <title>
         {`${zone.name ?? `โซน ${zone.code}`} รองรับ ${
@@ -548,7 +548,7 @@ function FocusedZone({
                 ? undefined
                 : unavailable
                   ? 'cursor-not-allowed'
-                  : 'cursor-pointer outline-none'
+                  : 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2'
             }
           >
             <title>
