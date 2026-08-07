@@ -81,6 +81,35 @@ export type VendorShop = {
   categories: { id: string; name: string }[];
 };
 
+/**
+ * `logoUrl` is accepted by CreateShopDto but nothing in the profile form sets
+ * it — uploads land in a later ticket — so it is deliberately absent here.
+ */
+export type CreateShopInput = {
+  name: string;
+  description?: string;
+  categoryIds: string[];
+};
+
+/**
+ * Every field optional, mirroring UpdateShopDto. An omitted key means "leave it
+ * alone"; the backend rejects an explicit `null` with 400, so never send one —
+ * `JSON.stringify` already drops `undefined` values from the body.
+ */
+export type UpdateShopInput = Partial<CreateShopInput>;
+
+export type ProductCategory = {
+  id: string;
+  name: string;
+};
+
+export type UpdateMeInput = {
+  phone?: string;
+};
+
+/** What PATCH /users/me returns — CurrentUser without the `shops` field. */
+export type UserProfile = Omit<CurrentUser, 'shops'>;
+
 export type ZoneRecommendation = {
   boothId: string;
   score: number;
@@ -346,6 +375,56 @@ export function getMe(
   signal?: AbortSignal,
 ): Promise<CurrentUser> {
   return getJson<CurrentUser>('/auth/me', { signal, token });
+}
+
+export function createShop(
+  input: CreateShopInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<VendorShop> {
+  return postJson<VendorShop>(
+    '/shops',
+    input,
+    { signal, token },
+    'สร้างร้านค้าไม่สำเร็จ',
+  );
+}
+
+/**
+ * `/shops/me` takes no id — the API resolves the shop from the token, so a
+ * vendor cannot address anyone else's row.
+ */
+export function updateShop(
+  input: UpdateShopInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<VendorShop> {
+  return patchJson<VendorShop>(
+    '/shops/me',
+    input,
+    { signal, token },
+    'บันทึกข้อมูลร้านค้าไม่สำเร็จ',
+  );
+}
+
+/** Public reference data — GET /categories has no guard, so no token. */
+export function getCategories(
+  signal?: AbortSignal,
+): Promise<ProductCategory[]> {
+  return getJson<ProductCategory[]>('/categories', { signal });
+}
+
+export function updateMe(
+  input: UpdateMeInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<UserProfile> {
+  return patchJson<UserProfile>(
+    '/users/me',
+    input,
+    { signal, token },
+    'บันทึกข้อมูลส่วนตัวไม่สำเร็จ',
+  );
 }
 
 export function getZoneRecommendations(
