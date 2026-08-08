@@ -1,18 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBoothDto } from './dto/create-booth.dto';
+import { UpdateBoothDto } from './dto/update-booth.dto';
 import { BoothsService } from './booths.service';
 
 const findMany = jest.fn();
 const create = jest.fn();
+const update = jest.fn();
+const deleteBooth = jest.fn();
 const mockPrismaService = {
   booth: {
     findMany,
     create,
+    update,
+    delete: deleteBooth,
   },
 };
 
 const zoneId = '00000000-0000-4000-8000-000000000001';
+const orgId = '00000000-0000-4000-8000-0000000000a1';
+const boothId = '00000000-0000-4000-8000-0000000000b1';
 const booths = [{ id: 'booth-1', zoneId }];
 
 describe('BoothsService', () => {
@@ -68,6 +75,34 @@ describe('BoothsService', () => {
     await expect(service.create(zoneId, dto)).resolves.toEqual(created);
     expect(create).toHaveBeenCalledWith({
       data: { code: 'A01', boothPrice: '1500.00', zoneId },
+    });
+  });
+
+  /*
+   * §14.2: every org-scoped query names the org relation explicitly, so a booth
+   * in another organization cannot be reached through these routes. One
+   * relation level deeper than the zone case — booth -> zone -> venue ->
+   * organization.
+   */
+  it('scopes the update to the caller organization', async () => {
+    const dto: UpdateBoothDto = { boothPrice: '2000.00' };
+    const updated = { id: boothId, zoneId, boothPrice: '2000.00' };
+    update.mockResolvedValue(updated);
+
+    await expect(service.update(boothId, dto, orgId)).resolves.toEqual(updated);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: boothId, zone: { venue: { organizationId: orgId } } },
+      data: dto,
+    });
+  });
+
+  it('scopes the delete to the caller organization', async () => {
+    const removed = { id: boothId, zoneId };
+    deleteBooth.mockResolvedValue(removed);
+
+    await expect(service.remove(boothId, orgId)).resolves.toEqual(removed);
+    expect(deleteBooth).toHaveBeenCalledWith({
+      where: { id: boothId, zone: { venue: { organizationId: orgId } } },
     });
   });
 });

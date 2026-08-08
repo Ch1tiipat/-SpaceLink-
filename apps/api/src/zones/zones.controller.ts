@@ -14,6 +14,7 @@ import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { BoothsService } from '../booths/booths.service';
 import { CreateBoothDto } from '../booths/dto/create-booth.dto';
+import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { FindAllZonesDto } from './dto/find-all-zones.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
@@ -51,16 +52,17 @@ export class ZonesController {
   update(
     @Param('zoneId') zoneId: string,
     @Body() updateZoneDto: UpdateZoneDto,
+    @CurrentOrgId() orgId: string,
   ) {
-    return this.zonesService.update(zoneId, updateZoneDto);
+    return this.zonesService.update(zoneId, updateZoneDto, orgId);
   }
 
   @Delete(':zoneId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
   @OrgScoped('zoneId')
-  remove(@Param('zoneId') zoneId: string) {
-    return this.zonesService.remove(zoneId);
+  remove(@Param('zoneId') zoneId: string, @CurrentOrgId() orgId: string) {
+    return this.zonesService.remove(zoneId, orgId);
   }
 
   /**

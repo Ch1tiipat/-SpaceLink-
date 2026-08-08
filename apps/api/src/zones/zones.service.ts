@@ -35,16 +35,27 @@ export class ZonesService {
     });
   }
 
-  update(id: string, updateZoneDto: UpdateZoneDto) {
+  /**
+   * `orgId` is the id OrgScopeGuard resolved and verified, taken from the
+   * request by `@CurrentOrgId()` — never from the client (§14.2).
+   *
+   * The guard has already checked membership, so the filter here is defence in
+   * depth rather than the only check: it keeps the promise in §14.2 that every
+   * org-scoped query names the org relation explicitly. A row in another
+   * organization simply does not match, Prisma raises P2025, and
+   * PrismaExceptionFilter turns that into the same 404 'Resource not found'
+   * the guard would have given — so there is nothing to catch here.
+   */
+  update(id: string, updateZoneDto: UpdateZoneDto, orgId: string) {
     return this.prisma.zone.update({
-      where: { id },
+      where: { id, venue: { organizationId: orgId } },
       data: updateZoneDto,
     });
   }
 
-  remove(id: string) {
+  remove(id: string, orgId: string) {
     return this.prisma.zone.delete({
-      where: { id },
+      where: { id, venue: { organizationId: orgId } },
     });
   }
 }

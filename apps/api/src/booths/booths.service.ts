@@ -35,16 +35,25 @@ export class BoothsService {
     });
   }
 
-  update(id: string, updateBoothDto: UpdateBoothDto) {
+  /**
+   * `orgId` is the id OrgScopeGuard resolved and verified, taken from the
+   * request by `@CurrentOrgId()` — never from the client (§14.2). One relation
+   * level deeper than the zone case: booth -> zone -> venue -> organization.
+   *
+   * See ZonesService.update for why no error handling belongs here — a row in
+   * another organization does not match, and PrismaExceptionFilter turns the
+   * resulting P2025 into the same 404 the guard would have given.
+   */
+  update(id: string, updateBoothDto: UpdateBoothDto, orgId: string) {
     return this.prisma.booth.update({
-      where: { id },
+      where: { id, zone: { venue: { organizationId: orgId } } },
       data: updateBoothDto,
     });
   }
 
-  remove(id: string) {
+  remove(id: string, orgId: string) {
     return this.prisma.booth.delete({
-      where: { id },
+      where: { id, zone: { venue: { organizationId: orgId } } },
     });
   }
 }
