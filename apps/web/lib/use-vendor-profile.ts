@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getMe, type CurrentUser, type VendorShop } from '@/lib/api';
+import { ApiError, getMe, type CurrentUser, type VendorShop } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 /**
@@ -48,6 +48,13 @@ export type VendorProfileState =
  * because it only decorates a header; a page whose entire content is the
  * profile must say that it could not be read instead of implying nobody is
  * signed in.
+ *
+ * **A 401 is the one exception.** That reasoning covers a cold API or an
+ * unreachable one — cases where the profile might exist and could not be
+ * fetched. A 401 is not one of them: Supabase handed us a token the API then
+ * refused, which means the session has expired, and "could not be read" would
+ * leave the vendor staring at an error next to a sign-in link they were never
+ * pointed at. That case resolves to `signed-out`.
  */
 export function useVendorProfile(): {
   state: VendorProfileState;
@@ -101,6 +108,13 @@ export function useVendorProfile(): {
           return;
         }
         if (active) {
+          // An expired session still yields an access token from
+          // `getSession()`, so this is where it surfaces — as the API refusing
+          // that token, not as a missing one.
+          if (cause instanceof ApiError && cause.status === 401) {
+            setState({ status: 'signed-out' });
+            return;
+          }
           setState({
             status: 'error',
             message:
@@ -114,7 +128,18 @@ export function useVendorProfile(): {
 
     void supabase.auth
       .getSession()
-      .then(({ data }) => resolve(data.session?.access_token));
+      .then(({ data }) => resolve(data.session?.access_token))
+      .catch(() => {
+        // `getSession()` itself rejecting — corrupted session storage is the
+        // usual cause. `resolve` never runs in that case, so without this the
+        // page holds its skeleton for good and the rejection goes unhandled.
+        if (active) {
+          setState({
+            status: 'error',
+            message: 'ไม่สามารถอ่านข้อมูลร้านค้าได้',
+          });
+        }
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (event, session) => {
