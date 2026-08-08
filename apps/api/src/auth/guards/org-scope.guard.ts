@@ -158,6 +158,13 @@ export class OrgScopeGuard implements CanActivate {
         });
         return this.orFail(booth?.zone.venue.organizationId);
       }
+      case 'bookingId': {
+        const booking = await this.prisma.booking.findUnique({
+          where: { id },
+          select: { event: { select: { organizationId: true } } },
+        });
+        return this.orFail(booking?.event.organizationId);
+      }
     }
   }
 
