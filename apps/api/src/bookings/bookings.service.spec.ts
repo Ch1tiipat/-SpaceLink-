@@ -10,6 +10,7 @@ import {
   EventStatus,
   Prisma,
   SlipStatus,
+  UserRole,
   type Booking,
 } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -21,6 +22,7 @@ import {
 } from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -30,6 +32,8 @@ const VENDOR_ID = '44444444-4444-4444-8444-444444444444';
 const VENUE_ID = '55555555-5555-4555-8555-555555555555';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
 const BOOKING_ID = '77777777-7777-4777-8777-777777777777';
+const ADMIN_ID = '99999999-9999-4999-8999-999999999999';
+const BOOKING_CODE = 'BK-0123456789AB';
 const EVENT_START = new Date('2026-09-10T00:00:00.000Z');
 const EVENT_END = new Date('2026-09-12T00:00:00.000Z');
 const NOW = new Date('2026-08-02T00:00:00.000Z');
@@ -48,6 +52,9 @@ const CREATE_DTO: CreateBookingDto = {
 };
 const CANCEL_DTO: CancelBookingDto = {
   cancelReason: 'ไม่สามารถเข้าร่วมงานได้',
+};
+const EXEMPT_DTO: ConfirmExemptBookingDto = {
+  paymentExemptReason: 'ผู้ขายชำระเงินสดหน้างานแล้ว',
 };
 
 const CREATED_BOOKING: Booking = {
@@ -805,6 +812,173 @@ describe('BookingsService', () => {
         shop: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  describe('findOne', () => {
+    it('reads a booking filtered by the organization the guard resolved', async () => {
+      bookingFindFirst.mockResolvedValue(CREATED_BOOKING);
+
+      const result = await service.findOne(BOOKING_ID, ORGANIZATION_ID);
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          event: { organizationId: ORGANIZATION_ID },
+        },
+      });
+      expect(result.id).toBe(BOOKING_ID);
+      // Money crosses the boundary as a string, never a Decimal or a float (§6.1).
+      expect(result.boothPrice).toBe('1500');
+    });
+
+    it('returns 404 rather than null for a missing booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findOne(BOOKING_ID, ORGANIZATION_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('findByCode', () => {
+    const ORG_ADMIN = { id: ADMIN_ID, role: UserRole.ORG_ADMIN };
+    const SUPER_ADMIN = { id: ADMIN_ID, role: UserRole.SUPER_ADMIN };
+
+    it('filters an ORG_ADMIN lookup by their own memberships', async () => {
+      bookingFindFirst.mockResolvedValue(CREATED_BOOKING);
+
+      const result = await service.findByCode(BOOKING_CODE, ORG_ADMIN);
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: {
+          bookingCode: BOOKING_CODE,
+          event: {
+            organization: { memberships: { some: { userId: ADMIN_ID } } },
+          },
+        },
+      });
+      expect(result.bookingCode).toBe(BOOKING_CODE);
+      expect(result.boothPrice).toBe('1500');
+    });
+
+    it('does not filter a SUPER_ADMIN lookup', async () => {
+      bookingFindFirst.mockResolvedValue(CREATED_BOOKING);
+
+      await service.findByCode(BOOKING_CODE, SUPER_ADMIN);
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: { bookingCode: BOOKING_CODE },
+      });
+    });
+
+    // A code in another organization and a code that does not exist are the same
+    // 404 — the code is short and guessable, so the two must not be told apart.
+    it('returns 404 for an unknown or out-of-organization code', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findByCode(BOOKING_CODE, ORG_ADMIN),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('confirmExempt', () => {
+    beforeEach(() => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+      });
+      bookingFindUnique.mockResolvedValue({
+        ...CREATED_BOOKING,
+        status: BookingStatus.CONFIRMED,
+        isPaymentExempt: true,
+        paymentExemptReason: EXEMPT_DTO.paymentExemptReason,
+        confirmedAt: NOW,
+      });
+    });
+
+    it('confirms a pending booking as payment-exempt', async () => {
+      const result = await service.confirmExempt(
+        BOOKING_ID,
+        EXEMPT_DTO,
+        ORGANIZATION_ID,
+      );
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          event: { organizationId: ORGANIZATION_ID },
+        },
+        select: { id: true, status: true },
+      });
+      // The status sits in the `where`, not only in the guard above it: the
+      // hold-expiry cron can cancel this row between the read and the write.
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          event: { organizationId: ORGANIZATION_ID },
+          status: BookingStatus.PENDING_PAYMENT,
+        },
+        data: {
+          isPaymentExempt: true,
+          paymentExemptReason: EXEMPT_DTO.paymentExemptReason,
+          status: BookingStatus.CONFIRMED,
+          confirmedAt: NOW,
+        },
+      });
+      expect(result.status).toBe(BookingStatus.CONFIRMED);
+      expect(result.isPaymentExempt).toBe(true);
+      expect(result.paymentExemptReason).toBe(EXEMPT_DTO.paymentExemptReason);
+      expect(result.boothPrice).toBe('1500');
+    });
+
+    // The hold having lapsed is not a reason to refuse: rescuing a booking the
+    // cron has not swept yet is what this method is for.
+    it('confirms a pending booking whose hold has already expired', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+        holdExpiresAt: new Date('2026-08-01T00:00:00.000Z'),
+      });
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).resolves.toMatchObject({ status: BookingStatus.CONFIRMED });
+    });
+
+    it('returns 404 for a missing or out-of-organization booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      BookingStatus.CONFIRMED,
+      BookingStatus.CANCELLED,
+      BookingStatus.NO_SHOW,
+      BookingStatus.COMPLETED,
+    ])('rejects a booking in %s status', async (status) => {
+      bookingFindFirst.mockResolvedValue({ id: BOOKING_ID, status });
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).rejects.toThrow(
+        'ยืนยันการจองนี้ไม่ได้ เนื่องจากไม่ได้อยู่ในสถานะรอชำระเงิน',
+      );
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a confirmation race without reading the booking back', async () => {
+      bookingUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+      expect(bookingFindUnique).not.toHaveBeenCalled();
     });
   });
 });

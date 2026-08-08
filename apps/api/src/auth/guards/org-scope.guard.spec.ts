@@ -16,6 +16,7 @@ const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
 const VENUE_ID = '33333333-3333-4333-8333-333333333333';
 const EVENT_ID = '44444444-4444-4444-8444-444444444444';
 const ZONE_ID = '55555555-5555-4555-8555-555555555555';
+const BOOKING_ID = '66666666-6666-4666-8666-666666666666';
 
 /**
  * A real controller carrying real decorators, read back through a real
@@ -46,6 +47,11 @@ class TestController {
 
   @OrgScope('boothId')
   byBooth(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
+  @OrgScope('bookingId')
+  byBooking(this: void) {
     // Route target; the guard only ever reads its metadata.
   }
 
@@ -82,6 +88,7 @@ describe('OrgScopeGuard', () => {
     event: { findUnique: jest.Mock };
     zone: { findUnique: jest.Mock };
     booth: { findUnique: jest.Mock };
+    booking: { findUnique: jest.Mock };
     orgMembership: { findUnique: jest.Mock };
   };
   let guard: OrgScopeGuard;
@@ -93,6 +100,7 @@ describe('OrgScopeGuard', () => {
       event: { findUnique: jest.fn() },
       zone: { findUnique: jest.fn() },
       booth: { findUnique: jest.fn() },
+      booking: { findUnique: jest.fn() },
       orgMembership: { findUnique: jest.fn() },
     };
     guard = new OrgScopeGuard(
@@ -382,5 +390,76 @@ describe('OrgScopeGuard', () => {
       },
     });
     expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('resolves a booking through event -> organization', async () => {
+    prisma.booking.findUnique.mockResolvedValue({
+      event: { organizationId: ORG_ID },
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { bookingId: BOOKING_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byBooking, request),
+      ),
+    ).resolves.toBe(true);
+
+    // Event carries organizationId directly, so the chain is one hop and does
+    // not fall back to a second query against `event`.
+    expect(prisma.booking.findUnique).toHaveBeenCalledWith({
+      where: { id: BOOKING_ID },
+      select: { event: { select: { organizationId: true } } },
+    });
+    expect(prisma.booking.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('answers 404 for a booking owned by another organization', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    prisma.booking.findUnique.mockResolvedValue({
+      event: { organizationId: ORG_ID },
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { bookingId: BOOKING_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    const error: unknown = await guard
+      .canActivate(createContext(TestController.prototype.byBooking, request))
+      .catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    // Byte-identical to the unknown-booking response below (§14.1).
+    expect((error as NotFoundException).getResponse()).toEqual({
+      statusCode: 404,
+      message: 'Resource not found',
+      error: 'Not Found',
+    });
+    expect(request.organizationId).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it('rejects an unknown booking before checking membership', async () => {
+    prisma.booking.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { bookingId: BOOKING_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byBooking, request),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
   });
 });

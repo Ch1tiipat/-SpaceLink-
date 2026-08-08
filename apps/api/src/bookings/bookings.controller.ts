@@ -12,8 +12,10 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole, type User } from '@prisma/client';
+import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
@@ -22,6 +24,7 @@ import {
 } from './booking-slip-storage.service';
 import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 export const PAYMENT_SLIP_UPLOAD_LIMITS = {
@@ -80,8 +83,55 @@ export class BookingsController {
     return this.bookingsService.findAll(currentUser.id);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.bookingsService.findOne(id);
+  /**
+   * Admin lookup by the code a vendor is actually shown. Declared before the
+   * `:bookingId` route so the two never compete for a match.
+   *
+   * This is the one org-scoped route here that cannot use `@OrgScoped`:
+   * OrgScopeGuard rejects any route param that is not a UUID, and a booking code
+   * is not one. The ownership check therefore lives in the service, which §14.2
+   * requires for `bookingCode` lookups regardless of how they are guarded.
+   */
+  @Get('by-code/:bookingCode')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  findByCode(
+    @Param('bookingCode') bookingCode: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.findByCode(bookingCode, currentUser);
+  }
+
+  // The two admin routes below are org-scoped. Their effective guard chain is
+  // [SupabaseAuthGuard, RolesGuard, SupabaseAuthGuard, OrgScopeGuard]: Nest runs
+  // controller-level guards before route-level ones, and `@OrgScoped` bundles its
+  // own SupabaseAuthGuard alongside OrgScopeGuard. That guard therefore runs
+  // twice on these two routes, costing one extra token verification and one
+  // idempotent `findOrCreate`. Accepted rather than fixed — the alternatives are
+  // splitting `@OrgScoped` into `@OrgScope` + `@UseGuards`, which AGENTS.md
+  // forbids outright, or dropping the class-level guards, which would touch every
+  // other route in this controller.
+  @Patch(':bookingId/confirm-exempt')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('bookingId')
+  confirmExempt(
+    @Param('bookingId') bookingId: string,
+    @Body() confirmExemptBookingDto: ConfirmExemptBookingDto,
+    @CurrentOrgId() orgId: string,
+  ) {
+    return this.bookingsService.confirmExempt(
+      bookingId,
+      confirmExemptBookingDto,
+      orgId,
+    );
+  }
+
+  @Get(':bookingId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('bookingId')
+  findOne(
+    @Param('bookingId') bookingId: string,
+    @CurrentOrgId() orgId: string,
+  ) {
+    return this.bookingsService.findOne(bookingId, orgId);
   }
 }
