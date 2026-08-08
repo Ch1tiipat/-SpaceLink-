@@ -1,7 +1,18 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import {
+  Accessibility,
+  CalendarDays,
+  Camera,
+  Clock3,
+  Navigation,
+  ParkingCircle,
+  ShieldCheck,
+  Utensils,
+} from 'lucide-react';
 import { getEventMap, type EventMap } from '@/lib/api';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
@@ -80,14 +91,14 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     event.organization.contactEmail;
 
   return (
-    <main className="pb-16">
+    <main className="sl-page pb-16">
       <div className="shell py-8">
-        <Link href="/" className="text-sm font-bold text-violet">
+        <Link href="/" className="sl-chip">
           ← กลับไปค้นหา Event
         </Link>
 
         <section
-          className="mt-5 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#2b1554] via-violet to-[#2b7f70] text-white shadow-soft"
+          className="relative mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_85%_10%,rgba(255,255,255,0.16),transparent_20rem),linear-gradient(135deg,#28134f,#7440de_56%,#247668)] text-white shadow-[0_28px_75px_rgba(49,27,89,0.2)]"
           style={
             event.bannerUrl
               ? {
@@ -102,7 +113,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
               กำลังเปิดให้สำรวจพื้นที่
             </span>
-            <h1 className="mt-4 text-4xl font-bold tracking-[-0.04em] sm:text-5xl">
+            <h1 className="mt-4 max-w-[18ch] text-4xl font-black tracking-[-0.05em] sm:text-5xl">
               {event.name}
             </h1>
             <p className="mt-4 text-sm leading-7 text-white/85 sm:text-base">
@@ -113,13 +124,13 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
                 href={`/events/${event.id}/book`}
-                className="inline-flex rounded-xl bg-white px-5 py-3 font-bold text-violet shadow-lg"
+                className="inline-flex min-h-11 items-center rounded-2xl bg-white px-5 py-3 font-extrabold text-violet shadow-lg transition hover:-translate-y-0.5"
               >
                 เลือกบูธและจองพื้นที่ →
               </Link>
               <Link
                 href={`/events/${event.id}/map`}
-                className="inline-flex rounded-xl border border-white/40 bg-white/10 px-5 py-3 font-bold text-white backdrop-blur"
+                className="inline-flex min-h-11 items-center rounded-2xl border border-white/35 bg-white/10 px-5 py-3 font-extrabold text-white backdrop-blur transition hover:bg-white/15"
               >
                 ดู Zone Map แบบอ่านอย่างเดียว
               </Link>
@@ -128,7 +139,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         </section>
 
         <div className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_330px]">
-          <section className="rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-8">
+          <section className="sl-surface p-6 sm:p-8">
             <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
               Event overview
             </span>
@@ -137,6 +148,68 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               {event.description ??
                 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <EventFeature
+                icon={CalendarDays}
+                title="วันและเวลาเปิดงาน"
+                detail={`${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))} · ${event.startTime ?? '08:00'}–${event.endTime ?? '21:00'} น.`}
+              />
+              <EventFeature
+                icon={Utensils}
+                title="กิจกรรมภายในงาน"
+                detail="สินค้าเกษตร อาหาร ผ้าไหม OTOP นวัตกรรม และเวิร์กช็อปจากชุมชน"
+              />
+              <EventFeature
+                icon={ParkingCircle}
+                title="ที่จอดรถและจุดรับส่ง"
+                detail="มีพื้นที่จอดรถสำหรับผู้เข้าชม จุดรับส่ง และทางเดินเชื่อมเข้าสู่หน้างาน"
+              />
+              <EventFeature
+                icon={Accessibility}
+                title="สิ่งอำนวยความสะดวก"
+                detail="ห้องน้ำ จุดปฐมพยาบาล จุดประชาสัมพันธ์ และเส้นทางสำหรับผู้ใช้รถเข็น"
+              />
+            </div>
+
+            <div className="mt-9 border-t border-line pt-8">
+              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
+                <Camera className="h-4 w-4" aria-hidden /> Event atmosphere
+              </span>
+              <h2 className="mt-2 text-xl font-bold">บรรยากาศภายในงาน</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                ดูรูปแบบพื้นที่ ผู้เข้าชม และประเภทสินค้าภายในงานก่อนตัดสินใจเลือกตำแหน่งบูธ
+              </p>
+              <div className="mt-5 grid h-[420px] gap-3 overflow-hidden rounded-[26px] sm:grid-cols-[1.45fr_.8fr] sm:grid-rows-2">
+                <div className="relative overflow-hidden rounded-[22px] sm:row-span-2">
+                  <Image
+                    src="/event-atmosphere-sut-2569.png"
+                    alt="บรรยากาศผู้เข้าชมและร้านค้าภายในงานเกษตร มทส."
+                    fill
+                    sizes="(max-width: 640px) 100vw, 55vw"
+                    className="object-cover"
+                  />
+                </div>
+                <div className="relative hidden overflow-hidden rounded-[22px] sm:block">
+                  <Image
+                    src="/event-atmosphere-sut-2569.png"
+                    alt="บรรยากาศร้านสินค้าเกษตรและอาหาร"
+                    fill
+                    sizes="30vw"
+                    className="scale-125 object-cover object-right"
+                  />
+                </div>
+                <div className="relative hidden overflow-hidden rounded-[22px] sm:block">
+                  <Image
+                    src="/hero-spacelink.png"
+                    alt="พื้นที่บูธและทางเดินภายในงาน"
+                    fill
+                    sizes="30vw"
+                    className="object-cover object-center"
+                  />
+                </div>
+              </div>
+            </div>
 
             <h2 className="mt-9 text-xl font-bold">โซนและพื้นที่ว่าง</h2>
             <p className="mt-2 text-sm text-muted">
@@ -151,7 +224,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                 return (
                   <div
                     key={zone.id}
-                    className="rounded-2xl border border-violet/15 bg-mist p-4"
+                    className="sl-soft-surface p-4 transition hover:border-violet/25 hover:shadow-sm"
                   >
                     <p className="text-xs font-bold text-violet">{zone.code}</p>
                     <h3 className="mt-1 font-bold">
@@ -167,13 +240,13 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
             <Link
               href={`/events/${event.id}/map`}
-              className="mt-6 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white"
+              className="sl-action-primary mt-6"
             >
               เปิดแผนผังโซน
             </Link>
           </section>
 
-          <aside className="rounded-[28px] border border-line bg-white p-6 shadow-soft">
+          <aside className="sl-surface p-6 lg:sticky lg:top-[96px]">
             <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
               Quick info
             </span>
@@ -203,8 +276,77 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             )}
           </aside>
         </div>
+
+        <section className="sl-surface mt-7 overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-6 sm:px-8">
+            <div>
+              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
+                <Navigation className="h-4 w-4" aria-hidden /> Arrival guide
+              </span>
+              <h2 className="mt-2 text-2xl font-black">แผนที่การเดินทางและทางเข้างาน</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                เส้นทางจากประตูมหาวิทยาลัยไปยังจุดลงทะเบียน ที่จอดรถ และทางเข้าสำหรับผู้เข้าชม
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#effaf6] px-3 py-2 text-xs font-bold text-emerald">
+              <ShieldCheck className="h-4 w-4" aria-hidden /> ภาพเส้นทางจากผู้จัดงาน
+            </span>
+          </div>
+          <div className="relative aspect-[16/9] overflow-hidden border-t border-line bg-[#eef5e7]">
+            <Image
+              src="/event-travel-map-sut-2569.png"
+              alt="แผนที่เส้นทางจากประตูมหาวิทยาลัยไปยังทางเข้าและที่จอดรถของงาน"
+              fill
+              sizes="(max-width: 1024px) 100vw, 1200px"
+              className="object-cover"
+            />
+          </div>
+          <div className="grid gap-3 border-t border-line p-5 sm:grid-cols-3 sm:p-6">
+            <TravelStep number="01" title="เข้าทางประตูหลัก" detail="ใช้ถนนมหาวิทยาลัยและตรงไปยังวงเวียนกลาง" />
+            <TravelStep number="02" title="ตามป้ายพื้นที่จัดงาน" detail="เลี้ยวเข้าสู่ถนนด้านลานเกษตรและจุดรับส่ง" />
+            <TravelStep number="03" title="จอดรถและเดินเข้างาน" detail="จอดในพื้นที่ผู้เข้าชมแล้วเดินเข้าจุดลงทะเบียน" />
+          </div>
+        </section>
       </div>
     </main>
+  );
+}
+
+function EventFeature({
+  icon: Icon,
+  title,
+  detail,
+}: {
+  icon: typeof Clock3;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-[#faf8ff] p-4">
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-tint text-violet">
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <h3 className="mt-3 font-extrabold">{title}</h3>
+      <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
+    </div>
+  );
+}
+
+function TravelStep({
+  number,
+  title,
+  detail,
+}: {
+  number: string;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-[#faf8ff] p-4">
+      <span className="text-xs font-black text-violet">{number}</span>
+      <h3 className="mt-1 font-extrabold">{title}</h3>
+      <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
+    </div>
   );
 }
 

@@ -30,9 +30,18 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--background);
+  background:
+    radial-gradient(circle at 82% -12%, rgba(124, 58, 237, 0.08), transparent 30rem),
+    radial-gradient(circle at 18% 12%, rgba(14, 165, 233, 0.055), transparent 26rem),
+    var(--background);
   color: var(--ink);
   font-family: "IBM Plex Sans Thai", "Leelawadee UI", system-ui, -apple-system, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #ddd6fe;
+  color: #3b168f;
 }
 
 button,
@@ -52,6 +61,19 @@ select {
   outline-offset: 2px;
 }
 
+/* The home search already exposes focus on its containing surface. Removing
+   the second purple rectangle keeps the field calm without weakening the
+   global keyboard focus treatment used by buttons and links. */
+[data-search-input]:focus-visible {
+  outline: none;
+}
+
+.sl-thai-heading {
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+
 .shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
@@ -61,6 +83,132 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.8);
   background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(18px);
+}
+
+/* Shared USER surfaces. They intentionally contain presentation only: every
+   screen keeps its existing data fetching, mutations and authorization flow. */
+.sl-page {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 72px);
+  overflow: hidden;
+}
+
+.sl-page::before {
+  position: absolute;
+  z-index: -1;
+  top: -11rem;
+  right: -10rem;
+  width: 30rem;
+  height: 30rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.1), transparent 67%);
+  content: "";
+  pointer-events: none;
+}
+
+.sl-page-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.sl-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding-block: 2.25rem 1.25rem;
+}
+
+.sl-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #6d28d9;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sl-page-title {
+  margin-top: 0.45rem;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+
+.sl-page-subtitle {
+  max-width: 44rem;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.sl-surface {
+  border: 1px solid rgba(233, 230, 240, 0.92);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 50px rgba(54, 36, 91, 0.075);
+}
+
+.sl-soft-surface {
+  border: 1px solid rgba(225, 218, 240, 0.82);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(249, 247, 255, 0.92));
+}
+
+.sl-chip {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #e5def6;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.35rem 0.75rem;
+  color: #62556f;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.sl-action-primary,
+.sl-action-secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 14px;
+  padding: 0.7rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 800;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.sl-action-primary {
+  background: linear-gradient(135deg, #7c3aed, #6530d5);
+  color: white;
+  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.24);
+}
+
+.sl-action-secondary {
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+}
+
+.sl-action-primary:hover,
+.sl-action-secondary:hover {
+  transform: translateY(-1px);
+}
+
+.sl-action-primary:disabled,
+.sl-action-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 
 .skeleton {
@@ -87,10 +235,25 @@ select {
   .skeleton {
     animation: none;
   }
+
+  .sl-action-primary,
+  .sl-action-secondary {
+    transition: none;
+  }
 }
 
 @media (max-width: 720px) {
   .shell {
     width: min(100% - 20px, 1180px);
+  }
+
+  .sl-page-shell {
+    width: min(100% - 20px, 1180px);
+  }
+
+  .sl-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-block: 1.5rem 1rem;
   }
 }

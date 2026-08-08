@@ -93,14 +93,14 @@ export function ProfileShopScreen() {
   const categoriesLoading = categories === null && categoriesError === null;
 
   return (
-    <main className="pb-16">
+    <main className="sl-page pb-16">
       <div className="shell py-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
+            <span className="sl-kicker">
               Profile
             </span>
-            <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
               โปรไฟล์ของฉัน
             </h1>
             <p className="mt-2 text-muted">
@@ -112,7 +112,7 @@ export function ProfileShopScreen() {
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="mt-4 inline-flex rounded-xl border border-violet px-5 py-3 font-bold text-violet sm:mt-0"
+              className="sl-action-secondary mt-4 text-violet sm:mt-0"
             >
               แก้ไขโปรไฟล์
             </button>
@@ -127,14 +127,14 @@ export function ProfileShopScreen() {
         )}
 
         {state.status === 'signed-out' && (
-          <section className="mt-8 rounded-[28px] border border-line bg-white p-8 text-center shadow-soft">
+          <section className="sl-surface mt-8 p-8 text-center">
             <h2 className="text-xl font-bold">กรุณาเข้าสู่ระบบก่อน</h2>
             <p className="mt-2 text-muted">
               โปรไฟล์และข้อมูลร้านค้าจะแสดงเฉพาะของบัญชีผู้ขายปัจจุบัน
             </p>
             <Link
               href="/login"
-              className="mt-6 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white"
+              className="sl-action-primary mt-6"
             >
               เข้าสู่ระบบ
             </Link>
@@ -151,7 +151,7 @@ export function ProfileShopScreen() {
         )}
 
         {ready && !ready.shop && (
-          <section className="mt-8 rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-8">
+          <section className="sl-surface mt-8 p-6 sm:p-8">
             <h2 className="text-xl font-bold">เพิ่มข้อมูลร้านค้า</h2>
             <p className="mt-2 max-w-2xl text-muted">
               บัญชีนี้ยังไม่มีร้านค้า — สร้างร้านของคุณก่อนเริ่มจองบูธ
@@ -185,10 +185,14 @@ export function ProfileShopScreen() {
             )}
 
             <div className="mt-8 grid gap-[18px] lg:grid-cols-[290px_minmax(0,1fr)]">
-              <aside className="rounded-[28px] border border-line bg-white p-6 text-center shadow-soft">
+              <aside className="sl-surface relative overflow-hidden p-6 text-center">
                 <span
                   aria-hidden
-                  className="mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white"
+                  className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-violet-tint to-transparent"
+                />
+                <span
+                  aria-hidden
+                  className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
                 >
                   {[...ready.shop.name.trim()][0] ?? '?'}
                 </span>
@@ -214,7 +218,7 @@ export function ProfileShopScreen() {
                 </div>
               </aside>
 
-              <section className="rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-7">
+              <section className="sl-surface p-6 sm:p-7">
                 <h2 className="text-lg font-bold">ข้อมูลร้านค้า</h2>
 
                 {isEditing ? (

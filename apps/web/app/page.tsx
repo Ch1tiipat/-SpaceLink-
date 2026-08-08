@@ -3,7 +3,16 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, Search } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUpRight,
+  CalendarDays,
+  MapPinned,
+  Megaphone,
+  Search,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
 import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import { getEvents, type DiscoveryEvent } from '@/lib/api';
 import { useAuthState } from '@/lib/use-auth-state';
@@ -55,6 +64,7 @@ function statusLabel(status: string) {
 }
 
 export default function DiscoveryPage() {
+  const { auth } = useAuthState();
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [query, setQuery] = useState('');
   const [organizationId, setOrganizationId] = useState('');
@@ -136,12 +146,12 @@ export default function DiscoveryPage() {
   );
 
   return (
-    <main>
+    <main className="sl-page">
       {/* `.hero` from the prototype: the photo carries no information the
           heading does not already state, so it is decorative (`alt=""`) and
           the gradient over it is what keeps the text legible. */}
       <section className="shell pt-7">
-        <div className="relative flex min-h-[263px] items-end overflow-hidden rounded-[19px] p-[25px] text-white sm:min-h-[315px] sm:rounded-[26px] sm:p-[42px]">
+        <div className="relative flex min-h-[285px] items-end overflow-hidden rounded-[24px] border border-white/10 p-[25px] text-white shadow-[0_30px_80px_rgba(49,27,89,0.18)] sm:min-h-[345px] sm:rounded-[32px] sm:p-[46px]">
           <Image
             src="/hero-spacelink.png"
             alt=""
@@ -152,14 +162,14 @@ export default function DiscoveryPage() {
           />
           <div
             aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(100deg,#251149F2_0%,#4C1D95C0_100%)] sm:bg-[linear-gradient(95deg,#251149_0%,#4C1D95DD_45%,#4C1D9520_100%)]"
+            className="absolute inset-0 bg-[linear-gradient(100deg,#21103df5_0%,#4C1D95d8_52%,#4C1D9540_100%)]"
           />
 
           <div className="relative max-w-[560px]">
-            <span className="inline-flex rounded-full border border-white/30 bg-white/[0.18] px-3 py-1.5 text-xs font-bold backdrop-blur">
+            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.14] px-3.5 py-1.5 text-xs font-extrabold backdrop-blur-md">
               พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
             </span>
-            <h1 className="my-3 text-[28px] font-black leading-[1.2] tracking-[-0.9px] sm:text-[37px] sm:tracking-[-1.1px]">
+            <h1 className="my-3 max-w-[14ch] text-[31px] font-black leading-[1.15] tracking-[-1px] sm:text-[44px] sm:tracking-[-1.6px]">
               ค้นหาพื้นที่ขายที่เหมาะกับร้านคุณ
             </h1>
             <p className="text-[13px] leading-relaxed text-[#E9E2F8] sm:text-[15px]">
@@ -174,7 +184,7 @@ export default function DiscoveryPage() {
                 bypass. */}
             <a
               href={`#${EVENTS_SECTION_ID}`}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#5B21B6] shadow-lg transition hover:-translate-y-0.5"
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-extrabold text-[#5B21B6] shadow-lg transition hover:-translate-y-0.5"
             >
               Explore Event
               <ArrowDown aria-hidden className="h-4 w-4" />
@@ -186,21 +196,22 @@ export default function DiscoveryPage() {
       {/* `.search`: overlaps the hero's lower edge, as in the prototype. */}
       <section className="shell relative z-10 -mt-7">
         <form
-          className="rounded-surface border border-line bg-card p-3.5 shadow-surface"
+          className="sl-surface p-3.5"
           onSubmit={(event) => event.preventDefault()}
         >
-          <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5">
+          <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5 transition focus-within:border-[#d5cfdf] focus-within:shadow-[0_0_0_4px_rgba(96,79,122,0.05)]">
             <Search aria-hidden className="h-5 w-5 shrink-0 text-violet" />
             <span className="sr-only">ค้นหา Event</span>
             <input
+              data-search-input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
+              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base placeholder:text-muted focus:outline-none"
               placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
             />
             <button
               type="submit"
-              className="rounded-xl bg-violet px-5 py-2.5 font-bold text-white shadow-lg shadow-violet/20"
+              className="sl-action-primary min-h-11 px-5 py-2.5"
             >
               ค้นหา
             </button>
@@ -238,9 +249,78 @@ export default function DiscoveryPage() {
         </form>
       </section>
 
+      <section className="shell py-12 sm:py-14" aria-labelledby="news-heading">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <span className="sl-kicker">
+              <Megaphone className="h-4 w-4" aria-hidden />
+              Latest updates
+            </span>
+            <h2 id="news-heading" className="mt-2 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
+              ข่าวสารและงานที่เปิดล่าสุด
+            </h2>
+          </div>
+          <a href={`#${EVENTS_SECTION_ID}`} className="sl-chip">
+            ดูงานทั้งหมด
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+          </a>
+        </div>
+
+        {loading ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {[0, 1, 2].map((item) => (
+              <span key={item} className="skeleton block h-36 rounded-3xl" />
+            ))}
+          </div>
+        ) : events.length > 0 ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {events.slice(0, 3).map((event, index) => (
+              <Link
+                key={event.id}
+                href={`/events/${event.id}`}
+                className="sl-soft-surface group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
+              >
+                <span
+                  aria-hidden
+                  className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${
+                    ['bg-[#f7d9a8]', 'bg-[#ded2fb]', 'bg-[#cceae2]'][index % 3]
+                  } opacity-45 blur-2xl`}
+                />
+                <div className="relative flex items-start justify-between gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+                    <CalendarDays className="h-[18px] w-[18px]" aria-hidden />
+                  </span>
+                  <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
+                </div>
+                <p className="relative mt-4 text-xs font-bold text-violet">
+                  {event.organization.name}
+                </p>
+                <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
+                  {event.name}
+                </h3>
+                <p className="relative mt-2 text-xs text-muted">
+                  {formatDateRange(event)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="sl-soft-surface mt-6 px-5 py-8 text-center text-sm text-muted">
+            เมื่อผู้จัดเผยแพร่งานใหม่ ข่าวสารจะแสดงที่ส่วนนี้
+          </div>
+        )}
+      </section>
+
+      {auth.status === 'signed-in' && (
+        <PopularAreaRecommendations
+          eventId={events[0]?.id ?? 'demo-event'}
+          shopName={auth.fullName}
+        />
+      )}
+
       <section
         id={EVENTS_SECTION_ID}
-        className="mt-10 border-y border-[#ece8f2] bg-white/70 py-16"
+        className="border-y border-[#ece8f2] bg-white/72 py-16 backdrop-blur-sm"
       >
         <div className="shell">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -297,7 +377,7 @@ export default function DiscoveryPage() {
               {visibleEvents.map((event, index) => (
                 <article
                   key={event.id}
-                  className="group overflow-hidden rounded-[28px] border border-[#e9e5ef] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft"
+                  className="group overflow-hidden rounded-[28px] border border-[#e9e5ef] bg-white shadow-[0_12px_34px_rgba(54,36,91,0.055)] transition hover:-translate-y-1 hover:border-[#d9cdf0] hover:shadow-soft"
                 >
                   <div
                     className={[
@@ -381,15 +461,80 @@ export default function DiscoveryPage() {
         </div>
       </section>
 
-      <ClosingCta />
+      <ClosingCta auth={auth} />
 
-      <footer id="support" className="border-t border-[#e9e5ef] bg-white py-8">
-        <div className="shell flex flex-wrap items-center justify-between gap-3 text-sm text-[#7b7588]">
-          <strong className="text-ink">SpaceLink</strong>
-          <span>แพลตฟอร์มเชื่อมพื้นที่ สร้างโอกาสให้ผู้ขาย</span>
+      <footer id="support" className="border-t border-[#e9e5ef] bg-[#201b2e] py-12 text-white">
+        <div className="shell grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1.1fr]">
+          <div>
+            <div className="flex items-center gap-3 text-xl font-black">
+              <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[#a78bfa] to-[#7c3aed] text-sm shadow-[0_8px_20px_rgba(124,58,237,0.35)]">
+                SL
+              </span>
+              SpaceLink
+            </div>
+            <p className="mt-4 max-w-sm text-sm leading-7 text-white/62">
+              แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว
+            </p>
+          </div>
+
+          <FooterColumn
+            title="สำรวจแพลตฟอร์ม"
+            links={[
+              ['ค้นหา Event', '/'],
+              ['การจองของฉัน', '/bookings'],
+              ['โปรไฟล์ร้านค้า', '/profile'],
+            ]}
+          />
+          <FooterColumn
+            title="บริการช่วยเหลือ"
+            links={[
+              ['ศูนย์ช่วยเหลือ', '/help'],
+              ['การแจ้งเตือน', '/notifications'],
+              ['เข้าสู่ระบบ', '/login'],
+            ]}
+          />
+          <div>
+            <p className="text-sm font-extrabold">ติดต่อ SpaceLink</p>
+            <div className="mt-4 grid gap-2 text-sm leading-6 text-white/65">
+              <a href="tel:+6644224000" className="transition hover:text-white">
+                โทร 044-224-000
+              </a>
+              <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" className="transition hover:text-white">
+                LINE Official
+              </a>
+              <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" className="transition hover:text-white">
+                Facebook Page
+              </a>
+            </div>
+          </div>
+        </div>
+        <div className="shell mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
+          <span>ความเป็นส่วนตัว · เงื่อนไขการใช้งาน · การเข้าถึงสำหรับทุกคน</span>
         </div>
       </footer>
     </main>
+  );
+}
+
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: readonly (readonly [string, string])[];
+}) {
+  return (
+    <div>
+      <p className="text-sm font-extrabold">{title}</p>
+      <nav className="mt-4 grid gap-2 text-sm text-white/65" aria-label={title}>
+        {links.map(([label, href]) => (
+          <Link key={href + label} href={href} className="transition hover:text-white">
+            {label}
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }
 
@@ -422,13 +567,12 @@ function withAllOption(
  * name in the topbar. Signed in, it points at what they can actually do next
  * instead — browse the open events, or open their bookings.
  */
-function ClosingCta() {
-  const { auth } = useAuthState();
+function ClosingCta({ auth }: { auth: ReturnType<typeof useAuthState>['auth'] }) {
   const signedIn = auth.status === 'signed-in';
 
   return (
     <section className="shell pb-16">
-      <div className="rounded-[32px] border border-[#e7e2ed] bg-white px-8 py-12 text-center shadow-soft sm:px-14">
+      <div className="relative overflow-hidden rounded-[32px] border border-[#e7e2ed] bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.12),transparent_22rem),#fff] px-8 py-12 text-center shadow-soft sm:px-14">
         <h2 className="text-3xl font-black tracking-[-0.04em]">
           พร้อมจองบูธในงานถัดไปแล้วหรือยัง
         </h2>
@@ -478,6 +622,93 @@ function ClosingCta() {
               </Link>
             </>
           )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PopularAreaRecommendations({
+  eventId,
+  shopName,
+}: {
+  eventId: string;
+  shopName: string;
+}) {
+  const recommendations = [
+    {
+      zone: 'โซน A · อาหาร',
+      booth: 'A01–A04',
+      title: 'ใกล้ทางเข้าและจุดลงทะเบียน',
+      reason: 'ลูกค้าเห็นร้านได้ตั้งแต่เข้าพื้นที่ เหมาะกับอาหารและเครื่องดื่มที่ตัดสินใจซื้อเร็ว',
+      score: 'นิยม 96%',
+      tone: 'from-[#fff2d8] to-[#fffaf0]',
+    },
+    {
+      zone: 'โซน B · เครื่องดื่ม',
+      booth: 'B03–B06',
+      title: 'ติดทางเดินหลักระหว่างโซน',
+      reason: 'เป็นเส้นทางเชื่อมกลางงาน มีผู้เข้าชมเดินผ่านซ้ำ เหมาะกับร้านคาเฟ่และของหวาน',
+      score: 'นิยม 92%',
+      tone: 'from-[#eee8ff] to-[#faf8ff]',
+    },
+    {
+      zone: 'โซน F · กิจกรรม',
+      booth: 'F01–F04',
+      title: 'ใกล้เวิร์กช็อปและจุดพัก',
+      reason: 'ลูกค้าใช้เวลาอยู่บริเวณนี้นาน เหมาะกับสินค้าที่ต้องอธิบายหรือให้ทดลองก่อนซื้อ',
+      score: 'นิยม 87%',
+      tone: 'from-[#e7f7f1] to-[#f7fffc]',
+    },
+  ];
+
+  return (
+    <section className="shell pb-12 sm:pb-14" aria-labelledby="popular-area-heading">
+      <div className="rounded-[30px] border border-[#e3d9f2] bg-white/90 p-5 shadow-soft sm:p-7">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <span className="sl-kicker">
+              <Sparkles className="h-4 w-4" aria-hidden />
+              Recommended for your shop
+            </span>
+            <h2 id="popular-area-heading" className="mt-2 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
+              พื้นที่นิยมที่เหมาะกับ {shopName}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+              แนะนำจากประเภทร้าน ตำแหน่งทางเข้า ทางเดินหลัก และจุดที่ผู้เข้าชมมีแนวโน้มเดินผ่านบ่อย
+            </p>
+          </div>
+          <span className="sl-chip">
+            <TrendingUp className="h-4 w-4" aria-hidden />
+            จัดอันดับจากข้อมูลพื้นที่
+          </span>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {recommendations.map((item, index) => (
+            <Link
+              key={item.zone}
+              href={`/events/${eventId}/book`}
+              className={`group rounded-[24px] border border-white bg-gradient-to-br ${item.tone} p-5 shadow-[0_10px_28px_rgba(54,36,91,0.06)] transition hover:-translate-y-1 hover:border-[#d7c6f0]`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+                  <MapPinned className="h-5 w-5" aria-hidden />
+                </span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-violet shadow-sm">
+                  #{index + 1} · {item.score}
+                </span>
+              </div>
+              <p className="mt-5 text-xs font-extrabold uppercase tracking-[.1em] text-violet">
+                {item.zone} · {item.booth}
+              </p>
+              <h3 className="mt-2 text-lg font-black">{item.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">{item.reason}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-violet">
+                ดูตำแหน่งบูธ <ArrowUpRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
+              </span>
+            </Link>
+          ))}
         </div>
       </div>
     </section>

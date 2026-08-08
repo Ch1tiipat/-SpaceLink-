@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useRef, useState } from 'react';
+import { ShieldCheck, UploadCloud } from 'lucide-react';
 
 import {
   ApiError,
@@ -96,13 +97,18 @@ export function SlipUploadPanel({
   const isConfirmed = result?.booking.status === 'CONFIRMED';
 
   return (
-    <section className="rounded-3xl border border-line bg-white p-5 shadow-soft sm:p-6">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold text-ink">แนบหลักฐานการชำระเงิน</h2>
+    <section className="sl-surface p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+          <UploadCloud className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="space-y-1">
+        <h2 className="text-lg font-extrabold text-ink">แนบหลักฐานการชำระเงิน</h2>
         <p className="text-sm leading-6 text-muted">
           เลือกรูปสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB ระบบจะตรวจสอบสลิป
           โดยอัตโนมัติ
         </p>
+        </div>
       </div>
 
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
@@ -113,15 +119,17 @@ export function SlipUploadPanel({
           >
             รูปสลิปการโอนเงิน
           </label>
-          <input
-            ref={inputRef}
-            id={`slip-${bookingId}`}
-            type="file"
-            accept="image/jpeg,image/png"
-            disabled={disabled || isUploading}
-            onChange={handleFileChange}
-            className="block w-full rounded-2xl border border-line bg-mist px-4 py-3 text-sm text-ink file:mr-4 file:rounded-xl file:border-0 file:bg-[#ede7ff] file:px-4 file:py-2 file:font-medium file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
-          />
+          <div className="rounded-[20px] border border-dashed border-[#cfc3e8] bg-[#faf8ff] p-3 transition focus-within:border-violet focus-within:bg-white">
+            <input
+              ref={inputRef}
+              id={`slip-${bookingId}`}
+              type="file"
+              accept="image/jpeg,image/png"
+              disabled={disabled || isUploading}
+              onChange={handleFileChange}
+              className="block w-full text-sm text-ink file:mr-4 file:rounded-xl file:border-0 file:bg-[#ede7ff] file:px-4 file:py-2.5 file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
           {file ? (
             <p className="mt-2 text-xs text-muted">
               เลือกแล้ว: {file.name} ({formatFileSize(file.size)})
@@ -159,8 +167,9 @@ export function SlipUploadPanel({
         <button
           type="submit"
           disabled={!file || disabled || isUploading}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-violet px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#5e2fd5] focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="sl-action-primary w-full"
         >
+          <ShieldCheck className="h-4 w-4" aria-hidden />
           {isUploading ? 'กำลังอัปโหลดและตรวจสอบ…' : 'อัปโหลดสลิป'}
         </button>
       </form>

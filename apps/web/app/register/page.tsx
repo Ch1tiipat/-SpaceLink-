@@ -84,7 +84,8 @@ export default function RegisterPage() {
     >
       {step === 'email' ? (
         <form onSubmit={handleDetailsSubmit} noValidate>
-          <h1 className="text-[32px] font-black tracking-[-0.04em]">
+          <span className="sl-kicker">Create your space</span>
+          <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             สร้างบัญชีใหม่
           </h1>
           <p className="mt-3 leading-7 text-muted">
@@ -108,7 +109,7 @@ export default function RegisterPage() {
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errorId : undefined}
             onChange={(event) => setFullName(event.target.value)}
-            className="mt-2 h-[52px] w-full rounded-2xl border border-line bg-white px-4 text-ink transition-colors placeholder:text-muted/70 focus:border-violet disabled:bg-mist disabled:text-muted"
+            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
           <label
@@ -129,7 +130,7 @@ export default function RegisterPage() {
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errorId : undefined}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-2 h-[52px] w-full rounded-2xl border border-line bg-white px-4 text-ink transition-colors placeholder:text-muted/70 focus:border-violet disabled:bg-mist disabled:text-muted"
+            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
           {errorBox}
@@ -137,7 +138,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={pending}
-            className="mt-7 h-[52px] w-full rounded-full bg-violet text-base font-bold text-white shadow-lg shadow-violet/25 transition-opacity disabled:opacity-55"
+            className="sl-action-primary mt-7 h-[52px] w-full text-base disabled:opacity-55"
           >
             {pending ? 'กำลังส่งรหัส…' : 'ส่งรหัสยืนยัน'}
           </button>
@@ -160,7 +161,8 @@ export default function RegisterPage() {
           }}
           noValidate
         >
-          <h1 className="text-[32px] font-black tracking-[-0.04em]">
+          <span className="sl-kicker">Secure verification</span>
+          <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             กรอกรหัสยืนยัน
           </h1>
           <p className="mt-3 leading-7 text-muted">
@@ -185,7 +187,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={pending || code.length !== OTP_LENGTH}
-            className="mt-7 h-[52px] w-full rounded-full bg-violet text-base font-bold text-white shadow-lg shadow-violet/25 transition-opacity disabled:opacity-55"
+            className="sl-action-primary mt-7 h-[52px] w-full text-base disabled:opacity-55"
           >
             {pending ? 'กำลังสร้างบัญชี…' : 'สร้างบัญชี'}
           </button>

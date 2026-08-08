@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { CalendarCheck2, MapPinned, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 
 type AuthLayoutProps = {
   /** Small pill above the headline. */
@@ -27,7 +29,7 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-[#f8f6ff] lg:grid lg:grid-cols-[1.05fr_1fr]">
+    <div className="flex min-h-screen flex-col bg-[#f8f6ff] lg:grid lg:grid-cols-[minmax(440px,0.92fr)_minmax(540px,1.08fr)]">
       {/* Compact brand header — the panel's stand-in below `lg`. */}
       <div className="relative overflow-hidden bg-gradient-to-br from-violet via-[#6330d9] to-[#4e21bd] px-5 pb-16 pt-4 text-white lg:hidden">
         <div className="absolute -right-16 -top-12 h-48 w-48 rounded-full border-[34px] border-white/[0.07]" />
@@ -40,7 +42,7 @@ export function AuthLayout({
             <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
               {eyebrow}
             </span>
-            <h2 className="mt-4 max-w-[18ch] text-[28px] font-black leading-[1.18] tracking-[-0.04em]">
+            <h2 className="sl-thai-heading mt-4 max-w-[20ch] text-[28px] font-black leading-[1.3] tracking-[-0.025em]">
               {headline}
             </h2>
             <p className="mt-3 max-w-[42ch] text-sm leading-6 text-white/75">
@@ -54,33 +56,76 @@ export function AuthLayout({
         </div>
       </div>
 
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-violet to-[#4e21bd] px-14 py-16 text-white lg:flex lg:flex-col">
+      <aside className="relative hidden overflow-hidden bg-[radial-gradient(circle_at_15%_12%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,#7c3aed,#4e21bd)] px-[clamp(40px,5vw,76px)] py-12 text-white lg:flex lg:flex-col">
+        <span className="absolute -right-24 -top-24 h-80 w-80 rounded-full border-[55px] border-white/[0.055]" />
+        <span className="absolute -bottom-36 left-1/3 h-96 w-96 rounded-full bg-[#b44de7]/20 blur-3xl" />
         <BrandMark />
 
-        <div className="mt-auto pt-16">
+        <div className="mt-auto pt-10">
           <span className="inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/90">
             {eyebrow}
           </span>
 
-          <h2 className="mt-7 max-w-[15ch] text-[42px] font-black leading-[1.1] tracking-[-0.045em]">
+          <h2 className="sl-thai-heading mt-6 max-w-[21ch] text-[clamp(34px,3.25vw,48px)] font-black leading-[1.24] tracking-[-0.028em]">
             {headline}
           </h2>
 
-          <p className="mt-5 max-w-[42ch] text-[17px] leading-8 text-white/75">
+          <p className="mt-5 max-w-[48ch] text-[16px] leading-8 text-white/78">
             {description}
           </p>
+
+          <AuthBenefits />
         </div>
 
-        <div className="mt-14">
+        <div className="mt-9">
           <BoothGrid />
         </div>
       </aside>
 
-      <main className="relative flex flex-1 items-start justify-center px-4 pb-12 lg:items-center lg:bg-white lg:px-5 lg:py-14">
-        <div className="-mt-9 w-full max-w-[430px] rounded-[28px] border border-white/80 bg-white p-6 shadow-[0_20px_60px_rgba(67,34,139,0.14)] sm:p-8 lg:mt-0 lg:max-w-[390px] lg:rounded-none lg:border-0 lg:p-0 lg:shadow-none">
+      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 pb-12 lg:items-center lg:bg-[radial-gradient(circle_at_85%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_15%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
+        <span className="pointer-events-none absolute -bottom-40 -right-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
+        <Link
+          href="/"
+          className="absolute right-8 top-7 hidden rounded-full border border-[#e8e2f1] bg-white/85 px-4 py-2 text-sm font-bold text-[#655d70] shadow-sm transition hover:border-[#d3c6e8] hover:text-violet lg:inline-flex"
+        >
+          ← กลับหน้าแรก
+        </Link>
+        <div className="relative -mt-9 w-full max-w-[460px] rounded-[28px] border border-white/80 bg-white p-6 shadow-[0_20px_60px_rgba(67,34,139,0.14)] sm:p-8 lg:mt-0 lg:max-w-[480px] lg:rounded-[32px] lg:border lg:border-[#eee8f7] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
           {children}
+          <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+            </span>
+            <p>
+              เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
+            </p>
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function AuthBenefits() {
+  const benefits = [
+    { icon: MapPinned, label: 'เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง' },
+    { icon: CalendarCheck2, label: 'ติดตามการจองและกำหนดชำระเงินในที่เดียว' },
+    { icon: ShieldCheck, label: 'เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน' },
+  ];
+
+  return (
+    <div className="mt-7 grid gap-2.5">
+      {benefits.map(({ icon: Icon, label }) => (
+        <div
+          key={label}
+          className="flex max-w-[520px] items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white/88 backdrop-blur-sm"
+        >
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/12">
+            <Icon className="h-4 w-4" aria-hidden />
+          </span>
+          <span className="leading-6">{label}</span>
+        </div>
+      ))}
     </div>
   );
 }

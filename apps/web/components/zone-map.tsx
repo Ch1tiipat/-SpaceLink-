@@ -143,7 +143,7 @@ export function ZoneMap({
     : rows * 300 + 100;
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-line bg-white shadow-soft">
+    <div className="overflow-hidden rounded-[28px] border border-[#ded6eb] bg-white shadow-[0_20px_55px_rgba(54,36,91,0.09)]">
       <svg
         viewBox={`0 0 1000 ${viewHeight}`}
         className="block h-auto min-h-[420px] w-full"
@@ -166,7 +166,7 @@ export function ZoneMap({
           </filter>
         </defs>
 
-        <rect width="100%" height="100%" fill="#f6f3ff" />
+        <rect width="100%" height="100%" fill="#f9f7fd" />
         {mapImageUrl && (
           <image
             href={mapImageUrl}
@@ -281,7 +281,7 @@ export function ZoneMap({
  */
 function MapLegend() {
   return (
-    <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line px-5 py-3.5">
+    <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-white/95 px-5 py-4">
       {STATUS_LEGEND.map(({ key, label }) => (
         <li key={key} className="flex items-center gap-2 text-xs font-semibold text-muted">
           <span
