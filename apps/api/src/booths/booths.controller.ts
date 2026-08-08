@@ -11,6 +11,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { FindAllBoothsDto } from './dto/find-all-booths.dto';
 import { UpdateBoothDto } from './dto/update-booth.dto';
@@ -45,15 +46,16 @@ export class BoothsController {
   update(
     @Param('boothId') boothId: string,
     @Body() updateBoothDto: UpdateBoothDto,
+    @CurrentOrgId() orgId: string,
   ) {
-    return this.boothsService.update(boothId, updateBoothDto);
+    return this.boothsService.update(boothId, updateBoothDto, orgId);
   }
 
   @Delete(':boothId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
   @OrgScoped('boothId')
-  remove(@Param('boothId') boothId: string) {
-    return this.boothsService.remove(boothId);
+  remove(@Param('boothId') boothId: string, @CurrentOrgId() orgId: string) {
+    return this.boothsService.remove(boothId, orgId);
   }
 }
