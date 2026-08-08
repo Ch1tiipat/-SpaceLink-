@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { decimalString } from '../common/decimal';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ACTIVE_BOOKING_STATUSES = [
@@ -253,10 +254,6 @@ function boothAvailability(
   }
 
   return 'AVAILABLE';
-}
-
-function decimalString(value: Prisma.Decimal | null): string | null {
-  return value?.toString() ?? null;
 }
 
 function uniqueCategories<T extends { id: string }>(categories: T[]): T[] {
