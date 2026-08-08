@@ -53,6 +53,12 @@ export function ProfileShopScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [categories, setCategories] = useState<ProductCategory[] | null>(null);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  // Lives here rather than in ShopForm because the form is gone by the time it
+  // has to be read: a save that succeeds unmounts the create form and closes
+  // the edit form, taking the form's own `notice` with it. A shop that saved
+  // while its phone number did not is exactly the case the vendor must still
+  // see afterwards, so it is held one level up and rendered next to the card.
+  const [phoneSaveWarning, setPhoneSaveWarning] = useState<string | null>(null);
 
   // Narrowed once, so profile, shop and token cannot drift apart below: all
   // three come from the same `ready` branch of the same render.
@@ -158,6 +164,7 @@ export function ProfileShopScreen() {
                 shop={null}
                 token={ready.token}
                 refresh={refresh}
+                setPhoneSaveWarning={setPhoneSaveWarning}
                 options={categoryOptions}
                 optionsLoading={categoriesLoading}
                 optionsError={categoriesError}
@@ -167,88 +174,105 @@ export function ProfileShopScreen() {
         )}
 
         {ready && ready.shop && (
-          <div className="mt-8 grid gap-[18px] lg:grid-cols-[290px_minmax(0,1fr)]">
-            <aside className="rounded-[28px] border border-line bg-white p-6 text-center shadow-soft">
-              <span
-                aria-hidden
-                className="mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white"
+          <>
+            {phoneSaveWarning && (
+              <p
+                role="alert"
+                className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]"
               >
-                {[...ready.shop.name.trim()][0] ?? '?'}
-              </span>
-              <h2 className="mt-3.5 text-lg font-bold">{ready.shop.name}</h2>
-              <p className="mt-0.5 text-[13px] text-muted">
-                {ready.profile.fullName}
+                {phoneSaveWarning}
               </p>
+            )}
 
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <ScoreCell
-                  label="Vendor Score"
-                  value={
-                    MOCK_STATS.averageRating === null
-                      ? 'ยังไม่มีรีวิว'
-                      : MOCK_STATS.averageRating.toFixed(1)
-                  }
-                  muted={MOCK_STATS.averageRating === null}
-                />
-                <ScoreCell
-                  label="Blacklist Point"
-                  value={String(MOCK_STATS.blacklistPoints)}
-                />
-              </div>
-            </aside>
+            <div className="mt-8 grid gap-[18px] lg:grid-cols-[290px_minmax(0,1fr)]">
+              <aside className="rounded-[28px] border border-line bg-white p-6 text-center shadow-soft">
+                <span
+                  aria-hidden
+                  className="mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white"
+                >
+                  {[...ready.shop.name.trim()][0] ?? '?'}
+                </span>
+                <h2 className="mt-3.5 text-lg font-bold">{ready.shop.name}</h2>
+                <p className="mt-0.5 text-[13px] text-muted">
+                  {ready.profile.fullName}
+                </p>
 
-            <section className="rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-7">
-              <h2 className="text-lg font-bold">ข้อมูลร้านค้า</h2>
-
-              {isEditing ? (
-                <div className="mt-4 max-w-2xl">
-                  <ShopForm
-                    mode="edit"
-                    profile={ready.profile}
-                    shop={ready.shop}
-                    token={ready.token}
-                    refresh={refresh}
-                    options={categoryOptions}
-                    optionsLoading={categoriesLoading}
-                    optionsError={categoriesError}
-                    onCancel={() => setIsEditing(false)}
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <ScoreCell
+                    label="Vendor Score"
+                    value={
+                      MOCK_STATS.averageRating === null
+                        ? 'ยังไม่มีรีวิว'
+                        : MOCK_STATS.averageRating.toFixed(1)
+                    }
+                    muted={MOCK_STATS.averageRating === null}
+                  />
+                  <ScoreCell
+                    label="Blacklist Point"
+                    value={String(MOCK_STATS.blacklistPoints)}
                   />
                 </div>
-              ) : (
-                <dl className="mt-4 grid gap-3">
-                  <InfoLine
-                    icon={UserRound}
-                    label="ชื่อร้าน"
-                    value={ready.shop.name}
-                  />
-                  <InfoLine
-                    icon={Phone}
-                    label="เบอร์โทรศัพท์"
-                    value={ready.profile.phone ?? 'ยังไม่ระบุ'}
-                  />
-                  <InfoLine
-                    icon={Mail}
-                    label="อีเมล"
-                    value={ready.profile.email}
-                  />
-                  <InfoLine
-                    icon={Store}
-                    label="รายละเอียดร้าน"
-                    value={ready.shop.description ?? 'ยังไม่ระบุ'}
-                  />
-                  <InfoLine
-                    icon={Package}
-                    label="สินค้าที่ขาย"
-                    value={
-                      ready.shop.categories
-                        .map((category) => category.name)
-                        .join(', ') || 'ยังไม่ระบุ'
-                    }
-                  />
-                </dl>
-              )}
-            </section>
-          </div>
+              </aside>
+
+              <section className="rounded-[28px] border border-line bg-white p-6 shadow-soft sm:p-7">
+                <h2 className="text-lg font-bold">ข้อมูลร้านค้า</h2>
+
+                {isEditing ? (
+                  <div className="mt-4 max-w-2xl">
+                    <ShopForm
+                      mode="edit"
+                      profile={ready.profile}
+                      shop={ready.shop}
+                      token={ready.token}
+                      refresh={refresh}
+                      setPhoneSaveWarning={setPhoneSaveWarning}
+                      options={categoryOptions}
+                      optionsLoading={categoriesLoading}
+                      optionsError={categoriesError}
+                      onCancel={() => setIsEditing(false)}
+                    />
+                  </div>
+                ) : (
+                  <dl className="mt-4 grid gap-3">
+                    <InfoLine
+                      icon={UserRound}
+                      label="ชื่อร้าน"
+                      value={ready.shop.name}
+                    />
+                    <InfoLine
+                      icon={Phone}
+                      label="เบอร์โทรศัพท์"
+                      value={ready.profile.phone ?? 'ยังไม่ระบุ'}
+                    />
+                    <InfoLine
+                      icon={Mail}
+                      label="อีเมล"
+                      value={ready.profile.email}
+                    />
+                    <InfoLine
+                      icon={Store}
+                      label="รายละเอียดร้าน"
+                      // `||`, not `??`: clearing the textarea now sends `''`
+                      // and the API stores it as-is, so a description that was
+                      // emptied comes back as an empty string rather than null.
+                      // The categories line below does the same for the same
+                      // reason — `??` would render a blank row.
+                      value={ready.shop.description || 'ยังไม่ระบุ'}
+                    />
+                    <InfoLine
+                      icon={Package}
+                      label="สินค้าที่ขาย"
+                      value={
+                        ready.shop.categories
+                          .map((category) => category.name)
+                          .join(', ') || 'ยังไม่ระบุ'
+                      }
+                    />
+                  </dl>
+                )}
+              </section>
+            </div>
+          </>
         )}
       </div>
     </main>
@@ -308,6 +332,7 @@ function ShopForm({
   shop,
   token,
   refresh,
+  setPhoneSaveWarning,
   options,
   optionsLoading,
   optionsError,
@@ -317,8 +342,13 @@ function ShopForm({
   profile: CurrentUser;
   shop: VendorShop | null;
   token: string;
-  /** `refresh()` from `useVendorProfile()` — called only after a save wins. */
+  /** `refresh()` from `useVendorProfile()` — called once the shop write wins. */
   refresh: () => void;
+  /**
+   * Owned by `ProfileShopScreen` on purpose: a shop that saved while its phone
+   * number did not has to stay on screen after this form is gone.
+   */
+  setPhoneSaveWarning: (message: string | null) => void;
   options: SelectMenuOption[];
   optionsLoading: boolean;
   optionsError: string | null;
@@ -360,43 +390,62 @@ function ShopForm({
 
     setIsSubmitting(true);
     setNotice(null);
+    setPhoneSaveWarning(null);
 
     // Two endpoints, because the fields belong to two rows: the shop is
     // POST /shops or PATCH /shops/me, and the phone is PATCH /users/me on
-    // `app_user`. `description` and `phone` are sent as `undefined` when empty
-    // rather than as null — the DTOs read an omitted key as "leave it alone"
-    // and answer 400 to an explicit null.
-    try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        categoryIds,
-      };
+    // `app_user`. They get a try/catch each rather than sharing one, because
+    // only the first of them decides whether anything was saved. Under a shared
+    // try, a phone write that failed after the shop had already been created
+    // skipped `refresh()` and left the page on the create form — and the retry
+    // it invited answered 409 for a shop that in fact existed, which reads as
+    // "your save failed" when the save had won.
+    //
+    // `description` is sent as the trimmed string even when it is empty: the
+    // DTO reads `''` as "clear it" and an omitted key as "leave it alone", so
+    // `|| undefined` made the textarea impossible to empty once filled. `phone`
+    // is the opposite case and is skipped entirely when blank — its DTO answers
+    // 400 to an explicit null, and there is no "clear it" value to send.
+    const payload = {
+      name: name.trim(),
+      description: description.trim(),
+      categoryIds,
+    };
 
+    try {
       if (mode === 'create') {
         await createShop(payload, token);
       } else {
         await updateShop(payload, token);
       }
-
-      if (trimmedPhone) {
-        await updateMe({ phone: trimmedPhone }, token);
-      }
-
-      refresh();
-      // Editing closes back to the read-only card; the refreshed profile and
-      // shop then arrive as props. Creating has nothing to close — the page
-      // swaps to the shop card on its own once `refresh()` lands.
-      if (mode === 'edit') onCancel?.();
     } catch (cause) {
       setNotice(
         cause instanceof ApiError
           ? cause.message
           : 'เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง',
       );
-    } finally {
       setIsSubmitting(false);
+      return;
     }
+
+    // The shop is saved from here on. Everything below runs whatever the phone
+    // write does — a failure there is reported, it does not undo the save.
+    if (trimmedPhone) {
+      try {
+        await updateMe({ phone: trimmedPhone }, token);
+      } catch {
+        setPhoneSaveWarning(
+          'บันทึกข้อมูลร้านค้าแล้ว แต่บันทึกเบอร์โทรศัพท์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+        );
+      }
+    }
+
+    setIsSubmitting(false);
+    refresh();
+    // Editing closes back to the read-only card; the refreshed profile and
+    // shop then arrive as props. Creating has nothing to close — the page
+    // swaps to the shop card on its own once `refresh()` lands.
+    if (mode === 'edit') onCancel?.();
   }
 
   return (

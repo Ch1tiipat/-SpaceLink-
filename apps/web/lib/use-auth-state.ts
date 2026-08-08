@@ -72,7 +72,16 @@ export function useAuthState(): {
 
     void supabase.auth
       .getSession()
-      .then(({ data }) => resolve(data.session?.access_token));
+      .then(({ data }) => resolve(data.session?.access_token))
+      .catch(() => {
+        // `getSession()` itself rejecting — corrupted session storage is the
+        // usual cause. `resolve` never runs in that case, so without this the
+        // header holds its placeholder for good and the rejection goes
+        // unhandled. Signed-out for the same reason a failed `/auth/me` is.
+        if (active) {
+          setAuth({ status: 'signed-out' });
+        }
+      });
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       // The initial session is already being resolved above; handling it here
