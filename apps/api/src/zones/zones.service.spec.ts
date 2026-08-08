@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -142,10 +143,11 @@ describe('ZonesService', () => {
   });
 
   /*
-   * §14.2: every org-scoped query names the org relation explicitly, so a zone
-   * in another organization cannot be reached through these routes. A miss
-   * raises P2025, which PrismaExceptionFilter turns into the same 404 the guard
-   * gives — nothing is caught in the service.
+   * These assert the shape of the `where` clause, not that it blocks anything:
+   * on this route OrgScopeGuard resolves the organization from the zone being
+   * written, so the filter matches by construction and cannot reject a row the
+   * guard allowed. What is pinned here is the §14.2 requirement that the query
+   * names the org relation explicitly — see the comment on ZonesService.update.
    */
   it('scopes the update to the caller organization', async () => {
     const dto: UpdateZoneDto = { name: 'โซนอาหาร' };
@@ -171,5 +173,50 @@ describe('ZonesService', () => {
         where: { id: zoneId, venue: { organizationId: orgId } },
       }),
     );
+  });
+
+  /*
+   * Zone -> Booth cascades into Booking.booth, which is onDelete: Restrict, so
+   * a zone whose booths carry bookings is refused by the database. That must
+   * read as 409 "still has bookings", not the filter's 400 "related resource
+   * does not exist", which says the opposite of what happened.
+   */
+  it('translates an FK-restrict delete into a Thai conflict', async () => {
+    deleteZone.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(
+        'Foreign key constraint failed',
+        { code: 'P2003', clientVersion: 'test' },
+      ),
+    );
+
+    await expect(service.remove(zoneId, orgId)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove(zoneId, orgId)).rejects.toThrow(
+      'ไม่สามารถลบโซนนี้ได้เนื่องจากยังมีการจองที่เกี่ยวข้องอยู่',
+    );
+  });
+
+  /*
+   * Pins the narrowness of that catch. P2025 is the cross-tenant and
+   * not-found case and must keep reaching PrismaExceptionFilter's 404 —
+   * swallowing it here would turn "not yours" into a 409 that confirms the
+   * row exists (§14.1).
+   */
+  it('lets a P2025 from a cross-tenant delete propagate untouched', async () => {
+    const notFound = new Prisma.PrismaClientKnownRequestError(
+      'An operation failed because it depends on one or more records that were required but not found',
+      { code: 'P2025', clientVersion: 'test' },
+    );
+    deleteZone.mockRejectedValue(notFound);
+
+    await expect(service.remove(zoneId, orgId)).rejects.toBe(notFound);
+  });
+
+  it('lets a non-Prisma error propagate untouched', async () => {
+    const boom = new Error('connection reset');
+    deleteZone.mockRejectedValue(boom);
+
+    await expect(service.remove(zoneId, orgId)).rejects.toBe(boom);
   });
 });

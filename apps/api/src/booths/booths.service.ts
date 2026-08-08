@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { BoothStatus, Prisma } from '@prisma/client';
 import { CreateBoothDto } from './dto/create-booth.dto';
 import { FindAllBoothsDto } from './dto/find-all-booths.dto';
@@ -95,13 +95,18 @@ export class BoothsService {
   }
 
   /**
-   * `orgId` is the id OrgScopeGuard resolved and verified, taken from the
-   * request by `@CurrentOrgId()` — never from the client (§14.2). One relation
-   * level deeper than the zone case: booth -> zone -> venue -> organization.
+   * `orgId` comes from `@CurrentOrgId()`, which OrgScopeGuard already derived
+   * from this exact booth's own organization — one relation level deeper than
+   * the zone case, `booth.zone.venue.organizationId` — before the handler could
+   * run. It is the same value the filter below compares against, so the filter
+   * cannot exclude a row the guard allowed and is **not** a second independent
+   * check on the data.
    *
-   * See ZonesService.update for why no error handling belongs here — a row in
-   * another organization does not match, and PrismaExceptionFilter turns the
-   * resulting P2025 into the same 404 the guard would have given.
+   * What it buys is a forcing function: a caller must supply an `orgId` to
+   * compile, and the only sanctioned source throws InternalServerErrorException
+   * the moment `@OrgScoped` is missing from the route, so a route that forgets
+   * the guard fails loudly instead of silently running an unscoped write
+   * (§14.2). See ZonesService.update for the longer version.
    */
   async update(
     id: string,
@@ -121,14 +126,37 @@ export class BoothsService {
    * Returns the row as it was immediately before deletion — the same shape
    * every other method returns, which is also what this endpoint returned
    * before it had a response type.
+   *
+   * `Booking.booth` is `onDelete: Restrict`, so a booth with any booking
+   * against it — a CANCELLED one included — cannot be deleted. Left to
+   * PrismaExceptionFilter that becomes a 400 'Related resource does not exist',
+   * which states the opposite of what happened. See ZonesService.remove for the
+   * full reasoning; the difference here is only that the booth is refused
+   * directly rather than through a cascade from its zone.
+   *
+   * Only the FK-restrict codes are intercepted. A missing or cross-tenant id
+   * still raises P2025 and still falls through to the filter's existing 404
+   * (§14.1).
    */
   async remove(id: string, orgId: string): Promise<BoothResponse> {
-    const booth = await this.prisma.booth.delete({
-      where: { id, zone: { venue: { organizationId: orgId } } },
-      select: boothSelect,
-    });
+    try {
+      const booth = await this.prisma.booth.delete({
+        where: { id, zone: { venue: { organizationId: orgId } } },
+        select: boothSelect,
+      });
 
-    return this.toResponse(booth);
+      return this.toResponse(booth);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2003' || error.code === 'P2014')
+      ) {
+        throw new ConflictException(
+          'ไม่สามารถลบบูธนี้ได้เนื่องจากยังมีการจองที่เกี่ยวข้องอยู่',
+        );
+      }
+      throw error;
+    }
   }
 
   private toResponse(booth: BoothRecord): BoothResponse {

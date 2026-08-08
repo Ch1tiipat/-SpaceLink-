@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { FindAllZonesDto } from './dto/find-all-zones.dto';
@@ -93,15 +93,22 @@ export class ZonesService {
   }
 
   /**
-   * `orgId` is the id OrgScopeGuard resolved and verified, taken from the
-   * request by `@CurrentOrgId()` — never from the client (§14.2).
+   * `orgId` comes from `@CurrentOrgId()`, which OrgScopeGuard already derived
+   * from this exact zone's own organization (`zone.venue.organizationId`)
+   * before the handler could run — the same value the filter below compares
+   * against. It therefore cannot exclude a row the guard allowed, and it is
+   * **not** a second independent check on the data.
    *
-   * The guard has already checked membership, so the filter here is defence in
-   * depth rather than the only check: it keeps the promise in §14.2 that every
-   * org-scoped query names the org relation explicitly. A row in another
-   * organization simply does not match, Prisma raises P2025, and
-   * PrismaExceptionFilter turns that into the same 404 'Resource not found'
-   * the guard would have given — so there is nothing to catch here.
+   * What it buys is a forcing function: a caller must supply an `orgId` to
+   * compile, and the only sanctioned source throws InternalServerErrorException
+   * the moment `@OrgScoped` is missing from the route. A route that forgets the
+   * guard fails loudly at request time instead of silently running an unscoped
+   * write — which is the failure §14.2 exists to prevent, and the one nobody
+   * would otherwise notice.
+   *
+   * Should the filter ever exclude a row, Prisma raises P2025 and
+   * PrismaExceptionFilter turns it into the same 404 'Resource not found' the
+   * guard gives, so there is nothing to catch for that case.
    */
   async update(
     id: string,
@@ -121,14 +128,39 @@ export class ZonesService {
    * Returns the row as it was immediately before deletion — the same shape
    * every other method returns, which is also what this endpoint returned
    * before it had a response type.
+   *
+   * `Zone -> Booth` cascades, but `Booking.booth` is `onDelete: Restrict`, so
+   * deleting a zone whose booths carry any booking — a CANCELLED one included —
+   * is refused by the database. Left to PrismaExceptionFilter that becomes a
+   * 400 'Related resource does not exist', which states the opposite of what
+   * happened: the related resource exists, and that is precisely the problem.
+   * Translated here for the same reason `ShopsService.assertCategoriesExist`
+   * handles its own foreign-key case — the generic filter answers in English,
+   * and every vendor-facing message in this codebase is Thai.
+   *
+   * Only the FK-restrict codes are intercepted. A missing or cross-tenant id
+   * still raises P2025 and still falls through to the filter's existing 404, so
+   * a caller cannot tell "not yours" from "not there" (§14.1).
    */
   async remove(id: string, orgId: string): Promise<ZoneResponse> {
-    const zone = await this.prisma.zone.delete({
-      where: { id, venue: { organizationId: orgId } },
-      select: zoneSelect,
-    });
+    try {
+      const zone = await this.prisma.zone.delete({
+        where: { id, venue: { organizationId: orgId } },
+        select: zoneSelect,
+      });
 
-    return this.toResponse(zone);
+      return this.toResponse(zone);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2003' || error.code === 'P2014')
+      ) {
+        throw new ConflictException(
+          'ไม่สามารถลบโซนนี้ได้เนื่องจากยังมีการจองที่เกี่ยวข้องอยู่',
+        );
+      }
+      throw error;
+    }
   }
 
   private toResponse(zone: ZoneRecord): ZoneResponse {
