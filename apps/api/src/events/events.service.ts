@@ -221,16 +221,30 @@ export class EventsService {
     };
   }
 
-  update(id: string, updateEventDto: UpdateEventDto) {
+  /**
+   * `orgId` is the organization the caller is scoped to. Unlike Zone, which
+   * reaches its organization through `venue`, `Event.organizationId` is a
+   * direct column, so the filter names it directly.
+   *
+   * No route calls this yet. The parameter is here so that whichever route
+   * eventually does cannot compile without supplying an `orgId` — the only
+   * sanctioned source is `@CurrentOrgId()`, which throws unless `@OrgScoped`
+   * put the guards on the route. An unscoped write is the §14.2 failure that
+   * shows up as a cross-tenant leak rather than as an error.
+   *
+   * A filtered-out row raises P2025, which PrismaExceptionFilter turns into
+   * the same 404 a missing id gives, so there is nothing to catch here.
+   */
+  update(id: string, updateEventDto: UpdateEventDto, orgId: string) {
     return this.prisma.event.update({
-      where: { id },
+      where: { id, organizationId: orgId },
       data: updateEventDto,
     });
   }
 
-  remove(id: string) {
+  remove(id: string, orgId: string) {
     return this.prisma.event.delete({
-      where: { id },
+      where: { id, organizationId: orgId },
     });
   }
 }

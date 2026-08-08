@@ -7,12 +7,23 @@ import { EventsService } from './events.service';
 const findUnique = jest.fn();
 const findFirst = jest.fn();
 const eventFindMany = jest.fn();
+const eventUpdate = jest.fn();
+const eventDelete = jest.fn();
 const zoneFindMany = jest.fn();
 
 const mockPrismaService = {
-  event: { findUnique, findFirst, findMany: eventFindMany },
+  event: {
+    findUnique,
+    findFirst,
+    findMany: eventFindMany,
+    update: eventUpdate,
+    delete: eventDelete,
+  },
   zone: { findMany: zoneFindMany },
 };
+
+const eventId = '00000000-0000-4000-8000-0000000000c1';
+const orgId = '00000000-0000-4000-8000-0000000000a1';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -239,5 +250,37 @@ describe('EventsService', () => {
       );
       expect(zoneFindMany).not.toHaveBeenCalled();
     });
+  });
+
+  /*
+   * These assert the shape of the `where` clause, not that it blocks anything.
+   * No route calls either method yet; what is pinned here is the §14.2
+   * requirement that the query names the org column explicitly — see the
+   * comment on EventsService.update.
+   */
+  it('scopes the update to the caller organization', async () => {
+    const dto = { name: 'SUT Agri Fair 2026' };
+    eventUpdate.mockResolvedValue({ id: eventId });
+
+    await service.update(eventId, dto, orgId);
+
+    expect(eventUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: eventId, organizationId: orgId },
+        data: dto,
+      }),
+    );
+  });
+
+  it('scopes the delete to the caller organization', async () => {
+    eventDelete.mockResolvedValue({ id: eventId });
+
+    await service.remove(eventId, orgId);
+
+    expect(eventDelete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: eventId, organizationId: orgId },
+      }),
+    );
   });
 });
