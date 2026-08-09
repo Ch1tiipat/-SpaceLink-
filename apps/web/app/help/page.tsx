@@ -56,9 +56,10 @@ const FAQS = [
 
 export default function HelpPage() {
   return (
-    <main className="pb-16">
+    <main className="sl-page pb-16">
       <div className="shell py-8 sm:py-12">
-        <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#29134f] via-violet to-[#7257d9] px-6 py-10 text-white shadow-soft sm:px-10 sm:py-14">
+        <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_85%_0%,rgba(255,255,255,0.16),transparent_20rem),linear-gradient(135deg,#29134f,#7c3aed_58%,#7257d9)] px-6 py-10 text-white shadow-[0_28px_70px_rgba(49,27,89,0.18)] sm:px-10 sm:py-14">
+          <span aria-hidden className="absolute -bottom-28 -right-16 h-64 w-64 rounded-full border-[38px] border-white/[0.055]" />
           <div className="grid max-w-3xl gap-5">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15 backdrop-blur">
               <CircleHelp aria-hidden className="h-7 w-7" />
@@ -92,7 +93,7 @@ export default function HelpPage() {
             {FAQS.map(({ question, icon: Icon, answer }) => (
               <details
                 key={question}
-                className="group rounded-3xl border border-line bg-card shadow-surface"
+                className="sl-surface group overflow-hidden"
               >
                 <summary className="flex min-h-16 cursor-pointer list-none items-center gap-4 rounded-3xl px-5 py-4 font-bold text-ink marker:hidden focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2 sm:px-6">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
@@ -114,7 +115,7 @@ export default function HelpPage() {
           </div>
         </section>
 
-        <section className="mt-8 flex flex-col gap-4 rounded-3xl border border-line bg-violet-tint p-6 sm:flex-row sm:items-center sm:justify-between">
+        <section className="sl-soft-surface mt-8 flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-bold">พร้อมจัดการพื้นที่ของคุณแล้วหรือยัง</h2>
             <p className="mt-1 text-sm leading-6 text-muted">
@@ -124,13 +125,13 @@ export default function HelpPage() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/"
-              className="rounded-xl border border-violet bg-white px-4 py-2.5 text-sm font-bold text-violet"
+              className="sl-action-secondary text-violet"
             >
               ค้นหา Event
             </Link>
             <Link
               href="/bookings"
-              className="rounded-xl bg-violet px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet/20"
+              className="sl-action-primary"
             >
               การจองของฉัน
             </Link>

@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMe } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import {
+  getUxPreviewMode,
+  setUxPreviewMode,
+  subscribeToUxPreview,
+  UX_PREVIEW_PROFILE,
+} from '@/lib/ux-preview';
 
 /**
  * `loading` is a state of its own rather than an optimistic guess. Resolving a
@@ -32,6 +38,19 @@ export function useAuthState(): {
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' });
 
   useEffect(() => {
+    const previewMode = getUxPreviewMode();
+    if (previewMode) {
+      const applyPreview = (mode: 'signed-in' | 'signed-out') => {
+        setAuth(
+          mode === 'signed-in'
+            ? { status: 'signed-in', fullName: UX_PREVIEW_PROFILE.fullName }
+            : { status: 'signed-out' },
+        );
+      };
+      applyPreview(previewMode);
+      return subscribeToUxPreview(applyPreview);
+    }
+
     const controller = new AbortController();
     let active = true;
 
@@ -100,6 +119,12 @@ export function useAuthState(): {
   }, []);
 
   const signOut = useCallback(() => {
+    if (getUxPreviewMode()) {
+      setUxPreviewMode('signed-out');
+      setAuth({ status: 'signed-out' });
+      return;
+    }
+
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();

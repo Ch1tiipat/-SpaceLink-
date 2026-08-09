@@ -143,21 +143,21 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }
 
   return (
-    <main className="pb-16">
-      <section className="border-b border-line bg-white">
+    <main className="sl-page pb-16">
+      <section className="border-b border-line bg-[linear-gradient(135deg,rgba(245,243,255,0.94),rgba(255,255,255,0.92))]">
         <div className="shell py-7">
           <Link
             href={`/events/${eventId}`}
-            className="text-sm font-bold text-violet"
+            className="sl-chip"
           >
             ← กลับรายละเอียด Event
           </Link>
           <div className="mt-5">
             <div>
-              <span className="rounded-full bg-mist px-3 py-1 text-xs font-bold text-violet">
+              <span className="sl-kicker">
                 Read-only zone map
               </span>
-              <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+              <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
                 {data.event.name}
               </h1>
               <p className="mt-2 text-sm text-muted">
@@ -169,7 +169,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       </section>
 
       <div className="shell mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="glass min-w-0 rounded-[28px] p-4 shadow-soft sm:p-6">
+        <section className="sl-surface min-w-0 p-4 sm:p-6">
           <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
           <SelectMenu
             className="flex-1"
@@ -191,14 +191,14 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             <button
               type="button"
               onClick={() => setFocusedZoneId(null)}
-              className="rounded-xl border border-[#ded2ff] bg-[#f7f3ff] px-4 py-3 text-sm font-bold text-violet transition hover:border-violet/40 hover:bg-white"
+              className="sl-action-secondary"
             >
               ← กลับไปดูทุกโซน
             </button>
           )}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-[#ded2ff] bg-[#f7f3ff] p-4">
+          <div className="sl-soft-surface mt-5 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-violet">
@@ -256,7 +256,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                 type="button"
                 onClick={() => void handleRecommendation()}
                 disabled={isRecommending || vendor.status !== 'ready' || !shop}
-                className="rounded-xl bg-gradient-to-r from-violet to-[#9349e8] px-5 py-3 font-bold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                className="sl-action-primary disabled:hover:translate-y-0"
               >
                 {isRecommending ? 'กำลังวิเคราะห์พื้นที่…' : 'แนะนำโซนให้ฉัน'}
               </button>
@@ -292,7 +292,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           </div>
         </section>
 
-        <aside className="sticky top-[96px] rounded-[28px] border border-line bg-white p-6 shadow-soft">
+        <aside className="sl-surface sticky top-[96px] p-6">
           {recommendation && recommendedLocation && (
             <div className="mb-6 rounded-2xl border border-[#d8ccf7] bg-[#f7f3ff] p-4">
               <span className="text-xs font-bold uppercase tracking-[.13em] text-violet">

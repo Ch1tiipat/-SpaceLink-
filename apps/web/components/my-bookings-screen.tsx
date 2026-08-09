@@ -11,6 +11,11 @@ import {
   type MyBooking,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import {
+  getUxPreviewMode,
+  subscribeToUxPreview,
+  UX_PREVIEW_TOKEN,
+} from '@/lib/ux-preview';
 
 type AccessState =
   | { status: 'loading' }
@@ -85,6 +90,22 @@ export function MyBookingsScreen() {
   }
 
   useEffect(() => {
+    const previewMode = getUxPreviewMode();
+    if (previewMode) {
+      const applyPreview = (mode: 'signed-in' | 'signed-out') => {
+        setAccess(
+          mode === 'signed-in'
+            ? { status: 'ready', token: UX_PREVIEW_TOKEN }
+            : { status: 'signed-out' },
+        );
+        setBookings([]);
+        setLoadError(null);
+        setIsLoading(false);
+      };
+      applyPreview(previewMode);
+      return subscribeToUxPreview(applyPreview);
+    }
+
     const controller = new AbortController();
     let active = true;
 
@@ -192,31 +213,55 @@ export function MyBookingsScreen() {
     }
   }
 
+  const pendingCount = bookings.filter(
+    (booking) => booking.status === 'PENDING_PAYMENT',
+  ).length;
+  const confirmedCount = bookings.filter(
+    (booking) => booking.status === 'CONFIRMED',
+  ).length;
+
   return (
-    <main className="pb-16">
+    <main className="sl-page pb-16">
       <div className="shell py-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
+            <span className="sl-kicker">
               My bookings
             </span>
-            <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
               การจองของฉัน
             </h1>
             <p className="mt-2 text-muted">
               ตรวจสอบสถานะ ชำระเงิน หรือยกเลิกการจองที่ยังดำเนินการอยู่
             </p>
           </div>
-          <Link href="/" className="mt-4 inline-flex rounded-xl border border-violet px-5 py-3 font-bold text-violet sm:mt-0">
+          <Link href="/" className="sl-action-secondary mt-4 text-violet sm:mt-0">
             ค้นหา Event เพิ่ม
           </Link>
         </div>
 
+        {access.status === 'ready' && !isLoading && !loadError && bookings.length > 0 ? (
+          <section className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="สรุปการจอง">
+            {[
+              ['การจองทั้งหมด', bookings.length, 'bg-[#f4efff] text-violet'],
+              ['รอชำระเงิน', pendingCount, 'bg-[#edf6ff] text-[#1d67a8]'],
+              ['ยืนยันแล้ว', confirmedCount, 'bg-[#ebfaf3] text-[#13795b]'],
+            ].map(([label, value, tone]) => (
+              <div key={label} className="sl-soft-surface flex items-center justify-between gap-4 p-4">
+                <span className="text-sm font-bold text-muted">{label}</span>
+                <strong className={`grid h-10 min-w-10 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
+                  {value}
+                </strong>
+              </div>
+            ))}
+          </section>
+        ) : null}
+
         {access.status === 'signed-out' && (
-          <section className="mt-8 rounded-[28px] border border-line bg-white p-8 text-center shadow-soft">
+          <section className="sl-surface mt-8 p-8 text-center">
             <h2 className="text-xl font-bold">กรุณาเข้าสู่ระบบก่อน</h2>
             <p className="mt-2 text-muted">รายการจองจะแสดงเฉพาะของบัญชีผู้ขายปัจจุบัน</p>
-            <Link href="/login" className="mt-6 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white">
+            <Link href="/login" className="sl-action-primary mt-6">
               เข้าสู่ระบบ
             </Link>
           </section>
@@ -250,7 +295,7 @@ export function MyBookingsScreen() {
           !isLoading &&
           !loadError &&
           bookings.length === 0 && (
-            <section className="mt-8 rounded-[28px] border border-line bg-white p-10 text-center shadow-soft">
+            <section className="sl-surface mt-8 p-10 text-center">
               <h2 className="text-xl font-bold">ยังไม่มีรายการจอง</h2>
               <p className="mt-2 text-muted">เลือก Event และบูธที่เหมาะกับร้านของคุณเพื่อเริ่มต้น</p>
             </section>
@@ -266,7 +311,7 @@ export function MyBookingsScreen() {
                 new Date(booking.bookingStartDate).getTime() > Date.now();
 
               return (
-                <article key={booking.id} className="rounded-[28px] border border-line bg-white p-5 shadow-soft sm:p-7">
+                <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <span className="inline-flex rounded-full bg-[#eee8ff] px-3 py-1 text-xs font-bold text-violet">
@@ -286,7 +331,7 @@ export function MyBookingsScreen() {
                     )}
                   </div>
 
-                  <dl className="mt-5 grid gap-3 rounded-2xl bg-mist p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <dl className="mt-5 grid gap-3 rounded-[20px] border border-[#ebe5f4] bg-[#faf8ff] p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <BookingDetail label="บูธ" value={booking.booth.code} />
                     <BookingDetail
                       label="โซน"

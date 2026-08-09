@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, getMe, type CurrentUser, type VendorShop } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import {
+  getUxPreviewMode,
+  getUxPreviewShopMode,
+  subscribeToUxPreview,
+  subscribeToUxPreviewShop,
+  UX_PREVIEW_PROFILE,
+  UX_PREVIEW_SHOP,
+  UX_PREVIEW_TOKEN,
+} from '@/lib/ux-preview';
 
 /**
  * `loading` is a state of its own for the same reason it is in `useAuthState`:
@@ -68,6 +77,34 @@ export function useVendorProfile(): {
     // The effect's re-run signal. Read so it is a real dependency and not one
     // the exhaustive-deps rule reports as unnecessary.
     void reloadCount;
+
+    const previewMode = getUxPreviewMode();
+    if (previewMode) {
+      const applyPreview = (mode: 'signed-in' | 'signed-out') => {
+        setState(
+          mode === 'signed-in'
+            ? {
+                status: 'ready',
+                token: UX_PREVIEW_TOKEN,
+                profile: UX_PREVIEW_PROFILE,
+                shop:
+                  getUxPreviewShopMode() === 'with-shop'
+                    ? UX_PREVIEW_SHOP
+                    : null,
+              }
+            : { status: 'signed-out' },
+        );
+      };
+      applyPreview(previewMode);
+      const unsubscribeAuth = subscribeToUxPreview(applyPreview);
+      const unsubscribeShop = subscribeToUxPreviewShop(() =>
+        applyPreview(getUxPreviewMode() ?? 'signed-out'),
+      );
+      return () => {
+        unsubscribeAuth();
+        unsubscribeShop();
+      };
+    }
 
     const controller = new AbortController();
     let active = true;
