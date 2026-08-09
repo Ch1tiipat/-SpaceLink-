@@ -6,10 +6,17 @@ export const ORG_SCOPE_KEY = 'orgScope';
  * The route params OrgScopeGuard knows how to resolve to an organization.
  * Each one is a step on the ownership chain (AGENTS.md §5):
  * Organization -> Venue -> Zone -> Booth, with Event hanging off Organization
- * and Booking hanging off Event.
+ * and Booking hanging off Event. A SupportTicket hangs off Organization too,
+ * but by a nullable column rather than by the chain.
  */
 export type OrgScopeParam =
-  'organizationId' | 'venueId' | 'eventId' | 'zoneId' | 'boothId' | 'bookingId';
+  | 'organizationId'
+  | 'venueId'
+  | 'eventId'
+  | 'zoneId'
+  | 'boothId'
+  | 'bookingId'
+  | 'ticketId';
 
 /**
  * Marks a handler as org-scoped, naming the route param that identifies the

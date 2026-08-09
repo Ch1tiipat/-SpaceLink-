@@ -51,13 +51,25 @@ const bookingListInclude = {
   shop: { select: { id: true, name: true } },
 } satisfies Prisma.BookingInclude;
 
-type BookingResponse = Omit<Booking, 'boothPrice'> & { boothPrice: string };
+export type BookingResponse = Omit<Booking, 'boothPrice'> & {
+  boothPrice: string;
+};
 type BookingListRecord = Prisma.BookingGetPayload<{
   include: typeof bookingListInclude;
 }>;
 type BookingListResponse = Omit<BookingListRecord, 'boothPrice'> & {
   boothPrice: string;
 };
+
+/**
+ * The only thing the admin create path is allowed to differ by. Deliberately
+ * one flag rather than a general "skip checks" switch: every other invariant in
+ * `createWithinTransaction` protects a booth or an event, not a vendor's
+ * allowance, and none of them are an admin's to waive.
+ */
+interface CreateBookingOptions {
+  skipQuotaCheck?: boolean;
+}
 
 interface SlipBooking {
   id: string;
@@ -83,9 +95,46 @@ export class BookingsService {
     private readonly slipStorage: BookingSlipStorageService,
   ) {}
 
-  async create(
+  create(
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
+  ): Promise<BookingResponse> {
+    return this.createWithRetry(createBookingDto, vendorUserId, {});
+  }
+
+  /**
+   * The approved end of a booking-quota exception (SupportTicketsService): an
+   * admin creates the booking on a vendor's behalf with the per-event quota
+   * skipped, and nothing else skipped. Booth availability, the venue match, the
+   * date range and the one-active-booking-per-(event, booth) rule all still
+   * apply, so this cannot double-book a booth or reach into another venue —
+   * quota is the single invariant an admin is allowed to waive here.
+   *
+   * `vendorUserId` is the vendor the booking is *for*, not the admin calling.
+   * The shop is still checked against that vendor inside the transaction, so an
+   * admin cannot attach someone else's shop to it.
+   *
+   * The caller is responsible for authorization: this method takes no orgId and
+   * checks no membership. Only route it from behind `@OrgScoped`.
+   */
+  createForAdmin(
+    createBookingDto: CreateBookingDto,
+    vendorUserId: string,
+  ): Promise<BookingResponse> {
+    return this.createWithRetry(createBookingDto, vendorUserId, {
+      skipQuotaCheck: true,
+    });
+  }
+
+  /**
+   * The serializable-transaction retry shared by both create paths. A P2034
+   * write conflict is retried; a P2002 is the unique (event, booth) constraint
+   * firing, which no retry can help with.
+   */
+  private async createWithRetry(
+    createBookingDto: CreateBookingDto,
+    vendorUserId: string,
+    options: CreateBookingOptions,
   ): Promise<BookingResponse> {
     for (
       let attempt = 1;
@@ -99,6 +148,7 @@ export class BookingsService {
               transaction,
               createBookingDto,
               vendorUserId,
+              options,
             ),
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         );
@@ -133,6 +183,7 @@ export class BookingsService {
     transaction: Prisma.TransactionClient,
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
+    options: CreateBookingOptions = {},
   ): Promise<BookingResponse> {
     const { eventId, boothId, shopId } = createBookingDto;
     const [event, booth, shop] = await Promise.all([
@@ -230,7 +281,11 @@ export class BookingsService {
     const quota =
       orgQuota ?? platformConfig?.defaultBookingQuota ?? DEFAULT_BOOKING_QUOTA;
 
-    if (activeBookingCount >= quota) {
+    // Everything above this point applies to both callers. The quota is the one
+    // invariant `createForAdmin` waives, and it is waived here rather than by
+    // skipping the counting above so the two paths read the same data and the
+    // block stays a single decision.
+    if (!options.skipQuotaCheck && activeBookingCount >= quota) {
       throw new ConflictException('คุณจองบูธในงานนี้ครบโควตาแล้ว');
     }
 
