@@ -14,5 +14,6 @@ import { BookingsController } from './bookings.controller';
     BookingSlipStorageService,
     BookingHoldExpiryService,
   ],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

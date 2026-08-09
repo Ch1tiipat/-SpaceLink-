@@ -17,6 +17,7 @@ const VENUE_ID = '33333333-3333-4333-8333-333333333333';
 const EVENT_ID = '44444444-4444-4444-8444-444444444444';
 const ZONE_ID = '55555555-5555-4555-8555-555555555555';
 const BOOKING_ID = '66666666-6666-4666-8666-666666666666';
+const TICKET_ID = '77777777-7777-4777-8777-777777777777';
 
 /**
  * A real controller carrying real decorators, read back through a real
@@ -55,6 +56,11 @@ class TestController {
     // Route target; the guard only ever reads its metadata.
   }
 
+  @OrgScope('ticketId')
+  byTicket(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
   unscoped(this: void) {
     // No @OrgScope — the guard must let this through untouched.
   }
@@ -89,6 +95,7 @@ describe('OrgScopeGuard', () => {
     zone: { findUnique: jest.Mock };
     booth: { findUnique: jest.Mock };
     booking: { findUnique: jest.Mock };
+    supportTicket: { findUnique: jest.Mock };
     orgMembership: { findUnique: jest.Mock };
   };
   let guard: OrgScopeGuard;
@@ -101,6 +108,7 @@ describe('OrgScopeGuard', () => {
       zone: { findUnique: jest.fn() },
       booth: { findUnique: jest.fn() },
       booking: { findUnique: jest.fn() },
+      supportTicket: { findUnique: jest.fn() },
       orgMembership: { findUnique: jest.fn() },
     };
     guard = new OrgScopeGuard(
@@ -457,6 +465,70 @@ describe('OrgScopeGuard', () => {
     await expect(
       guard.canActivate(
         createContext(TestController.prototype.byBooking, request),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('resolves a support ticket by reading its own organizationId', async () => {
+    prisma.supportTicket.findUnique.mockResolvedValue({
+      organizationId: ORG_ID,
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { ticketId: TICKET_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byTicket, request),
+      ),
+    ).resolves.toBe(true);
+
+    // A ticket carries organizationId directly, like an event — nothing else
+    // is walked to reach it.
+    expect(prisma.supportTicket.findUnique).toHaveBeenCalledWith({
+      where: { id: TICKET_ID },
+      select: { organizationId: true },
+    });
+    expect(prisma.supportTicket.findUnique).toHaveBeenCalledTimes(1);
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  // The one org-scope param whose column is nullable. A ticket belonging to no
+  // organization cannot be reached from an org-scoped route, and says so with
+  // the same 404 as an unknown id rather than passing `null` down to a query.
+  it('answers 404 for a ticket with no organization', async () => {
+    prisma.supportTicket.findUnique.mockResolvedValue({
+      organizationId: null,
+    });
+    const request: RequestStub = {
+      params: { ticketId: TICKET_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byTicket, request),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+    expect(request.organizationId).toBeUndefined();
+  });
+
+  it('rejects an unknown support ticket before checking membership', async () => {
+    prisma.supportTicket.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { ticketId: TICKET_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byTicket, request),
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
