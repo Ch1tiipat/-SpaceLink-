@@ -12,7 +12,9 @@ import {
   EventStatus,
   Prisma,
   SlipStatus,
+  UserRole,
   type Booking,
+  type User,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
@@ -21,6 +23,7 @@ import {
   type UploadedSlipFile,
 } from './booking-slip-storage.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 
@@ -476,10 +479,130 @@ export class BookingsService {
     return this.toResponse(cancelledBooking);
   }
 
-  findOne(id: string) {
-    return this.prisma.booking.findUnique({
-      where: { id },
+  /**
+   * Admin lookup by id. `orgId` comes from `@CurrentOrgId()`, which OrgScopeGuard
+   * already derived from this exact booking's own `event.organizationId` before
+   * the handler could run — so the filter below cannot exclude a row the guard
+   * allowed, and is not a second independent check.
+   *
+   * What it buys is the same forcing function as `ZonesService.update`: a caller
+   * must supply an `orgId` to compile, and the only sanctioned source throws the
+   * moment `@OrgScoped` is missing from the route. A route that forgets the guard
+   * fails loudly instead of silently running an unscoped read (§14.2).
+   */
+  async findOne(bookingId: string, orgId: string): Promise<BookingResponse> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, event: { organizationId: orgId } },
     });
+
+    if (!booking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+
+    return this.toResponse(booking);
+  }
+
+  /**
+   * Admin lookup by the short code a vendor is actually shown — the one an admin
+   * is handed in a support conversation, since the booking id is a UUID nobody
+   * quotes over the phone.
+   *
+   * The org check lives here rather than in OrgScopeGuard because the guard
+   * rejects any route param that is not a UUID, and a booking code is not one.
+   * §14.2 requires the ownership check on exactly this lookup regardless: the
+   * code is short and guessable, so membership is filtered in the query itself.
+   * SUPER_ADMIN skips the filter, mirroring the bypass OrgScopeGuard already has
+   * for that role.
+   *
+   * A code in another organization and a code that does not exist both answer
+   * 404 with the same message — 403 would confirm the code is real (§14.1).
+   */
+  async findByCode(
+    bookingCode: string,
+    user: Pick<User, 'id' | 'role'>,
+  ): Promise<BookingResponse> {
+    const booking = await this.prisma.booking.findFirst({
+      where: {
+        bookingCode,
+        ...(user.role === UserRole.SUPER_ADMIN
+          ? {}
+          : {
+              event: {
+                organization: { memberships: { some: { userId: user.id } } },
+              },
+            }),
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+
+    return this.toResponse(booking);
+  }
+
+  /**
+   * The payment-exempt path of AGENTS.md §8 step 6, applied to a booking that is
+   * already stuck in PENDING_PAYMENT: an admin confirms it directly with a
+   * reason, skipping the slip.
+   *
+   * The read below exists only to name *why* a booking cannot be confirmed; the
+   * write is guarded by putting the status in its own `where`. That matters here
+   * because BookingHoldExpiryService cancels expired holds every minute, so a
+   * read-then-write pair could resurrect a booking the cron had just cancelled.
+   * `cancel()` closes the same race the same way.
+   *
+   * Hold expiry is deliberately *not* a precondition. Rescuing a booking whose
+   * hold lapsed before the cron swept it is the point of this endpoint, and
+   * `holdExpiresAt` is left untouched — the cron only looks at PENDING_PAYMENT
+   * rows, so a CONFIRMED booking is never swept. This matches what the slip
+   * confirmation path in `uploadSlip` does.
+   */
+  async confirmExempt(
+    bookingId: string,
+    confirmExemptBookingDto: ConfirmExemptBookingDto,
+    orgId: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, event: { organizationId: orgId } },
+      select: { id: true, status: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+    if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+      throw new ConflictException(
+        'ยืนยันการจองนี้ไม่ได้ เนื่องจากไม่ได้อยู่ในสถานะรอชำระเงิน',
+      );
+    }
+
+    const updated = await this.prisma.booking.updateMany({
+      where: {
+        id: booking.id,
+        event: { organizationId: orgId },
+        status: BookingStatus.PENDING_PAYMENT,
+      },
+      data: {
+        isPaymentExempt: true,
+        paymentExemptReason: confirmExemptBookingDto.paymentExemptReason,
+        status: BookingStatus.CONFIRMED,
+        confirmedAt: new Date(),
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new ConflictException('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+    }
+
+    const confirmedBooking = await this.prisma.booking.findUnique({
+      where: { id: booking.id },
+    });
+    if (!confirmedBooking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+
+    return this.toResponse(confirmedBooking);
   }
 
   update(id: string, updateBookingDto: UpdateBookingDto) {
