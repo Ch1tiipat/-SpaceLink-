@@ -405,6 +405,75 @@ describe('BookingsService', () => {
     expect(bookingCreate).not.toHaveBeenCalled();
   });
 
+  describe('createForAdmin', () => {
+    // The approved end of a quota exception. The default event mock allows 3
+    // per vendor and the vendor already holds 5 — the vendor path would refuse
+    // this outright (see 'rejects a vendor who has reached the organization
+    // quota'), and this path must not.
+    it('creates a booking for a vendor already over the quota', async () => {
+      bookingCount.mockResolvedValue(5);
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+      ).resolves.toEqual({ ...CREATED_BOOKING, boothPrice: '1500' });
+
+      expect(bookingCreate).toHaveBeenCalledTimes(1);
+      const data = bookingCreateData();
+      // Booked for the vendor named in the argument, not for whoever approved
+      // it, and on the ordinary pending-payment path — an exception to the
+      // quota is not an exemption from paying.
+      expect(data.vendorUserId).toBe(VENDOR_ID);
+      expect(data.status).toBe(BookingStatus.PENDING_PAYMENT);
+      expect(data.isPaymentExempt).toBe(false);
+    });
+
+    // Quota is the only invariant waived. The rest of createWithinTransaction
+    // still runs, so an admin cannot double-book a booth by approving a ticket.
+    it('still refuses a booth with an active booking', async () => {
+      bookingCount.mockResolvedValue(5);
+      bookingFindFirst.mockResolvedValue({ id: 'existing-booking' });
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+      ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
+      expect(bookingCreate).not.toHaveBeenCalled();
+    });
+
+    it('still refuses a booth in another venue', async () => {
+      bookingCount.mockResolvedValue(5);
+      boothFindUnique.mockResolvedValue({
+        id: BOOTH_ID,
+        status: BoothStatus.AVAILABLE,
+        boothPrice: BOOTH_PRICE,
+        zone: { venueId: '88888888-8888-4888-8888-888888888888' },
+      });
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(bookingCreate).not.toHaveBeenCalled();
+    });
+
+    it('keeps the serializable retry the vendor path has', async () => {
+      const serializationError = new Prisma.PrismaClientKnownRequestError(
+        'Transaction write conflict',
+        { code: 'P2034', clientVersion: 'test' },
+      );
+      prismaTransaction
+        .mockRejectedValueOnce(serializationError)
+        .mockImplementationOnce(
+          (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+            operation(mockPrismaService as unknown as Prisma.TransactionClient),
+        );
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+      ).resolves.toMatchObject({ id: BOOKING_ID });
+      expect(prismaTransaction).toHaveBeenCalledTimes(2);
+      expect(bookingCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('uploadSlip', () => {
     beforeEach(() => {
       bookingFindFirst.mockResolvedValue(PENDING_SLIP_BOOKING);

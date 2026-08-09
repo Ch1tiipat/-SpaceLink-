@@ -165,10 +165,22 @@ export class OrgScopeGuard implements CanActivate {
         });
         return this.orFail(booking?.event.organizationId);
       }
+      case 'ticketId': {
+        // A ticket carries its own organizationId, like an event — no chain to
+        // walk. It is nullable, though: a ticket raised against the platform
+        // rather than an organization has none, and `orFail` turns that into
+        // the same 404 as an unknown id, which is what an org-scoped route
+        // owes a ticket no organization can claim.
+        const ticket = await this.prisma.supportTicket.findUnique({
+          where: { id },
+          select: { organizationId: true },
+        });
+        return this.orFail(ticket?.organizationId);
+      }
     }
   }
 
-  private orFail(organizationId: string | undefined): string {
+  private orFail(organizationId: string | null | undefined): string {
     if (!organizationId) {
       throw new NotFoundException(RESOURCE_NOT_FOUND);
     }
