@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getMe } from '@/lib/api';
+import { getMe, type UserRole } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   getUxPreviewMode,
@@ -19,7 +19,7 @@ import {
 export type AuthState =
   | { status: 'loading' }
   | { status: 'signed-out' }
-  | { status: 'signed-in'; fullName: string };
+  | { status: 'signed-in'; fullName: string; role: UserRole };
 
 /**
  * The session is read from Supabase, but the display name comes from
@@ -43,7 +43,11 @@ export function useAuthState(): {
       const applyPreview = (mode: 'signed-in' | 'signed-out') => {
         setAuth(
           mode === 'signed-in'
-            ? { status: 'signed-in', fullName: UX_PREVIEW_PROFILE.fullName }
+            ? {
+                status: 'signed-in',
+                fullName: UX_PREVIEW_PROFILE.fullName,
+                role: 'VENDOR',
+              }
             : { status: 'signed-out' },
         );
       };
@@ -76,7 +80,11 @@ export function useAuthState(): {
       try {
         const me = await getMe(token, controller.signal);
         if (active) {
-          setAuth({ status: 'signed-in', fullName: me.fullName });
+          setAuth({
+            status: 'signed-in',
+            fullName: me.fullName,
+            role: me.role,
+          });
         }
       } catch {
         // This drives presentation only; authorization is enforced server-side
