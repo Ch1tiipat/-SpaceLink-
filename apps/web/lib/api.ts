@@ -207,6 +207,77 @@ export type CurrentUser = {
   shops: VendorShop[];
 };
 
+export type AdminVenue = {
+  id: string;
+  organizationId: string;
+  name: string;
+  description: string | null;
+  address: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  mapImageUrl: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminZone = {
+  id: string;
+  venueId: string;
+  code: string;
+  name: string | null;
+  description: string | null;
+  defaultBoothPrice: string | null;
+  posX: string | null;
+  posY: string | null;
+  imageUrls: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminBoothStatus =
+  | 'AVAILABLE'
+  | 'BOOKED'
+  | 'MAINTENANCE'
+  | 'INACTIVE';
+
+export type AdminBooth = {
+  id: string;
+  zoneId: string;
+  code: string;
+  boothPrice: string;
+  widthM: string | null;
+  heightM: string | null;
+  facilities: unknown;
+  posX: string | null;
+  posY: string | null;
+  status: AdminBoothStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaveZoneInput = {
+  code: string;
+  name?: string;
+  description?: string;
+  defaultBoothPrice?: string;
+  posX?: number;
+  posY?: number;
+};
+
+export type SaveBoothInput = {
+  code: string;
+  boothPrice: string;
+  widthM?: number;
+  heightM?: number;
+  posX?: number;
+  posY?: number;
+};
+
+export type UpdateBoothInput = Partial<SaveBoothInput> & {
+  status?: AdminBoothStatus;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -347,6 +418,157 @@ function patchJson<T>(
   fallbackMessage?: string,
 ): Promise<T> {
   return sendJson<T>('PATCH', path, body, options, fallbackMessage);
+}
+
+async function deleteJson<T>(
+  path: string,
+  { signal, token }: RequestOptions = {},
+  fallbackMessage = 'ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง',
+): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+
+  let response: Response;
+  try {
+    response = await fetch(API_BASE_URL + path, {
+      method: 'DELETE',
+      signal,
+      headers,
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+    throw new ApiError(detail || fallbackMessage, response.status);
+  }
+
+  return (await response.json()) as T;
+}
+
+/**
+ * Admin reads use the existing public discovery endpoints. Mutations never
+ * carry organizationId: the API derives it from the selected resource and the
+ * authenticated OrgMembership (AGENTS.md §14.2).
+ */
+export function getAdminVenues(
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminVenue[]> {
+  return getJson<AdminVenue[]>('/venues', { signal, token });
+}
+
+export function getAdminZones(
+  venueId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminZone[]> {
+  return getJson<AdminZone[]>(
+    '/zones?venueId=' + encodeURIComponent(venueId),
+    { signal, token },
+  );
+}
+
+export function createAdminZone(
+  venueId: string,
+  input: SaveZoneInput,
+  token: string,
+): Promise<AdminZone> {
+  return postJson<AdminZone>(
+    '/venues/' + encodeURIComponent(venueId) + '/zones',
+    input,
+    { token },
+    'ไม่สามารถสร้างโซนได้',
+  );
+}
+
+export function updateAdminZone(
+  zoneId: string,
+  input: Partial<SaveZoneInput>,
+  token: string,
+): Promise<AdminZone> {
+  return patchJson<AdminZone>(
+    '/zones/' + encodeURIComponent(zoneId),
+    input,
+    { token },
+    'ไม่สามารถแก้ไขโซนได้',
+  );
+}
+
+export function deleteAdminZone(
+  zoneId: string,
+  token: string,
+): Promise<AdminZone> {
+  return deleteJson<AdminZone>(
+    '/zones/' + encodeURIComponent(zoneId),
+    { token },
+    'ไม่สามารถลบโซนได้',
+  );
+}
+
+export function getAdminBooths(
+  zoneId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminBooth[]> {
+  return getJson<AdminBooth[]>(
+    '/booths?zoneId=' + encodeURIComponent(zoneId),
+    { signal, token },
+  );
+}
+
+export function createAdminBooth(
+  zoneId: string,
+  input: SaveBoothInput,
+  token: string,
+): Promise<AdminBooth> {
+  return postJson<AdminBooth>(
+    '/zones/' + encodeURIComponent(zoneId) + '/booths',
+    input,
+    { token },
+    'ไม่สามารถสร้างบูธได้',
+  );
+}
+
+export function updateAdminBooth(
+  boothId: string,
+  input: UpdateBoothInput,
+  token: string,
+): Promise<AdminBooth> {
+  return patchJson<AdminBooth>(
+    '/booths/' + encodeURIComponent(boothId),
+    input,
+    { token },
+    'ไม่สามารถแก้ไขบูธได้',
+  );
+}
+
+export function deleteAdminBooth(
+  boothId: string,
+  token: string,
+): Promise<AdminBooth> {
+  return deleteJson<AdminBooth>(
+    '/booths/' + encodeURIComponent(boothId),
+    { token },
+    'ไม่สามารถลบบูธได้',
+  );
 }
 
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
