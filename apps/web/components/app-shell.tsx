@@ -124,6 +124,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
       icon: ShieldCheck,
       matches: (pathname) => pathname.startsWith('/admin/bookings'),
     },
+    {
+      kind: 'link',
+      label: 'โซนและบูธ',
+      href: '/admin/zones',
+      icon: MapPinned,
+      matches: (pathname) => pathname.startsWith('/admin/zones'),
+    },
   ],
 };
 
@@ -164,7 +171,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, NAV_GROUPS[1]]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
-    ? [NAV_GROUPS[0].items[0], ADMIN_NAV_GROUP.items[0], ...BOTTOM_NAV.slice(2, 3)]
+    ? [
+        NAV_GROUPS[0].items[0],
+        ...ADMIN_NAV_GROUP.items,
+        BOTTOM_NAV[2],
+      ]
     : BOTTOM_NAV;
 
   return (
