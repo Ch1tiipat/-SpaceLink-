@@ -15,6 +15,7 @@ import {
   Orbit,
   Phone,
   Send,
+  ShieldCheck,
   Sparkles,
   Ticket,
   UserRound,
@@ -50,12 +51,14 @@ type NavItem =
     }
   | { kind: 'soon'; label: string; icon: LucideIcon };
 
+type NavGroup = { label: string; items: NavItem[] };
+
 /**
  * The prototype lists หน้าหลัก and ค้นหา Event separately. Discovery is a
  * single page here, so they are one item; its sibling Event ที่แนะนำ is
  * dropped rather than pointed at a route that does not exist.
  */
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Explore',
     items: [
@@ -110,6 +113,20 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+
+const ADMIN_NAV_GROUP: NavGroup = {
+  label: 'Admin',
+  items: [
+    {
+      kind: 'link',
+      label: 'ยืนยันการจอง',
+      href: '/admin/bookings',
+      icon: ShieldCheck,
+      matches: (pathname) => pathname.startsWith('/admin/bookings'),
+    },
+  ],
+};
+
 /** Below `lg` the sidebar is replaced by this bar, so it repeats its items. */
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
@@ -140,6 +157,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const hasPrivateNavigation = auth.status === 'signed-in';
+  const isAdmin =
+    auth.status === 'signed-in' &&
+    (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
+  const navGroups = isAdmin
+    ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, NAV_GROUPS[1]]
+    : NAV_GROUPS;
+  const bottomNavItems = isAdmin
+    ? [NAV_GROUPS[0].items[0], ADMIN_NAV_GROUP.items[0], ...BOTTOM_NAV.slice(2, 3)]
+    : BOTTOM_NAV;
 
   return (
     <>
@@ -157,6 +183,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {hasPrivateNavigation && !sidebarCollapsed && (
           <Sidebar
             pathname={pathname}
+            navGroups={navGroups}
             collapsed={sidebarCollapsed}
             onSignOut={signOut}
             onToggle={() => setSidebarCollapsed((current) => !current)}
@@ -185,7 +212,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {hasPrivateNavigation && <BottomNav pathname={pathname} />}
+      {hasPrivateNavigation && (
+        <BottomNav pathname={pathname} items={bottomNavItems} />
+      )}
       <FloatingSupport hasBottomNav={hasPrivateNavigation} />
       <UxReviewPanel auth={auth} pathname={pathname} />
     </>
@@ -194,11 +223,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Sidebar({
   pathname,
+  navGroups,
   collapsed,
   onSignOut,
   onToggle,
 }: {
   pathname: string;
+  navGroups: NavGroup[];
   collapsed: boolean;
   onSignOut: () => void;
   onToggle: () => void;
@@ -250,7 +281,7 @@ function Sidebar({
       </div>
 
       <div className="grid gap-0.5">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label}>
             {collapsed ? (
               <span aria-hidden className="mx-auto my-3 block h-px w-7 bg-[#ece7f3]" />
@@ -709,10 +740,16 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
   );
 }
 
-function BottomNav({ pathname }: { pathname: string }) {
+function BottomNav({
+  pathname,
+  items,
+}: {
+  pathname: string;
+  items: NavItem[];
+}) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-[35] flex h-[68px] justify-around border-t border-[#e9e3f2] bg-white/95 px-[5px] pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-10px_30px_rgba(54,36,91,0.06)] backdrop-blur-xl lg:hidden">
-      {BOTTOM_NAV.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
 
         if (item.kind === 'soon') {

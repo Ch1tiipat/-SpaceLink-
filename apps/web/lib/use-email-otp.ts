@@ -218,12 +218,13 @@ export function useEmailOtp({
         return;
       }
 
-      // VENDOR, ORG_ADMIN and SUPER_ADMIN all land on Discovery for now.
-      // TODO(SCRUM-54): redirect admins to /admin once it exists
-      //
       // `pending` stays true so the button remains disabled while the router
       // navigates away.
-      router.replace('/');
+      router.replace(
+        me.role === 'ORG_ADMIN' || me.role === 'SUPER_ADMIN'
+          ? '/admin/bookings'
+          : '/',
+      );
     } catch (cause) {
       setError(describeProfileError(cause));
       setPending(false);

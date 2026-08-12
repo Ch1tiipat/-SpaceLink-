@@ -469,6 +469,38 @@ export function cancelBooking(
   );
 }
 
+
+/**
+ * Looks up the booking code an organizer receives from a vendor. The API
+ * applies the organization-membership filter; the browser never attempts to
+ * infer or send an organization id itself.
+ */
+export function getAdminBookingByCode(
+  bookingCode: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord> {
+  return getJson<BookingRecord>(
+    `/bookings/by-code/${encodeURIComponent(bookingCode.trim())}`,
+    { signal, token },
+  );
+}
+
+/** Confirms a pending booking without a payment slip, with an audit reason. */
+export function confirmExemptBooking(
+  bookingId: string,
+  paymentExemptReason: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord> {
+  return patchJson<BookingRecord>(
+    `/bookings/${encodeURIComponent(bookingId)}/confirm-exempt`,
+    { paymentExemptReason: paymentExemptReason.trim() },
+    { signal, token },
+    'ยืนยันการจองไม่สำเร็จ',
+  );
+}
+
 /**
  * Uploads a payment slip to the guarded booking endpoint.
  *
