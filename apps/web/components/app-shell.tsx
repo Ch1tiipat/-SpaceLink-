@@ -8,6 +8,7 @@ import {
   Bot,
   House,
   LogOut,
+  Map,
   MapPinned,
   Menu,
   MessageCircle,
@@ -130,6 +131,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
       href: '/admin/zones',
       icon: MapPinned,
       matches: (pathname) => pathname.startsWith('/admin/zones'),
+    },
+    {
+      kind: 'link',
+      label: 'ออกแบบแผนผัง',
+      href: '/admin/map-designer',
+      icon: Map,
+      matches: (pathname) => pathname.startsWith('/admin/map-designer'),
     },
   ],
 };

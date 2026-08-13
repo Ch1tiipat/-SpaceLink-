@@ -38,6 +38,12 @@ export type EventBooth = {
   posY: string | null;
   availability: BoothAvailability;
   tier: BoothTier | null;
+  /** Public shop identity is present only after the booking is confirmed. */
+  occupant: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  } | null;
 };
 
 export type EventZone = {

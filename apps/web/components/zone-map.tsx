@@ -93,6 +93,11 @@ function boothText(
   return statusOf(booth).text;
 }
 
+function bookedLogoUrl(booth: EventBooth) {
+  if (booth.availability !== 'BOOKED') return null;
+  return booth.occupant?.logoUrl ?? null;
+}
+
 const tierColor = {
   S: '#4c1d95',
   A: '#6d28d9',
@@ -379,6 +384,8 @@ function OverviewZone({
       {zone.booths.slice(0, 12).map((booth, index) => {
         const boothX = x + 28 + (index % 6) * 59;
         const boothY = y + 92 + Math.floor(index / 6) * 54;
+        const logoUrl = bookedLogoUrl(booth);
+        const clipId = `overview-logo-${booth.id}`;
 
         return (
           <g key={booth.id}>
@@ -392,7 +399,24 @@ function OverviewZone({
               stroke={boothStroke(booth)}
               strokeWidth="2"
             />
-            {booth.tier && (
+            {logoUrl ? (
+              <>
+                <defs>
+                  <clipPath id={clipId}>
+                    <rect x={boothX} y={boothY} width="49" height="38" rx="7" />
+                  </clipPath>
+                </defs>
+                <image
+                  href={logoUrl}
+                  x={boothX}
+                  y={boothY}
+                  width="49"
+                  height="38"
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#${clipId})`}
+                />
+              </>
+            ) : booth.tier ? (
               <g>
                 <circle
                   cx={boothX + 43}
@@ -411,17 +435,19 @@ function OverviewZone({
                   {booth.tier}
                 </text>
               </g>
+            ) : null}
+            {!logoUrl && (
+              <text
+                x={boothX + 24.5}
+                y={boothY + 24}
+                textAnchor="middle"
+                fill={statusOf(booth).text}
+                fontSize="11"
+                fontWeight="800"
+              >
+                {booth.code}
+              </text>
             )}
-            <text
-              x={boothX + 24.5}
-              y={boothY + 24}
-              textAnchor="middle"
-              fill={statusOf(booth).text}
-              fontSize="11"
-              fontWeight="800"
-            >
-              {booth.code}
-            </text>
           </g>
         );
       })}
@@ -520,6 +546,8 @@ function FocusedZone({
         );
         const unavailable = booth.availability !== 'AVAILABLE';
         const fill = boothFill(booth, selectedBoothId, recommendedBoothId);
+        const logoUrl = bookedLogoUrl(booth);
+        const clipId = `focused-logo-${booth.id}`;
 
         return (
           <g
@@ -581,7 +609,30 @@ function FocusedZone({
               strokeWidth="4"
               opacity={unavailable ? 0.72 : 1}
             />
-            {booth.tier && (
+            {logoUrl ? (
+              <>
+                <defs>
+                  <clipPath id={clipId}>
+                    <rect
+                      x={x}
+                      y={y}
+                      width={boothWidth}
+                      height={boothHeight}
+                      rx="11"
+                    />
+                  </clipPath>
+                </defs>
+                <image
+                  href={logoUrl}
+                  x={x}
+                  y={y}
+                  width={boothWidth}
+                  height={boothHeight}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#${clipId})`}
+                />
+              </>
+            ) : booth.tier ? (
               <g>
                 <rect
                   x={x + boothWidth - 28}
@@ -602,17 +653,19 @@ function FocusedZone({
                   {booth.tier}
                 </text>
               </g>
+            ) : null}
+            {!logoUrl && (
+              <text
+                x={x + boothWidth / 2}
+                y={y + 29}
+                textAnchor="middle"
+                fill={boothText(booth, selectedBoothId, recommendedBoothId)}
+                fontSize="17"
+                fontWeight="900"
+              >
+                {booth.code}
+              </text>
             )}
-            <text
-              x={x + boothWidth / 2}
-              y={y + 29}
-              textAnchor="middle"
-              fill={boothText(booth, selectedBoothId, recommendedBoothId)}
-              fontSize="17"
-              fontWeight="900"
-            >
-              {booth.code}
-            </text>
             <text
               x={x + boothWidth / 2}
               y={y + 50}
