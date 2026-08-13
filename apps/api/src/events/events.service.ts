@@ -97,9 +97,9 @@ export class EventsService {
   /**
    * Public-safe data used by the vendor zone map.
    *
-   * Booking records are deliberately reduced to an availability label. The
-   * browser must never receive another vendor's booking id or personal data
-   * just to colour a booth on the map.
+   * Booking records are deliberately reduced to an availability label and,
+   * for a confirmed booking only, the public shop identity used on the map.
+   * The browser never receives another vendor's booking id or personal data.
    */
   async findMap(id: string) {
     const event = await this.prisma.event.findFirst({
@@ -175,7 +175,12 @@ export class EventsService {
                 eventId: id,
                 status: { in: ACTIVE_BOOKING_STATUSES },
               },
-              select: { status: true },
+              select: {
+                status: true,
+                shop: {
+                  select: { id: true, name: true, logoUrl: true },
+                },
+              },
               take: 1,
             },
           },
@@ -205,18 +210,25 @@ export class EventsService {
         posX: decimalString(zone.posX),
         posY: decimalString(zone.posY),
         categories: zone.categories.map(({ category }) => category),
-        booths: zone.booths.map((booth) => ({
-          id: booth.id,
-          zoneId: booth.zoneId,
-          code: booth.code,
-          boothPrice: booth.boothPrice.toString(),
-          widthM: decimalString(booth.widthM),
-          heightM: decimalString(booth.heightM),
-          posX: decimalString(booth.posX),
-          posY: decimalString(booth.posY),
-          availability: boothAvailability(booth.status, booth.bookings),
-          tier: boothTier(booth.boothPrice, tierThresholds),
-        })),
+        booths: zone.booths.map((booth) => {
+          const confirmedBooking = booth.bookings.find(
+            (booking) => booking.status === BookingStatus.CONFIRMED,
+          );
+
+          return {
+            id: booth.id,
+            zoneId: booth.zoneId,
+            code: booth.code,
+            boothPrice: booth.boothPrice.toString(),
+            widthM: decimalString(booth.widthM),
+            heightM: decimalString(booth.heightM),
+            posX: decimalString(booth.posX),
+            posY: decimalString(booth.posY),
+            availability: boothAvailability(booth.status, booth.bookings),
+            tier: boothTier(booth.boothPrice, tierThresholds),
+            occupant: confirmedBooking?.shop ?? null,
+          };
+        }),
       })),
     };
   }

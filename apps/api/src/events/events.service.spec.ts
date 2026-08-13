@@ -167,7 +167,16 @@ describe('EventsService', () => {
               posX: null,
               posY: null,
               status: BoothStatus.AVAILABLE,
-              bookings: [{ status: BookingStatus.CONFIRMED }],
+              bookings: [
+                {
+                  status: BookingStatus.CONFIRMED,
+                  shop: {
+                    id: 'shop-1',
+                    name: 'ร้านกาแฟอรุณ',
+                    logoUrl: 'https://example.com/shop-logo.png',
+                  },
+                },
+              ],
             },
           ],
         },
@@ -190,6 +199,11 @@ describe('EventsService', () => {
             code: 'A02',
             boothPrice: '1800',
             availability: 'BOOKED',
+            occupant: {
+              id: 'shop-1',
+              name: 'ร้านกาแฟอรุณ',
+              logoUrl: 'https://example.com/shop-logo.png',
+            },
           },
         ],
       });
@@ -231,7 +245,16 @@ describe('EventsService', () => {
               posX: null,
               posY: null,
               status: BoothStatus.AVAILABLE,
-              bookings: [{ status: BookingStatus.PENDING_PAYMENT }],
+              bookings: [
+                {
+                  status: BookingStatus.PENDING_PAYMENT,
+                  shop: {
+                    id: 'shop-1',
+                    name: 'ร้านกาแฟอรุณ',
+                    logoUrl: 'https://example.com/shop-logo.png',
+                  },
+                },
+              ],
             },
           ],
         },
@@ -240,6 +263,7 @@ describe('EventsService', () => {
       const result = await service.findMap('event-1');
 
       expect(result.zones[0].booths[0].availability).toBe('HELD');
+      expect(result.zones[0].booths[0].occupant).toBeNull();
     });
 
     it('throws 404 when the event does not exist', async () => {
