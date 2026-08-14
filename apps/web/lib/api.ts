@@ -173,6 +173,31 @@ export type CreateBookingInput = {
   shopId: string;
 };
 
+export type SupportTicketStatus = 'OPEN' | 'PROCESSING' | 'CLOSED';
+
+export type SupportTicketRecord = {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  bookingId: string | null;
+  type: string;
+  subject: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateSupportTicketInput = {
+  eventId: string;
+  subject: string;
+  message: string;
+};
+
+export type ApproveQuotaExceptionInput = {
+  eventId: string;
+  boothId: string;
+};
+
 export type SlipVerificationStatus =
   | 'VERIFIED'
   | 'INVALID'
@@ -726,6 +751,42 @@ export function confirmExemptBooking(
     { paymentExemptReason: paymentExemptReason.trim() },
     { signal, token },
     'ยืนยันการจองไม่สำเร็จ',
+  );
+}
+
+/** Opens a quota-exception request for the organization that owns the event. */
+export function createSupportTicket(
+  input: CreateSupportTicketInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<SupportTicketRecord> {
+  return postJson<SupportTicketRecord>(
+    '/support-tickets',
+    {
+      eventId: input.eventId.trim(),
+      subject: input.subject.trim(),
+      message: input.message.trim(),
+    },
+    { signal, token },
+    'ไม่สามารถส่งคำร้องขอเพิ่มโควตาได้',
+  );
+}
+
+/** Approves one request; the API derives the organization from the ticket. */
+export function approveQuotaException(
+  ticketId: string,
+  input: ApproveQuotaExceptionInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord> {
+  return patchJson<BookingRecord>(
+    `/support-tickets/${encodeURIComponent(ticketId.trim())}/approve-quota-exception`,
+    {
+      eventId: input.eventId.trim(),
+      boothId: input.boothId.trim(),
+    },
+    { signal, token },
+    'ไม่สามารถอนุมัติคำร้องขอเพิ่มโควตาได้',
   );
 }
 
