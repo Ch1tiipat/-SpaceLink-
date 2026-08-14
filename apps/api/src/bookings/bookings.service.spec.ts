@@ -14,6 +14,8 @@ import {
   type Booking,
 } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
+import generatePromptPayPayload from 'promptpay-qr';
+import QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
@@ -24,6 +26,18 @@ import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+
+jest.mock('promptpay-qr', () => ({
+  __esModule: true,
+  default: jest.fn(() => 'promptpay-payload'),
+}));
+
+jest.mock('qrcode', () => ({
+  __esModule: true,
+  default: {
+    toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,cXI='),
+  },
+}));
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
@@ -850,7 +864,11 @@ describe('BookingsService', () => {
   it('lists only bookings owned by the authenticated vendor', async () => {
     const listedBooking = {
       ...CREATED_BOOKING,
-      event: { id: EVENT_ID, name: 'ตลาดนัดสร้างสรรค์' },
+      event: {
+        id: EVENT_ID,
+        name: 'ตลาดนัดสร้างสรรค์',
+        organization: { promptpayId: '0812345678' },
+      },
       booth: {
         id: BOOTH_ID,
         code: 'A01',
@@ -864,13 +882,25 @@ describe('BookingsService', () => {
     };
     bookingFindMany.mockResolvedValue([listedBooking]);
 
-    await expect(service.findAll(VENDOR_ID)).resolves.toEqual([
-      { ...listedBooking, boothPrice: '1500' },
-    ]);
+    const result = await service.findAll(VENDOR_ID);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.paymentQrDataUri).toMatch(/^data:image\/png;base64,/);
+    expect(result[0]).toEqual({
+      ...listedBooking,
+      event: { id: EVENT_ID, name: 'ตลาดนัดสร้างสรรค์' },
+      boothPrice: '1500',
+      paymentQrDataUri: 'data:image/png;base64,cXI=',
+    });
     expect(bookingFindMany).toHaveBeenCalledWith({
       where: { vendorUserId: VENDOR_ID },
       include: {
-        event: { select: { id: true, name: true } },
+        event: {
+          select: {
+            id: true,
+            name: true,
+            organization: { select: { promptpayId: true } },
+          },
+        },
         booth: {
           select: {
             id: true,
@@ -882,6 +912,40 @@ describe('BookingsService', () => {
       },
       orderBy: { createdAt: 'desc' },
     });
+    expect(generatePromptPayPayload).toHaveBeenCalledWith('0812345678', {
+      amount: 1500,
+    });
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(
+      'promptpay-payload',
+      expect.objectContaining({ width: 320 }),
+    );
+  });
+
+  it('returns a null payment QR when the organizer has no PromptPay ID', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        ...CREATED_BOOKING,
+        event: {
+          id: EVENT_ID,
+          name: 'ตลาดนัดสร้างสรรค์',
+          organization: { promptpayId: null },
+        },
+        booth: {
+          id: BOOTH_ID,
+          code: 'A01',
+          zone: {
+            id: '88888888-8888-4888-8888-888888888888',
+            code: 'A',
+            name: 'อาหารและเครื่องดื่ม',
+          },
+        },
+        shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+      },
+    ]);
+
+    const [result] = await service.findAll(VENDOR_ID);
+
+    expect(result.paymentQrDataUri).toBeNull();
   });
 
   describe('findOne', () => {

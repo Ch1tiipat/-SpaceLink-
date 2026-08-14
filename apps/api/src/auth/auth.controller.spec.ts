@@ -11,9 +11,11 @@ jest.mock('./guards/supabase-auth.guard', () => ({
 }));
 
 describe('AuthController', () => {
-  const findMany = jest.fn();
+  const shopFindMany = jest.fn();
+  const membershipFindMany = jest.fn();
   const controller = new AuthController({
-    shop: { findMany },
+    shop: { findMany: shopFindMany },
+    orgMembership: { findMany: membershipFindMany },
   } as unknown as PrismaService);
 
   const user: User = {
@@ -31,6 +33,7 @@ describe('AuthController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    membershipFindMany.mockResolvedValue([]);
   });
 
   it('protects the profile endpoint with Supabase authentication', () => {
@@ -45,7 +48,7 @@ describe('AuthController', () => {
   });
 
   it('returns vendor-owned shops with flattened product categories', async () => {
-    findMany.mockResolvedValue([
+    shopFindMany.mockResolvedValue([
       {
         id: '00000000-0000-4000-8000-000000000010',
         name: 'ร้านเกษตรดี',
@@ -64,7 +67,7 @@ describe('AuthController', () => {
 
     const result = await controller.me(user);
 
-    expect(findMany).toHaveBeenCalledWith(
+    expect(shopFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { ownerUserId: user.id } }),
     );
     expect(result.shops).toEqual([
@@ -82,5 +85,33 @@ describe('AuthController', () => {
       },
     ]);
     expect(result).not.toHaveProperty('blacklistReason');
+  });
+
+  it('returns only organizations linked to the authenticated user', async () => {
+    shopFindMany.mockResolvedValue([]);
+    membershipFindMany.mockResolvedValue([
+      {
+        role: 'ADMIN',
+        organization: {
+          id: '00000000-0000-4000-8000-000000000030',
+          name: 'SpaceLink Organizer',
+          promptpayId: '0812345678',
+        },
+      },
+    ]);
+
+    const result = await controller.me(user);
+
+    expect(membershipFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: user.id } }),
+    );
+    expect(result.organizations).toEqual([
+      {
+        id: '00000000-0000-4000-8000-000000000030',
+        name: 'SpaceLink Organizer',
+        promptpayId: '0812345678',
+        membershipRole: 'ADMIN',
+      },
+    ]);
   });
 });

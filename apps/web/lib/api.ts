@@ -114,7 +114,7 @@ export type UpdateMeInput = {
 };
 
 /** What PATCH /users/me returns — CurrentUser without the `shops` field. */
-export type UserProfile = Omit<CurrentUser, 'shops'>;
+export type UserProfile = Omit<CurrentUser, 'shops' | 'organizations'>;
 
 export type ZoneRecommendation = {
   boothId: string;
@@ -155,9 +155,12 @@ export type BookingRecord = {
   cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Present after hydrating the booking through GET /bookings. */
+  paymentQrDataUri?: string | null;
 };
 
 export type MyBooking = BookingRecord & {
+  paymentQrDataUri: string | null;
   event: { id: string; name: string };
   booth: {
     id: string;
@@ -211,6 +214,23 @@ export type CurrentUser = {
   createdAt: string;
   updatedAt: string;
   shops: VendorShop[];
+  organizations: {
+    id: string;
+    name: string;
+    promptpayId: string | null;
+    membershipRole: 'OWNER' | 'ADMIN';
+  }[];
+};
+
+export type OrganizationSettings = {
+  id: string;
+  name: string;
+  description: string | null;
+  contactEmail: string;
+  contactPhone: string | null;
+  logoUrl: string | null;
+  status: string;
+  promptpayId: string | null;
 };
 
 export type AdminVenue = {
@@ -603,6 +623,24 @@ export function getMe(
   signal?: AbortSignal,
 ): Promise<CurrentUser> {
   return getJson<CurrentUser>('/auth/me', { signal, token });
+}
+
+/**
+ * `organizationId` must come from the authenticated user's memberships in
+ * GET /auth/me. The UI never accepts an arbitrary organization identifier.
+ */
+export function updateOrganizationPromptPay(
+  organizationId: string,
+  promptpayId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSettings> {
+  return patchJson<OrganizationSettings>(
+    '/organizations/' + encodeURIComponent(organizationId),
+    { promptpayId },
+    { signal, token },
+    'บันทึกหมายเลข PromptPay ไม่สำเร็จ',
+  );
 }
 
 export function createShop(

@@ -16,6 +16,8 @@ import {
   type Booking,
   type User,
 } from '@prisma/client';
+import generatePromptPayPayload from 'promptpay-qr';
+import QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
@@ -40,7 +42,13 @@ const BOOKABLE_EVENT_STATUSES: EventStatus[] = [
 ];
 
 const bookingListInclude = {
-  event: { select: { id: true, name: true } },
+  event: {
+    select: {
+      id: true,
+      name: true,
+      organization: { select: { promptpayId: true } },
+    },
+  },
   booth: {
     select: {
       id: true,
@@ -57,8 +65,10 @@ export type BookingResponse = Omit<Booking, 'boothPrice'> & {
 type BookingListRecord = Prisma.BookingGetPayload<{
   include: typeof bookingListInclude;
 }>;
-type BookingListResponse = Omit<BookingListRecord, 'boothPrice'> & {
+type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
   boothPrice: string;
+  event: { id: string; name: string };
+  paymentQrDataUri: string | null;
 };
 
 /**
@@ -442,7 +452,7 @@ export class BookingsService {
       include: bookingListInclude,
       orderBy: { createdAt: 'desc' },
     });
-    return bookings.map((booking) => this.toListResponse(booking));
+    return Promise.all(bookings.map((booking) => this.toListResponse(booking)));
   }
 
   async cancel(
@@ -695,9 +705,33 @@ export class BookingsService {
     return { ...rest, boothPrice: boothPrice.toString() };
   }
 
-  private toListResponse(booking: BookingListRecord): BookingListResponse {
-    const { boothPrice, ...rest } = booking;
-    return { ...rest, boothPrice: boothPrice.toString() };
+  private async toListResponse(
+    booking: BookingListRecord,
+  ): Promise<BookingListResponse> {
+    const { boothPrice, event, ...rest } = booking;
+    const promptpayId = event.organization.promptpayId;
+
+    let paymentQrDataUri: string | null = null;
+    if (promptpayId) {
+      // The QR encoder requires a JavaScript number. Conversion happens only
+      // at this external-library boundary; every API money field remains a
+      // Decimal-backed string.
+      const payload = generatePromptPayPayload(promptpayId, {
+        amount: boothPrice.toNumber(),
+      });
+      paymentQrDataUri = await QRCode.toDataURL(payload, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 320,
+      });
+    }
+
+    return {
+      ...rest,
+      boothPrice: boothPrice.toString(),
+      event: { id: event.id, name: event.name },
+      paymentQrDataUri,
+    };
   }
 
   private toSlipResponse(

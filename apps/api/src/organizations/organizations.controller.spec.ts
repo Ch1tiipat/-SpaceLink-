@@ -1,36 +1,56 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { PrismaService } from '../prisma/prisma.service';
+
+jest.mock('jose', () => ({
+  createRemoteJWKSet: jest.fn(),
+  jwtVerify: jest.fn(),
+}));
+
+import { UserRole } from '@prisma/client';
+import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
-
-const mockPrismaService = {};
 
 describe('OrganizationsController', () => {
   let controller: OrganizationsController;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [OrganizationsController],
-      providers: [
-        OrganizationsService,
-        { provide: PrismaService, useValue: mockPrismaService },
-      ],
-    }).compile();
-
-    controller = module.get<OrganizationsController>(OrganizationsController);
+  beforeEach(() => {
+    controller = new OrganizationsController({} as OrganizationsService);
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  it('keeps public reads unguarded and exposes no mutation handlers', () => {
+  it('keeps public reads unguarded', () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, OrganizationsController),
     ).toBeUndefined();
-    expect(OrganizationsController.prototype).not.toHaveProperty('create');
-    expect(OrganizationsController.prototype).not.toHaveProperty('update');
-    expect(OrganizationsController.prototype).not.toHaveProperty('remove');
+    for (const name of ['findAll', 'findOne']) {
+      const handler = (
+        OrganizationsController.prototype as unknown as Record<string, object>
+      )[name];
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeUndefined();
+    }
+  });
+
+  it('protects update with auth, org scope, and role guards', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).update;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+      UserRole.ORG_ADMIN,
+    ]);
   });
 });

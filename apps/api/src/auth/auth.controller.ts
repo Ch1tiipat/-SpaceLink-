@@ -16,21 +16,33 @@ export class AuthController {
   @UseGuards(SupabaseAuthGuard)
   @Get('me')
   async me(@CurrentUser() user: User) {
-    const shops = await this.prisma.shop.findMany({
-      where: { ownerUserId: user.id },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        logoUrl: true,
-        categories: {
-          select: {
-            category: { select: { id: true, name: true } },
+    const [shops, memberships] = await Promise.all([
+      this.prisma.shop.findMany({
+        where: { ownerUserId: user.id },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          logoUrl: true,
+          categories: {
+            select: {
+              category: { select: { id: true, name: true } },
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.orgMembership.findMany({
+        where: { userId: user.id },
+        orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+        select: {
+          role: true,
+          organization: {
+            select: { id: true, name: true, promptpayId: true },
+          },
+        },
+      }),
+    ]);
 
     // Shaped, not the raw row: `blacklistReason` is admin-facing only (§14.5).
     // The profile half lives in toUserResponse so PATCH /users/me returns the
@@ -43,6 +55,10 @@ export class AuthController {
         description: shop.description,
         logoUrl: shop.logoUrl,
         categories: shop.categories.map(({ category }) => category),
+      })),
+      organizations: memberships.map(({ role, organization }) => ({
+        ...organization,
+        membershipRole: role,
       })),
     };
   }
