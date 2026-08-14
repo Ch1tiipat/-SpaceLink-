@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import {
   Building2,
-  CreditCard,
   Landmark,
   MapPin,
   QrCode,
@@ -31,7 +30,7 @@ import { canUseUxPreview } from '@/lib/ux-preview';
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
 
-type PaymentMethod = 'qr' | 'card' | 'bank';
+type PaymentMethod = 'qr' | 'bank';
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -640,7 +639,6 @@ function PaymentMethodPanel({
 }) {
   const methods = [
     { id: 'qr' as const, label: 'QR Code', icon: QrCode },
-    { id: 'card' as const, label: 'บัตรเครดิต / เดบิต', icon: CreditCard },
     { id: 'bank' as const, label: 'ธนาคารออนไลน์', icon: Landmark },
   ];
 
@@ -685,16 +683,6 @@ function PaymentMethodPanel({
           </span>
           <b className="mt-4 block">สแกนเพื่อชำระ {formatMoney(amount)} บาท</b>
           <p className="mt-1 text-xs text-muted">QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง</p>
-        </div>
-      )}
-
-      {method === 'card' && (
-        <div className="mt-5 grid gap-3 rounded-2xl bg-[#faf8ff] p-4">
-          <input aria-label="หมายเลขบัตร" placeholder="หมายเลขบัตร 0000 0000 0000 0000" className="rounded-xl border border-line bg-white px-4 py-3 text-sm" />
-          <div className="grid grid-cols-2 gap-3">
-            <input aria-label="วันหมดอายุ" placeholder="MM / YY" className="min-w-0 rounded-xl border border-line bg-white px-4 py-3 text-sm" />
-            <input aria-label="รหัส CVC" placeholder="CVC" className="min-w-0 rounded-xl border border-line bg-white px-4 py-3 text-sm" />
-          </div>
         </div>
       )}
 
