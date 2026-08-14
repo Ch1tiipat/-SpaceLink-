@@ -2,6 +2,7 @@ import {
   BookingStatus,
   BoothStatus,
   EventStatus,
+  MembershipRole,
   Prisma,
   PrismaClient,
   UserRole,
@@ -75,6 +76,19 @@ const PHASE6_QUOTA_EVENT_ID = seedUuid(10, 2);
 const PHASE6_ZONE_ID = seedUuid(11, 1);
 const PHASE6_VENDOR_B_BOOKING_ID = seedUuid(13, 1);
 const PHASE6_EXPIRED_HOLD_BOOKING_ID = seedUuid(13, 2);
+const ZZTEST_ORG_A_ID = seedUuid(20, 1);
+const ZZTEST_ORG_B_ID = seedUuid(20, 2);
+const ZZTEST_ORG_A_CONFIG_ID = seedUuid(21, 1);
+const ZZTEST_ORG_B_CONFIG_ID = seedUuid(21, 2);
+const ZZTEST_ORG_A_MEMBERSHIP_ID = seedUuid(22, 1);
+const ZZTEST_ORG_B_MEMBERSHIP_ID = seedUuid(22, 2);
+const ZZTEST_ORG_A_VENUE_ID = seedUuid(23, 1);
+const ZZTEST_ORG_B_VENUE_ID = seedUuid(23, 2);
+const ZZTEST_ORG_A_ZONE_ID = seedUuid(24, 1);
+const ZZTEST_ORG_B_ZONE_ID = seedUuid(24, 2);
+const ZZTEST_ORG_A_EVENT_ID = seedUuid(25, 1);
+const ZZTEST_ORG_B_EVENT_ID = seedUuid(25, 2);
+const ZZTEST_VENDOR_SHOP_ID = seedUuid(26, 1);
 
 // Independent lookup data. These rows must exist before ZoneCategory links.
 const CATEGORY_SEEDS = [
@@ -371,6 +385,17 @@ const BOOTH_STATUSES = [
 ];
 
 async function main(): Promise<void> {
+  const zzTestUsers = await findZzTestUsers();
+  if (zzTestUsers) {
+    console.log('Seeding isolated SCRUM-26/56 ZZTEST fixtures...');
+    const zzTestFixtureSummary = await seedZzTestFixtures(zzTestUsers);
+    console.log('SCRUM-26/56 ZZTEST fixtures ready:');
+    for (const [key, value] of Object.entries(zzTestFixtureSummary)) {
+      console.log(`${key}=${value}`);
+    }
+    return;
+  }
+
   console.log('Seeding SpaceLink multi-organization demo data...');
 
   const phase6VendorA = await findPhase6VendorA();
@@ -626,6 +651,9 @@ async function main(): Promise<void> {
       'Phase 6 fixtures skipped: PHASE6_VENDOR_A_USER_ID is not set.',
     );
   }
+  console.log(
+    'SCRUM-26/56 ZZTEST fixtures skipped: ZZTEST user IDs are not set.',
+  );
 }
 
 async function findPhase6VendorA(): Promise<{ id: string } | null> {
@@ -932,6 +960,315 @@ async function seedPhase6Fixtures(vendorA: { id: string }): Promise<{
     booths: phase6Booths.length,
     bookings: 5,
   };
+}
+
+type ZzTestUsers = {
+  adminAId: string;
+  adminBId: string;
+  vendorId: string;
+  runLabel: string;
+};
+
+async function findZzTestUsers(): Promise<ZzTestUsers | null> {
+  const adminAId = process.env.ZZTEST_ORG_ADMIN_A_USER_ID?.trim();
+  const adminBId = process.env.ZZTEST_ORG_ADMIN_B_USER_ID?.trim();
+  const vendorId = process.env.ZZTEST_VENDOR_USER_ID?.trim();
+  const suppliedIds = [adminAId, adminBId, vendorId].filter(Boolean);
+
+  if (suppliedIds.length === 0) {
+    return null;
+  }
+  if (!adminAId || !adminBId || !vendorId) {
+    throw new SeedPreconditionError(
+      'ZZTEST_ORG_ADMIN_A_USER_ID, ZZTEST_ORG_ADMIN_B_USER_ID, and ' +
+        'ZZTEST_VENDOR_USER_ID must be set together.',
+    );
+  }
+  if (new Set([adminAId, adminBId, vendorId]).size !== 3) {
+    throw new SeedPreconditionError(
+      'ZZTEST user IDs must identify three different users.',
+    );
+  }
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [adminAId, adminBId, vendorId] } },
+    select: { id: true, role: true },
+  });
+  if (users.length !== 3) {
+    throw new SeedPreconditionError(
+      'Every ZZTEST user ID must identify an existing app_user provisioned ' +
+        'through Supabase Email OTP.',
+    );
+  }
+
+  const rolesByUserId = new Map(users.map((user) => [user.id, user.role]));
+  if (
+    rolesByUserId.get(adminAId) !== UserRole.ORG_ADMIN ||
+    rolesByUserId.get(adminBId) !== UserRole.ORG_ADMIN ||
+    rolesByUserId.get(vendorId) !== UserRole.VENDOR
+  ) {
+    throw new SeedPreconditionError(
+      'ZZTEST Admin A and Admin B must already be ORG_ADMIN users, and the ' +
+        'ZZTEST vendor must already be a VENDOR. The seed does not modify ' +
+        'existing user roles.',
+    );
+  }
+
+  const runLabel =
+    process.env.ZZTEST_RUN_LABEL?.trim() ?? 'ZZTEST_SCRUM_26_56_20260811';
+  if (!runLabel.startsWith('ZZTEST_')) {
+    throw new SeedPreconditionError(
+      'ZZTEST_RUN_LABEL must start with ZZTEST_.',
+    );
+  }
+
+  return { adminAId, adminBId, vendorId, runLabel };
+}
+
+async function seedZzTestFixtures(
+  users: ZzTestUsers,
+): Promise<Record<string, string>> {
+  return prisma.$transaction(async (tx) => {
+    const organizations = [
+      {
+        id: ZZTEST_ORG_A_ID,
+        configId: ZZTEST_ORG_A_CONFIG_ID,
+        membershipId: ZZTEST_ORG_A_MEMBERSHIP_ID,
+        adminUserId: users.adminAId,
+        name: `${users.runLabel}_Organization_A`,
+        contactEmail: 'zztest-org-a@example.com',
+      },
+      {
+        id: ZZTEST_ORG_B_ID,
+        configId: ZZTEST_ORG_B_CONFIG_ID,
+        membershipId: ZZTEST_ORG_B_MEMBERSHIP_ID,
+        adminUserId: users.adminBId,
+        name: `${users.runLabel}_Organization_B`,
+        contactEmail: 'zztest-org-b@example.com',
+      },
+    ];
+
+    for (const organizationSeed of organizations) {
+      await tx.organization.upsert({
+        where: { id: organizationSeed.id },
+        update: {
+          name: organizationSeed.name,
+          description: 'Isolated SCRUM-26/56 shared database test fixture',
+          contactEmail: organizationSeed.contactEmail,
+        },
+        create: {
+          id: organizationSeed.id,
+          name: organizationSeed.name,
+          description: 'Isolated SCRUM-26/56 shared database test fixture',
+          contactEmail: organizationSeed.contactEmail,
+        },
+      });
+      await tx.orgConfig.upsert({
+        where: { organizationId: organizationSeed.id },
+        update: {
+          boothLimitPerVendor: 3,
+          bookingQuotaPerVendor: 2,
+        },
+        create: {
+          id: organizationSeed.configId,
+          organizationId: organizationSeed.id,
+          boothLimitPerVendor: 3,
+          bookingQuotaPerVendor: 2,
+        },
+      });
+      await tx.orgMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: organizationSeed.id,
+            userId: organizationSeed.adminUserId,
+          },
+        },
+        update: { role: MembershipRole.OWNER },
+        create: {
+          id: organizationSeed.membershipId,
+          organizationId: organizationSeed.id,
+          userId: organizationSeed.adminUserId,
+          role: MembershipRole.OWNER,
+        },
+      });
+    }
+
+    const venueSeeds = [
+      {
+        id: ZZTEST_ORG_A_VENUE_ID,
+        organizationId: ZZTEST_ORG_A_ID,
+        name: `${users.runLabel}_Venue_A`,
+      },
+      {
+        id: ZZTEST_ORG_B_VENUE_ID,
+        organizationId: ZZTEST_ORG_B_ID,
+        name: `${users.runLabel}_Venue_B`,
+      },
+    ];
+    for (const venueSeed of venueSeeds) {
+      await tx.venue.upsert({
+        where: { id: venueSeed.id },
+        update: {
+          organizationId: venueSeed.organizationId,
+          name: venueSeed.name,
+          description: 'SCRUM-26/56 test venue',
+        },
+        create: {
+          ...venueSeed,
+          description: 'SCRUM-26/56 test venue',
+        },
+      });
+    }
+
+    const zoneSeeds = [
+      {
+        id: ZZTEST_ORG_A_ZONE_ID,
+        venueId: ZZTEST_ORG_A_VENUE_ID,
+        code: 'ZZTEST-A',
+        name: `${users.runLabel}_Zone_A`,
+      },
+      {
+        id: ZZTEST_ORG_B_ZONE_ID,
+        venueId: ZZTEST_ORG_B_VENUE_ID,
+        code: 'ZZTEST-B',
+        name: `${users.runLabel}_Zone_B`,
+      },
+    ];
+    for (const zoneSeed of zoneSeeds) {
+      await tx.zone.upsert({
+        where: {
+          venueId_code: { venueId: zoneSeed.venueId, code: zoneSeed.code },
+        },
+        update: {
+          name: zoneSeed.name,
+          description: 'SCRUM-26/56 test zone',
+          defaultBoothPrice: '100.00',
+          posX: '10.0000',
+          posY: '10.0000',
+        },
+        create: {
+          ...zoneSeed,
+          description: 'SCRUM-26/56 test zone',
+          defaultBoothPrice: '100.00',
+          posX: '10.0000',
+          posY: '10.0000',
+        },
+      });
+    }
+
+    const boothSeeds = [
+      { id: seedUuid(27, 1), zoneId: ZZTEST_ORG_A_ZONE_ID, code: 'ZZ-A01' },
+      { id: seedUuid(27, 2), zoneId: ZZTEST_ORG_A_ZONE_ID, code: 'ZZ-A02' },
+      { id: seedUuid(27, 3), zoneId: ZZTEST_ORG_A_ZONE_ID, code: 'ZZ-A03' },
+      { id: seedUuid(27, 4), zoneId: ZZTEST_ORG_B_ZONE_ID, code: 'ZZ-B01' },
+      { id: seedUuid(27, 5), zoneId: ZZTEST_ORG_B_ZONE_ID, code: 'ZZ-B02' },
+      { id: seedUuid(27, 6), zoneId: ZZTEST_ORG_B_ZONE_ID, code: 'ZZ-B03' },
+    ];
+    for (const [index, boothSeed] of boothSeeds.entries()) {
+      await tx.booth.upsert({
+        where: {
+          zoneId_code: { zoneId: boothSeed.zoneId, code: boothSeed.code },
+        },
+        update: {
+          boothPrice: '100.00',
+          widthM: '3.00',
+          heightM: '3.00',
+          posX: `${10 + index * 10}.0000`,
+          posY: '20.0000',
+          facilities: { zzTestFixture: true },
+          status: BoothStatus.AVAILABLE,
+        },
+        create: {
+          ...boothSeed,
+          boothPrice: '100.00',
+          widthM: '3.00',
+          heightM: '3.00',
+          posX: `${10 + index * 10}.0000`,
+          posY: '20.0000',
+          facilities: { zzTestFixture: true },
+          status: BoothStatus.AVAILABLE,
+        },
+      });
+    }
+
+    const eventSeeds = [
+      {
+        id: ZZTEST_ORG_A_EVENT_ID,
+        organizationId: ZZTEST_ORG_A_ID,
+        venueId: ZZTEST_ORG_A_VENUE_ID,
+        name: `${users.runLabel}_Event_A`,
+      },
+      {
+        id: ZZTEST_ORG_B_EVENT_ID,
+        organizationId: ZZTEST_ORG_B_ID,
+        venueId: ZZTEST_ORG_B_VENUE_ID,
+        name: `${users.runLabel}_Event_B`,
+      },
+    ];
+    for (const eventSeed of eventSeeds) {
+      await tx.event.upsert({
+        where: { id: eventSeed.id },
+        update: {
+          organizationId: eventSeed.organizationId,
+          venueId: eventSeed.venueId,
+          name: eventSeed.name,
+          description: 'SCRUM-26/56 shared database test event',
+          startDate: new Date('2026-09-20T00:00:00.000Z'),
+          endDate: new Date('2026-09-22T00:00:00.000Z'),
+          startTime: '09:00',
+          endTime: '18:00',
+          contactEmail: 'zztest-organizer@example.com',
+          status: EventStatus.PUBLISHED,
+        },
+        create: {
+          ...eventSeed,
+          description: 'SCRUM-26/56 shared database test event',
+          startDate: new Date('2026-09-20T00:00:00.000Z'),
+          endDate: new Date('2026-09-22T00:00:00.000Z'),
+          startTime: '09:00',
+          endTime: '18:00',
+          contactEmail: 'zztest-organizer@example.com',
+          status: EventStatus.PUBLISHED,
+        },
+      });
+    }
+
+    await tx.shop.upsert({
+      where: { id: ZZTEST_VENDOR_SHOP_ID },
+      update: {
+        ownerUserId: users.vendorId,
+        name: `${users.runLabel}_Vendor_Shop`,
+      },
+      create: {
+        id: ZZTEST_VENDOR_SHOP_ID,
+        ownerUserId: users.vendorId,
+        name: `${users.runLabel}_Vendor_Shop`,
+      },
+    });
+
+    return {
+      TEST_RUN_LABEL: users.runLabel,
+      ORG_A_ID: ZZTEST_ORG_A_ID,
+      ORG_A_ADMIN_USER_ID: users.adminAId,
+      ORG_A_VENUE_ID: ZZTEST_ORG_A_VENUE_ID,
+      ORG_A_ZONE_ID: ZZTEST_ORG_A_ZONE_ID,
+      ORG_A_BOOTH_1_ID: boothSeeds[0].id,
+      ORG_A_BOOTH_2_ID: boothSeeds[1].id,
+      ORG_A_BOOTH_3_ID: boothSeeds[2].id,
+      ORG_A_EVENT_ID: ZZTEST_ORG_A_EVENT_ID,
+      ORG_B_ID: ZZTEST_ORG_B_ID,
+      ORG_B_ADMIN_USER_ID: users.adminBId,
+      ORG_B_VENUE_ID: ZZTEST_ORG_B_VENUE_ID,
+      ORG_B_ZONE_ID: ZZTEST_ORG_B_ZONE_ID,
+      ORG_B_BOOTH_ID: boothSeeds[3].id,
+      ORG_B_BOOTH_1_ID: boothSeeds[3].id,
+      ORG_B_BOOTH_2_ID: boothSeeds[4].id,
+      ORG_B_BOOTH_3_ID: boothSeeds[5].id,
+      ORG_B_EVENT_ID: ZZTEST_ORG_B_EVENT_ID,
+      VENDOR_USER_ID: users.vendorId,
+      VENDOR_SHOP_ID: ZZTEST_VENDOR_SHOP_ID,
+    };
+  });
 }
 
 function seedUuid(entityGroup: number, sequence: number): string {
