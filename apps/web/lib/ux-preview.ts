@@ -23,6 +23,7 @@ export const UX_PREVIEW_PROFILE: CurrentUser = {
   createdAt: '2026-08-01T03:00:00.000Z',
   updatedAt: '2026-08-08T03:00:00.000Z',
   shops: [],
+  organizations: [],
 };
 
 export const UX_PREVIEW_SHOP: VendorShop = {

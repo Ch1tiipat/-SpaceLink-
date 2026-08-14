@@ -117,6 +117,20 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           );
       setCreatedBooking(booking);
       setHoldExpired(false);
+
+      // Creating the booking and hydrating its payment QR are deliberately
+      // separate operations. If the read fails, the booking still exists and
+      // must not be submitted a second time; the UI keeps the established QR
+      // placeholder until a later refresh can hydrate it.
+      if (!canUseUxPreview()) {
+        try {
+          const bookings = await getMyBookings(vendor.token);
+          const hydrated = bookings.find((row) => row.id === booking.id);
+          if (hydrated) setCreatedBooking(hydrated);
+        } catch {
+          // Keep the already-created booking visible and uploadable.
+        }
+      }
     } catch (cause) {
       setActionError(
         cause instanceof Error ? cause.message : 'สร้างการจองไม่สำเร็จ',
@@ -241,14 +255,13 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             />
 
             <div className="grid gap-5">
-              {canUseUxPreview() ? (
-                <PaymentMethodPanel
-                  method={paymentMethod}
-                  onChange={setPaymentMethod}
-                  amount={createdBooking.boothPrice}
-                  disabled={holdExpired}
-                />
-              ) : null}
+              <PaymentMethodPanel
+                method={paymentMethod}
+                onChange={setPaymentMethod}
+                amount={createdBooking.boothPrice}
+                disabled={holdExpired}
+                paymentQrDataUri={createdBooking.paymentQrDataUri ?? null}
+              />
 
               {vendor.status === 'ready' &&
                 createdBooking.status === 'PENDING_PAYMENT' && (
@@ -631,11 +644,13 @@ function PaymentMethodPanel({
   onChange,
   amount,
   disabled,
+  paymentQrDataUri,
 }: {
   method: PaymentMethod;
   onChange: (method: PaymentMethod) => void;
   amount: string;
   disabled: boolean;
+  paymentQrDataUri: string | null;
 }) {
   const methods = [
     { id: 'qr' as const, label: 'QR Code', icon: QrCode },
@@ -676,13 +691,28 @@ function PaymentMethodPanel({
 
       {method === 'qr' && (
         <div className="mt-5 rounded-2xl bg-[#faf8ff] p-5 text-center">
-          <span className="mx-auto grid h-40 w-40 place-items-center rounded-2xl border-8 border-white bg-[repeating-conic-gradient(#201b2e_0_25%,#fff_0_50%)] bg-[length:16px_16px] shadow-sm">
-            <span className="grid h-14 w-14 place-items-center rounded-xl bg-white text-violet shadow">
-              <QrCode className="h-9 w-9" aria-hidden />
+          {paymentQrDataUri ? (
+            <Image
+              src={paymentQrDataUri}
+              alt="QR Code PromptPay สำหรับชำระค่าบูธ"
+              width={320}
+              height={320}
+              unoptimized
+              className="mx-auto h-40 w-40 rounded-2xl border-8 border-white bg-white shadow-sm"
+            />
+          ) : (
+            <span className="mx-auto grid h-40 w-40 place-items-center rounded-2xl border-8 border-white bg-[repeating-conic-gradient(#201b2e_0_25%,#fff_0_50%)] bg-[length:16px_16px] shadow-sm">
+              <span className="grid h-14 w-14 place-items-center rounded-xl bg-white text-violet shadow">
+                <QrCode className="h-9 w-9" aria-hidden />
+              </span>
             </span>
-          </span>
+          )}
           <b className="mt-4 block">สแกนเพื่อชำระ {formatMoney(amount)} บาท</b>
-          <p className="mt-1 text-xs text-muted">QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง</p>
+          {!paymentQrDataUri ? (
+            <p className="mt-1 text-xs text-muted">QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง</p>
+          ) : (
+            <p className="mt-1 text-xs text-muted">QR PromptPay สร้างจากบัญชีรับเงินของผู้จัดงานและยอดค่าบูธรายการนี้</p>
+          )}
         </div>
       )}
 

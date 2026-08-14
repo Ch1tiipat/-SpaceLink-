@@ -7,6 +7,7 @@ import {
   Bell,
   Bot,
   House,
+  Landmark,
   LogOut,
   Map,
   MapPinned,
@@ -138,6 +139,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
       href: '/admin/map-designer',
       icon: Map,
       matches: (pathname) => pathname.startsWith('/admin/map-designer'),
+    },
+    {
+      kind: 'link',
+      label: 'ตั้งค่า PromptPay',
+      href: '/admin/organization',
+      icon: Landmark,
+      matches: (pathname) => pathname.startsWith('/admin/organization'),
     },
   ],
 };
