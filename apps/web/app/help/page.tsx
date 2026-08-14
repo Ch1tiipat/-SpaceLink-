@@ -6,6 +6,7 @@ import {
   MessageCircleMore,
   ReceiptText,
 } from 'lucide-react';
+import { SupportTicketScreen } from '@/components/support-ticket-screen';
 
 const FAQS = [
   {
@@ -78,6 +79,8 @@ export default function HelpPage() {
             </div>
           </div>
         </section>
+
+        <SupportTicketScreen />
 
         <section aria-labelledby="faq-heading" className="mt-8">
           <div className="mb-5">
