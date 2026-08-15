@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getMe, type UserRole } from '@/lib/api';
+import { getMe, type CurrentUser, type UserRole } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   getUxPreviewMode,
@@ -19,7 +19,12 @@ import {
 export type AuthState =
   | { status: 'loading' }
   | { status: 'signed-out' }
-  | { status: 'signed-in'; fullName: string; role: UserRole };
+  | {
+      status: 'signed-in';
+      fullName: string;
+      role: UserRole;
+      organizations: CurrentUser['organizations'];
+    };
 
 /**
  * The session is read from Supabase, but the display name comes from
@@ -47,6 +52,7 @@ export function useAuthState(): {
                 status: 'signed-in',
                 fullName: UX_PREVIEW_PROFILE.fullName,
                 role: 'VENDOR',
+                organizations: [],
               }
             : { status: 'signed-out' },
         );
@@ -84,6 +90,7 @@ export function useAuthState(): {
             status: 'signed-in',
             fullName: me.fullName,
             role: me.role,
+            organizations: me.organizations,
           });
         }
       } catch {

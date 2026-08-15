@@ -22,12 +22,17 @@ import {
   type CurrentUser,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
 type OrganizationOption = CurrentUser['organizations'][number];
 
 export function AdminDashboard() {
   const router = useRouter();
+  const {
+    selectedOrganizationId,
+    selectOrganization: selectGlobalOrganization,
+  } = useAdminOrganizationSelection();
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
@@ -61,18 +66,8 @@ export function AdminDashboard() {
           return;
         }
 
-        const requestedId = new URLSearchParams(window.location.search).get(
-          'organization',
-        );
-        const selectedId = me.organizations.some(
-          (organization) => organization.id === requestedId,
-        )
-          ? requestedId!
-          : me.organizations[0].id;
-
         setToken(accessToken);
         setOrganizations(me.organizations);
-        setOrganizationId(selectedId);
         setAccess('allowed');
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -85,6 +80,18 @@ export function AdminDashboard() {
       controller.abort();
     };
   }, [router]);
+
+  useEffect(() => {
+    if (
+      access !== 'allowed' ||
+      !organizations.some(
+        (organization) => organization.id === selectedOrganizationId,
+      )
+    ) {
+      return;
+    }
+    setOrganizationId(selectedOrganizationId);
+  }, [access, organizations, selectedOrganizationId]);
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !organizationId) return;
@@ -113,8 +120,7 @@ export function AdminDashboard() {
       return;
     }
     setOrganizationId(nextId);
-    const query = new URLSearchParams({ organization: nextId });
-    router.replace(`/admin/dashboard?${query.toString()}`);
+    selectGlobalOrganization(nextId);
   }
 
   if (access === 'loading') {

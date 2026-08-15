@@ -33,6 +33,7 @@ import {
   type SaveZoneInput,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied';
 type EditorMode = 'create' | 'edit';
@@ -84,6 +85,7 @@ const STATUS_LABELS: Record<AdminBoothStatus, string> = {
 
 export function AdminZoneBoothScreen() {
   const router = useRouter();
+  const { selectedOrganizationId } = useAdminOrganizationSelection();
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
   const [venues, setVenues] = useState<AdminVenue[]>([]);
@@ -140,15 +142,22 @@ export function AdminZoneBoothScreen() {
   }, [router]);
 
   useEffect(() => {
-    if (access !== 'allowed' || !token) return;
+    if (access !== 'allowed' || !token || !selectedOrganizationId) return;
     const controller = new AbortController();
     setLoadingVenues(true);
+    setError(null);
+    setSuccess(null);
 
     void getAdminVenues(token, controller.signal)
       .then((rows) => {
-        setVenues(rows);
+        const organizationVenues = rows.filter(
+          (venue) => venue.organizationId === selectedOrganizationId,
+        );
+        setVenues(organizationVenues);
         setVenueId((current) =>
-          rows.some((venue) => venue.id === current) ? current : (rows[0]?.id ?? ''),
+          organizationVenues.some((venue) => venue.id === current)
+            ? current
+            : (organizationVenues[0]?.id ?? ''),
         );
       })
       .catch((cause) => {
@@ -159,7 +168,7 @@ export function AdminZoneBoothScreen() {
       .finally(() => setLoadingVenues(false));
 
     return () => controller.abort();
-  }, [access, token]);
+  }, [access, selectedOrganizationId, token]);
 
   useEffect(() => {
     if (!token || !venueId) {

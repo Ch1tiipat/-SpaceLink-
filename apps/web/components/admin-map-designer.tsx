@@ -31,6 +31,7 @@ import {
   type AdminZone,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied';
 type Position = { x: number; y: number };
@@ -57,6 +58,7 @@ const ZONE_TONES = [
 
 export function AdminMapDesigner() {
   const router = useRouter();
+  const { selectedOrganizationId } = useAdminOrganizationSelection();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
@@ -94,11 +96,20 @@ export function AdminMapDesigner() {
           return;
         }
 
+        const organizationId = me.organizations.some(
+          (organization) => organization.id === selectedOrganizationId,
+        )
+          ? selectedOrganizationId
+          : undefined;
+
         const venueRows = await getAdminVenues(accessToken, controller.signal);
         if (!active) return;
+        const organizationVenues = organizationId
+          ? venueRows.filter((venue) => venue.organizationId === organizationId)
+          : [];
         setToken(accessToken);
-        setVenues(venueRows);
-        setVenueId(venueRows[0]?.id ?? '');
+        setVenues(organizationVenues);
+        setVenueId(organizationVenues[0]?.id ?? '');
         setAccess('allowed');
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -110,7 +121,7 @@ export function AdminMapDesigner() {
       active = false;
       controller.abort();
     };
-  }, [router]);
+  }, [router, selectedOrganizationId]);
 
   useEffect(() => {
     if (!token || !venueId) {
