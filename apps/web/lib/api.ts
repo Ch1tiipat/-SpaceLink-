@@ -258,6 +258,24 @@ export type OrganizationSettings = {
   promptpayId: string | null;
 };
 
+export type AdminDashboardSummary = {
+  organizationId: string;
+  bookings: {
+    pendingPayment: number;
+    confirmed: number;
+    cancelled: number;
+  };
+  resources: {
+    venues: number;
+    zones: number;
+    booths: number;
+  };
+  events: {
+    published: number;
+    upcoming: number;
+  };
+};
+
 export type AdminVenue = {
   id: string;
   organizationId: string;
@@ -648,6 +666,17 @@ export function getMe(
   signal?: AbortSignal,
 ): Promise<CurrentUser> {
   return getJson<CurrentUser>('/auth/me', { signal, token });
+}
+
+export function getAdminDashboardSummary(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminDashboardSummary> {
+  return getJson<AdminDashboardSummary>(
+    `/organizations/${encodeURIComponent(organizationId)}/dashboard-summary`,
+    { signal, token },
+  );
 }
 
 /**

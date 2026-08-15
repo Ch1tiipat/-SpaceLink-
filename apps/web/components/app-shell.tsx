@@ -8,6 +8,7 @@ import {
   Bot,
   House,
   Landmark,
+  LayoutDashboard,
   LogOut,
   Map,
   MapPinned,
@@ -119,6 +120,13 @@ const NAV_GROUPS: NavGroup[] = [
 const ADMIN_NAV_GROUP: NavGroup = {
   label: 'Admin',
   items: [
+    {
+      kind: 'link',
+      label: 'Dashboard',
+      href: '/admin/dashboard',
+      icon: LayoutDashboard,
+      matches: (pathname) => pathname.startsWith('/admin/dashboard'),
+    },
     {
       kind: 'link',
       label: 'ยืนยันการจอง',
