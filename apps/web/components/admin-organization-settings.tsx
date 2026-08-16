@@ -3,8 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { BadgeCheck, Building2, Landmark, ShieldCheck } from 'lucide-react';
-import { getMe, updateOrganizationPromptPay } from '@/lib/api';
+import {
+  getMe,
+  updateOrganizationPromptPay,
+  type CurrentUser,
+} from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
 
@@ -12,8 +17,12 @@ const PROMPTPAY_PATTERN = /^(\d{10}|\d{13}|\d{15})$/;
 
 export function AdminOrganizationSettings() {
   const router = useRouter();
+  const { selectedOrganizationId } = useAdminOrganizationSelection();
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
+  const [organizations, setOrganizations] = useState<
+    CurrentUser['organizations']
+  >([]);
   const [organizationId, setOrganizationId] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [promptpayId, setPromptpayId] = useState('');
@@ -49,9 +58,7 @@ export function AdminOrganizationSettings() {
         }
 
         setToken(accessToken);
-        setOrganizationId(organization.id);
-        setOrganizationName(organization.name);
-        setPromptpayId(organization.promptpayId ?? '');
+        setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -64,6 +71,20 @@ export function AdminOrganizationSettings() {
       controller.abort();
     };
   }, [router]);
+
+  useEffect(() => {
+    if (access !== 'allowed') return;
+    const organization = organizations.find(
+      ({ id }) => id === selectedOrganizationId,
+    );
+    if (!organization) return;
+
+    setOrganizationId(organization.id);
+    setOrganizationName(organization.name);
+    setPromptpayId(organization.promptpayId ?? '');
+    setError(null);
+    setSuccess(null);
+  }, [access, organizations, selectedOrganizationId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

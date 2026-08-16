@@ -1,13 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   Bell,
   Bot,
   House,
   Landmark,
+  LayoutDashboard,
   LogOut,
   Map,
   MapPinned,
@@ -25,6 +32,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthState, type AuthState } from '@/lib/use-auth-state';
+import type { CurrentUser } from '@/lib/api';
 import {
   canUseUxPreview,
   getUxPreviewMode,
@@ -54,6 +62,24 @@ type NavItem =
   | { kind: 'soon'; label: string; icon: LucideIcon };
 
 type NavGroup = { label: string; items: NavItem[] };
+type AdminOrganization = CurrentUser['organizations'][number];
+
+type AdminOrganizationContextValue = {
+  organizations: AdminOrganization[];
+  selectedOrganizationId: string;
+  selectOrganization: (organizationId: string) => void;
+};
+
+const AdminOrganizationContext = createContext<AdminOrganizationContextValue>({
+  organizations: [],
+  selectedOrganizationId: '',
+  selectOrganization: () => undefined,
+});
+const NO_ADMIN_ORGANIZATIONS: AdminOrganization[] = [];
+
+export function useAdminOrganizationSelection() {
+  return useContext(AdminOrganizationContext);
+}
 
 /**
  * The prototype lists หน้าหลัก and ค้นหา Event separately. Discovery is a
@@ -121,6 +147,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
   items: [
     {
       kind: 'link',
+      label: 'Dashboard',
+      href: '/admin/dashboard',
+      icon: LayoutDashboard,
+      matches: (pathname) => pathname.startsWith('/admin/dashboard'),
+    },
+    {
+      kind: 'link',
       label: 'ยืนยันการจอง',
       href: '/admin/bookings',
       icon: ShieldCheck,
@@ -167,8 +200,55 @@ const BARE_ROUTES = new Set(['/login', '/register']);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { auth, signOut } = useAuthState();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState('');
+
+  const isAdmin =
+    auth.status === 'signed-in' &&
+    (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
+  const organizations = isAdmin ? auth.organizations : NO_ADMIN_ORGANIZATIONS;
+  const isAdminRoute = pathname.startsWith('/admin');
+
+  useEffect(() => {
+    if (!isAdmin || organizations.length === 0) {
+      setSelectedOrganizationId('');
+      return;
+    }
+
+    const syncFromUrl = () => {
+      const query = new URLSearchParams(window.location.search);
+      const requestedId = query.get('organization');
+      const nextId = organizations.some(
+        (organization) => organization.id === requestedId,
+      )
+        ? requestedId!
+        : organizations[0].id;
+
+      setSelectedOrganizationId(nextId);
+
+      if (isAdminRoute && requestedId !== nextId) {
+        query.set('organization', nextId);
+        router.replace(`${pathname}?${query.toString()}`);
+      }
+    };
+
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    return () => window.removeEventListener('popstate', syncFromUrl);
+  }, [isAdmin, isAdminRoute, organizations, pathname, router]);
+
+  function selectOrganization(organizationId: string) {
+    if (!organizations.some((organization) => organization.id === organizationId)) {
+      return;
+    }
+
+    setSelectedOrganizationId(organizationId);
+    const query = new URLSearchParams(window.location.search);
+    query.set('organization', organizationId);
+    router.replace(`${pathname}?${query.toString()}`);
+  }
 
   if (BARE_ROUTES.has(pathname)) {
     return (
@@ -180,9 +260,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const hasPrivateNavigation = auth.status === 'signed-in';
-  const isAdmin =
-    auth.status === 'signed-in' &&
-    (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
   const navGroups = isAdmin
     ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, NAV_GROUPS[1]]
     : NAV_GROUPS;
@@ -195,7 +272,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     : BOTTOM_NAV;
 
   return (
-    <>
+    <AdminOrganizationContext.Provider
+      value={{
+        organizations,
+        selectedOrganizationId,
+        selectOrganization,
+      }}
+    >
       <div
         className={
           hasPrivateNavigation
@@ -211,6 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar
             pathname={pathname}
             navGroups={navGroups}
+            selectedOrganizationId={selectedOrganizationId}
             collapsed={sidebarCollapsed}
             onSignOut={signOut}
             onToggle={() => setSidebarCollapsed((current) => !current)}
@@ -223,6 +307,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             hasSidebar={hasPrivateNavigation}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={() => setSidebarCollapsed(false)}
+            showTenantSwitcher={isAdmin && isAdminRoute}
+            organizations={organizations}
+            selectedOrganizationId={selectedOrganizationId}
+            onSelectOrganization={selectOrganization}
           />
           {/* The viewport minus the topbar, so a short page still fills the
               screen without overflowing it — the pages themselves no longer
@@ -240,23 +328,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {hasPrivateNavigation && (
-        <BottomNav pathname={pathname} items={bottomNavItems} />
+        <BottomNav
+          pathname={pathname}
+          items={bottomNavItems}
+          selectedOrganizationId={selectedOrganizationId}
+        />
       )}
       <FloatingSupport hasBottomNav={hasPrivateNavigation} />
       <UxReviewPanel auth={auth} pathname={pathname} />
-    </>
+    </AdminOrganizationContext.Provider>
   );
 }
 
 function Sidebar({
   pathname,
   navGroups,
+  selectedOrganizationId,
   collapsed,
   onSignOut,
   onToggle,
 }: {
   pathname: string;
   navGroups: NavGroup[];
+  selectedOrganizationId: string;
   collapsed: boolean;
   onSignOut: () => void;
   onToggle: () => void;
@@ -324,6 +418,7 @@ function Sidebar({
                   item={item}
                   pathname={pathname}
                   collapsed={collapsed}
+                  selectedOrganizationId={selectedOrganizationId}
                 />
               ))}
             </nav>
@@ -353,10 +448,12 @@ function SidebarItem({
   item,
   pathname,
   collapsed,
+  selectedOrganizationId,
 }: {
   item: NavItem;
   pathname: string;
   collapsed: boolean;
+  selectedOrganizationId: string;
 }) {
   const Icon = item.icon;
   const shared = `flex min-h-11 w-full items-center rounded-2xl py-2.5 text-left text-[14px] font-semibold transition-colors ${
@@ -382,7 +479,7 @@ function SidebarItem({
 
   return (
     <Link
-      href={item.href}
+      href={navItemHref(item, selectedOrganizationId)}
       aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
@@ -411,11 +508,19 @@ function Topbar({
   hasSidebar,
   sidebarCollapsed,
   onToggleSidebar,
+  showTenantSwitcher,
+  organizations,
+  selectedOrganizationId,
+  onSelectOrganization,
 }: {
   auth: AuthState;
   hasSidebar: boolean;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  showTenantSwitcher: boolean;
+  organizations: AdminOrganization[];
+  selectedOrganizationId: string;
+  onSelectOrganization: (organizationId: string) => void;
 }) {
   return (
     <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ece7f3] bg-white/[0.82] px-[18px] shadow-[0_8px_28px_rgba(54,36,91,0.035)] backdrop-blur-xl lg:h-[72px] lg:px-8">
@@ -444,6 +549,24 @@ function Topbar({
       )}
 
       <div className="flex items-center gap-2">
+        {showTenantSwitcher && organizations.length > 0 && (
+          <label className="min-w-0">
+            <span className="sr-only">องค์กรที่กำลังจัดการ</span>
+            <select
+              aria-label="องค์กรที่กำลังจัดการ"
+              value={selectedOrganizationId}
+              onChange={(event) => onSelectOrganization(event.target.value)}
+              className="h-10 max-w-[130px] rounded-xl border border-[#ded5ec] bg-white px-3 text-xs font-extrabold text-[#5b21b6] outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10 sm:max-w-[240px] sm:text-sm"
+            >
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {auth.status === 'signed-in' && (
           <Link
             href="/notifications"
@@ -487,7 +610,11 @@ function Topbar({
         {auth.status === 'signed-in' && (
           <span className="flex items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4]">
             <Avatar name={auth.fullName} className="h-[26px] w-[26px] text-[11px]" />
-            <span className="max-w-[84px] truncate sm:max-w-[180px]">
+            <span
+              className={`max-w-[84px] truncate sm:max-w-[180px] ${
+                showTenantSwitcher ? 'hidden md:inline' : ''
+              }`}
+            >
               {auth.fullName}
             </span>
           </span>
@@ -529,7 +656,7 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
   if (!available) return null;
 
   return (
-    <details className="fixed bottom-4 left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl">
+    <details className="fixed bottom-[84px] left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl lg:bottom-4">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-extrabold text-violet">
         ตรวจ UX/UI · {auth.status === 'signed-in' ? 'เข้าสู่ระบบแล้ว' : 'ผู้เยี่ยมชม'}
       </summary>
@@ -770,9 +897,11 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
 function BottomNav({
   pathname,
   items,
+  selectedOrganizationId,
 }: {
   pathname: string;
   items: NavItem[];
+  selectedOrganizationId: string;
 }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-[35] flex h-[68px] justify-around border-t border-[#e9e3f2] bg-white/95 px-[5px] pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-10px_30px_rgba(54,36,91,0.06)] backdrop-blur-xl lg:hidden">
@@ -798,7 +927,7 @@ function BottomNav({
         return (
           <Link
             key={item.label}
-            href={item.href}
+            href={navItemHref(item, selectedOrganizationId)}
             aria-current={active ? 'page' : undefined}
             className={`relative grid min-w-[62px] place-items-center gap-0.5 rounded-xl px-2 text-[10px] transition-colors ${
               active
@@ -813,6 +942,17 @@ function BottomNav({
       })}
     </nav>
   );
+}
+
+function navItemHref(
+  item: Extract<NavItem, { kind: 'link' }>,
+  organizationId: string,
+) {
+  if (!organizationId || !item.href.startsWith('/admin')) {
+    return item.href;
+  }
+
+  return `${item.href}?${new URLSearchParams({ organization: organizationId }).toString()}`;
 }
 
 function BrandMark() {
