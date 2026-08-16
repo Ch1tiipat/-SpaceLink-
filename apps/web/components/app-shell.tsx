@@ -656,7 +656,7 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
   if (!available) return null;
 
   return (
-    <details className="fixed bottom-4 left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl">
+    <details className="fixed bottom-[84px] left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl lg:bottom-4">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-extrabold text-violet">
         ตรวจ UX/UI · {auth.status === 'signed-in' ? 'เข้าสู่ระบบแล้ว' : 'ผู้เยี่ยมชม'}
       </summary>
