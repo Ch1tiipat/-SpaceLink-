@@ -110,7 +110,15 @@ export function AdminDashboard() {
         setSummary(null);
         setError(cause instanceof Error ? cause.message : 'โหลดข้อมูล Dashboard ไม่สำเร็จ');
       })
-      .finally(() => setLoadingSummary(false));
+      .finally(() => {
+        // A stale request aborted by a fast org switch still settles its
+        // promise chain — without this check its `finally` would clear
+        // loadingSummary for the *newer* request that is still in flight,
+        // flashing the error state before the new data arrives.
+        if (!controller.signal.aborted) {
+          setLoadingSummary(false);
+        }
+      });
 
     return () => controller.abort();
   }, [access, organizationId, token]);
