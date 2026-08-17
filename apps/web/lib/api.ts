@@ -191,6 +191,41 @@ export type CreateReviewInput = {
   reviewerDisplayName?: string;
 };
 
+export type PenaltyReason =
+  | 'NO_SHOW'
+  | 'RULE_VIOLATION'
+  | 'CONTRACT_BREACH'
+  | 'BAD_REVIEW'
+  | 'OTHER';
+
+export type PenaltyRecord = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  bookingId: string | null;
+  reason: PenaltyReason;
+  description: string | null;
+  points: number;
+  issuedAt: string;
+  createdAt: string;
+};
+
+export type PenaltyHistory = {
+  penalties: PenaltyRecord[];
+  totalPointsAllOrgs: number;
+};
+
+export type CreatePenaltyInput = {
+  reason: PenaltyReason;
+  description?: string;
+};
+
+export type CreatePenaltyResult = {
+  penalty: PenaltyRecord;
+  justBlacklisted: boolean;
+  totalPoints: number;
+};
+
 export type SupportTicketStatus = 'OPEN' | 'PROCESSING' | 'CLOSED';
 
 export type SupportTicketRecord = {
@@ -903,6 +938,31 @@ export function createReview(
     input,
     { token },
     'ไม่สามารถบันทึกคะแนนได้',
+  );
+}
+
+export function getPenaltyHistory(
+  bookingId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<PenaltyHistory> {
+  return getJson<PenaltyHistory>(
+    `/bookings/${encodeURIComponent(bookingId)}/penalties`,
+    { signal, token },
+  );
+}
+
+export function createPenalty(
+  bookingId: string,
+  input: CreatePenaltyInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<CreatePenaltyResult> {
+  return postJson<CreatePenaltyResult>(
+    `/bookings/${encodeURIComponent(bookingId)}/penalties`,
+    input,
+    { signal, token },
+    'ไม่สามารถออกแต้มโทษได้',
   );
 }
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -97,6 +98,7 @@ const CREATED_BOOKING: Booking = {
 const eventFindUnique = jest.fn();
 const boothFindUnique = jest.fn();
 const shopFindFirst = jest.fn();
+const userFindUnique = jest.fn();
 const bookingFindFirst = jest.fn();
 const bookingCount = jest.fn();
 const bookingCreate = jest.fn();
@@ -113,6 +115,7 @@ const mockPrismaService = {
   event: { findUnique: eventFindUnique },
   booth: { findUnique: boothFindUnique },
   shop: { findFirst: shopFindFirst },
+  user: { findUnique: userFindUnique },
   booking: {
     findFirst: bookingFindFirst,
     count: bookingCount,
@@ -175,6 +178,7 @@ describe('BookingsService', () => {
       zone: { venueId: VENUE_ID },
     });
     shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+    userFindUnique.mockResolvedValue({ isBlacklisted: false });
     bookingFindFirst.mockResolvedValue(null);
     bookingCount.mockResolvedValue(0);
     bookingCreate.mockResolvedValue(CREATED_BOOKING);
@@ -249,6 +253,16 @@ describe('BookingsService', () => {
     expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
+  });
+
+  it('rejects a blacklisted vendor before creating a booking', async () => {
+    userFindUnique.mockResolvedValue({ isBlacklisted: true });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(bookingFindFirst).not.toHaveBeenCalled();
+    expect(bookingCreate).not.toHaveBeenCalled();
   });
 
   it.each([EventStatus.DRAFT, EventStatus.COMPLETED, EventStatus.CANCELLED])(
@@ -420,6 +434,16 @@ describe('BookingsService', () => {
   });
 
   describe('createForAdmin', () => {
+    it('does not let a quota exception bypass the blacklist', async () => {
+      userFindUnique.mockResolvedValue({ isBlacklisted: true });
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(bookingFindFirst).not.toHaveBeenCalled();
+      expect(bookingCreate).not.toHaveBeenCalled();
+    });
+
     // The approved end of a quota exception. The default event mock allows 3
     // per vendor and the vendor already holds 5 — the vendor path would refuse
     // this outright (see 'rejects a vendor who has reached the organization
@@ -1021,6 +1045,7 @@ describe('BookingsService', () => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
         status: BookingStatus.PENDING_PAYMENT,
+        vendor: { isBlacklisted: false },
       });
       bookingFindUnique.mockResolvedValue({
         ...CREATED_BOOKING,
@@ -1043,7 +1068,11 @@ describe('BookingsService', () => {
           id: BOOKING_ID,
           event: { organizationId: ORGANIZATION_ID },
         },
-        select: { id: true, status: true },
+        select: {
+          id: true,
+          status: true,
+          vendor: { select: { isBlacklisted: true } },
+        },
       });
       // The status sits in the `where`, not only in the guard above it: the
       // hold-expiry cron can cancel this row between the read and the write.
@@ -1066,6 +1095,19 @@ describe('BookingsService', () => {
       expect(result.boothPrice).toBe('1500');
     });
 
+    it('rejects a blacklisted vendor before updating the booking', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+        vendor: { isBlacklisted: true },
+      });
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
     // The hold having lapsed is not a reason to refuse: rescuing a booking the
     // cron has not swept yet is what this method is for.
     it('confirms a pending booking whose hold has already expired', async () => {
@@ -1073,6 +1115,7 @@ describe('BookingsService', () => {
         id: BOOKING_ID,
         status: BookingStatus.PENDING_PAYMENT,
         holdExpiresAt: new Date('2026-08-01T00:00:00.000Z'),
+        vendor: { isBlacklisted: false },
       });
 
       await expect(
@@ -1095,7 +1138,11 @@ describe('BookingsService', () => {
       BookingStatus.NO_SHOW,
       BookingStatus.COMPLETED,
     ])('rejects a booking in %s status', async (status) => {
-      bookingFindFirst.mockResolvedValue({ id: BOOKING_ID, status });
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status,
+        vendor: { isBlacklisted: false },
+      });
 
       await expect(
         service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
