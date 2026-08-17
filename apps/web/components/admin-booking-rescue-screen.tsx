@@ -6,16 +6,23 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  Gavel,
   Search,
+  ShieldAlert,
   ShieldCheck,
   TicketCheck,
 } from 'lucide-react';
+import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import {
   ApiError,
+  createPenalty,
   confirmExemptBooking,
   getAdminBookingByCode,
   getMe,
+  getPenaltyHistory,
   type BookingRecord,
+  type PenaltyHistory,
+  type PenaltyReason,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -28,6 +35,18 @@ const STATUS_LABELS: Record<BookingRecord['status'], string> = {
   NO_SHOW: 'ไม่มาใช้พื้นที่',
   COMPLETED: 'เสร็จสิ้น',
 };
+
+const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
+  NO_SHOW: 'ไม่มาใช้พื้นที่ตามที่จอง',
+  RULE_VIOLATION: 'ฝ่าฝืนกติกาการใช้พื้นที่',
+  CONTRACT_BREACH: 'ผิดเงื่อนไขสัญญา',
+  BAD_REVIEW: 'ได้รับรีวิวเชิงลบร้ายแรง',
+  OTHER: 'อื่นๆ',
+};
+
+const PENALTY_REASON_OPTIONS: SelectMenuOption[] = Object.entries(
+  PENALTY_REASON_LABELS,
+).map(([value, label]) => ({ value, label }));
 
 export function AdminBookingRescueScreen() {
   const router = useRouter();
@@ -198,13 +217,16 @@ export function AdminBookingRescueScreen() {
         </section>
 
         {booking ? (
-          <BookingResult
-            booking={booking}
-            reason={reason}
-            onReasonChange={setReason}
-            onConfirm={handleConfirm}
-            confirming={confirming}
-          />
+          <>
+            <BookingResult
+              booking={booking}
+              reason={reason}
+              onReasonChange={setReason}
+              onConfirm={handleConfirm}
+              confirming={confirming}
+            />
+            <PenaltyPanel booking={booking} token={token} />
+          </>
         ) : (
           <section className="mt-6 grid min-h-64 place-items-center rounded-[28px] border border-dashed border-[#dcd3e8] bg-white/70 p-8 text-center">
             <div>
@@ -216,6 +238,210 @@ export function AdminBookingRescueScreen() {
         )}
       </div>
     </main>
+  );
+}
+
+function PenaltyPanel({
+  booking,
+  token,
+}: {
+  booking: BookingRecord;
+  token: string;
+}) {
+  const [history, setHistory] = useState<PenaltyHistory | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [penaltyReason, setPenaltyReason] =
+    useState<PenaltyReason>('NO_SHOW');
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [resultMessage, setResultMessage] = useState<{
+    tone: 'success' | 'warning';
+    text: string;
+  } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    setHistory(null);
+    setLoading(true);
+    setLoadError(null);
+    setDescription('');
+    setResultMessage(null);
+    setSubmitError(null);
+
+    void getPenaltyHistory(booking.id, token, controller.signal)
+      .then((result) => {
+        if (active) setHistory(result);
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (active) {
+          setLoadError(describeError(cause, 'โหลดประวัติแต้มโทษไม่สำเร็จ'));
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [booking.id, token]);
+
+  async function handlePenaltySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting) return;
+
+    const reasonLabel = PENALTY_REASON_LABELS[penaltyReason];
+    if (!window.confirm(`ยืนยันออกแต้มโทษ "${reasonLabel}" ให้ผู้ขายรายนี้?`)) {
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    setResultMessage(null);
+    const normalizedDescription = description.trim();
+
+    try {
+      const result = await createPenalty(
+        booking.id,
+        {
+          reason: penaltyReason,
+          description: normalizedDescription || undefined,
+        },
+        token,
+      );
+
+      setDescription('');
+      setResultMessage(
+        result.justBlacklisted
+          ? {
+              tone: 'warning',
+              text: `⚠️ ครบ ${result.totalPoints} แต้มแล้ว บัญชีนี้ถูกขึ้นบัญชีดำอัตโนมัติ`,
+            }
+          : {
+              tone: 'success',
+              text: `ออกแต้มโทษเรียบร้อยแล้ว (รวม ${result.totalPoints} แต้ม)`,
+            },
+      );
+
+      try {
+        const refreshed = await getPenaltyHistory(booking.id, token);
+        setHistory(refreshed);
+        setLoadError(null);
+      } catch (cause) {
+        setLoadError(
+          describeError(
+            cause,
+            'ออกแต้มโทษสำเร็จ แต่โหลดประวัติล่าสุดไม่สำเร็จ',
+          ),
+        );
+      }
+    } catch (cause) {
+      setSubmitError(describeError(cause, 'ออกแต้มโทษไม่สำเร็จ'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const totalPoints = history?.totalPointsAllOrgs ?? 0;
+  const isBlacklisted = totalPoints >= 3;
+
+  return (
+    <section className="mt-6 rounded-[28px] border border-[#eadff7] bg-white p-6 shadow-[0_22px_55px_rgba(54,36,91,0.07)] sm:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eee9f4] pb-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f3e8ff] text-[#7e22ce]">
+            <Gavel className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="font-black text-ink">แต้มโทษของผู้ขาย</h2>
+            <p className="mt-1 text-xs text-[#81778c]">ประวัติด้านล่างแสดงเฉพาะองค์กรนี้</p>
+          </div>
+        </div>
+        <div className={`rounded-2xl px-4 py-3 text-right ${isBlacklisted ? 'bg-[#fff1f2] text-[#b91c1c]' : 'bg-[#f7f2ff] text-[#6d28d9]'}`}>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em]">รวมทุกองค์กร</p>
+          <p className="mt-0.5 text-lg font-black">{totalPoints} / 3 แต้ม</p>
+        </div>
+      </div>
+
+      {isBlacklisted && (
+        <p className="mt-4 flex items-start gap-2 rounded-2xl bg-[#fff1f2] p-3 text-sm font-bold text-[#b91c1c]">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          บัญชีผู้ขายรายนี้ถูกขึ้นบัญชีดำแล้ว
+        </p>
+      )}
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div>
+          <h3 className="text-sm font-black text-ink">ประวัติในองค์กรนี้</h3>
+          {loading ? (
+            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">กำลังโหลดประวัติแต้มโทษ...</p>
+          ) : history?.penalties.length ? (
+            <ul className="mt-3 space-y-3">
+              {history.penalties.map((penalty) => (
+                <li key={penalty.id} className="rounded-2xl border border-[#eee9f4] bg-[#fcfbff] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-extrabold text-ink">{PENALTY_REASON_LABELS[penalty.reason]}</p>
+                    <span className="shrink-0 rounded-full bg-[#fee2e2] px-2.5 py-1 text-xs font-black text-[#b91c1c]">+{penalty.points} แต้ม</span>
+                  </div>
+                  {penalty.description && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#655d70]">{penalty.description}</p>
+                  )}
+                  <p className="mt-2 text-xs text-[#91889c]">{formatDateTime(penalty.issuedAt)}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">ยังไม่มีประวัติแต้มโทษในองค์กรนี้</p>
+          )}
+          {loadError && <Feedback tone="error">{loadError}</Feedback>}
+        </div>
+
+        <form onSubmit={handlePenaltySubmit} className="rounded-2xl border border-[#e6dcf3] bg-[#faf7ff] p-4">
+          <h3 className="text-sm font-black text-ink">ออกแต้มโทษ</h3>
+          <SelectMenu
+            label="เหตุผล"
+            value={penaltyReason}
+            onChange={(value) => setPenaltyReason(value as PenaltyReason)}
+            options={PENALTY_REASON_OPTIONS}
+            placeholder="เลือกเหตุผล"
+            className="mt-4"
+          />
+          <label className="mt-4 block">
+            <span className="text-sm font-extrabold text-ink">รายละเอียด (ไม่บังคับ)</span>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={500}
+              rows={4}
+              placeholder="ระบุรายละเอียดเพิ่มเติม"
+              className="mt-2 w-full resize-none rounded-2xl border border-[#dcd2e9] bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="mt-4 w-full rounded-2xl bg-[#7e22ce] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#6b21a8] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? 'กำลังออกแต้มโทษ...' : 'ออกแต้มโทษ'}
+          </button>
+          {submitError && <Feedback tone="error">{submitError}</Feedback>}
+          {resultMessage && (
+            <p
+              role="status"
+              className={`mt-4 rounded-2xl p-3 text-sm font-bold ${resultMessage.tone === 'warning' ? 'bg-[#fff7ed] text-[#c2410c]' : 'bg-[#ecfdf3] text-[#166534]'}`}
+            >
+              {resultMessage.text}
+            </p>
+          )}
+        </form>
+      </div>
+    </section>
   );
 }
 

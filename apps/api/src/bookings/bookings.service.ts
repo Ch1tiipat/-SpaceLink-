@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -196,7 +197,7 @@ export class BookingsService {
     options: CreateBookingOptions = {},
   ): Promise<BookingResponse> {
     const { eventId, boothId, shopId } = createBookingDto;
-    const [event, booth, shop] = await Promise.all([
+    const [event, booth, shop, vendor] = await Promise.all([
       transaction.event.findUnique({
         where: { id: eventId },
         select: {
@@ -228,7 +229,17 @@ export class BookingsService {
         where: { id: shopId, ownerUserId: vendorUserId },
         select: { id: true },
       }),
+      transaction.user.findUnique({
+        where: { id: vendorUserId },
+        select: { isBlacklisted: true },
+      }),
     ]);
+
+    if (vendor?.isBlacklisted) {
+      throw new ForbiddenException(
+        'บัญชีนี้ถูกระงับสิทธิ์การจอง กรุณาติดต่อผู้ดูแลระบบ',
+      );
+    }
 
     if (!event) {
       throw new NotFoundException('ไม่พบอีเวนต์');
@@ -630,11 +641,20 @@ export class BookingsService {
   ): Promise<BookingResponse> {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, event: { organizationId: orgId } },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        vendor: { select: { isBlacklisted: true } },
+      },
     });
 
     if (!booking) {
       throw new NotFoundException('ไม่พบการจอง');
+    }
+    if (booking.vendor.isBlacklisted) {
+      throw new ForbiddenException(
+        'บัญชีนี้ถูกระงับสิทธิ์การจอง กรุณาติดต่อผู้ดูแลระบบ',
+      );
     }
     if (booking.status !== BookingStatus.PENDING_PAYMENT) {
       throw new ConflictException(
