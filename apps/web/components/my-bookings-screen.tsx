@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
   cancelBooking,
+  createReview,
   getMyBookings,
   type BookingStatus,
   type MyBooking,
@@ -33,6 +34,8 @@ const statusLabel: Record<BookingStatus, string> = {
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const REVIEW_ELIGIBLE_OFFSET_HOURS = 17;
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -55,6 +58,17 @@ function isExpired(booking: MyBooking): boolean {
     booking.status === 'PENDING_PAYMENT' &&
     (!booking.holdExpiresAt ||
       new Date(booking.holdExpiresAt).getTime() <= Date.now())
+  );
+}
+
+function isReviewEligible(booking: MyBooking): boolean {
+  const eligibleFrom = new Date(
+    new Date(booking.bookingEndDate).getTime() +
+      REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR,
+  );
+  return (
+    (booking.status === 'CONFIRMED' || booking.status === 'COMPLETED') &&
+    eligibleFrom <= new Date()
   );
 }
 
@@ -406,6 +420,10 @@ export function MyBookingsScreen() {
                       เหตุผลที่ยกเลิก: {booking.cancelReason}
                     </p>
                   )}
+
+                  {isReviewEligible(booking) && (
+                    <ReviewForm booking={booking} token={access.token} />
+                  )}
                 </article>
               );
             })}
@@ -422,5 +440,128 @@ function BookingDetail({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-bold text-muted">{label}</dt>
       <dd className="mt-1 font-bold text-ink">{value}</dd>
     </div>
+  );
+}
+
+function ReviewForm({ booking, token }: { booking: MyBooking; token: string }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [reviewerDisplayName, setReviewerDisplayName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function submitReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (rating < 1 || rating > 5) {
+      setError('กรุณาเลือกคะแนน 1–5 ดาว');
+      setSuccess(null);
+      return;
+    }
+
+    const trimmedComment = comment.trim();
+    const trimmedDisplayName = reviewerDisplayName.trim();
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await createReview(
+        {
+          targetType: 'BOOTH',
+          targetId: booking.booth.id,
+          rating,
+          ...(trimmedComment ? { comment: trimmedComment } : {}),
+          ...(trimmedDisplayName
+            ? { reviewerDisplayName: trimmedDisplayName }
+            : {}),
+        },
+        token,
+      );
+      setSuccess('บันทึกคะแนนพื้นที่เรียบร้อยแล้ว');
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'ไม่สามารถบันทึกคะแนนได้',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submitReview} className="mt-5 border-t border-line pt-5">
+      <h3 className="font-extrabold text-ink">ให้คะแนนบูธ {booking.booth.code}</h3>
+      <p className="mt-1 text-sm text-muted">
+        ประเมินพื้นที่จากประสบการณ์การจองครั้งนี้ คุณสามารถส่งซ้ำเพื่ออัปเดตคะแนนเดิมได้
+      </p>
+
+      <fieldset className="mt-4">
+        <legend className="text-sm font-bold">คะแนนพื้นที่ *</legend>
+        <div className="mt-2 flex flex-wrap gap-2" aria-label="เลือกคะแนนพื้นที่">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-label={`${value} ดาว`}
+              aria-pressed={rating === value}
+              onClick={() => {
+                setRating(value);
+                setError(null);
+                setSuccess(null);
+              }}
+              className={
+                'grid h-11 w-11 place-items-center rounded-xl border text-xl transition ' +
+                (rating >= value
+                  ? 'border-[#f3b61f] bg-[#fff8dc] text-[#b77900]'
+                  : 'border-line bg-white text-[#aaa3b2]')
+              }
+            >
+              ★
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <label className="text-sm font-bold text-ink">
+          ชื่อที่ใช้แสดง (ไม่บังคับ)
+          <input
+            value={reviewerDisplayName}
+            onChange={(event) => setReviewerDisplayName(event.target.value)}
+            maxLength={80}
+            placeholder="ไม่ระบุชื่อ (จะแสดงเป็นไม่ระบุตัวตน)"
+            className="mt-1.5 h-11 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
+          />
+        </label>
+        <label className="text-sm font-bold text-ink lg:row-span-2">
+          ความคิดเห็น (ไม่บังคับ)
+          <textarea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            maxLength={1000}
+            rows={4}
+            placeholder="บอกผู้จัดงานว่าพื้นที่นี้เป็นอย่างไร"
+            className="mt-1.5 w-full resize-y rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-violet"
+          />
+        </label>
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-3 text-sm font-semibold text-[#b42318]">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p role="status" className="mt-3 text-sm font-semibold text-[#13795b]">
+          {success}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-4 rounded-xl bg-violet px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {submitting ? 'กำลังบันทึก…' : 'บันทึกคะแนน'}
+      </button>
+    </form>
   );
 }
