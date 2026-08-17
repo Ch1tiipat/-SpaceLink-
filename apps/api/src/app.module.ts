@@ -17,6 +17,7 @@ import { ShopsModule } from './shops/shops.module';
 import { CategoriesModule } from './categories/categories.module';
 import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     CategoriesModule,
     SupportTicketsModule,
     DashboardModule,
+    AnnouncementsModule,
   ],
 })
 export class AppModule {}

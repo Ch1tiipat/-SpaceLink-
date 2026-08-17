@@ -347,6 +347,24 @@ export type UpdateBoothInput = Partial<SaveBoothInput> & {
   status?: AdminBoothStatus;
 };
 
+export type AdminAnnouncement = {
+  id: string;
+  organizationId: string;
+  title: string;
+  body: string;
+  isActive: boolean;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaveAnnouncementInput = {
+  title: string;
+  body: string;
+  isActive?: boolean;
+  publishedAt?: string;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -637,6 +655,78 @@ export function deleteAdminBooth(
     '/booths/' + encodeURIComponent(boothId),
     { token },
     'ไม่สามารถลบบูธได้',
+  );
+}
+
+export function getPublicAnnouncements(
+  organizationId: string,
+  signal?: AbortSignal,
+): Promise<AdminAnnouncement[]> {
+  return getJson<AdminAnnouncement[]>(
+    '/organizations/' +
+      encodeURIComponent(organizationId) +
+      '/announcements',
+    { signal },
+  );
+}
+
+export function getAdminAnnouncements(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminAnnouncement[]> {
+  return getJson<AdminAnnouncement[]>(
+    '/organizations/' +
+      encodeURIComponent(organizationId) +
+      '/announcements/admin',
+    { signal, token },
+  );
+}
+
+export function createAdminAnnouncement(
+  organizationId: string,
+  input: SaveAnnouncementInput,
+  token: string,
+): Promise<AdminAnnouncement> {
+  return postJson<AdminAnnouncement>(
+    '/organizations/' +
+      encodeURIComponent(organizationId) +
+      '/announcements',
+    input,
+    { token },
+    'ไม่สามารถสร้างประกาศได้',
+  );
+}
+
+export function updateAdminAnnouncement(
+  organizationId: string,
+  announcementId: string,
+  input: Partial<SaveAnnouncementInput>,
+  token: string,
+): Promise<AdminAnnouncement> {
+  return patchJson<AdminAnnouncement>(
+    '/organizations/' +
+      encodeURIComponent(organizationId) +
+      '/announcements/' +
+      encodeURIComponent(announcementId),
+    input,
+    { token },
+    'ไม่สามารถแก้ไขประกาศได้',
+  );
+}
+
+export function deleteAdminAnnouncement(
+  organizationId: string,
+  announcementId: string,
+  token: string,
+): Promise<AdminAnnouncement> {
+  return deleteJson<AdminAnnouncement>(
+    '/organizations/' +
+      encodeURIComponent(organizationId) +
+      '/announcements/' +
+      encodeURIComponent(announcementId),
+    { token },
+    'ไม่สามารถลบประกาศได้',
   );
 }
 
