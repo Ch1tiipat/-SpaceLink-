@@ -8,12 +8,18 @@ import {
   CalendarDays,
   Camera,
   Clock3,
+  Megaphone,
   Navigation,
   ParkingCircle,
   ShieldCheck,
   Utensils,
 } from 'lucide-react';
-import { getEventMap, type EventMap } from '@/lib/api';
+import {
+  getEventMap,
+  getPublicAnnouncements,
+  type AdminAnnouncement,
+  type EventMap,
+} from '@/lib/api';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -23,6 +29,7 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const [data, setData] = useState<EventMap | null>(null);
+  const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +47,25 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
     return () => controller.abort();
   }, [eventId]);
+
+  const organizationId = data?.event.organization.id;
+
+  useEffect(() => {
+    if (!organizationId) {
+      setAnnouncements([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    getPublicAnnouncements(organizationId, controller.signal)
+      .then(setAnnouncements)
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setAnnouncements([]);
+      });
+
+    return () => controller.abort();
+  }, [organizationId]);
 
   if (!data && !error) {
     return (
@@ -137,6 +163,33 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </div>
           </div>
         </section>
+
+        {announcements.length > 0 && (
+          <section className="sl-surface mt-7 p-6 sm:p-8">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
+              <Megaphone className="h-4 w-4" aria-hidden /> ประกาศจากผู้จัดงาน
+            </span>
+            <h2 className="mt-2 text-2xl font-black">ข่าวสารสำคัญก่อนเข้าร่วมงาน</h2>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {announcements.map((announcement) => (
+                <article
+                  key={announcement.id}
+                  className="rounded-2xl border border-[#e6dcf7] bg-[#faf7ff] p-5"
+                >
+                  <h3 className="font-extrabold text-ink">{announcement.title}</h3>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted">
+                    {announcement.body}
+                  </p>
+                  {announcement.publishedAt && (
+                    <p className="mt-4 text-xs font-bold text-violet">
+                      เผยแพร่ {dateFormatter.format(new Date(announcement.publishedAt))}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_330px]">
           <section className="sl-surface p-6 sm:p-8">

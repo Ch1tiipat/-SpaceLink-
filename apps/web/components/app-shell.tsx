@@ -18,6 +18,7 @@ import {
   LogOut,
   Map,
   MapPinned,
+  Megaphone,
   Menu,
   MessageCircle,
   MessagesSquare,
@@ -172,6 +173,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
       href: '/admin/map-designer',
       icon: Map,
       matches: (pathname) => pathname.startsWith('/admin/map-designer'),
+    },
+    {
+      kind: 'link',
+      label: 'ประกาศ',
+      href: '/admin/announcements',
+      icon: Megaphone,
+      matches: (pathname) => pathname.startsWith('/admin/announcements'),
     },
     {
       kind: 'link',
