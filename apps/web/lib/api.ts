@@ -176,6 +176,21 @@ export type CreateBookingInput = {
   shopId: string;
 };
 
+export type ReviewTargetType = 'BOOTH' | 'ZONE' | 'SHOP' | 'ORGANIZATION';
+
+export type AverageRating = {
+  average: number | null;
+  count: number;
+};
+
+export type CreateReviewInput = {
+  targetType: 'BOOTH' | 'ZONE';
+  targetId: string;
+  rating: number;
+  comment?: string;
+  reviewerDisplayName?: string;
+};
+
 export type SupportTicketStatus = 'OPEN' | 'PROCESSING' | 'CLOSED';
 
 export type SupportTicketRecord = {
@@ -863,6 +878,32 @@ export function getMyBookings(
   signal?: AbortSignal,
 ): Promise<MyBooking[]> {
   return getJson<MyBooking[]>('/bookings', { signal, token });
+}
+
+export function getAverageRating(
+  targetType: ReviewTargetType,
+  targetId: string,
+  signal?: AbortSignal,
+): Promise<AverageRating> {
+  return getJson<AverageRating>(
+    '/reviews/average?targetType=' +
+      targetType +
+      '&targetId=' +
+      encodeURIComponent(targetId),
+    { signal },
+  );
+}
+
+export function createReview(
+  input: CreateReviewInput,
+  token: string,
+): Promise<unknown> {
+  return postJson(
+    '/reviews',
+    input,
+    { token },
+    'ไม่สามารถบันทึกคะแนนได้',
+  );
 }
 
 export function cancelBooking(

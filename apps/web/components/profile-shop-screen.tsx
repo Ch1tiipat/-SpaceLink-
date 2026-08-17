@@ -15,6 +15,7 @@ import type { SelectMenuOption } from '@/components/select-menu';
 import {
   ApiError,
   createShop,
+  getAverageRating,
   getCategories,
   updateMe,
   updateShop,
@@ -32,21 +33,13 @@ import { useVendorProfile } from '@/lib/use-vendor-profile';
  */
 const THAI_PHONE_PATTERN = /^0\d{8,9}$/;
 
-/**
- * Vendor Score and Blacklist Point are in the approved design but on no wire
- * type: `averageRating` is derived and never stored (AGENTS.md §6.3), and the
- * points behind `isBlacklisted` are accumulated `penalty.points`. `GET
- * /auth/me` returns neither today, so Phase 1 carries them as mock values and a
- * later phase decides where they come from.
- */
+/** Blacklist points remain mocked until SCRUM-77 wires the penalty total. */
 type VendorStats = {
-  /** `null` means no review has been left yet — never render that as 0. */
-  averageRating: number | null;
   blacklistPoints: number;
 };
 
-/** TODO(Phase 4): the endpoint that exposes a vendor's own score and points. */
-const MOCK_STATS: VendorStats = { averageRating: 4.9, blacklistPoints: 0 };
+/** TODO(SCRUM-77): replace the remaining blacklist-points mock. */
+const MOCK_STATS: VendorStats = { blacklistPoints: 0 };
 
 export function ProfileShopScreen() {
   const { state, refresh } = useVendorProfile();
@@ -59,10 +52,15 @@ export function ProfileShopScreen() {
   // while its phone number did not is exactly the case the vendor must still
   // see afterwards, so it is held one level up and rendered next to the card.
   const [phoneSaveWarning, setPhoneSaveWarning] = useState<string | null>(null);
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [ratingState, setRatingState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
 
   // Narrowed once, so profile, shop and token cannot drift apart below: all
   // three come from the same `ready` branch of the same render.
   const ready = state.status === 'ready' ? state : null;
+  const readyShopId = ready?.shop?.id ?? null;
 
   // Product categories are public reference data (GET /categories has no
   // guard), so this is deliberately not gated behind the session — the form
@@ -81,6 +79,28 @@ export function ProfileShopScreen() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!readyShopId) {
+      setAverageRating(null);
+      setRatingState('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    setRatingState('loading');
+    getAverageRating('SHOP', readyShopId, controller.signal)
+      .then((result) => {
+        setAverageRating(result.average);
+        setRatingState('ready');
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setRatingState('error');
+      });
+
+    return () => controller.abort();
+  }, [readyShopId]);
 
   const categoryOptions = useMemo<SelectMenuOption[]>(
     () =>
@@ -205,11 +225,15 @@ export function ProfileShopScreen() {
                   <ScoreCell
                     label="Vendor Score"
                     value={
-                      MOCK_STATS.averageRating === null
-                        ? 'ยังไม่มีรีวิว'
-                        : MOCK_STATS.averageRating.toFixed(1)
+                      ratingState === 'loading'
+                        ? 'กำลังโหลด…'
+                        : ratingState === 'error'
+                          ? 'โหลดคะแนนไม่ได้'
+                          : averageRating === null
+                            ? 'ยังไม่มีรีวิว'
+                            : averageRating.toFixed(1)
                     }
-                    muted={MOCK_STATS.averageRating === null}
+                    muted={ratingState !== 'ready' || averageRating === null}
                   />
                   <ScoreCell
                     label="Blacklist Point"

@@ -17,9 +17,11 @@ import { ZoneMap } from '@/components/zone-map';
 import { SelectMenu } from '@/components/select-menu';
 import {
   createBooking,
+  getAverageRating,
   getEventMap,
   getMyBookings,
   type BookingRecord,
+  type AverageRating,
   type EventBooth,
   type EventMap,
   type EventZone,
@@ -31,6 +33,10 @@ const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
 
 type PaymentMethod = 'qr' | 'bank';
+type BoothRatingState =
+  | { status: 'idle' }
+  | { status: 'loading' | 'error'; boothId: string }
+  | { status: 'ready'; boothId: string; value: AverageRating };
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -56,6 +62,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   const [isCreating, setIsCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qr');
+  const [boothRating, setBoothRating] = useState<BoothRatingState>({
+    status: 'idle',
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +79,32 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  const selectedBoothId = selectedBooth?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedBoothId) {
+      setBoothRating({ status: 'idle' });
+      return;
+    }
+
+    const controller = new AbortController();
+    setBoothRating({ status: 'loading', boothId: selectedBoothId });
+    getAverageRating('BOOTH', selectedBoothId, controller.signal)
+      .then((value) =>
+        setBoothRating({
+          status: 'ready',
+          boothId: selectedBoothId,
+          value,
+        }),
+      )
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setBoothRating({ status: 'error', boothId: selectedBoothId });
+      });
+
+    return () => controller.abort();
+  }, [selectedBoothId]);
+
   const selectedZone = useMemo(
     () =>
       data?.zones.find((zone) =>
@@ -80,6 +115,16 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   // A vendor owns one shop at most, so there is nothing to pick: the booking
   // uses the shop the account already has, or it cannot be made at all.
   const shop = vendor.status === 'ready' ? vendor.shop : null;
+  const ratingLabel =
+    boothRating.status === 'idle' || boothRating.boothId !== selectedBoothId
+      ? 'กำลังโหลดคะแนน…'
+      : boothRating.status === 'loading'
+      ? 'กำลังโหลดคะแนน…'
+      : boothRating.status === 'error'
+        ? 'โหลดคะแนนไม่ได้'
+        : boothRating.status === 'ready' && boothRating.value.average !== null
+          ? `${boothRating.value.average.toFixed(1)} ★ (${boothRating.value.count} รีวิว)`
+          : 'ยังไม่มีรีวิว';
 
   async function handleCreate() {
     if (vendor.status !== 'ready' || !vendor.shop || !selectedBooth) {
@@ -371,6 +416,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                     label="สถานะ"
                     value={selectedBooth.availability === 'AVAILABLE' ? 'ว่าง พร้อมจอง' : selectedBooth.availability}
                   />
+                  <SummaryRow label="คะแนนพื้นที่" value={ratingLabel} />
                   <SummaryRow
                     label="ราคา"
                     value={`${formatMoney(selectedBooth.boothPrice)} บาท`}
