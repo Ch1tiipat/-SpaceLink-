@@ -3,10 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { JWTPayload, JWTVerifyGetKey } from 'jose';
 
-/** The only claims we take from a Supabase access token. Role is deliberately absent. */
+/** The identity claims we take from a Supabase token. Role is deliberately absent. */
 export interface SupabaseTokenClaims {
   sub: string;
   email: string;
+  fullName?: string;
 }
 
 /**
@@ -86,10 +87,10 @@ export class SupabaseTokenService {
   }
 
   /**
-   * Verifies a raw bearer token and returns the two claims we use. Anything
-   * that fails — bad signature, expired, wrong issuer or audience, unexpected
-   * algorithm, missing claim — is an UnauthorizedException; the caller never
-   * has to distinguish them.
+   * Verifies a raw bearer token and returns the required identity claims plus
+   * the optional profile name. Anything that fails — bad signature, expired,
+   * wrong issuer or audience, unexpected algorithm, missing claim — is an
+   * UnauthorizedException; the caller never has to distinguish them.
    *
    * `exp` needs no option here: jose rejects an expired token by default, and
    * `verify` is called on every request rather than once at sign-in.
@@ -119,16 +120,26 @@ export class SupabaseTokenService {
 
     const sub = payload.sub;
     const email = typeof payload.email === 'string' ? payload.email : undefined;
+    const userMetadata =
+      typeof payload.user_metadata === 'object' &&
+      payload.user_metadata !== null
+        ? (payload.user_metadata as Record<string, unknown>)
+        : undefined;
+    const fullName =
+      typeof userMetadata?.full_name === 'string'
+        ? userMetadata.full_name
+        : undefined;
 
-    // `sub` is app_user.auth_user_id; `email` seeds fullName on first sight.
-    // A token lacking either cannot be provisioned against.
+    // `sub` is app_user.auth_user_id; `email` is the fallback source for a
+    // missing fullName on first sight. A token lacking either cannot be
+    // provisioned against.
     if (!sub || !email) {
       throw new UnauthorizedException('Token is missing a required claim');
     }
 
-    // Only these two. Role and org membership come from the database (§7) —
-    // returning a role claim here would be enough for someone downstream to
-    // trust it by mistake.
-    return { sub, email };
+    // fullName is profile data only. Role and org membership come from the
+    // database (§7) — returning an authorization claim here would be enough
+    // for someone downstream to trust it by mistake.
+    return { sub, email, fullName };
   }
 }

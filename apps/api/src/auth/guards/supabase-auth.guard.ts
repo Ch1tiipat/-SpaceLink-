@@ -38,11 +38,15 @@ export class SupabaseAuthGuard implements CanActivate {
 
     // Throws UnauthorizedException on a bad signature, expiry, wrong audience
     // or a missing claim.
-    const { sub, email } = await this.tokenService.verify(token);
+    const { sub, email, fullName } = await this.tokenService.verify(token);
 
     // Just-in-time provisioning (§7, step 4): the first verified token for an
     // auth_user_id we have not seen creates its `app_user` row.
-    request.user = await this.userProvisioning.findOrCreate(sub, email);
+    request.user = await this.userProvisioning.findOrCreate(
+      sub,
+      email,
+      fullName,
+    );
 
     return true;
   }

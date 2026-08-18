@@ -33,12 +33,14 @@ import { useVendorProfile } from '@/lib/use-vendor-profile';
  */
 const THAI_PHONE_PATTERN = /^0\d{8,9}$/;
 
-/** Blacklist points remain mocked until SCRUM-77 wires the penalty total. */
+/**
+ * Intentionally still mocked — no ticket yet wires blacklistPoints from real
+ * Penalty totals into this screen.
+ */
 type VendorStats = {
   blacklistPoints: number;
 };
 
-/** TODO(SCRUM-77): replace the remaining blacklist-points mock. */
 const MOCK_STATS: VendorStats = { blacklistPoints: 0 };
 
 export function ProfileShopScreen() {
