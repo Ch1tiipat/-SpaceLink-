@@ -1,7 +1,13 @@
 import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Prisma, TicketStatus, TicketType } from '@prisma/client';
+import {
+  NotificationType,
+  Prisma,
+  TicketStatus,
+  TicketType,
+} from '@prisma/client';
 import { BookingsService } from '../bookings/bookings.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportTicketsService } from './support-tickets.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
@@ -52,6 +58,7 @@ const ticketMessageCreate = jest.fn();
 const shopFindFirst = jest.fn();
 const prismaTransaction = jest.fn();
 const createForAdmin = jest.fn();
+const createForUser = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -65,6 +72,7 @@ const mockPrismaService = {
   $transaction: prismaTransaction,
 };
 const mockBookingsService = { createForAdmin };
+const mockNotificationsService = { createForUser };
 
 describe('SupportTicketsService', () => {
   let service: SupportTicketsService;
@@ -90,12 +98,17 @@ describe('SupportTicketsService', () => {
     supportTicketUpdateMany.mockResolvedValue({ count: 1 });
     shopFindFirst.mockResolvedValue({ id: SHOP_ID });
     createForAdmin.mockResolvedValue(CREATED_BOOKING);
+    createForUser.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupportTicketsService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: BookingsService, useValue: mockBookingsService },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
+        },
       ],
     }).compile();
 
@@ -201,6 +214,16 @@ describe('SupportTicketsService', () => {
         { eventId: EVENT_ID, boothId: BOOTH_ID, shopId: SHOP_ID },
         VENDOR_ID,
       );
+      expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
+        type: NotificationType.SUPPORT_TICKET,
+        title: 'คำร้องขอยกเว้นโควตาได้รับการอนุมัติแล้ว',
+        body: 'ระบบสร้างการจองให้คุณเรียบร้อยแล้ว',
+        relatedEntityType: 'SUPPORT_TICKET',
+        relatedEntityId: TICKET_ID,
+      });
+      expect(supportTicketUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
+        createForUser.mock.invocationCallOrder[0],
+      );
     });
 
     // The status sits in the `where`, not only in the guard above it: two
@@ -248,6 +271,7 @@ describe('SupportTicketsService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
       expect(createForAdmin).not.toHaveBeenCalled();
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('returns 404 for a missing or out-of-organization ticket', async () => {
@@ -267,6 +291,7 @@ describe('SupportTicketsService', () => {
       ).rejects.toThrow('ไม่พบร้านค้าของผู้ใช้');
       expect(createForAdmin).not.toHaveBeenCalled();
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     // Booth conflicts, an unbookable event and a missing booth are all decided

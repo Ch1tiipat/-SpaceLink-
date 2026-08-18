@@ -1,6 +1,12 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PenaltyReason, Prisma, type Penalty } from '@prisma/client';
+import {
+  NotificationType,
+  PenaltyReason,
+  Prisma,
+  type Penalty,
+} from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePenaltyDto } from './dto/create-penalty.dto';
 import { PenaltiesService } from './penalties.service';
@@ -32,6 +38,7 @@ const penaltyAggregate = jest.fn();
 const penaltyFindMany = jest.fn();
 const userUpdate = jest.fn();
 const prismaTransaction = jest.fn();
+const createForUser = jest.fn();
 const transactionClient = {
   booking: { findFirst: bookingFindFirst },
   penalty: {
@@ -40,6 +47,7 @@ const transactionClient = {
   },
   user: { update: userUpdate },
 };
+const mockNotificationsService = { createForUser };
 const mockPrismaService = {
   booking: { findFirst: bookingFindFirst },
   penalty: {
@@ -62,6 +70,7 @@ describe('PenaltiesService', () => {
     penaltyAggregate.mockResolvedValue({ _sum: { points: 1 } });
     penaltyFindMany.mockResolvedValue([penalty]);
     userUpdate.mockResolvedValue({ id: vendorUserId });
+    createForUser.mockResolvedValue(null);
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(transactionClient as unknown as Prisma.TransactionClient),
@@ -71,6 +80,10 @@ describe('PenaltiesService', () => {
       providers: [
         PenaltiesService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
+        },
       ],
     }).compile();
 
@@ -107,6 +120,26 @@ describe('PenaltiesService', () => {
       },
     });
     expect(userUpdate).not.toHaveBeenCalled();
+    expect(createForUser).toHaveBeenCalledWith(vendorUserId, {
+      type: NotificationType.PENALTY,
+      title: 'คุณได้รับแต้มโทษ',
+      body: `เหตุผล: ไม่มาตามนัด · 1 แต้ม · ${new Intl.DateTimeFormat('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(issuedAt)}`,
+      relatedEntityType: 'PENALTY',
+      relatedEntityId: penaltyId,
+    });
+    expect(
+      (createForUser.mock.calls[0] as [string, { body: string }])[1].body,
+    ).not.toContain(dto.description);
+    expect(prismaTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+      createForUser.mock.invocationCallOrder[0],
+    );
   });
 
   it('marks the vendor when this penalty crosses the threshold', async () => {
@@ -213,5 +246,6 @@ describe('PenaltiesService', () => {
       new ConflictException('มีการออกแต้มโทษพร้อมกัน กรุณาลองใหม่อีกครั้ง'),
     );
     expect(prismaTransaction).toHaveBeenCalledTimes(3);
+    expect(createForUser).not.toHaveBeenCalled();
   });
 });

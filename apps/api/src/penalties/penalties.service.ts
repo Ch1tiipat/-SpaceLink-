@@ -3,16 +3,40 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  NotificationType,
+  PenaltyReason,
+  Prisma,
+  type Penalty,
+} from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePenaltyDto } from './dto/create-penalty.dto';
 
 const BLACKLIST_THRESHOLD_POINTS = 3;
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
+const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
+  [PenaltyReason.NO_SHOW]: 'ไม่มาตามนัด',
+  [PenaltyReason.RULE_VIOLATION]: 'ทำผิดกติกาการใช้พื้นที่',
+  [PenaltyReason.CONTRACT_BREACH]: 'ผิดสัญญา',
+  [PenaltyReason.BAD_REVIEW]: 'ได้รับรีวิวไม่ดี',
+  [PenaltyReason.OTHER]: 'อื่นๆ',
+};
+const THAILAND_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
+  timeZone: 'Asia/Bangkok',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 @Injectable()
 export class PenaltiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(
     bookingId: string,
@@ -25,7 +49,7 @@ export class PenaltiesService {
       attempt += 1
     ) {
       try {
-        return await this.prisma.$transaction(
+        const result = await this.prisma.$transaction(
           (transaction) =>
             this.createWithinTransaction(
               transaction,
@@ -35,6 +59,9 @@ export class PenaltiesService {
             ),
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         );
+
+        await this.notifyVendor(result.penalty);
+        return result;
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -50,6 +77,19 @@ export class PenaltiesService {
     }
 
     throw new ConflictException('มีการออกแต้มโทษพร้อมกัน กรุณาลองใหม่อีกครั้ง');
+  }
+
+  private notifyVendor(penalty: Penalty) {
+    const reason = PENALTY_REASON_LABELS[penalty.reason];
+    const issuedAt = THAILAND_DATE_TIME_FORMATTER.format(penalty.issuedAt);
+
+    return this.notifications.createForUser(penalty.userId, {
+      type: NotificationType.PENALTY,
+      title: 'คุณได้รับแต้มโทษ',
+      body: `เหตุผล: ${reason} · ${penalty.points} แต้ม · ${issuedAt}`,
+      relatedEntityType: 'PENALTY',
+      relatedEntityId: penalty.id,
+    });
   }
 
   private async createWithinTransaction(
