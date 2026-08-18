@@ -14,7 +14,11 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UserProvisioningService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOrCreate(authUserId: string, email: string): Promise<User> {
+  async findOrCreate(
+    authUserId: string,
+    email: string,
+    fullName?: string,
+  ): Promise<User> {
     const existing = await this.prisma.user.findUnique({
       where: { authUserId },
     });
@@ -27,7 +31,7 @@ export class UserProvisioningService {
         data: {
           authUserId,
           email,
-          fullName: this.deriveFullName(email),
+          fullName: fullName?.trim() || this.deriveFullName(email),
           role: UserRole.VENDOR,
         },
       });

@@ -34,7 +34,6 @@ export default function RegisterPage() {
       // `data` only when it creates the user, so /login sends
       // shouldCreateUser: false to keep this the only door in (§A3.4).
       shouldCreateUser: true,
-      // TODO(SCRUM-54): backend ignores user_metadata.full_name — see PART E-1
     },
   });
 
