@@ -88,8 +88,9 @@ export type VendorShop = {
 };
 
 /**
- * `logoUrl` is accepted by CreateShopDto but nothing in the profile form sets
- * it — uploads land in a later ticket — so it is deliberately absent here.
+ * `logoUrl` is accepted by CreateShopDto but deliberately absent here: a logo
+ * is set by `uploadShopLogo`, which sends the file itself, so nothing in the
+ * profile form ever puts a URL in this body.
  */
 export type CreateShopInput = {
   name: string;
@@ -928,6 +929,75 @@ export function updateShop(
     { signal, token },
     'บันทึกข้อมูลร้านค้าไม่สำเร็จ',
   );
+}
+
+/**
+ * Uploads a shop logo through the API, not to Supabase Storage directly: the
+ * bucket is written with the service-role key, which is backend-only and must
+ * never reach this bundle. The API names the object and returns the shop with
+ * `logoUrl` already pointing at it.
+ *
+ * Do not set Content-Type — the browser adds the multipart boundary for this
+ * FormData body. Same shape as `uploadBookingSlip` below.
+ */
+export async function uploadShopLogo(
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<VendorShop> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  const form = new FormData();
+  form.append('file', file);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/shops/me/logo`, {
+      method: 'POST',
+      signal,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: form,
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw cause;
+    }
+
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดโลโก้ได้ กรุณาลองใหม่อีกครั้ง',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+    const fallbackByStatus: Record<number, string> = {
+      400: 'ไฟล์โลโก้ไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG',
+      404: 'ไม่พบร้านค้าของคุณ กรุณาสร้างร้านค้าก่อนอัปโหลดโลโก้',
+      413: 'ไฟล์โลโก้มีขนาดเกิน 2 MB',
+      502: 'บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
+    };
+
+    throw new ApiError(
+      detail || fallbackByStatus[response.status] || 'อัปโหลดโลโก้ไม่สำเร็จ',
+      response.status,
+    );
+  }
+
+  return (await response.json()) as VendorShop;
 }
 
 /** Public reference data — GET /categories has no guard, so no token. */

@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ImageUp,
   Mail,
   Package,
   Phone,
@@ -19,6 +20,7 @@ import {
   getCategories,
   updateMe,
   updateShop,
+  uploadShopLogo,
   type CurrentUser,
   type ProductCategory,
   type VendorShop,
@@ -32,6 +34,40 @@ import { useVendorProfile } from '@/lib/use-vendor-profile';
  * rather than the backend's raw class-validator string.
  */
 const THAI_PHONE_PATTERN = /^0\d{8,9}$/;
+
+/**
+ * Both limits mirror ShopLogoStorageService, which re-checks them from the
+ * file's own bytes. Checking here as well is a courtesy, not the enforcement
+ * (§14.6): it turns a rejected file into an instant Thai message instead of an
+ * upload that travels to the server before failing.
+ */
+const MAX_LOGO_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_LOGO_DIMENSION = 2000;
+const ACCEPTED_LOGO_TYPES = new Set(['image/jpeg', 'image/png']);
+
+/**
+ * Resolves `null` when the bytes cannot be decoded as an image — the same
+ * "reject rather than skip the check" posture the API takes for a header it
+ * cannot parse.
+ */
+function readImageDimensions(
+  file: File,
+): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+    image.src = objectUrl;
+  });
+}
 
 /**
  * Intentionally still mocked — no ticket yet wires blacklistPoints from real
@@ -212,12 +248,11 @@ export function ProfileShopScreen() {
                   aria-hidden
                   className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-violet-tint to-transparent"
                 />
-                <span
-                  aria-hidden
-                  className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
-                >
-                  {[...ready.shop.name.trim()][0] ?? '?'}
-                </span>
+                <ShopLogoUploader
+                  shop={ready.shop}
+                  token={ready.token}
+                  refresh={refresh}
+                />
                 <h2 className="mt-3.5 text-lg font-bold">{ready.shop.name}</h2>
                 <p className="mt-0.5 text-[13px] text-muted">
                   {ready.profile.fullName}
@@ -306,6 +341,187 @@ export function ProfileShopScreen() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * The shop avatar and the control that replaces it, together — the preview a
+ * vendor needs before uploading *is* the avatar, so keeping them apart would
+ * mean rendering the same square twice.
+ *
+ * Only reachable once a shop exists: the object path is keyed by shop id, so
+ * there is nothing to attach a logo to on the create form.
+ */
+function ShopLogoUploader({
+  shop,
+  token,
+  refresh,
+}: {
+  shop: VendorShop;
+  token: string;
+  /** `refresh()` from `useVendorProfile()` — brings back the new `logoUrl`. */
+  refresh: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Revoked on the way out: an object URL pins the whole file in memory until
+  // it is released, and a vendor may pick several before settling on one.
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  function reject(message: string, input: HTMLInputElement) {
+    setFile(null);
+    setError(message);
+    input.value = '';
+  }
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const selected = input.files?.[0] ?? null;
+    setError(null);
+
+    if (!selected) {
+      setFile(null);
+      return;
+    }
+
+    if (!ACCEPTED_LOGO_TYPES.has(selected.type)) {
+      reject('รองรับเฉพาะไฟล์ JPEG หรือ PNG เท่านั้น', input);
+      return;
+    }
+    if (selected.size > MAX_LOGO_FILE_SIZE) {
+      reject('ไฟล์โลโก้ต้องมีขนาดไม่เกิน 2 MB', input);
+      return;
+    }
+
+    const dimensions = await readImageDimensions(selected);
+    if (!dimensions) {
+      reject('ไม่สามารถอ่านไฟล์รูปภาพนี้ได้ กรุณาเลือกไฟล์อื่น', input);
+      return;
+    }
+    if (
+      dimensions.width > MAX_LOGO_DIMENSION ||
+      dimensions.height > MAX_LOGO_DIMENSION
+    ) {
+      reject(
+        `รูปโลโก้ต้องมีความกว้างและความสูงไม่เกิน ${MAX_LOGO_DIMENSION} พิกเซล (ไฟล์นี้ ${dimensions.width}×${dimensions.height})`,
+        input,
+      );
+      return;
+    }
+
+    setFile(selected);
+  }
+
+  async function handleUpload() {
+    if (!file || isUploading) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      await uploadShopLogo(file, token);
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : 'เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง',
+      );
+      setIsUploading(false);
+      return;
+    }
+
+    setIsUploading(false);
+    // Clearing the picked file drops the local preview, so the square falls
+    // back to `shop.logoUrl` — which `refresh()` is about to replace with the
+    // URL that was just stored. Its `?v=` differs every upload, so the browser
+    // fetches the new file instead of the cached one.
+    setFile(null);
+    if (inputRef.current) inputRef.current.value = '';
+    refresh();
+  }
+
+  const shownLogoUrl = previewUrl ?? shop.logoUrl;
+
+  return (
+    <div className="relative">
+      {shownLogoUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element --
+           next/image would route this through the optimizer, which needs the
+           Supabase host in `images.remotePatterns` — and that host comes from
+           an env var, so it is not known at build time. `zone-map.tsx` renders
+           the same URL raw for the same reason. */
+        <img
+          src={shownLogoUrl}
+          alt={`โลโก้ของ ${shop.name}`}
+          width={82}
+          height={82}
+          className="relative mx-auto block h-[82px] w-[82px] rounded-[28px] object-cover shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+        >
+          {[...shop.name.trim()][0] ?? '?'}
+        </span>
+      )}
+
+      <div className="mt-3">
+        <label
+          htmlFor="shop-logo"
+          className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-bold text-violet"
+        >
+          <ImageUp aria-hidden className="h-4 w-4" strokeWidth={2} />
+          {shop.logoUrl ? 'เปลี่ยนโลโก้' : 'เพิ่มโลโก้ร้าน'}
+        </label>
+        <input
+          ref={inputRef}
+          id="shop-logo"
+          type="file"
+          accept="image/jpeg,image/png"
+          disabled={isUploading}
+          onChange={handleFileChange}
+          className="mt-2 block w-full text-[11px] text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-[#ede7ff] file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <p className="mt-1.5 text-[11px] leading-4 text-muted">
+          JPEG หรือ PNG ไม่เกิน 2 MB และไม่เกิน {MAX_LOGO_DIMENSION}×
+          {MAX_LOGO_DIMENSION} พิกเซล
+        </p>
+      </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 rounded-xl bg-[#fff4f6] px-3 py-2 text-left text-[11px] leading-4 text-danger"
+        >
+          {error}
+        </p>
+      )}
+
+      {file && (
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={isUploading}
+          className="mt-2.5 w-full rounded-xl bg-violet px-4 py-2 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {isUploading ? 'กำลังอัปโหลด…' : 'บันทึกโลโก้'}
+        </button>
+      )}
+    </div>
   );
 }
 
