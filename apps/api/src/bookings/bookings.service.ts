@@ -11,6 +11,7 @@ import {
   BoothStatus,
   CancelledByRole,
   EventStatus,
+  NotificationType,
   Prisma,
   SlipStatus,
   UserRole,
@@ -19,6 +20,7 @@ import {
 } from '@prisma/client';
 import generatePromptPayPayload from 'promptpay-qr';
 import QRCode from 'qrcode';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
@@ -104,6 +106,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly slipVerification: SlipVerificationService,
     private readonly slipStorage: BookingSlipStorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   create(
@@ -687,7 +690,16 @@ export class BookingsService {
       throw new NotFoundException('ไม่พบการจอง');
     }
 
-    return this.toResponse(confirmedBooking);
+    const response = this.toResponse(confirmedBooking);
+    await this.notifications.createForUser(confirmedBooking.vendorUserId, {
+      type: NotificationType.BOOKING_STATUS,
+      title: 'การจองของคุณได้รับการยืนยันแล้ว',
+      body: 'แอดมินยืนยันการจองให้คุณโดยยกเว้นการชำระเงิน',
+      relatedEntityType: 'BOOKING',
+      relatedEntityId: confirmedBooking.id,
+    });
+
+    return response;
   }
 
   update(id: string, updateBookingDto: UpdateBookingDto) {

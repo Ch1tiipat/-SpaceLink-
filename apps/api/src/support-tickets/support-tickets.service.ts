@@ -4,9 +4,15 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TicketStatus, TicketType } from '@prisma/client';
+import {
+  NotificationType,
+  Prisma,
+  TicketStatus,
+  TicketType,
+} from '@prisma/client';
 import { BookingsService } from '../bookings/bookings.service';
 import type { BookingResponse } from '../bookings/bookings.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
@@ -69,6 +75,7 @@ export class SupportTicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -204,6 +211,14 @@ export class SupportTicketsService {
           `approval; booking ${booking.id} is not linked to it`,
       );
     }
+
+    await this.notifications.createForUser(ticket.userId, {
+      type: NotificationType.SUPPORT_TICKET,
+      title: 'คำร้องขอยกเว้นโควตาได้รับการอนุมัติแล้ว',
+      body: 'ระบบสร้างการจองให้คุณเรียบร้อยแล้ว',
+      relatedEntityType: 'SUPPORT_TICKET',
+      relatedEntityId: ticket.id,
+    });
 
     return booking;
   }

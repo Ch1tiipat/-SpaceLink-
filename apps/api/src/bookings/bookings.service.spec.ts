@@ -9,6 +9,7 @@ import {
   BoothStatus,
   CancelledByRole,
   EventStatus,
+  NotificationType,
   Prisma,
   SlipStatus,
   UserRole,
@@ -17,6 +18,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import generatePromptPayPayload from 'promptpay-qr';
 import QRCode from 'qrcode';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
@@ -110,6 +112,7 @@ const verifySlip = jest.fn();
 const uploadForVerification = jest.fn();
 const removeObject = jest.fn();
 const prismaTransaction = jest.fn();
+const createForUser = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -129,6 +132,7 @@ const mockPrismaService = {
 };
 const mockSlipVerificationService = { verify: verifySlip };
 const mockSlipStorageService = { removeObject, uploadForVerification };
+const mockNotificationsService = { createForUser };
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
@@ -202,6 +206,7 @@ describe('BookingsService', () => {
       verificationUrl: SIGNED_SLIP_URL,
     });
     removeObject.mockResolvedValue(undefined);
+    createForUser.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -214,6 +219,10 @@ describe('BookingsService', () => {
         {
           provide: BookingSlipStorageService,
           useValue: mockSlipStorageService,
+        },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
         },
       ],
     }).compile();
@@ -1093,6 +1102,13 @@ describe('BookingsService', () => {
       expect(result.isPaymentExempt).toBe(true);
       expect(result.paymentExemptReason).toBe(EXEMPT_DTO.paymentExemptReason);
       expect(result.boothPrice).toBe('1500');
+      expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
+        type: NotificationType.BOOKING_STATUS,
+        title: 'การจองของคุณได้รับการยืนยันแล้ว',
+        body: 'แอดมินยืนยันการจองให้คุณโดยยกเว้นการชำระเงิน',
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: BOOKING_ID,
+      });
     });
 
     it('rejects a blacklisted vendor before updating the booking', async () => {
@@ -1159,6 +1175,7 @@ describe('BookingsService', () => {
         service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
       ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
       expect(bookingFindUnique).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
   });
 });

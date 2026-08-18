@@ -7,23 +7,38 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  CircleAlert,
   Clock3,
   CreditCard,
   Mail,
   Megaphone,
   Settings2,
+  ShieldAlert,
   Smartphone,
   Sparkles,
 } from 'lucide-react';
 
+import {
+  getMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationRecord,
+  type NotificationType,
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { useAuthState } from '@/lib/use-auth-state';
-import { canUseUxPreview } from '@/lib/ux-preview';
 
-type NotificationKind = 'event' | 'booking' | 'payment' | 'system';
+type NotificationKind =
+  | 'event'
+  | 'booking'
+  | 'penalty'
+  | 'payment'
+  | 'system';
 type NotificationFilter = 'all' | 'unread';
 type NotificationPreference =
   | 'all'
   | 'booking'
+  | 'penalty'
   | 'payment'
   | 'event'
   | 'system'
@@ -35,52 +50,26 @@ type UserNotification = {
   kind: NotificationKind;
   title: string;
   description: string;
-  time: string;
+  createdAt: string;
   unread: boolean;
   href?: string;
 };
 
-const DEMO_NOTIFICATIONS: UserNotification[] = [
-  {
-    id: 'booking-confirmed',
-    kind: 'booking',
-    title: 'ยืนยันการจองบูธ A12 แล้ว',
-    description:
-      'งานเกษตร มทส. 2569 ยืนยันการจองของคุณเรียบร้อย เตรียมร้านให้พร้อมก่อนวันงาน',
-    time: '10 นาทีที่แล้ว',
-    unread: true,
-    href: '/bookings',
-  },
-  {
-    id: 'payment-reminder',
-    kind: 'payment',
-    title: 'เหลือเวลาอัปโหลดสลิปอีก 3 นาที',
-    description:
-      'การจองบูธ B04 ยังรอชำระเงิน หากหมดเวลาระบบจะคืนบูธให้ผู้ขายรายอื่น',
-    time: '25 นาทีที่แล้ว',
-    unread: true,
-    href: '/bookings',
-  },
-  {
-    id: 'event-announcement',
-    kind: 'event',
-    title: 'ผู้จัดงานอัปเดตเวลาเข้าพื้นที่',
-    description:
-      'ผู้ขายสามารถเข้าจัดเตรียมบูธได้ตั้งแต่เวลา 06:00 น. โปรดแสดงรหัสการจองที่จุดลงทะเบียน',
-    time: 'เมื่อวาน 18:30',
-    unread: false,
-  },
-  {
-    id: 'recommended-event',
-    kind: 'system',
-    title: 'มีงานใหม่ที่เหมาะกับร้านของคุณ',
-    description:
-      'งานผ้าไหมปักธงชัยเปิดรับร้านค้าแล้ว หมวดสินค้าและทำเลของงานตรงกับโปรไฟล์ร้านของคุณ',
-    time: '2 วันที่แล้ว',
-    unread: false,
-    href: '/',
-  },
-];
+type NotificationAccess =
+  | { status: 'loading' }
+  | { status: 'signed-out' }
+  | { status: 'ready'; token: string }
+  | { status: 'error'; message: string };
+
+const KIND_BY_TYPE: Record<NotificationType, NotificationKind> = {
+  ANNOUNCEMENT: 'event',
+  BOOKING_STATUS: 'booking',
+  SUPPORT_TICKET: 'booking',
+  PENALTY: 'penalty',
+  PAYMENT: 'payment',
+  REFUND: 'payment',
+  SYSTEM: 'system',
+};
 
 const KIND_META = {
   event: {
@@ -92,6 +81,11 @@ const KIND_META = {
     label: 'การจอง',
     icon: CalendarDays,
     tone: 'bg-[#f0eaff] text-[#6d28d9]',
+  },
+  penalty: {
+    label: 'แต้มโทษ',
+    icon: ShieldAlert,
+    tone: 'bg-[#fff0f0] text-[#b42318]',
   },
   payment: {
     label: 'การชำระเงิน',
@@ -108,9 +102,79 @@ const KIND_META = {
   { label: string; icon: typeof Bell; tone: string }
 >;
 
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat('th', {
+  numeric: 'auto',
+});
+const THAILAND_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
+  timeZone: 'Asia/Bangkok',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+function toUserNotification(notification: NotificationRecord): UserNotification {
+  return {
+    id: notification.id,
+    kind: KIND_BY_TYPE[notification.type],
+    title: notification.title,
+    description: notification.body ?? '',
+    createdAt: notification.createdAt,
+    unread: !notification.isRead,
+    href: notificationHref(notification.type),
+  };
+}
+
+function notificationHref(type: NotificationType): string | undefined {
+  switch (type) {
+    case 'ANNOUNCEMENT':
+    case 'SYSTEM':
+      return '/';
+    case 'BOOKING_STATUS':
+    case 'PAYMENT':
+    case 'REFUND':
+      return '/bookings';
+    case 'SUPPORT_TICKET':
+      return '/help';
+    case 'PENALTY':
+      return undefined;
+  }
+}
+
+function formatRelativeTime(createdAt: string): string {
+  const timestamp = new Date(createdAt).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+
+  const difference = timestamp - Date.now();
+  const absolute = Math.abs(difference);
+  if (absolute < 60_000) return 'เมื่อสักครู่';
+  if (absolute < 3_600_000) {
+    return RELATIVE_TIME_FORMATTER.format(Math.round(difference / 60_000), 'minute');
+  }
+  if (absolute < 86_400_000) {
+    return RELATIVE_TIME_FORMATTER.format(
+      Math.round(difference / 3_600_000),
+      'hour',
+    );
+  }
+  if (absolute < 604_800_000) {
+    return RELATIVE_TIME_FORMATTER.format(
+      Math.round(difference / 86_400_000),
+      'day',
+    );
+  }
+  return THAILAND_DATE_TIME_FORMATTER.format(timestamp);
+}
+
+function describeError(cause: unknown, fallback: string): string {
+  return cause instanceof Error && cause.message ? cause.message : fallback;
+}
+
 export default function NotificationsPage() {
   const { auth } = useAuthState();
-  const [previewAvailable, setPreviewAvailable] = useState(false);
+  const [access, setAccess] = useState<NotificationAccess>({
+    status: 'loading',
+  });
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferences, setPreferences] = useState<
@@ -118,18 +182,68 @@ export default function NotificationsPage() {
   >({
     all: true,
     booking: true,
+    penalty: true,
     payment: true,
     event: true,
     system: true,
     email: true,
     line: false,
   });
-  const [notifications, setNotifications] =
-    useState<UserNotification[]>(DEMO_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
 
   useEffect(() => {
-    setPreviewAvailable(canUseUxPreview());
-  }, []);
+    if (auth.status === 'loading') {
+      setAccess({ status: 'loading' });
+      return;
+    }
+    if (auth.status === 'signed-out') {
+      setNotifications([]);
+      setAccess({ status: 'signed-out' });
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setAccess({ status: 'loading' });
+    setActionError(null);
+
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) {
+          if (active) {
+            setNotifications([]);
+            setAccess({ status: 'signed-out' });
+          }
+          return;
+        }
+
+        const rows = await getMyNotifications(token, controller.signal);
+        if (!active) return;
+        setNotifications(rows.map(toUserNotification));
+        setAccess({ status: 'ready', token });
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (active) {
+          setNotifications([]);
+          setAccess({
+            status: 'error',
+            message: describeError(
+              cause,
+              'โหลดการแจ้งเตือนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+            ),
+          });
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [auth.status, reloadVersion]);
 
   const visibleNotifications = useMemo(
     () =>
@@ -142,13 +256,29 @@ export default function NotificationsPage() {
     (notification) => notification.unread,
   ).length;
 
-  function markAllAsRead() {
+  async function markAllAsRead() {
+    if (access.status !== 'ready' || unreadCount === 0) return;
+    const previous = notifications;
+    setActionError(null);
     setNotifications((current) =>
       current.map((notification) => ({ ...notification, unread: false })),
     );
+
+    try {
+      await markAllNotificationsRead(access.token);
+    } catch (cause) {
+      setNotifications(previous);
+      setActionError(
+        describeError(cause, 'ทำเครื่องหมายอ่านทั้งหมดไม่สำเร็จ'),
+      );
+    }
   }
 
-  function markAsRead(id: string) {
+  async function markAsRead(id: string) {
+    if (access.status !== 'ready') return;
+    const target = notifications.find((notification) => notification.id === id);
+    if (!target?.unread) return;
+    setActionError(null);
     setNotifications((current) =>
       current.map((notification) =>
         notification.id === id
@@ -156,6 +286,21 @@ export default function NotificationsPage() {
           : notification,
       ),
     );
+
+    try {
+      await markNotificationRead(id, access.token);
+    } catch (cause) {
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id === id
+            ? { ...notification, unread: true }
+            : notification,
+        ),
+      );
+      setActionError(
+        describeError(cause, 'ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ'),
+      );
+    }
   }
 
   function togglePreference(key: NotificationPreference) {
@@ -165,6 +310,7 @@ export default function NotificationsPage() {
         return {
           all: enabled,
           booking: enabled,
+          penalty: enabled,
           payment: enabled,
           event: enabled,
           system: enabled,
@@ -175,7 +321,11 @@ export default function NotificationsPage() {
 
       const next = { ...current, [key]: !current[key] };
       const contentEnabled =
-        next.booking && next.payment && next.event && next.system;
+        next.booking &&
+        next.penalty &&
+        next.payment &&
+        next.event &&
+        next.system;
       return { ...next, all: contentEnabled };
     });
   }
@@ -195,7 +345,7 @@ export default function NotificationsPage() {
             </p>
           </div>
 
-          {auth.status === 'signed-in' && previewAvailable ? (
+          {access.status === 'ready' ? (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -220,12 +370,15 @@ export default function NotificationsPage() {
           ) : null}
         </header>
 
-        {auth.status === 'loading' ? (
+        {auth.status === 'loading' || access.status === 'loading' ? (
           <NotificationSkeleton />
-        ) : auth.status === 'signed-out' ? (
+        ) : auth.status === 'signed-out' || access.status === 'signed-out' ? (
           <SignedOutState />
-        ) : !previewAvailable ? (
-          <NotificationUnavailable />
+        ) : access.status === 'error' ? (
+          <NotificationErrorState
+            message={access.message}
+            onRetry={() => setReloadVersion((current) => current + 1)}
+          />
         ) : (
           <>
             {settingsOpen ? (
@@ -235,82 +388,90 @@ export default function NotificationsPage() {
               />
             ) : null}
 
+            {actionError ? (
+              <p
+                role="alert"
+                className="mb-4 rounded-2xl border border-[#fecaca] bg-[#fff7f7] px-4 py-3 text-sm font-semibold text-[#b42318]"
+              >
+                {actionError}
+              </p>
+            ) : null}
+
             <section className="sl-surface overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <div className="flex rounded-2xl bg-[#f5f2f9] p-1" role="tablist">
-                <FilterButton
-                  active={filter === 'all'}
-                  onClick={() => setFilter('all')}
-                  label="ทั้งหมด"
-                  count={notifications.length}
-                />
-                <FilterButton
-                  active={filter === 'unread'}
-                  onClick={() => setFilter('unread')}
-                  label="ยังไม่ได้อ่าน"
-                  count={unreadCount}
-                />
-              </div>
-
-              <span className="inline-flex items-center gap-2 text-xs font-semibold text-muted">
-                <Clock3 className="h-4 w-4" aria-hidden />
-                เรียงจากรายการล่าสุด
-              </span>
-            </div>
-
-            {visibleNotifications.length > 0 ? (
-              <div className="divide-y divide-[#f0edf4]">
-                {visibleNotifications.map((notification) => (
-                  <NotificationRow
-                    key={notification.id}
-                    notification={notification}
-                    onRead={() => markAsRead(notification.id)}
+              <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <div className="flex rounded-2xl bg-[#f5f2f9] p-1" role="tablist">
+                  <FilterButton
+                    active={filter === 'all'}
+                    onClick={() => setFilter('all')}
+                    label="ทั้งหมด"
+                    count={notifications.length}
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="px-6 py-16 text-center">
-                <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
-                  <CheckCheck className="h-7 w-7" aria-hidden />
+                  <FilterButton
+                    active={filter === 'unread'}
+                    onClick={() => setFilter('unread')}
+                    label="ยังไม่ได้อ่าน"
+                    count={unreadCount}
+                  />
+                </div>
+
+                <span className="inline-flex items-center gap-2 text-xs font-semibold text-muted">
+                  <Clock3 className="h-4 w-4" aria-hidden />
+                  เรียงจากรายการล่าสุด
                 </span>
-                <h2 className="mt-5 text-xl font-extrabold">
-                  อ่านการแจ้งเตือนครบแล้ว
-                </h2>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-                  เมื่อมีข่าวงานหรือสถานะการจองใหม่ รายการจะแสดงที่หน้านี้
-                </p>
               </div>
-            )}
+
+              {visibleNotifications.length > 0 ? (
+                <div className="divide-y divide-[#f0edf4]">
+                  {visibleNotifications.map((notification) => (
+                    <NotificationRow
+                      key={notification.id}
+                      notification={notification}
+                      onRead={() => markAsRead(notification.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="px-6 py-16 text-center">
+                  <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
+                    <CheckCheck className="h-7 w-7" aria-hidden />
+                  </span>
+                  <h2 className="mt-5 text-xl font-extrabold">
+                    {notifications.length === 0
+                      ? 'ยังไม่มีการแจ้งเตือน'
+                      : 'อ่านการแจ้งเตือนครบแล้ว'}
+                  </h2>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
+                    เมื่อมีข่าวงานหรือสถานะการจองใหม่ รายการจะแสดงที่หน้านี้
+                  </p>
+                </div>
+              )}
             </section>
           </>
         )}
-
-        {previewAvailable ? (
-          <p className="mt-4 text-center text-xs text-muted">
-            โหมดตรวจ UX/UI บนเครื่องนี้ใช้ข้อมูลตัวอย่างและไม่ส่งข้อมูลเข้า API
-          </p>
-        ) : null}
       </div>
     </main>
   );
 }
 
-function NotificationUnavailable() {
+function NotificationErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <section className="sl-surface px-6 py-16 text-center">
-      <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
-        <Bell className="h-7 w-7" aria-hidden />
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-[#fff0f0] text-[#b42318]">
+        <CircleAlert className="h-7 w-7" aria-hidden />
       </span>
-      <h2 className="mt-5 text-xl font-extrabold">
-        ระบบแจ้งเตือนกำลังเตรียมเชื่อมต่อ
-      </h2>
+      <h2 className="mt-5 text-xl font-extrabold">โหลดการแจ้งเตือนไม่สำเร็จ</h2>
       <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted">
-        หน้านี้พร้อมด้าน UX/UI แล้ว แต่จะยังไม่แสดงข้อมูลตัวอย่างในระบบจริง
-        จนกว่าทีมจะเชื่อม Notification API และการตั้งค่าผู้ใช้
+        {message}
       </p>
-      <Link href="/" className="sl-action-primary mt-6">
-        กลับไปค้นหา Event
-      </Link>
+      <button type="button" onClick={onRetry} className="sl-action-primary mt-6">
+        ลองใหม่อีกครั้ง
+      </button>
     </section>
   );
 }
@@ -333,6 +494,12 @@ function NotificationSettings({
       title: 'สถานะการจอง',
       description: 'แจ้งเมื่อยืนยัน ยกเลิก หรือมีการเปลี่ยนแปลงบูธ',
       icon: CalendarDays,
+    },
+    {
+      key: 'penalty',
+      title: 'แต้มโทษ',
+      description: 'แจ้งเมื่อได้รับแต้มโทษและรายละเอียดเวลาที่ออกแต้ม',
+      icon: ShieldAlert,
     },
     {
       key: 'payment',
@@ -548,13 +715,17 @@ function NotificationRow({
             <span className="h-2 w-2 rounded-full bg-violet" aria-label="ยังไม่ได้อ่าน" />
           ) : null}
         </span>
-        <span className="mt-1.5 block max-w-3xl text-sm leading-6 text-muted">
-          {notification.description}
-        </span>
+        {notification.description ? (
+          <span className="mt-1.5 block max-w-3xl text-sm leading-6 text-muted">
+            {notification.description}
+          </span>
+        ) : null}
         <span className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8b8296]">
           <span>{meta.label}</span>
           <span aria-hidden>•</span>
-          <time>{notification.time}</time>
+          <time dateTime={notification.createdAt}>
+            {formatRelativeTime(notification.createdAt)}
+          </time>
         </span>
       </span>
     </>
