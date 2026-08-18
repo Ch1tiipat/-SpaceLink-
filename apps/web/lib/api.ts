@@ -415,6 +415,29 @@ export type SaveAnnouncementInput = {
   publishedAt?: string;
 };
 
+export type NotificationType =
+  | 'ANNOUNCEMENT'
+  | 'BOOKING_STATUS'
+  | 'PAYMENT'
+  | 'REFUND'
+  | 'SUPPORT_TICKET'
+  | 'PENALTY'
+  | 'SYSTEM';
+
+export type NotificationRecord = {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  relatedEntityType: string | null;
+  relatedEntityId: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type NotificationCount = { count: number };
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -777,6 +800,46 @@ export function deleteAdminAnnouncement(
       encodeURIComponent(announcementId),
     { token },
     'ไม่สามารถลบประกาศได้',
+  );
+}
+
+export function getMyNotifications(
+  token: string,
+  signal?: AbortSignal,
+): Promise<NotificationRecord[]> {
+  return getJson<NotificationRecord[]>('/notifications', { signal, token });
+}
+
+export function getUnreadNotificationCount(
+  token: string,
+  signal?: AbortSignal,
+): Promise<NotificationCount> {
+  return getJson<NotificationCount>('/notifications/unread-count', {
+    signal,
+    token,
+  });
+}
+
+export function markNotificationRead(
+  notificationId: string,
+  token: string,
+): Promise<NotificationCount> {
+  return patchJson<NotificationCount>(
+    `/notifications/${encodeURIComponent(notificationId)}/read`,
+    {},
+    { token },
+    'ไม่สามารถอัปเดตการแจ้งเตือนได้',
+  );
+}
+
+export function markAllNotificationsRead(
+  token: string,
+): Promise<NotificationCount> {
+  return patchJson<NotificationCount>(
+    '/notifications/mark-all-read',
+    {},
+    { token },
+    'ไม่สามารถอัปเดตการแจ้งเตือนทั้งหมดได้',
   );
 }
 

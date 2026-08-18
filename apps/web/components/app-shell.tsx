@@ -33,7 +33,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthState, type AuthState } from '@/lib/use-auth-state';
-import type { CurrentUser } from '@/lib/api';
+import {
+  getUnreadNotificationCount,
+  type CurrentUser,
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   canUseUxPreview,
   getUxPreviewMode,
@@ -212,6 +216,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { auth, signOut } = useAuthState();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState('');
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState<
+    number | null
+  >(null);
 
   const isAdmin =
     auth.status === 'signed-in' &&
@@ -246,6 +253,37 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.addEventListener('popstate', syncFromUrl);
     return () => window.removeEventListener('popstate', syncFromUrl);
   }, [isAdmin, isAdminRoute, organizations, pathname, router]);
+
+  useEffect(() => {
+    setUnreadNotificationCount(null);
+    if (auth.status !== 'signed-in') return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!active || !token) return;
+
+        const result = await getUnreadNotificationCount(
+          token,
+          controller.signal,
+        );
+        if (active) setUnreadNotificationCount(result.count);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (active) setUnreadNotificationCount(null);
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [auth.status, pathname]);
 
   function selectOrganization(organizationId: string) {
     if (!organizations.some((organization) => organization.id === organizationId)) {
@@ -319,6 +357,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             organizations={organizations}
             selectedOrganizationId={selectedOrganizationId}
             onSelectOrganization={selectOrganization}
+            showUnreadNotificationDot={
+              unreadNotificationCount !== null && unreadNotificationCount > 0
+            }
           />
           {/* The viewport minus the topbar, so a short page still fills the
               screen without overflowing it — the pages themselves no longer
@@ -520,6 +561,7 @@ function Topbar({
   organizations,
   selectedOrganizationId,
   onSelectOrganization,
+  showUnreadNotificationDot,
 }: {
   auth: AuthState;
   hasSidebar: boolean;
@@ -529,6 +571,7 @@ function Topbar({
   organizations: AdminOrganization[];
   selectedOrganizationId: string;
   onSelectOrganization: (organizationId: string) => void;
+  showUnreadNotificationDot: boolean;
 }) {
   return (
     <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ece7f3] bg-white/[0.82] px-[18px] shadow-[0_8px_28px_rgba(54,36,91,0.035)] backdrop-blur-xl lg:h-[72px] lg:px-8">
@@ -582,10 +625,12 @@ function Topbar({
             className="relative hidden h-10 w-10 place-items-center rounded-2xl border border-[#ece7f3] bg-white text-[#655D70] shadow-[0_6px_18px_rgba(54,36,91,0.06)] transition hover:border-[#d9cdf3] hover:bg-violet-tint hover:text-violet sm:grid"
           >
             <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
-            <span
-              aria-hidden
-              className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-[#ef4444]"
-            />
+            {showUnreadNotificationDot ? (
+              <span
+                aria-hidden
+                className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-[#ef4444]"
+              />
+            ) : null}
           </Link>
         )}
 
