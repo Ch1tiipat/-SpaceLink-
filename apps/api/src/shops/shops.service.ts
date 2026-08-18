@@ -8,6 +8,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
+import {
+  ShopLogoStorageService,
+  type UploadedShopLogoFile,
+} from './shop-logo-storage.service';
 
 /**
  * The same projection AuthController.me() builds for its `shops[]` entries, so
@@ -38,7 +42,10 @@ export interface ShopResponse {
 
 @Injectable()
 export class ShopsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly logoStorage: ShopLogoStorageService,
+  ) {}
 
   /**
    * One shop per vendor. That rule lives here and only here — `Shop` has no
@@ -123,6 +130,39 @@ export class ShopsService {
         data: shopFields,
         select: shopSelect,
       });
+    });
+
+    return this.toResponse(shop);
+  }
+
+  /**
+   * Resolve, upload, then persist — one method rather than a storage step and a
+   * separate write, because the object path needs the `shopId` that resolving
+   * already found. Same shape as `BookingsService.uploadSlip`.
+   *
+   * No transaction: the upload is a network call to Supabase Storage and cannot
+   * be rolled back, so wrapping the write in one would only hold a connection
+   * open across it. A stored object whose row never got its URL is harmless —
+   * the next upload overwrites the same path (§14.4: the server names it).
+   */
+  async uploadLogo(
+    file: UploadedShopLogoFile,
+    ownerUserId: string,
+  ): Promise<ShopResponse> {
+    const existing = await this.prisma.shop.findFirst({
+      where: { ownerUserId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
+    }
+
+    const logoUrl = await this.logoStorage.uploadForShop(file, existing.id);
+
+    const shop = await this.prisma.shop.update({
+      where: { id: existing.id },
+      data: { logoUrl },
+      select: shopSelect,
     });
 
     return this.toResponse(shop);

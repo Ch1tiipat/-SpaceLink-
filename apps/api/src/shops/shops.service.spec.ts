@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -8,6 +9,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
+import { ShopLogoStorageService } from './shop-logo-storage.service';
 import { ShopsService } from './shops.service';
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
@@ -15,6 +17,8 @@ const SHOP_ID = '22222222-2222-4222-8222-222222222222';
 const CATEGORY_ID = '33333333-3333-4333-8333-333333333333';
 const OTHER_CATEGORY_ID = '44444444-4444-4444-8444-444444444444';
 const MISSING_CATEGORY_ID = '55555555-5555-4555-8555-555555555555';
+const LOGO_URL = `https://project.supabase.co/storage/v1/object/public/shop-logos/${SHOP_ID}/logo?v=1760000000000`;
+const LOGO_FILE = { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
 
 const CREATE_DTO: CreateShopDto = {
   name: 'ร้านขนมไทย',
@@ -45,6 +49,7 @@ const shopCategoryDeleteMany = jest.fn();
 const shopCategoryCreateMany = jest.fn();
 const productCategoryCount = jest.fn();
 const prismaTransaction = jest.fn();
+const uploadForShop = jest.fn();
 
 const mockPrismaService = {
   shop: {
@@ -59,6 +64,8 @@ const mockPrismaService = {
   productCategory: { count: productCategoryCount },
   $transaction: prismaTransaction,
 };
+
+const mockLogoStorage = { uploadForShop };
 
 describe('ShopsService', () => {
   let service: ShopsService;
@@ -77,11 +84,13 @@ describe('ShopsService', () => {
     shopCategoryDeleteMany.mockResolvedValue({ count: 1 });
     shopCategoryCreateMany.mockResolvedValue({ count: 1 });
     productCategoryCount.mockResolvedValue(1);
+    uploadForShop.mockResolvedValue(LOGO_URL);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ShopsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ShopLogoStorageService, useValue: mockLogoStorage },
       ],
     }).compile();
 
@@ -252,6 +261,62 @@ describe('ShopsService', () => {
       await expect(
         service.updateMe({ name: 'ร้านขนมไทย' }, OWNER_ID),
       ).resolves.toEqual(SHOP_RESPONSE);
+    });
+  });
+
+  describe('uploadLogo', () => {
+    it('returns 404 when the user has no shop, without touching storage', async () => {
+      shopFindFirst.mockResolvedValue(null);
+
+      await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).rejects.toThrow(
+        new NotFoundException('ไม่พบร้านค้าของผู้ใช้'),
+      );
+      expect(uploadForShop).not.toHaveBeenCalled();
+      expect(shopUpdate).not.toHaveBeenCalled();
+    });
+
+    /*
+     * The object path is keyed by shop id, and that id must come from the
+     * ownerUserId lookup — never from anything the client sent (§14.2).
+     */
+    it('names the object with the shop resolved from the authenticated user', async () => {
+      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+
+      await service.uploadLogo(LOGO_FILE, OWNER_ID);
+
+      expect(shopFindFirst).toHaveBeenCalledWith({
+        where: { ownerUserId: OWNER_ID },
+        select: { id: true },
+      });
+      expect(uploadForShop).toHaveBeenCalledWith(LOGO_FILE, SHOP_ID);
+    });
+
+    it('stores the URL the storage service built and returns the me() shape', async () => {
+      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+      shopUpdate.mockResolvedValue({ ...SHOP_RECORD, logoUrl: LOGO_URL });
+
+      await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).resolves.toEqual({
+        ...SHOP_RESPONSE,
+        logoUrl: LOGO_URL,
+      });
+      expect(shopUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: SHOP_ID },
+          data: { logoUrl: LOGO_URL },
+        }),
+      );
+    });
+
+    it('leaves logoUrl unchanged when the upload fails', async () => {
+      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+      uploadForShop.mockRejectedValue(
+        new BadGatewayException('ไม่สามารถจัดเก็บโลโก้ร้านได้'),
+      );
+
+      await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).rejects.toThrow(
+        BadGatewayException,
+      );
+      expect(shopUpdate).not.toHaveBeenCalled();
     });
   });
 });

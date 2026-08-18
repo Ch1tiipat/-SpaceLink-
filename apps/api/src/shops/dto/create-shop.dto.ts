@@ -11,9 +11,10 @@ import {
  * `ownerUserId` is deliberately absent: it comes from the authenticated user
  * that SupabaseAuthGuard put on the request, never from the body (§14.2).
  *
- * `logoUrl` is accepted and stored but nothing reads it yet — uploads land in
- * a later ticket. It is validated as a plain string rather than `@IsUrl`
- * because a Supabase Storage object path is not a URL.
+ * `logoUrl` is accepted and stored as a plain string. It is **not** how a logo
+ * gets uploaded — that is `POST /shops/me/logo`, which stores the file itself
+ * and overwrites this field with the URL it built. Nothing in the web app sends
+ * `logoUrl` here.
  */
 export class CreateShopDto {
   @IsString()
