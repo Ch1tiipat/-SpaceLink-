@@ -785,29 +785,52 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
 
 function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
   const [open, setOpen] = useState(false);
-  const [previewAvailable, setPreviewAvailable] = useState(false);
-  const [question, setQuestion] = useState('ร้านคาเฟ่ของฉันเหมาะกับโซนไหน');
+  const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(
-    'แนะนำโซน A บูธ A01 หรือ A02 เพราะอยู่ใกล้ทางเข้าหลักและกลุ่มร้านอาหาร ลูกค้ามองเห็นง่าย เหมาะกับร้านเครื่องดื่มและขนม',
+    'พิมพ์คำถามเกี่ยวกับโซนหรือบูธได้เลย ผู้ช่วยจะพาคุณไปดูพื้นที่ที่เหมาะกับประเภทร้านและ Event ที่สนใจ',
   );
 
-  useEffect(() => {
-    const preview = canUseUxPreview();
-    setPreviewAvailable(preview);
-    if (!preview) {
-      setAnswer(
-        'ระบบจะแนะนำโซนและบูธจากข้อมูลร้านค้าของคุณในหน้าแผนผังของแต่ละ Event',
-      );
-    }
-  }, []);
+  const quickQuestions = [
+    'แนะนำบูธสำหรับร้านอาหาร',
+    'ร้านผ้าไหมเหมาะกับโซนไหน',
+    'เริ่มจองบูธอย่างไร',
+  ];
 
-  function askAssistant() {
-    const normalized = question.trim();
+  function askAssistant(nextQuestion = question) {
+    const normalized = nextQuestion.trim();
     if (!normalized) return;
+    setQuestion(nextQuestion);
+
+    if (!/(โซน|บูธ|ร้าน|จอง|event|งาน|พื้นที่)/i.test(normalized)) {
+      setAnswer(
+        'ผู้ช่วยนี้ตอบเฉพาะเรื่องการเลือกโซน บูธ และขั้นตอนจองพื้นที่ครับ ลองเลือกคำถามพบบ่อยด้านล่างได้เลย',
+      );
+      return;
+    }
+
+    if (/ผ้า|ไหม|otop/i.test(normalized)) {
+      setAnswer(
+        'ร้านผ้าไหมและ OTOP ควรเริ่มดูโซน D ซึ่งรวมสินค้าประเภทเดียวกันไว้ด้วยกัน จากนั้นเลือก Event เพื่อให้ระบบเทียบข้อมูลร้านและบูธว่างจริงอีกครั้ง',
+      );
+      return;
+    }
+
+    if (/อาหาร|กาแฟ|คาเฟ่|เครื่องดื่ม|ขนม/i.test(normalized)) {
+      setAnswer(
+        'ร้านอาหารหรือเครื่องดื่มควรเริ่มดูโซน A และบูธใกล้ทางเข้าหรือทางเดินหลัก จากนั้นเลือก Event เพื่อให้ระบบจัดอันดับจากบูธว่างจริงและข้อมูลร้านของคุณ',
+      );
+      return;
+    }
+
+    if (/จอง|เริ่ม|ขั้นตอน/i.test(normalized)) {
+      setAnswer(
+        'เลือก Event ที่สนใจ เปิดแผนผัง เลือกโซนและบูธ ตรวจสอบรายละเอียดราคา แล้วจึงยืนยันเพื่อไปหน้าชำระเงินครับ',
+      );
+      return;
+    }
+
     setAnswer(
-      normalized.includes('ผ้า')
-        ? 'แนะนำโซน D บูธ D01 หรือ D02 ใกล้กลุ่มผ้าไหมและ OTOP ลูกค้าที่สนใจสินค้าประเภทเดียวกันเดินผ่านมากที่สุด'
-        : 'แนะนำโซน A บูธ A01 หรือ A02 เพราะอยู่ใกล้ทางเข้าหลักและกลุ่มร้านอาหาร ลูกค้ามองเห็นง่าย เหมาะกับประเภทร้านในโปรไฟล์ของคุณ',
+      'เลือก Event ที่สนใจก่อน แล้วเปิดแผนผังเพื่อดูคำแนะนำจากข้อมูลร้านและสถานะบูธจริง ระบบจะช่วยเปรียบเทียบโซนที่เหมาะที่สุดให้ครับ',
     );
   }
 
@@ -854,41 +877,51 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
               {answer}
             </div>
 
-            {previewAvailable ? (
-              <div className="mt-3 flex gap-2 rounded-2xl border border-line bg-white p-2 focus-within:border-[#cfc4df]">
-                <input
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') askAssistant();
-                  }}
-                  aria-label="พิมพ์คำถามเกี่ยวกับโซนและบูธ"
-                  className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={askAssistant}
-                  aria-label="ส่งคำถาม"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,0.24)]"
-                >
-                  <Send className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-            ) : (
-              <p className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-xs leading-5 text-muted">
-                เลือก Event แล้วเปิดหน้าแผนผัง จากนั้นกด “แนะนำโซนให้ฉัน”
-                เพื่อใช้ระบบแนะนำจริงจากข้อมูลร้านค้าของคุณ
+            <div className="mt-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+                คำถามพบบ่อย
               </p>
-            )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {quickQuestions.map((quickQuestion) => (
+                  <button
+                    key={quickQuestion}
+                    type="button"
+                    onClick={() => askAssistant(quickQuestion)}
+                    className="rounded-full border border-[#e3daf4] bg-white px-3 py-2 text-left text-xs font-bold text-[#5d506d] transition hover:border-violet hover:text-violet"
+                  >
+                    {quickQuestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 flex gap-2 rounded-2xl border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+              <input
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') askAssistant();
+                }}
+                placeholder="ถามเรื่องโซน บูธ หรือการจอง..."
+                aria-label="พิมพ์คำถามเกี่ยวกับโซนและบูธ"
+                className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none placeholder:text-[#978ba5]"
+              />
+              <button
+                type="button"
+                onClick={() => askAssistant()}
+                aria-label="ส่งคำถาม"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,0.24)] transition hover:bg-[#6d28d9]"
+              >
+                <Send className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
 
             <Link
-              href={previewAvailable ? '/events/demo-event/map' : '/'}
+              href="/"
               className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#211a2e] px-4 text-sm font-extrabold text-white transition hover:bg-[#352746]"
             >
               <MapPinned className="h-4 w-4" aria-hidden />
-              {previewAvailable
-                ? 'ทดลองหน้าแนะนำโซน'
-                : 'ไปเลือก Event เพื่อขอคำแนะนำ'}
+              เลือก Event เพื่อดูคำแนะนำจากข้อมูลจริง
             </Link>
 
             <div className="mt-4 border-t border-line pt-4">
@@ -900,21 +933,28 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
                   href="https://www.facebook.com/"
                   target="_blank"
                   rel="noreferrer"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#eef4ff] px-2 text-xs font-bold text-[#2459a9]"
+                  aria-label="ติดต่อผ่าน Facebook"
+                  className="grid min-h-14 place-items-center rounded-2xl bg-[#eef4ff] px-2 text-xs font-bold text-[#2459a9] transition hover:-translate-y-0.5"
                 >
-                  Facebook
+                  <span className="flex items-center gap-1.5">
+                    <MessagesSquare className="h-4 w-4" aria-hidden /> Facebook
+                  </span>
                 </a>
                 <a
                   href="https://line.me/R/ti/p/"
                   target="_blank"
                   rel="noreferrer"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#ecfbf1] px-2 text-xs font-bold text-[#168a46]"
+                  aria-label="ติดต่อผ่าน LINE"
+                  className="grid min-h-14 place-items-center rounded-2xl bg-[#ecfbf1] px-2 text-xs font-bold text-[#168a46] transition hover:-translate-y-0.5"
                 >
-                  LINE
+                  <span className="flex items-center gap-1.5">
+                    <MessageCircle className="h-4 w-4" aria-hidden /> LINE
+                  </span>
                 </a>
                 <a
                   href="tel:+6644224000"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#fff5e9] px-2 text-xs font-bold text-[#a85c00]"
+                  aria-label="โทรหาเจ้าหน้าที่ SpaceLink"
+                  className="grid min-h-14 place-items-center rounded-2xl bg-[#fff5e9] px-2 text-xs font-bold text-[#a85c00] transition hover:-translate-y-0.5"
                 >
                   <span className="flex items-center gap-1">
                     <Phone className="h-3.5 w-3.5" aria-hidden /> โทร
@@ -940,7 +980,7 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
           <MessagesSquare className="h-5 w-5" aria-hidden />
         </span>
         <span className="hidden pr-1 sm:inline">
-          {previewAvailable ? 'ทดลอง AI · ติดต่อเรา' : 'ช่วยเลือกโซน · ติดต่อเรา'}
+          ถาม AI · ติดต่อเรา
         </span>
       </button>
     </div>
