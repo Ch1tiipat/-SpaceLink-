@@ -30,7 +30,9 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 export const PAYMENT_SLIP_UPLOAD_LIMITS = {
   files: 1,
   fields: 0,
-  parts: 1,
+  // Busboy emits `partsLimit` when the parsed part count reaches this value.
+  // Two therefore permits the one expected file while rejecting a second part.
+  parts: 2,
   fileSize: MAX_SLIP_FILE_SIZE_BYTES,
 } as const;
 

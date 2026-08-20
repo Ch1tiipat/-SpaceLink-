@@ -1,7 +1,17 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  type INestApplication,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
+import type { Server } from 'node:http';
+import request from 'supertest';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -75,6 +85,17 @@ const mockBookingsService = {
   uploadSlip,
 };
 
+@Controller('payment-slip-multipart-probe')
+class PaymentSlipMultipartProbeController {
+  @Post()
+  @UseInterceptors(
+    FileInterceptor('file', { limits: PAYMENT_SLIP_UPLOAD_LIMITS }),
+  )
+  upload(@UploadedFile() file: { originalname: string } | undefined) {
+    return { originalname: file?.originalname };
+  }
+}
+
 function controllerHandler(
   name:
     | 'cancel'
@@ -97,6 +118,20 @@ function controllerHandler(
 
 describe('BookingsController', () => {
   let controller: BookingsController;
+  let multipartApp: INestApplication;
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      controllers: [PaymentSlipMultipartProbeController],
+    }).compile();
+
+    multipartApp = module.createNestApplication();
+    await multipartApp.init();
+  });
+
+  afterAll(async () => {
+    await multipartApp.close();
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -256,8 +291,19 @@ describe('BookingsController', () => {
     expect(PAYMENT_SLIP_UPLOAD_LIMITS).toEqual({
       files: 1,
       fields: 0,
-      parts: 1,
+      parts: 2,
       fileSize: 5 * 1024 * 1024,
     });
+  });
+
+  it('accepts the one file part used by a browser FormData upload', async () => {
+    await request(multipartApp.getHttpServer() as Server)
+      .post('/payment-slip-multipart-probe')
+      .attach('file', Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+        filename: 'payment-slip.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(201)
+      .expect({ originalname: 'payment-slip.jpg' });
   });
 });

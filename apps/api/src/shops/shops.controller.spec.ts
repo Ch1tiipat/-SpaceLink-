@@ -1,7 +1,17 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  type INestApplication,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
+import type { Server } from 'node:http';
+import request from 'supertest';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
@@ -49,6 +59,15 @@ const updateMe = jest.fn();
 const uploadLogo = jest.fn();
 const mockShopsService = { create, updateMe, uploadLogo };
 
+@Controller('shop-logo-multipart-probe')
+class ShopLogoMultipartProbeController {
+  @Post()
+  @UseInterceptors(FileInterceptor('file', { limits: SHOP_LOGO_UPLOAD_LIMITS }))
+  upload(@UploadedFile() file: { originalname: string } | undefined) {
+    return { originalname: file?.originalname };
+  }
+}
+
 function controllerHandler(name: 'create' | 'updateMe' | 'uploadLogo'): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     ShopsController.prototype,
@@ -62,6 +81,20 @@ function controllerHandler(name: 'create' | 'updateMe' | 'uploadLogo'): object {
 
 describe('ShopsController', () => {
   let controller: ShopsController;
+  let multipartApp: INestApplication;
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      controllers: [ShopLogoMultipartProbeController],
+    }).compile();
+
+    multipartApp = module.createNestApplication();
+    await multipartApp.init();
+  });
+
+  afterAll(async () => {
+    await multipartApp.close();
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -153,8 +186,19 @@ describe('ShopsController', () => {
     expect(SHOP_LOGO_UPLOAD_LIMITS).toEqual({
       files: 1,
       fields: 0,
-      parts: 1,
+      parts: 2,
       fileSize: MAX_SHOP_LOGO_FILE_SIZE_BYTES,
     });
+  });
+
+  it('accepts the one file part used by a browser FormData upload', async () => {
+    await request(multipartApp.getHttpServer() as Server)
+      .post('/shop-logo-multipart-probe')
+      .attach('file', Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+        filename: 'shop-logo.png',
+        contentType: 'image/png',
+      })
+      .expect(201)
+      .expect({ originalname: 'shop-logo.png' });
   });
 });

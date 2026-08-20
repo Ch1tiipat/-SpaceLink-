@@ -25,7 +25,9 @@ import { ShopsService } from './shops.service';
 export const SHOP_LOGO_UPLOAD_LIMITS = {
   files: 1,
   fields: 0,
-  parts: 1,
+  // Busboy emits `partsLimit` when the parsed part count reaches this value.
+  // Two therefore permits the one expected file while rejecting a second part.
+  parts: 2,
   fileSize: MAX_SHOP_LOGO_FILE_SIZE_BYTES,
 } as const;
 
