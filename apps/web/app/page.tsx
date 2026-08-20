@@ -14,11 +14,20 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
-import { getEvents, type DiscoveryEvent } from '@/lib/api';
+import {
+  getEvents,
+  getPublicAnnouncements,
+  type AdminAnnouncement,
+  type DiscoveryEvent,
+} from '@/lib/api';
 import { useAuthState } from '@/lib/use-auth-state';
 
 /** Anchor for the hero's "Explore Event" button. */
 const EVENTS_SECTION_ID = 'events';
+
+type PublicAnnouncement = AdminAnnouncement & {
+  organizationName: string;
+};
 
 /**
  * `Venue` has no province column and the schema is frozen (§2.1), so the
@@ -66,6 +75,7 @@ function statusLabel(status: string) {
 export default function DiscoveryPage() {
   const { auth } = useAuthState();
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
+  const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [query, setQuery] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [area, setArea] = useState('');
@@ -89,6 +99,58 @@ export default function DiscoveryPage() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const organizations = uniqueOrganizations(events);
+
+    if (organizations.length === 0) {
+      setAnnouncements([]);
+      return () => controller.abort();
+    }
+
+    Promise.allSettled(
+      organizations.map(async (organization) => {
+        const items = await getPublicAnnouncements(
+          organization.id,
+          controller.signal,
+        );
+        return items.map((item) => ({
+          ...item,
+          organizationName: organization.name,
+        }));
+      }),
+    ).then((results) => {
+      if (controller.signal.aborted) return;
+
+      setAnnouncements(
+        results
+          .flatMap((result) =>
+            result.status === 'fulfilled' ? result.value : [],
+          )
+          .sort(
+            (left, right) =>
+              announcementTimestamp(right) - announcementTimestamp(left),
+          ),
+      );
+    });
+
+    return () => controller.abort();
+  }, [events]);
+
+  const latestUpdates = useMemo(
+    () => [
+      ...announcements.slice(0, 3).map((announcement) => ({
+        kind: 'announcement' as const,
+        announcement,
+      })),
+      ...events.slice(0, 3).map((event) => ({
+        kind: 'event' as const,
+        event,
+      })),
+    ].slice(0, 3),
+    [announcements, events],
+  );
 
   const visibleEvents = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('th');
@@ -145,6 +207,15 @@ export default function DiscoveryPage() {
     [events],
   );
 
+  function showEventResults() {
+    window.location.hash = EVENTS_SECTION_ID;
+  }
+
+  function showOrganizationEvents(nextOrganizationId: string) {
+    setOrganizationId(nextOrganizationId);
+    window.requestAnimationFrame(showEventResults);
+  }
+
   return (
     <main className="sl-page">
       {/* `.hero` from the prototype: the photo carries no information the
@@ -197,7 +268,10 @@ export default function DiscoveryPage() {
       <section className="shell relative z-10 -mt-7">
         <form
           className="sl-surface p-3.5"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            showEventResults();
+          }}
         >
           <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5 transition focus-within:border-[#d5cfdf] focus-within:shadow-[0_0_0_4px_rgba(96,79,122,0.05)]">
             <Search aria-hidden className="h-5 w-5 shrink-0 text-violet" />
@@ -272,37 +346,78 @@ export default function DiscoveryPage() {
               <span key={item} className="skeleton block h-36 rounded-3xl" />
             ))}
           </div>
-        ) : events.length > 0 ? (
+        ) : latestUpdates.length > 0 ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {events.slice(0, 3).map((event, index) => (
-              <Link
-                key={event.id}
-                href={`/events/${event.id}`}
-                className="sl-soft-surface group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
-              >
-                <span
-                  aria-hidden
-                  className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${
-                    ['bg-[#f7d9a8]', 'bg-[#ded2fb]', 'bg-[#cceae2]'][index % 3]
-                  } opacity-45 blur-2xl`}
-                />
-                <div className="relative flex items-start justify-between gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
-                    <CalendarDays className="h-[18px] w-[18px]" aria-hidden />
-                  </span>
-                  <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
-                </div>
-                <p className="relative mt-4 text-xs font-bold text-violet">
-                  {event.organization.name}
-                </p>
-                <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
-                  {event.name}
-                </h3>
-                <p className="relative mt-2 text-xs text-muted">
-                  {formatDateRange(event)}
-                </p>
-              </Link>
-            ))}
+            {latestUpdates.map((update, index) => {
+              const tone = [
+                'bg-[#f7d9a8]',
+                'bg-[#ded2fb]',
+                'bg-[#cceae2]',
+              ][index % 3];
+
+              if (update.kind === 'announcement') {
+                const { announcement } = update;
+                return (
+                  <button
+                    key={`announcement-${announcement.id}`}
+                    type="button"
+                    onClick={() =>
+                      showOrganizationEvents(announcement.organizationId)
+                    }
+                    className="sl-soft-surface group relative overflow-hidden p-5 text-left transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${tone} opacity-45 blur-2xl`}
+                    />
+                    <div className="relative flex items-start justify-between gap-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+                        <Megaphone className="h-[18px] w-[18px]" aria-hidden />
+                      </span>
+                      <ArrowDown className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
+                    </div>
+                    <p className="relative mt-4 text-xs font-bold text-violet">
+                      ประกาศจาก {announcement.organizationName}
+                    </p>
+                    <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
+                      {announcement.title}
+                    </h3>
+                    <p className="relative mt-2 line-clamp-2 text-xs leading-5 text-muted">
+                      {announcement.body}
+                    </p>
+                  </button>
+                );
+              }
+
+              const { event } = update;
+              return (
+                <Link
+                  key={`event-${event.id}`}
+                  href={`/events/${event.id}`}
+                  className="sl-soft-surface group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${tone} opacity-45 blur-2xl`}
+                  />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+                      <CalendarDays className="h-[18px] w-[18px]" aria-hidden />
+                    </span>
+                    <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
+                  </div>
+                  <p className="relative mt-4 text-xs font-bold text-violet">
+                    {event.organization.name}
+                  </p>
+                  <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
+                    {event.name}
+                  </h3>
+                  <p className="relative mt-2 text-xs text-muted">
+                    {formatDateRange(event)}
+                  </p>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <div className="sl-soft-surface mt-6 px-5 py-8 text-center text-sm text-muted">
@@ -547,6 +662,20 @@ function uniqueOptions(options: FilterOption[]): FilterOption[] {
     seen.add(option.value);
     return true;
   });
+}
+
+function uniqueOrganizations(events: DiscoveryEvent[]) {
+  const organizations = new Map<string, { id: string; name: string }>();
+  events.forEach((event) => {
+    organizations.set(event.organization.id, event.organization);
+  });
+  return [...organizations.values()];
+}
+
+function announcementTimestamp(announcement: AdminAnnouncement) {
+  return new Date(
+    announcement.publishedAt ?? announcement.createdAt,
+  ).getTime();
 }
 
 /**
