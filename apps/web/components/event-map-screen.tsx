@@ -314,6 +314,12 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   ? 'Gemini AI'
                   : 'ระบบจัดอันดับของ SpaceLink'}
               </p>
+              <Link
+                href={`/events/${eventId}/book`}
+                className="sl-action-primary mt-4 flex w-full justify-center"
+              >
+                เลือกบูธนี้ในหน้าจอง
+              </Link>
             </div>
           )}
 
@@ -364,6 +370,12 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             หน้านี้แสดงข้อมูลแบบอ่านอย่างเดียว
             การคลิกบูธจะไม่สร้างหรือยืนยันการจอง
           </div>
+          <Link
+            href={`/events/${eventId}/book`}
+            className="sl-action-primary mt-4 flex w-full justify-center"
+          >
+            เริ่มเลือกโซนและจองบูธ
+          </Link>
         </aside>
       </div>
     </main>
