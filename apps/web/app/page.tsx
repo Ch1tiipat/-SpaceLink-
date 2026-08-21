@@ -29,6 +29,8 @@ type PublicAnnouncement = AdminAnnouncement & {
   organizationName: string;
 };
 
+type UpdateFilter = 'all' | 'event' | 'announcement';
+
 /**
  * `Venue` has no province column and the schema is frozen (§2.1), so the
  * province is recovered from the free-text address.
@@ -80,6 +82,7 @@ export default function DiscoveryPage() {
   const [organizationId, setOrganizationId] = useState('');
   const [area, setArea] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [updateFilter, setUpdateFilter] = useState<UpdateFilter>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,8 +141,8 @@ export default function DiscoveryPage() {
     return () => controller.abort();
   }, [events]);
 
-  const latestUpdates = useMemo(
-    () => [
+  const latestUpdates = useMemo(() => {
+    const updates = [
       ...announcements.slice(0, 3).map((announcement) => ({
         kind: 'announcement' as const,
         announcement,
@@ -148,9 +151,12 @@ export default function DiscoveryPage() {
         kind: 'event' as const,
         event,
       })),
-    ].slice(0, 3),
-    [announcements, events],
-  );
+    ];
+
+    return updates
+      .filter((update) => updateFilter === 'all' || update.kind === updateFilter)
+      .slice(0, 3);
+  }, [announcements, events, updateFilter]);
 
   const visibleEvents = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('th');
@@ -334,10 +340,31 @@ export default function DiscoveryPage() {
               ข่าวสารและงานที่เปิดล่าสุด
             </h2>
           </div>
-          <a href={`#${EVENTS_SECTION_ID}`} className="sl-chip">
-            ดูงานทั้งหมด
-            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-          </a>
+          <div
+            className="flex rounded-2xl border border-line bg-white p-1 shadow-sm"
+            role="group"
+            aria-label="กรองข่าวสารล่าสุด"
+          >
+            {([
+              ['all', 'ทั้งหมด'],
+              ['event', 'Event'],
+              ['announcement', 'ประกาศ'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={updateFilter === value}
+                onClick={() => setUpdateFilter(value)}
+                className={`min-h-9 rounded-xl px-3 text-xs font-extrabold transition sm:px-4 ${
+                  updateFilter === value
+                    ? 'bg-violet text-white shadow-sm'
+                    : 'text-muted hover:bg-mist hover:text-violet'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -421,7 +448,11 @@ export default function DiscoveryPage() {
           </div>
         ) : (
           <div className="sl-soft-surface mt-6 px-5 py-8 text-center text-sm text-muted">
-            เมื่อผู้จัดเผยแพร่งานใหม่ ข่าวสารจะแสดงที่ส่วนนี้
+            {updateFilter === 'all'
+              ? 'เมื่อผู้จัดเผยแพร่งานใหม่ ข่าวสารจะแสดงที่ส่วนนี้'
+              : updateFilter === 'event'
+                ? 'ยังไม่มี Event ล่าสุดในขณะนี้'
+                : 'ยังไม่มีประกาศล่าสุดในขณะนี้'}
           </div>
         )}
       </section>

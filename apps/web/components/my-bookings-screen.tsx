@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
@@ -24,6 +25,9 @@ type AccessState =
   | { status: 'ready'; token: string }
   | { status: 'error'; message: string };
 
+type BookingFilter = 'ALL' | BookingStatus;
+type SortOrder = 'newest' | 'oldest' | 'price-desc' | 'price-asc';
+
 const statusLabel: Record<BookingStatus, string> = {
   PENDING_PAYMENT: 'รอชำระเงิน',
   CONFIRMED: 'ยืนยันแล้ว',
@@ -31,6 +35,23 @@ const statusLabel: Record<BookingStatus, string> = {
   NO_SHOW: 'ไม่มาเข้าร่วม',
   COMPLETED: 'เสร็จสิ้น',
 };
+
+const statusTone: Record<BookingStatus, string> = {
+  PENDING_PAYMENT: 'border-[#d5e6f5] bg-[#edf6ff] text-[#1d67a8]',
+  CONFIRMED: 'border-[#b9dfd3] bg-[#ebfaf3] text-[#13795b]',
+  CANCELLED: 'border-[#fac5bf] bg-[#fff0ee] text-[#b42318]',
+  NO_SHOW: 'border-[#ead8b7] bg-[#fff8e8] text-[#895b08]',
+  COMPLETED: 'border-[#d9ccef] bg-[#f4efff] text-violet',
+};
+
+const bookingFilters: readonly { value: BookingFilter; label: string }[] = [
+  { value: 'ALL', label: 'ทั้งหมด' },
+  { value: 'PENDING_PAYMENT', label: 'รอชำระ' },
+  { value: 'CONFIRMED', label: 'ยืนยันแล้ว' },
+  { value: 'COMPLETED', label: 'เสร็จสิ้น' },
+  { value: 'CANCELLED', label: 'ยกเลิก' },
+  { value: 'NO_SHOW', label: 'ไม่มาเข้าร่วม' },
+];
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
@@ -81,6 +102,9 @@ export function MyBookingsScreen() {
   const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<BookingFilter>('ALL');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   async function refreshBookings(token: string, signal?: AbortSignal) {
     setIsLoading(true);
@@ -233,6 +257,42 @@ export function MyBookingsScreen() {
   const confirmedCount = bookings.filter(
     (booking) => booking.status === 'CONFIRMED',
   ).length;
+  const completedCount = bookings.filter(
+    (booking) => booking.status === 'COMPLETED',
+  ).length;
+  const statusCounts = useMemo(() => {
+    const counts = new Map<BookingStatus, number>();
+    bookings.forEach((booking) => {
+      counts.set(booking.status, (counts.get(booking.status) ?? 0) + 1);
+    });
+    return counts;
+  }, [bookings]);
+  const visibleBookings = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('th');
+    const filtered = bookings.filter((booking) => {
+      const matchesStatus =
+        statusFilter === 'ALL' || booking.status === statusFilter;
+      const matchesKeyword =
+        !keyword ||
+        `${booking.event.name} ${booking.bookingCode} ${booking.booth.code} ${booking.shop.name}`
+          .toLocaleLowerCase('th')
+          .includes(keyword);
+      return matchesStatus && matchesKeyword;
+    });
+
+    return filtered.sort((left, right) => {
+      if (sortOrder === 'price-desc') {
+        return Number(right.boothPrice) - Number(left.boothPrice);
+      }
+      if (sortOrder === 'price-asc') {
+        return Number(left.boothPrice) - Number(right.boothPrice);
+      }
+
+      const difference =
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      return sortOrder === 'oldest' ? -difference : difference;
+    });
+  }, [bookings, query, sortOrder, statusFilter]);
 
   return (
     <main className="sl-page pb-16">
@@ -254,22 +314,89 @@ export function MyBookingsScreen() {
           </Link>
         </div>
 
-        {access.status === 'ready' && !isLoading && !loadError && bookings.length > 0 ? (
-          <section className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="สรุปการจอง">
+        {access.status === 'ready' && !isLoading && !loadError ? (
+          <section className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="สรุปการจอง">
             {[
               ['การจองทั้งหมด', bookings.length, 'bg-[#f4efff] text-violet'],
               ['รอชำระเงิน', pendingCount, 'bg-[#edf6ff] text-[#1d67a8]'],
               ['ยืนยันแล้ว', confirmedCount, 'bg-[#ebfaf3] text-[#13795b]'],
+              ['เสร็จสิ้น', completedCount, 'bg-[#eef7fb] text-[#276b87]'],
             ].map(([label, value, tone]) => (
-              <div key={label} className="sl-soft-surface flex items-center justify-between gap-4 p-4">
-                <span className="text-sm font-bold text-muted">{label}</span>
-                <strong className={`grid h-10 min-w-10 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
+              <div key={label} className="sl-soft-surface p-4 sm:p-5">
+                <span className="text-xs font-bold text-muted">{label}</span>
+                <strong className={`mt-3 grid h-11 w-11 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
                   {value}
                 </strong>
+                <p className="mt-2 text-[10px] font-extrabold tracking-[.1em] text-muted">
+                  {label === 'การจองทั้งหมด' ? 'ALL BOOKINGS' : label === 'รอชำระเงิน' ? 'PENDING' : label === 'ยืนยันแล้ว' ? 'CONFIRMED' : 'COMPLETED'}
+                </p>
               </div>
             ))}
           </section>
         ) : null}
+
+        {access.status === 'ready' && !isLoading && !loadError && (
+          <section className="mt-5" aria-label="ค้นหาและกรองการจอง">
+            <div className="sl-surface grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-white px-4 focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/15">
+                <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                <span className="sr-only">ค้นหารายการจอง</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="ค้นหา Event, รหัสจอง, บูธ หรือร้านค้า"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+                />
+              </label>
+              <label>
+                <span className="sr-only">เรียงรายการจอง</span>
+                <select
+                  value={sortOrder}
+                  onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+                  className="min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm font-bold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+                >
+                  <option value="newest">ล่าสุดก่อน</option>
+                  <option value="oldest">เก่าก่อน</option>
+                  <option value="price-desc">ราคาสูง → ต่ำ</option>
+                  <option value="price-asc">ราคาต่ำ → สูง</option>
+                </select>
+              </label>
+            </div>
+
+            <nav
+              className="mt-3 flex gap-2 overflow-x-auto rounded-[22px] border border-line bg-white p-2 shadow-sm"
+              aria-label="กรองสถานะการจอง"
+            >
+              {bookingFilters.map((filter) => {
+                const count =
+                  filter.value === 'ALL'
+                    ? bookings.length
+                    : (statusCounts.get(filter.value) ?? 0);
+                const active = statusFilter === filter.value;
+
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStatusFilter(filter.value)}
+                    className={`flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 text-xs font-extrabold transition ${
+                      active
+                        ? 'bg-violet-tint text-violet'
+                        : 'text-muted hover:bg-mist hover:text-ink'
+                    }`}
+                  >
+                    {filter.label}
+                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </section>
+        )}
 
         {access.status === 'signed-out' && (
           <section className="sl-surface mt-8 p-8 text-center">
@@ -317,7 +444,25 @@ export function MyBookingsScreen() {
 
         {access.status === 'ready' && !isLoading && !loadError && (
           <div className="mt-8 grid gap-6">
-            {bookings.map((booking) => {
+            {bookings.length > 0 && visibleBookings.length === 0 && (
+              <section className="sl-surface p-10 text-center">
+                <h2 className="text-xl font-bold">ไม่พบรายการที่ตรงกับตัวกรอง</h2>
+                <p className="mt-2 text-muted">
+                  ลองเปลี่ยนคำค้นหาหรือเลือกดูสถานะอื่น
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setStatusFilter('ALL');
+                  }}
+                  className="sl-action-secondary mt-5 text-violet"
+                >
+                  ล้างตัวกรอง
+                </button>
+              </section>
+            )}
+            {visibleBookings.map((booking) => {
               const holdExpired = expiredIds.has(booking.id) || isExpired(booking);
               const cancellable =
                 (booking.status === 'PENDING_PAYMENT' ||
@@ -328,7 +473,7 @@ export function MyBookingsScreen() {
                 <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <span className="inline-flex rounded-full bg-[#eee8ff] px-3 py-1 text-xs font-bold text-violet">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}>
                         {statusLabel[booking.status]}
                       </span>
                       <h2 className="mt-3 text-xl font-bold">{booking.event.name}</h2>

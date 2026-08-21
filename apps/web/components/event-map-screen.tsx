@@ -2,6 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  CircleDollarSign,
+  LayoutGrid,
+  MapPinned,
+  Sparkles,
+  Store,
+} from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
 import { SelectMenu } from '@/components/select-menu';
 import {
@@ -16,6 +23,12 @@ import { useVendorProfile } from '@/lib/use-vendor-profile';
 function availableCount(zone: EventZone) {
   return zone.booths.filter((booth) => booth.availability === 'AVAILABLE')
     .length;
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('th-TH', {
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export function EventMapScreen({ eventId }: { eventId: string }) {
@@ -65,6 +78,23 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     () => data?.zones.find((zone) => zone.id === focusedZoneId) ?? null,
     [data, focusedZoneId],
   );
+
+  const mapMetrics = useMemo(() => {
+    const zones = data?.zones ?? [];
+    const booths = zones.flatMap((zone) => zone.booths);
+    const prices = booths
+      .map((booth) => Number(booth.boothPrice))
+      .filter(Number.isFinite);
+
+    return {
+      zoneCount: zones.length,
+      boothCount: booths.length,
+      availableCount: booths.filter(
+        (booth) => booth.availability === 'AVAILABLE',
+      ).length,
+      startingPrice: prices.length ? Math.min(...prices) : null,
+    };
+  }, [data]);
 
   const recommendedLocation = useMemo(() => {
     if (!data || !recommendation) return null;
@@ -165,11 +195,85 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               </p>
             </div>
           </div>
+
+          <section
+            className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4"
+            aria-label="สรุปแผนผัง Event"
+          >
+            <MapMetric
+              icon={LayoutGrid}
+              label="โซนทั้งหมด"
+              value={`${mapMetrics.zoneCount} โซน`}
+            />
+            <MapMetric
+              icon={Store}
+              label="บูธทั้งหมด"
+              value={`${mapMetrics.boothCount} บูธ`}
+            />
+            <MapMetric
+              icon={MapPinned}
+              label="บูธว่าง"
+              value={`${mapMetrics.availableCount} บูธ`}
+              tone="green"
+            />
+            <MapMetric
+              icon={CircleDollarSign}
+              label="ราคาเริ่มต้น"
+              value={
+                mapMetrics.startingPrice === null
+                  ? 'ยังไม่ระบุ'
+                  : `${formatMoney(mapMetrics.startingPrice)} บาท`
+              }
+            />
+          </section>
         </div>
       </section>
 
       <div className="shell mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className="sl-surface min-w-0 p-4 sm:p-6">
+          <div className="mb-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <span className="sl-kicker">Explore zones</span>
+                <h2 className="mt-2 text-xl font-black">เลือกโซนจากแผนผัง</h2>
+              </div>
+              <span className="sl-chip">
+                <MapPinned className="h-4 w-4" aria-hidden />
+                อ่านอย่างเดียว
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {data.zones.map((zone) => {
+                const selected = focusedZoneId === zone.id;
+
+                return (
+                  <button
+                    key={zone.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setFocusedZoneId(zone.id)}
+                    className={`rounded-[20px] border p-4 text-left transition ${
+                      selected
+                        ? 'border-violet bg-violet-tint shadow-sm'
+                        : 'border-line bg-[#fcfbff] hover:border-[#cdbce9] hover:bg-white'
+                    }`}
+                  >
+                    <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-violet">
+                      Zone {zone.code}
+                    </span>
+                    <strong className="mt-1 block line-clamp-1 text-sm text-ink">
+                      {zone.name ?? 'ยังไม่ระบุชื่อโซน'}
+                    </strong>
+                    <span className="mt-2 block text-xs font-bold text-muted">
+                      {availableCount(zone)} / {zone.booths.length} บูธว่าง
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
           <SelectMenu
             className="flex-1"
@@ -201,7 +305,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           <div className="sl-soft-surface mt-5 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-violet">
+                <p className="flex items-center gap-2 text-sm font-bold text-violet">
+                  <Sparkles className="h-4 w-4" aria-hidden />
                   ให้ SpaceLink ช่วยเลือกพื้นที่ที่เหมาะกับร้านของคุณ
                 </p>
 
@@ -379,6 +484,36 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         </aside>
       </div>
     </main>
+  );
+}
+
+function MapMetric({
+  icon: Icon,
+  label,
+  value,
+  tone = 'violet',
+}: {
+  icon: typeof LayoutGrid;
+  label: string;
+  value: string;
+  tone?: 'violet' | 'green';
+}) {
+  return (
+    <article className="flex min-w-0 items-center gap-3 rounded-[20px] border border-line bg-white p-4 shadow-[0_10px_26px_rgba(54,36,91,0.06)]">
+      <span
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
+          tone === 'green'
+            ? 'bg-[#ebfaf3] text-[#13795b]'
+            : 'bg-violet-tint text-violet'
+        }`}
+      >
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold text-muted">{label}</p>
+        <p className="mt-1 truncate text-sm font-extrabold text-ink">{value}</p>
+      </div>
+    </article>
   );
 }
 

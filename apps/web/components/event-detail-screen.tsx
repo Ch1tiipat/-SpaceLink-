@@ -7,7 +7,10 @@ import {
   Accessibility,
   CalendarDays,
   Camera,
+  CircleDollarSign,
   Clock3,
+  LayoutGrid,
+  MapPin,
   Megaphone,
   Navigation,
   ParkingCircle,
@@ -26,6 +29,18 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   month: 'long',
   year: 'numeric',
 });
+
+const compactDateFormatter = new Intl.DateTimeFormat('th-TH', {
+  day: 'numeric',
+  month: 'short',
+  year: '2-digit',
+});
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const [data, setData] = useState<EventMap | null>(null);
@@ -115,6 +130,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     event.contactEmail ??
     event.organization.contactPhone ??
     event.organization.contactEmail;
+  const boothPrices = zones
+    .flatMap((zone) => zone.booths)
+    .map((booth) => Number(booth.boothPrice))
+    .filter(Number.isFinite);
+  const startingPrice = boothPrices.length ? Math.min(...boothPrices) : null;
 
   return (
     <main className="sl-page pb-16">
@@ -162,6 +182,36 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               </Link>
             </div>
           </div>
+        </section>
+
+        <section
+          className="relative z-10 -mt-3 grid gap-3 px-3 sm:-mt-5 sm:grid-cols-2 sm:px-5 lg:grid-cols-4"
+          aria-label="ข้อมูลสำคัญของ Event"
+        >
+          <EventStat
+            icon={CalendarDays}
+            label="วันที่จัดงาน"
+            value={`${compactDateFormatter.format(new Date(event.startDate))} – ${compactDateFormatter.format(new Date(event.endDate))}`}
+          />
+          <EventStat
+            icon={MapPin}
+            label="สถานที่"
+            value={event.venue.name}
+          />
+          <EventStat
+            icon={LayoutGrid}
+            label="บูธว่าง"
+            value={`${availableBooths} บูธ`}
+          />
+          <EventStat
+            icon={CircleDollarSign}
+            label="ราคาเริ่มต้น"
+            value={
+              startingPrice === null
+                ? 'ยังไม่ระบุ'
+                : `${formatMoney(startingPrice)} บาท`
+            }
+          />
         </section>
 
         {announcements.length > 0 && (
@@ -362,6 +412,30 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         </section>
       </div>
     </main>
+  );
+}
+
+function EventStat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Clock3;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold text-muted">{label}</p>
+        <p className="mt-1 line-clamp-2 text-sm font-extrabold leading-5 text-ink">
+          {value}
+        </p>
+      </div>
+    </article>
   );
 }
 

@@ -112,6 +112,22 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       ) ?? null,
     [data, selectedBooth],
   );
+  const bookingMetrics = useMemo(() => {
+    const zones = data?.zones ?? [];
+    const booths = zones.flatMap((zone) => zone.booths);
+    const prices = booths
+      .map((booth) => Number(booth.boothPrice))
+      .filter(Number.isFinite);
+
+    return {
+      zoneCount: zones.length,
+      boothCount: booths.length,
+      availableCount: booths.filter(
+        (booth) => booth.availability === 'AVAILABLE',
+      ).length,
+      startingPrice: prices.length ? Math.min(...prices) : null,
+    };
+  }, [data]);
   // A vendor owns one shop at most, so there is nothing to pick: the booking
   // uses the shop the account already has, or it cannot be made at all.
   const shop = vendor.status === 'ready' ? vendor.shop : null;
@@ -257,29 +273,59 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         </div>
 
         {!createdBooking ? (
-          <ol className="mt-6 grid gap-2 rounded-[22px] border border-[#e6def3] bg-white/85 p-2 shadow-sm sm:grid-cols-3">
-            {[
-              ['1', 'เลือกโซนและบูธ'],
-              ['2', 'ตรวจสอบร้านและราคา'],
-              ['3', 'ยืนยันและชำระเงิน'],
-            ].map(([number, label], index) => (
-              <li
-                key={number}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold ${
-                  index === 0 ? 'bg-violet-tint text-violet' : 'text-muted'
-                }`}
-              >
-                <span
-                  className={`grid h-7 w-7 place-items-center rounded-full text-xs ${
-                    index === 0 ? 'bg-violet text-white' : 'bg-[#f1eef5] text-muted'
+          <>
+            <ol className="mt-6 grid gap-2 rounded-[22px] border border-[#e6def3] bg-white/85 p-2 shadow-sm sm:grid-cols-3">
+              {[
+                ['1', 'เลือกโซนและบูธ'],
+                ['2', 'ตรวจสอบร้านและราคา'],
+                ['3', 'ยืนยันและชำระเงิน'],
+              ].map(([number, label], index) => (
+                <li
+                  key={number}
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold ${
+                    index === 0 ? 'bg-violet-tint text-violet' : 'text-muted'
                   }`}
                 >
-                  {number}
-                </span>
-                {label}
-              </li>
-            ))}
-          </ol>
+                  <span
+                    className={`grid h-7 w-7 place-items-center rounded-full text-xs ${
+                      index === 0 ? 'bg-violet text-white' : 'bg-[#f1eef5] text-muted'
+                    }`}
+                  >
+                    {number}
+                  </span>
+                  {label}
+                </li>
+              ))}
+            </ol>
+
+            <section
+              className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
+              aria-label="สรุปพื้นที่ที่เปิดให้จอง"
+            >
+              {[
+                ['โซนที่เปิด', bookingMetrics.zoneCount, 'AVAILABLE ZONES'],
+                ['บูธทั้งหมด', bookingMetrics.boothCount, 'ALL BOOTHS'],
+                ['บูธว่าง', bookingMetrics.availableCount, 'AVAILABLE'],
+                [
+                  'ราคาเริ่มต้น',
+                  bookingMetrics.startingPrice === null
+                    ? '–'
+                    : `${formatMoney(String(bookingMetrics.startingPrice))} ฿`,
+                  'STARTING PRICE',
+                ],
+              ].map(([label, value, caption]) => (
+                <article key={label} className="sl-soft-surface p-4 sm:p-5">
+                  <p className="text-xs font-bold text-muted">{label}</p>
+                  <strong className="mt-2 block text-2xl font-black text-ink">
+                    {value}
+                  </strong>
+                  <p className="mt-1 text-[10px] font-extrabold tracking-[.1em] text-violet">
+                    {caption}
+                  </p>
+                </article>
+              ))}
+            </section>
+          </>
         ) : null}
 
         {createdBooking ? (
@@ -350,6 +396,42 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="sl-surface min-w-0 p-4 sm:p-6">
               <StaticEventPlan zones={data.zones} />
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {data.zones.map((zone) => {
+                  const available = zone.booths.filter(
+                    (booth) => booth.availability === 'AVAILABLE',
+                  ).length;
+                  const selected = focusedZoneId === zone.id;
+
+                  return (
+                    <button
+                      key={zone.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setFocusedZoneId(zone.id);
+                        setSelectedBooth(null);
+                      }}
+                      className={`rounded-[20px] border p-4 text-left transition ${
+                        selected
+                          ? 'border-violet bg-violet-tint shadow-sm'
+                          : 'border-line bg-white hover:border-[#cdbce9] hover:bg-[#fcfaff]'
+                      }`}
+                    >
+                      <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-violet">
+                        Zone {zone.code}
+                      </span>
+                      <strong className="mt-1 block line-clamp-1 text-sm text-ink">
+                        {zone.name ?? 'ยังไม่ระบุชื่อโซน'}
+                      </strong>
+                      <span className="mt-2 block text-xs font-bold text-muted">
+                        {available} บูธว่าง
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
               <SelectMenu
                 className="mt-5 max-w-sm"
