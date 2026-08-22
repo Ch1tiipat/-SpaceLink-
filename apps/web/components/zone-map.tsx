@@ -21,15 +21,22 @@ const palette = [
   { fill: '#EDE9FE', stroke: '#4C1D95' }, // violet-100 / 900
 ];
 
+const overviewPalette = [
+  { stroke: '#7C3AED', fill: 'rgba(124,58,237,.035)' },
+  { stroke: '#159461', fill: 'rgba(21,148,97,.045)' },
+  { stroke: '#E47B00', fill: 'rgba(228,123,0,.045)' },
+  { stroke: '#3281C8', fill: 'rgba(50,129,200,.045)' },
+];
+
 /**
  * Booth status. These mirror the `emerald` / `danger` / `amber` / `muted`
  * tokens in `tailwind.config.ts`; SVG `fill` cannot take a Tailwind class, so
  * the values are repeated here and must be changed in both places together.
  */
 const status = {
-  available: { fill: '#13795b', stroke: '#0f5f47', text: '#ffffff' }, // emerald
+  available: { fill: '#ffffff', stroke: '#7C3AED', text: '#6D28D9' },
   held: { fill: '#FFF7E6', stroke: '#F59E0B', text: '#8a5a00' }, // amber / amber-bg
-  booked: { fill: '#FEF2F2', stroke: '#c62448', text: '#991b32' }, // danger / red-bg
+  booked: { fill: '#2C8B61', stroke: '#247A56', text: '#ffffff' },
   disabled: { fill: '#F3F4F6', stroke: '#9ca3af', text: '#6b7280' }, // muted
 } as const;
 
@@ -59,6 +66,9 @@ function pillWidth(text: string, fontSize: number) {
 
 type ZoneMapProps = {
   readOnly?: boolean;
+  keepOverview?: boolean;
+  showLegend?: boolean;
+  boothHref?: (booth: EventBooth) => string;
   mapImageUrl?: string | null;
   zones: EventZone[];
   focusedZoneId: string | null;
@@ -124,6 +134,9 @@ function positionedCoordinate(
 
 export function ZoneMap({
   readOnly = false,
+  keepOverview = false,
+  showLegend = true,
+  boothHref,
   mapImageUrl,
   zones,
   focusedZoneId,
@@ -134,8 +147,10 @@ export function ZoneMap({
 }: ZoneMapProps) {
   const visibleZones = useMemo(
     () =>
-      focusedZoneId ? zones.filter((zone) => zone.id === focusedZoneId) : zones,
-    [focusedZoneId, zones],
+      focusedZoneId && !keepOverview
+        ? zones.filter((zone) => zone.id === focusedZoneId)
+        : zones,
+    [focusedZoneId, keepOverview, zones],
   );
 
   const rows = Math.max(1, Math.ceil(visibleZones.length / 2));
@@ -143,9 +158,24 @@ export function ZoneMap({
     1,
     Math.ceil((visibleZones[0]?.booths.length ?? 0) / 6),
   );
-  const viewHeight = focusedZoneId
+  const focusedView = Boolean(focusedZoneId && !keepOverview);
+  const viewHeight = focusedView
     ? Math.max(650, 285 + focusedRows * 92)
     : rows * 300 + 100;
+
+  if (keepOverview) {
+    return (
+      <OverviewGridMap
+        zones={zones}
+        readOnly={readOnly}
+        focusedZoneId={focusedZoneId}
+        recommendedBoothId={recommendedBoothId}
+        boothHref={boothHref}
+        onFocusZone={onFocusZone}
+        onSelectBooth={onSelectBooth}
+      />
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-[#ded6eb] bg-white shadow-[0_20px_55px_rgba(54,36,91,0.09)]">
@@ -195,7 +225,7 @@ export function ZoneMap({
           ทางเข้า • จุดลงทะเบียน
         </text>
 
-        {focusedZoneId ? (
+        {focusedView ? (
           <FocusedZone
             zone={visibleZones[0]}
             readOnly={readOnly}
@@ -226,13 +256,17 @@ export function ZoneMap({
                 x={x}
                 y={y}
                 color={palette[index % palette.length]}
+                selected={focusedZoneId === zone.id}
+                readOnly={readOnly}
+                boothHref={boothHref}
                 onFocusZone={onFocusZone}
+                onSelectBooth={onSelectBooth}
               />
             );
           })
         )}
 
-        {!focusedZoneId && visibleZones.length > 1 && (
+        {!focusedView && visibleZones.length > 1 && (
           <g>
             <rect
               x="480"
@@ -274,7 +308,159 @@ export function ZoneMap({
         </text>
       </svg>
 
-      <MapLegend />
+      {showLegend && <MapLegend />}
+    </div>
+  );
+}
+
+function OverviewGridMap({
+  zones,
+  readOnly,
+  focusedZoneId,
+  recommendedBoothId,
+  boothHref,
+  onFocusZone,
+  onSelectBooth,
+}: {
+  zones: EventZone[];
+  readOnly: boolean;
+  focusedZoneId: string | null;
+  recommendedBoothId: string | null;
+  boothHref?: (booth: EventBooth) => string;
+  onFocusZone: (zoneId: string) => void;
+  onSelectBooth: (booth: EventBooth) => void;
+}) {
+  return (
+    <div
+      className="grid grid-cols-1 items-start gap-3 overflow-hidden bg-[#fcfbff] p-4 md:grid-cols-2 xl:grid-cols-3"
+      style={{
+        backgroundImage:
+          'linear-gradient(#e9e4ef 1px,transparent 1px),linear-gradient(90deg,#e9e4ef 1px,transparent 1px)',
+        backgroundSize: '38px 38px',
+      }}
+    >
+      {zones.map((zone, zoneIndex) => {
+        const tone = overviewPalette[zoneIndex % overviewPalette.length];
+        const available = zone.booths.filter(
+          (booth) => booth.availability === 'AVAILABLE',
+        ).length;
+        const selected = zone.id === focusedZoneId;
+
+        return (
+          <section
+            key={zone.id}
+            aria-label={`Zone ${zone.code} ${zone.name ?? ''}`}
+            onClick={() => onFocusZone(zone.id)}
+            className={`rounded-[20px] border-2 border-dashed p-3 transition ${
+              selected
+                ? 'shadow-[0_0_0_5px_rgba(124,58,237,.10),0_16px_34px_rgba(54,36,91,.10)]'
+                : 'hover:-translate-y-0.5 hover:shadow-soft'
+            }`}
+            style={{ borderColor: tone.stroke, backgroundColor: tone.fill }}
+          >
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-black text-ink">Zone {zone.code}</h2>
+                <p className="mt-0.5 line-clamp-1 text-[9px] text-muted">
+                  {zone.name ??
+                    (zone.categories
+                      .map((category) => category.name)
+                      .join(' · ') || 'ยังไม่ระบุชื่อโซน')}
+                </p>
+              </div>
+              <span className="rounded-full bg-[#e9f9f1] px-2 py-1 text-[8px] font-extrabold text-[#128252]">
+                {available} ว่าง
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1">
+              {zone.booths.map((booth) => {
+                const unavailable = booth.availability !== 'AVAILABLE';
+                const href = !readOnly && !unavailable ? boothHref?.(booth) : undefined;
+                const recommended = booth.id === recommendedBoothId;
+                const shopName = booth.occupant?.name ?? 'จองแล้ว';
+                const shared =
+                  'relative flex min-h-[38px] flex-col items-center justify-center overflow-hidden rounded-[9px] border px-1 py-1 text-center transition';
+
+                if (booth.availability === 'BOOKED') {
+                  return (
+                    <div
+                      key={booth.id}
+                      aria-label={`บูธ ${booth.code} จองแล้ว`}
+                      className={`${shared} border-[#2a9b67] bg-[linear-gradient(135deg,#31a66f,#0f3f2d)] text-white`}
+                      style={
+                        booth.occupant?.logoUrl
+                          ? {
+                              backgroundImage: `linear-gradient(180deg,rgba(15,63,45,.08),rgba(8,35,25,.86)),url("${booth.occupant.logoUrl}")`,
+                              backgroundPosition: 'center',
+                              backgroundSize: 'cover',
+                            }
+                          : undefined
+                      }
+                    >
+                      <span className="absolute left-1 top-1 rounded-full bg-white/18 px-1.5 py-0.5 text-[5px] font-extrabold backdrop-blur">✓ ยืนยัน</span>
+                      <strong className="mt-2 max-w-full truncate text-[8px]">{shopName}</strong>
+                      <span className="text-[6px] text-white/80">{booth.code}</span>
+                    </div>
+                  );
+                }
+
+                if (booth.availability === 'HELD') {
+                  return (
+                    <div key={booth.id} aria-label={`บูธ ${booth.code} กำลังถูกจอง`} className={`${shared} cursor-not-allowed border-[#e7a339] bg-[#fff8ec] text-[#9d620c]`}>
+                      <strong className="text-[9px]">{booth.code}</strong>
+                      <span className="text-[6px]">กำลังจอง</span>
+                    </div>
+                  );
+                }
+
+                if (booth.availability === 'UNAVAILABLE') {
+                  return (
+                    <div key={booth.id} aria-label={`บูธ ${booth.code} ปิดใช้งาน`} className={`${shared} cursor-not-allowed border-dashed border-[#d3ccd6] bg-[#efedef] text-[#918996]`}>
+                      <strong className="text-[9px]">{booth.code}</strong>
+                      <span className="text-[6px]">ปิดใช้งาน</span>
+                    </div>
+                  );
+                }
+
+                if (href) {
+                  return (
+                    <a
+                      key={booth.id}
+                      href={href}
+                      aria-label={`บูธ ${booth.code} AVAILABLE`}
+                      onClick={(event) => event.stopPropagation()}
+                      className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
+                    >
+                      {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-[5px] font-black text-white">AI</span> : null}
+                      <strong className="text-[9px]">{booth.code}</strong>
+                      <span className="text-[6px] text-muted">{Number(booth.boothPrice).toLocaleString('th-TH')} บ.</span>
+                    </a>
+                  );
+                }
+
+                return (
+                  <button
+                    key={booth.id}
+                    type="button"
+                    disabled={readOnly}
+                    aria-label={`บูธ ${booth.code} AVAILABLE`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectBooth(booth);
+                    }}
+                    className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
+                  >
+                    {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-[5px] font-black text-white">AI</span> : null}
+                    <strong className="text-[9px]">{booth.code}</strong>
+                    <span className="text-[6px] text-muted">{Number(booth.boothPrice).toLocaleString('th-TH')} บ.</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -309,13 +495,21 @@ function OverviewZone({
   x,
   y,
   color,
+  selected,
+  readOnly,
+  boothHref,
   onFocusZone,
+  onSelectBooth,
 }: {
   zone: EventZone;
   x: number;
   y: number;
   color: (typeof palette)[number];
+  selected: boolean;
+  readOnly: boolean;
+  boothHref?: (booth: EventBooth) => string;
   onFocusZone: (zoneId: string) => void;
+  onSelectBooth: (booth: EventBooth) => void;
 }) {
   const available = zone.booths.filter(
     (booth) => booth.availability === 'AVAILABLE',
@@ -347,7 +541,7 @@ function OverviewZone({
         fill={color.fill}
         fillOpacity="0.9"
         stroke={color.stroke}
-        strokeWidth="2"
+        strokeWidth={selected ? 5 : 2}
         filter="url(#mapShadow)"
       />
       <rect
@@ -387,8 +581,29 @@ function OverviewZone({
         const logoUrl = bookedLogoUrl(booth);
         const clipId = `overview-logo-${booth.id}`;
 
+        const unavailable = booth.availability !== 'AVAILABLE';
+        const href = !readOnly && !unavailable ? boothHref?.(booth) : undefined;
+
         return (
-          <g key={booth.id}>
+          <a
+            key={booth.id}
+            href={href}
+            role={href ? 'link' : readOnly ? undefined : 'button'}
+            tabIndex={readOnly || unavailable ? -1 : 0}
+            aria-disabled={unavailable}
+            aria-label={readOnly ? undefined : `บูธ ${booth.code} ${booth.availability}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!href && !readOnly && !unavailable) onSelectBooth(booth);
+            }}
+            onKeyDown={(event) => {
+              if (!readOnly && !unavailable && (event.key === 'Enter' || event.key === ' ')) {
+                event.stopPropagation();
+                onSelectBooth(booth);
+              }
+            }}
+            className={readOnly ? undefined : unavailable ? 'cursor-not-allowed' : 'cursor-pointer'}
+          >
             <rect
               x={boothX}
               y={boothY}
@@ -448,7 +663,7 @@ function OverviewZone({
                 {booth.code}
               </text>
             )}
-          </g>
+          </a>
         );
       })}
     </g>

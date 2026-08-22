@@ -1,52 +1,33 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUpRight,
-  CalendarDays,
+  ArrowRight,
+  BellRing,
+  CalendarSearch,
+  CreditCard,
+  Headphones,
   MapPinned,
-  Megaphone,
-  Search,
-  Sparkles,
-  TrendingUp,
+  ShieldCheck,
+  Store,
+  type LucideIcon,
 } from 'lucide-react';
 import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import {
+  getEventMap,
   getEvents,
   getPublicAnnouncements,
   type AdminAnnouncement,
   type DiscoveryEvent,
+  type EventZone,
 } from '@/lib/api';
-import { useAuthState } from '@/lib/use-auth-state';
 
-/** Anchor for the hero's "Explore Event" button. */
-const EVENTS_SECTION_ID = 'events';
-
-type PublicAnnouncement = AdminAnnouncement & {
-  organizationName: string;
-};
-
+type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
 type UpdateFilter = 'all' | 'event' | 'announcement';
-
-/**
- * `Venue` has no province column and the schema is frozen (§2.1), so the
- * province is recovered from the free-text address.
- *
- * Thai addresses spell it `จังหวัดนครราชสีมา` — prefix attached, no space —
- * except Bangkok, which is written `กรุงเทพมหานคร` with no prefix at all.
- * Anything matching neither keeps its full address as the option label: a
- * filter that silently dropped those events would hide real results, which is
- * worse than one ugly entry in the list.
- */
-function provinceFromAddress(address: string): string {
-  const prefixed = /จังหวัด(\S+)/.exec(address);
-  if (prefixed) return prefixed[1];
-  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
-  return address;
-}
+type Update =
+  | { kind: 'event'; event: DiscoveryEvent }
+  | { kind: 'announcement'; announcement: PublicAnnouncement };
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -54,145 +35,66 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   year: 'numeric',
 });
 
+function provinceFromAddress(address: string): string {
+  const prefixed = /จังหวัด(\S+)/.exec(address);
+  if (prefixed) return prefixed[1];
+  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
+  return address;
+}
+
 function formatDateRange(event: DiscoveryEvent) {
   return `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(
     new Date(event.endDate),
   )}`;
 }
 
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    DRAFT: 'เตรียมเปิดรับสมัคร',
-    OPEN: 'เผยแพร่แล้ว',
-    PUBLISHED: 'เผยแพร่แล้ว',
-    ONGOING: 'กำลังจัดงาน',
-    CLOSED: 'ปิดงาน',
-    CANCELLED: 'ยกเลิก',
-    COMPLETED: 'จบงานแล้ว',
-  };
-
-  return labels[status] ?? status;
-}
-
 export default function DiscoveryPage() {
-  const { auth } = useAuthState();
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [query, setQuery] = useState('');
-  const [organizationId, setOrganizationId] = useState('');
   const [area, setArea] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [updateFilter, setUpdateFilter] = useState<UpdateFilter>('all');
+  const [searchApplied, setSearchApplied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-
     getEvents(controller.signal)
       .then(setEvents)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        setError(
-          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
-        );
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
       })
       .finally(() => setLoading(false));
-
     return () => controller.abort();
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     const organizations = uniqueOrganizations(events);
-
-    if (organizations.length === 0) {
-      setAnnouncements([]);
-      return () => controller.abort();
-    }
+    if (organizations.length === 0) return () => controller.abort();
 
     Promise.allSettled(
       organizations.map(async (organization) => {
-        const items = await getPublicAnnouncements(
-          organization.id,
-          controller.signal,
-        );
-        return items.map((item) => ({
-          ...item,
-          organizationName: organization.name,
-        }));
+        const items = await getPublicAnnouncements(organization.id, controller.signal);
+        return items.map((item) => ({ ...item, organizationName: organization.name }));
       }),
     ).then((results) => {
       if (controller.signal.aborted) return;
-
       setAnnouncements(
         results
-          .flatMap((result) =>
-            result.status === 'fulfilled' ? result.value : [],
-          )
-          .sort(
-            (left, right) =>
-              announcementTimestamp(right) - announcementTimestamp(left),
-          ),
+          .flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+          .sort((left, right) => announcementTimestamp(right) - announcementTimestamp(left)),
       );
     });
 
     return () => controller.abort();
   }, [events]);
 
-  const latestUpdates = useMemo(() => {
-    const updates = [
-      ...announcements.slice(0, 3).map((announcement) => ({
-        kind: 'announcement' as const,
-        announcement,
-      })),
-      ...events.slice(0, 3).map((event) => ({
-        kind: 'event' as const,
-        event,
-      })),
-    ];
-
-    return updates
-      .filter((update) => updateFilter === 'all' || update.kind === updateFilter)
-      .slice(0, 3);
-  }, [announcements, events, updateFilter]);
-
-  const visibleEvents = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase('th');
-
-    return events.filter((event) => {
-      const matchesKeyword =
-        !keyword ||
-        `${event.name} ${event.description ?? ''} ${event.organization.name} ${
-          event.venue.name
-        }`
-          .toLocaleLowerCase('th')
-          .includes(keyword);
-      const matchesOrganization =
-        !organizationId || event.organization.id === organizationId;
-      const matchesArea =
-        !area ||
-        (event.venue.address !== null &&
-          provinceFromAddress(event.venue.address) === area);
-      const matchesCategory =
-        !categoryId ||
-        event.categories.some((category) => category.id === categoryId);
-
-      return (
-        matchesKeyword && matchesOrganization && matchesArea && matchesCategory
-      );
-    });
-  }, [area, categoryId, events, organizationId, query]);
-
   const filters = useMemo(
     () => ({
-      organizations: uniqueOptions(
-        events.map((event) => ({
-          value: event.organization.id,
-          label: event.organization.name,
-        })),
-      ),
       areas: uniqueOptions(
         events
           .filter((event) => event.venue.address)
@@ -213,153 +115,131 @@ export default function DiscoveryPage() {
     [events],
   );
 
-  function showEventResults() {
-    window.location.hash = EVENTS_SECTION_ID;
-  }
+  const visibleEvents = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('th');
+    return events.filter((event) => {
+      const searchable = `${event.name} ${event.description ?? ''} ${event.organization.name} ${event.venue.name}`
+        .toLocaleLowerCase('th');
+      return (
+        (!keyword || searchable.includes(keyword)) &&
+        (!area || provinceFromAddress(event.venue.address ?? '') === area) &&
+        (!categoryId || event.categories.some((category) => category.id === categoryId))
+      );
+    });
+  }, [area, categoryId, events, query]);
 
-  function showOrganizationEvents(nextOrganizationId: string) {
-    setOrganizationId(nextOrganizationId);
-    window.requestAnimationFrame(showEventResults);
+  const updates = useMemo<Update[]>(() => {
+    if (searchApplied) {
+      return visibleEvents.slice(0, 3).map((event) => ({ kind: 'event', event }));
+    }
+
+    return [
+      ...events.slice(0, 3).map((event): Update => ({ kind: 'event', event })),
+      ...announcements
+        .slice(0, 3)
+        .map((announcement): Update => ({ kind: 'announcement', announcement })),
+    ]
+      .filter((update) => updateFilter === 'all' || update.kind === updateFilter)
+      .slice(0, 3);
+  }, [announcements, events, searchApplied, updateFilter, visibleEvents]);
+
+  function runSearch() {
+    setSearchApplied(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById('latest-updates')?.scrollIntoView({ block: 'start' });
+    });
   }
 
   return (
-    <main className="sl-page">
-      {/* `.hero` from the prototype: the photo carries no information the
-          heading does not already state, so it is decorative (`alt=""`) and
-          the gradient over it is what keeps the text legible. */}
-      <section className="shell pt-7">
-        <div className="relative flex min-h-[285px] items-end overflow-hidden rounded-[24px] border border-white/10 p-[25px] text-white shadow-[0_30px_80px_rgba(49,27,89,0.18)] sm:min-h-[345px] sm:rounded-[32px] sm:p-[46px]">
-          <Image
-            src="/hero-spacelink.png"
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 1200px) 100vw, 1180px"
-            className="object-cover"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(100deg,#21103df5_0%,#4C1D95d8_52%,#4C1D9540_100%)]"
-          />
-
-          <div className="relative max-w-[560px]">
-            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.14] px-3.5 py-1.5 text-xs font-extrabold backdrop-blur-md">
+    <main className="sl-page pb-10">
+      <section className="shell pt-8">
+        <section className="relative flex min-h-[350px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] p-[44px] text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[390px] max-sm:items-end max-sm:rounded-[24px] max-sm:px-[22px] max-sm:py-7">
+          <div className="relative z-[5] w-[57%] max-w-[600px] max-md:w-[68%] max-sm:w-full">
+            <span className="inline-flex min-h-[30px] items-center rounded-full border border-white/25 bg-white/[0.13] px-[13px] py-1.5 text-[11px] font-bold">
               พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
             </span>
-            <h1 className="my-3 max-w-[14ch] text-[31px] font-black leading-[1.15] tracking-[-1px] sm:text-[44px] sm:tracking-[-1.6px]">
-              ค้นหาพื้นที่ขายที่เหมาะกับร้านคุณ
+            <h1 className="my-[14px] text-[clamp(36px,4vw,48px)] font-black leading-[1.12] tracking-[-0.045em] text-white max-sm:text-[34px]">
+              ค้นหาพื้นที่ขายที่
+              <br />
+              เหมาะกับร้านคุณ
             </h1>
-            <p className="text-[13px] leading-relaxed text-[#E9E2F8] sm:text-[15px]">
-              รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
-              และตรวจสอบพื้นที่ได้จากแผนผังจริง
+            <p className="max-w-[550px] text-sm leading-[1.8] text-white/85">
+              รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง และตรวจสอบพื้นที่ได้จากแผนผังจริง
             </p>
-
-            {/* A plain anchor rather than a scroll handler: `scroll-behavior`
-                is already smooth in `globals.css`, and its
-                `prefers-reduced-motion` override then applies for free — which
-                a scripted `scrollIntoView({ behavior: 'smooth' })` would
-                bypass. */}
             <a
-              href={`#${EVENTS_SECTION_ID}`}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-extrabold text-[#5B21B6] shadow-lg transition hover:-translate-y-0.5"
+              href="#eventSearch"
+              className="mt-5 inline-flex min-h-[45px] items-center justify-center gap-[9px] rounded-[13px] bg-white px-[18px] text-[13px] font-bold text-[#6d28d9] shadow-[0_9px_25px_rgba(19,10,38,0.13)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(19,10,38,0.18)]"
             >
-              Explore Event
-              <ArrowDown aria-hidden className="h-4 w-4" />
+              เริ่มสำรวจพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
             </a>
           </div>
-        </div>
-      </section>
 
-      {/* `.search`: overlaps the hero's lower edge, as in the prototype. */}
-      <section className="shell relative z-10 -mt-7">
+          <div aria-hidden className="absolute inset-y-0 right-0 left-[55%] max-sm:hidden">
+            <span className="absolute bottom-[22%] left-[20%] h-[92px] w-[110px] -rotate-[4deg] rounded-[8px_8px_5px_5px] bg-[linear-gradient(#e28a8c,#c85c7a)] shadow-[0_18px_32px_rgba(18,9,32,0.18)]">
+              <span className="absolute inset-x-0 top-0 h-[25px] overflow-hidden rounded-[9px_9px_2px_2px] bg-[repeating-linear-gradient(90deg,#fff_0_18px,#8b5cf6_18px_36px)]" />
+            </span>
+            <span className="absolute bottom-[29%] right-[10%] h-[92px] w-[110px] rotate-[4deg] rounded-[8px_8px_5px_5px] bg-[linear-gradient(#72c9b2,#27876d)] shadow-[0_18px_32px_rgba(18,9,32,0.18)]">
+              <span className="absolute inset-x-0 top-0 h-[25px] overflow-hidden rounded-[9px_9px_2px_2px] bg-[repeating-linear-gradient(90deg,#fff_0_18px,#8b5cf6_18px_36px)]" />
+            </span>
+            <span className="absolute -bottom-[130px] -right-[10%] left-[10%] h-[260px] -rotate-[7deg] rounded-[50%] bg-white/[0.04]" />
+          </div>
+        </section>
+
         <form
-          className="sl-surface p-3.5"
+          id="eventSearch"
+          className="sl-surface relative z-30 mx-[18px] -mt-[18px] grid scroll-mt-24 grid-cols-[minmax(0,1.4fr)_minmax(170px,.8fr)_minmax(190px,.8fr)_auto] gap-[10px] overflow-visible p-[15px] max-lg:grid-cols-2 max-sm:mx-[7px] max-sm:-mt-[13px] max-sm:grid-cols-1 max-sm:rounded-[19px] max-sm:p-3"
           onSubmit={(event) => {
             event.preventDefault();
-            showEventResults();
+            runSearch();
           }}
         >
-          <label className="flex items-center gap-3 rounded-2xl border border-line bg-white p-2 pl-5 transition focus-within:border-[#d5cfdf] focus-within:shadow-[0_0_0_4px_rgba(96,79,122,0.05)]">
-            <Search aria-hidden className="h-5 w-5 shrink-0 text-violet" />
-            <span className="sr-only">ค้นหา Event</span>
+          <label className="min-w-0">
+            <span className="mb-1.5 ml-1 block text-[10px] font-bold text-[#807787]">
+              ค้นหางานหรือสถานที่
+            </span>
             <input
-              data-search-input
+              list="event-suggestions"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-base placeholder:text-muted focus:outline-none"
-              placeholder="ค้นหาชื่องาน เช่น งานเกษตรแฟร์"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSearchApplied(false);
+              }}
+              className="min-h-[45px] w-full rounded-[13px] border border-[#e8e3ed] bg-[#fdfcff] px-4 text-sm outline-none transition placeholder:text-[#aaa4b2] focus:border-[#a887ee] focus:bg-white focus:shadow-[0_0_0_4px_rgba(124,58,237,0.08)]"
+              placeholder="เช่น งานเกษตร มทส."
             />
-            <button
-              type="submit"
-              className="sl-action-primary min-h-11 px-5 py-2.5"
-            >
-              ค้นหา
-            </button>
+            <datalist id="event-suggestions">
+              {events.slice(0, 8).map((event) => (
+                <option key={event.id} value={event.name}>{event.venue.name}</option>
+              ))}
+            </datalist>
           </label>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <SelectMenu
-              label="ผู้จัดงาน"
-              placeholder="ผู้จัดงาน: ทั้งหมด"
-              value={organizationId}
-              onChange={setOrganizationId}
-              options={withAllOption(filters.organizations, 'ผู้จัดงาน: ทั้งหมด')}
-            />
-            <SelectMenu
-              label="จังหวัด / พื้นที่"
-              placeholder="จังหวัด / พื้นที่: ทั้งหมด"
-              value={area}
-              onChange={setArea}
-              options={withAllOption(
-                filters.areas,
-                'จังหวัด / พื้นที่: ทั้งหมด',
-              )}
-            />
-            <SelectMenu
-              label="ประเภทสินค้า"
-              placeholder="ประเภทสินค้า: ทั้งหมด"
-              value={categoryId}
-              onChange={setCategoryId}
-              options={withAllOption(
-                filters.categories,
-                'ประเภทสินค้า: ทั้งหมด',
-              )}
-            />
-          </div>
+          <SelectMenu label="พื้นที่" placeholder="ทุกพื้นที่" value={area} onChange={(value) => { setArea(value); setSearchApplied(false); }} options={withAllOption(filters.areas, 'ทุกพื้นที่')} />
+          <SelectMenu label="หมวดสินค้า" placeholder="ทุกหมวดสินค้า" value={categoryId} onChange={(value) => { setCategoryId(value); setSearchApplied(false); }} options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')} />
+          <button type="submit" className="sl-action-primary min-h-[45px] self-end whitespace-nowrap px-6 max-lg:w-full">
+            ค้นหา Event
+          </button>
         </form>
       </section>
 
-      <section className="shell py-12 sm:py-14" aria-labelledby="news-heading">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      <section id="latest-updates" className="shell !mt-[52px] scroll-mt-24 max-sm:!mt-[38px]" aria-labelledby="latest-heading">
+        <div className="mb-[18px] flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
           <div>
-            <span className="sl-kicker">
-              <Megaphone className="h-4 w-4" aria-hidden />
-              Latest updates
-            </span>
-            <h2 id="news-heading" className="mt-2 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
-              ข่าวสารและงานที่เปิดล่าสุด
+            <span className="sl-kicker">Latest updates</span>
+            <h2 id="latest-heading" className="mt-[7px] text-[26px] font-black tracking-[-0.025em]">
+              {searchApplied ? 'ผลการค้นหา Event' : 'ข่าวสารและ Event ล่าสุด'}
             </h2>
+            <p className="mt-1 text-xs text-muted">
+              {searchApplied ? `พบ ${visibleEvents.length} Event จากข้อมูล SpaceLink` : 'รายการ Event และข่าวสารล่าสุดของ SpaceLink'}
+            </p>
           </div>
-          <div
-            className="flex rounded-2xl border border-line bg-white p-1 shadow-sm"
-            role="group"
-            aria-label="กรองข่าวสารล่าสุด"
-          >
-            {([
-              ['all', 'ทั้งหมด'],
-              ['event', 'Event'],
-              ['announcement', 'ประกาศ'],
-            ] as const).map(([value, label]) => (
+          <div className="flex flex-wrap gap-[7px]" role="group" aria-label="กรองข่าวสารล่าสุด">
+            {([['all', 'ทั้งหมด'], ['event', 'Event'], ['announcement', 'ประกาศ']] as const).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
                 aria-pressed={updateFilter === value}
-                onClick={() => setUpdateFilter(value)}
-                className={`min-h-9 rounded-xl px-3 text-xs font-extrabold transition sm:px-4 ${
-                  updateFilter === value
-                    ? 'bg-violet text-white shadow-sm'
-                    : 'text-muted hover:bg-mist hover:text-violet'
-                }`}
+                onClick={() => { setSearchApplied(false); setUpdateFilter(value); }}
+                className={`sl-chip min-h-9 px-4 ${updateFilter === value ? '!border-violet !bg-violet !text-white' : ''}`}
               >
                 {label}
               </button>
@@ -368,319 +248,276 @@ export default function DiscoveryPage() {
         </div>
 
         {loading ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {[0, 1, 2].map((item) => (
-              <span key={item} className="skeleton block h-36 rounded-3xl" />
-            ))}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[0, 1, 2].map((item) => <span key={item} className="skeleton block h-[260px] rounded-[22px]" />)}
           </div>
-        ) : latestUpdates.length > 0 ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {latestUpdates.map((update, index) => {
-              const tone = [
-                'bg-[#f7d9a8]',
-                'bg-[#ded2fb]',
-                'bg-[#cceae2]',
-              ][index % 3];
-
-              if (update.kind === 'announcement') {
-                const { announcement } = update;
-                return (
-                  <button
-                    key={`announcement-${announcement.id}`}
-                    type="button"
-                    onClick={() =>
-                      showOrganizationEvents(announcement.organizationId)
-                    }
-                    className="sl-soft-surface group relative overflow-hidden p-5 text-left transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
-                  >
-                    <span
-                      aria-hidden
-                      className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${tone} opacity-45 blur-2xl`}
-                    />
-                    <div className="relative flex items-start justify-between gap-3">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
-                        <Megaphone className="h-[18px] w-[18px]" aria-hidden />
-                      </span>
-                      <ArrowDown className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
-                    </div>
-                    <p className="relative mt-4 text-xs font-bold text-violet">
-                      ประกาศจาก {announcement.organizationName}
-                    </p>
-                    <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
-                      {announcement.title}
-                    </h3>
-                    <p className="relative mt-2 line-clamp-2 text-xs leading-5 text-muted">
-                      {announcement.body}
-                    </p>
-                  </button>
-                );
-              }
-
-              const { event } = update;
-              return (
-                <Link
-                  key={`event-${event.id}`}
-                  href={`/events/${event.id}`}
-                  className="sl-soft-surface group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-[#d7c9f4] hover:shadow-surface"
-                >
-                  <span
-                    aria-hidden
-                    className={`absolute -right-6 -top-8 h-24 w-24 rounded-full ${tone} opacity-45 blur-2xl`}
-                  />
-                  <div className="relative flex items-start justify-between gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
-                      <CalendarDays className="h-[18px] w-[18px]" aria-hidden />
-                    </span>
-                    <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-violet" aria-hidden />
-                  </div>
-                  <p className="relative mt-4 text-xs font-bold text-violet">
-                    {event.organization.name}
-                  </p>
-                  <h3 className="relative mt-1 line-clamp-1 text-[17px] font-extrabold">
-                    {event.name}
-                  </h3>
-                  <p className="relative mt-2 text-xs text-muted">
-                    {formatDateRange(event)}
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
+        ) : error ? (
+          <div className="sl-surface p-8 text-center text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {error}</div>
+        ) : updates.length === 0 ? (
+          <div className="sl-surface p-8 text-center text-sm text-muted">ยังไม่พบรายการที่ตรงกับตัวกรอง</div>
         ) : (
-          <div className="sl-soft-surface mt-6 px-5 py-8 text-center text-sm text-muted">
-            {updateFilter === 'all'
-              ? 'เมื่อผู้จัดเผยแพร่งานใหม่ ข่าวสารจะแสดงที่ส่วนนี้'
-              : updateFilter === 'event'
-                ? 'ยังไม่มี Event ล่าสุดในขณะนี้'
-                : 'ยังไม่มีประกาศล่าสุดในขณะนี้'}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {updates.map((update, index) => <LatestCard key={update.kind === 'event' ? update.event.id : update.announcement.id} update={update} index={index} />)}
           </div>
         )}
       </section>
 
-      {auth.status === 'signed-in' && (
-        <PopularAreaRecommendations
-          eventId={events[0]?.id ?? 'demo-event'}
-          shopName={auth.fullName}
-        />
+      {events[0] && (
+        <PopularAreaRecommendations event={events[0]} />
       )}
 
-      <section
-        id={EVENTS_SECTION_ID}
-        className="border-y border-[#ece8f2] bg-white/72 py-16 backdrop-blur-sm"
-      >
-        <div className="shell">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-extrabold uppercase tracking-[.16em] text-violet">
-                Events
-              </p>
-              <h2 className="mt-2 text-3xl font-black tracking-[-0.04em]">
-                งานที่เปิดให้สำรวจพื้นที่
-              </h2>
-            </div>
-            <p className="text-sm text-[#817b8e]">
-              พบ {visibleEvents.length} งานจากข้อมูล SpaceLink API
-            </p>
-          </div>
-
-          {loading && (
-            <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {[0, 1, 2].map((item) => (
-                <div key={item} className="skeleton h-[330px] rounded-[28px]" />
-              ))}
-            </div>
-          )}
-
-          {!loading && error && (
-            <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-8">
-              <p className="font-extrabold text-red-800">
-                โหลดรายการ Event ไม่สำเร็จ
-              </p>
-              <p className="mt-2 text-sm text-red-700">
-                {error} — ตรวจสอบว่า NestJS API เปิดอยู่และตั้งค่า
-                NEXT_PUBLIC_API_URL ถูกต้อง
-              </p>
-            </div>
-          )}
-
-          {!loading && !error && visibleEvents.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-dashed border-[#d9d3e5] bg-white p-12 text-center">
-              <p className="text-lg font-extrabold">
-                {events.length === 0
-                  ? 'ยังไม่มี Event ที่เผยแพร่'
-                  : 'ยังไม่พบ Event ที่ค้นหา'}
-              </p>
-              <p className="mt-2 text-sm text-[#817b8e]">
-                {events.length === 0
-                  ? 'Event สถานะ PUBLISHED หรือ ONGOING จะแสดงที่หน้านี้'
-                  : 'ลองเปลี่ยนคำค้นหาหรือตัวกรองแล้วลองอีกครั้ง'}
-              </p>
-            </div>
-          )}
-
-          {!loading && !error && visibleEvents.length > 0 && (
-            <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {visibleEvents.map((event, index) => (
-                <article
-                  key={event.id}
-                  className="group overflow-hidden rounded-[28px] border border-[#e9e5ef] bg-white shadow-[0_12px_34px_rgba(54,36,91,0.055)] transition hover:-translate-y-1 hover:border-[#d9cdf0] hover:shadow-soft"
-                >
-                  <div
-                    className={[
-                      'relative h-44 overflow-hidden p-6 text-white',
-                      [
-                        'bg-gradient-to-br from-[#176c50] to-[#85ad3d]',
-                        'bg-gradient-to-br from-[#662f8d] to-[#d5679c]',
-                        'bg-gradient-to-br from-[#2454a4] to-[#3aa5b9]',
-                      ][index % 3],
-                    ].join(' ')}
-                  >
-                    <span className="rounded-full bg-white/18 px-3 py-1 text-xs font-bold backdrop-blur">
-                      {statusLabel(event.status)}
-                    </span>
-                    <div className="absolute -bottom-14 -right-8 h-40 w-40 rounded-full border-[24px] border-white/10" />
-                    <div className="absolute right-16 top-12 h-14 w-14 rounded-2xl bg-white/10 rotate-12" />
-                  </div>
-                  <div className="p-6">
-                    <p className="text-xs font-bold text-violet">
-                      {formatDateRange(event)}
-                    </p>
-                    <h3 className="mt-2 line-clamp-2 text-xl font-black tracking-[-0.025em]">
-                      {event.name}
-                    </h3>
-                    <p className="mt-3 line-clamp-2 min-h-11 text-sm leading-6 text-[#756f82]">
-                      {event.description ||
-                        'สำรวจโซนและเลือกบูธที่เหมาะกับร้านของคุณ'}
-                    </p>
-                    <p className="mt-3 text-xs font-bold text-muted">
-                      {event.organization.name} · {event.venue.name}
-                    </p>
-                    <Link
-                      href={`/events/${event.id}`}
-                      className="mt-5 flex items-center justify-between rounded-xl bg-mist px-4 py-3 text-sm font-extrabold text-violet transition group-hover:bg-violet group-hover:text-white"
-                    >
-                      ดูรายละเอียดและแผนผัง <span aria-hidden>→</span>
-                    </Link>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section id="how-it-works" className="shell py-16">
-        <h2 className="text-center text-3xl font-black tracking-[-0.04em]">
-          สำรวจพื้นที่ใน 3 ขั้นตอน
-        </h2>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {[
-            [
-              '01',
-              'เลือก Event',
-              'ดูรายละเอียด วันจัดงาน และเงื่อนไขของผู้จัด',
-            ],
-            [
-              '02',
-              'เลือกโซนและบูธ',
-              'โฟกัสแผนผังตามประเภทสินค้าและตรวจสอบบูธว่าง',
-            ],
-            [
-              '03',
-              'ดูตำแหน่งบูธ',
-              'ตรวจสอบตำแหน่ง ราคา สถานะ และระดับพื้นที่จากแผนผังจริง',
-            ],
-          ].map(([number, title, description]) => (
-            <div
-              key={number}
-              className="rounded-3xl border border-[#e7e2ed] bg-white p-7"
-            >
-              <span className="text-3xl font-black text-violet/25">
-                {number}
-              </span>
-              <h3 className="mt-5 text-lg font-extrabold">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-[#7a7487]">
-                {description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <ClosingCta auth={auth} />
-
-      <footer id="support" className="border-t border-[#e9e5ef] bg-[#201b2e] py-12 text-white">
-        <div className="shell grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1.1fr]">
-          <div>
-            <div className="flex items-center gap-3 text-xl font-black">
-              <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[#a78bfa] to-[#7c3aed] text-sm shadow-[0_8px_20px_rgba(124,58,237,0.35)]">
-                SL
-              </span>
-              SpaceLink
-            </div>
-            <p className="mt-4 max-w-sm text-sm leading-7 text-white/62">
-              แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว
-            </p>
-          </div>
-
-          <FooterColumn
-            title="สำรวจแพลตฟอร์ม"
-            links={[
-              ['ค้นหา Event', '/'],
-              ['การจองของฉัน', '/bookings'],
-              ['โปรไฟล์ร้านค้า', '/profile'],
-            ]}
-          />
-          <FooterColumn
-            title="บริการช่วยเหลือ"
-            links={[
-              ['ศูนย์ช่วยเหลือ', '/help'],
-              ['การแจ้งเตือน', '/notifications'],
-              ['เข้าสู่ระบบ', '/login'],
-            ]}
-          />
-          <div>
-            <p className="text-sm font-extrabold">ติดต่อ SpaceLink</p>
-            <div className="mt-4 grid gap-2 text-sm leading-6 text-white/65">
-              <a href="tel:+6644224000" className="transition hover:text-white">
-                โทร 044-224-000
-              </a>
-              <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" className="transition hover:text-white">
-                LINE Official
-              </a>
-              <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" className="transition hover:text-white">
-                Facebook Page
-              </a>
-            </div>
-          </div>
-        </div>
-        <div className="shell mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
-          <span>ความเป็นส่วนตัว · เงื่อนไขการใช้งาน · การเข้าถึงสำหรับทุกคน</span>
-        </div>
-      </footer>
+      <BookingJourney event={events[0]} />
+      <PlatformBenefits />
+      <HomepageCallToAction />
     </main>
   );
 }
 
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: readonly (readonly [string, string])[];
-}) {
+function LatestCard({ update, index }: { update: Update; index: number }) {
+  const tones = [
+    'bg-[linear-gradient(135deg,#3b176c,#8959f3,#3a8079)]',
+    'bg-[linear-gradient(135deg,#187250,#64a76e)]',
+    'bg-[linear-gradient(135deg,#994b34,#e89a58)]',
+  ];
+  const cover = tones[index % tones.length];
+
+  if (update.kind === 'announcement') {
+    return (
+      <article className="sl-surface relative overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
+        <div className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}><strong className="text-[23px]">ประกาศ</strong></div>
+        <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-[9px] font-bold text-[#6d28d9]">ข่าวงาน</span>
+        <div className="p-[17px]">
+          <h3 className="text-[15px] font-extrabold">{update.announcement.title}</h3>
+          <p className="mt-1.5 min-h-[38px] line-clamp-2 text-[11px] leading-[1.65] text-muted">{update.announcement.body}</p>
+          <span className="mt-3 inline-block text-[11px] font-bold text-[#6d28d9]">อ่านประกาศ →</span>
+        </div>
+      </article>
+    );
+  }
+
+  const { event } = update;
   return (
-    <div>
-      <p className="text-sm font-extrabold">{title}</p>
-      <nav className="mt-4 grid gap-2 text-sm text-white/65" aria-label={title}>
-        {links.map(([label, href]) => (
-          <Link key={href + label} href={href} className="transition hover:text-white">
-            {label}
-          </Link>
-        ))}
-      </nav>
-    </div>
+    <Link href={`/events/${event.id}`} className="sl-surface relative overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft">
+      <div className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}><strong className="text-[23px]">{formatDateRange(event)}</strong></div>
+      <span className="absolute right-[13px] top-[13px] rounded-full bg-[#ecfff3] px-[9px] py-[5px] text-[9px] font-bold text-[#16723f]">เปิดจอง</span>
+      <div className="p-[17px]">
+        <h3 className="text-[15px] font-extrabold">{event.name}</h3>
+        <p className="mt-1.5 min-h-[38px] text-[11px] leading-[1.65] text-muted">{event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}</p>
+        <span className="mt-3 inline-block text-[11px] font-bold text-[#6d28d9]">ดูรายละเอียด →</span>
+      </div>
+    </Link>
+  );
+}
+
+function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
+  const [zones, setZones] = useState<EventZone[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getEventMap(event.id, controller.signal)
+      .then((map) => {
+        const featured = [map.zones[0], map.zones[3], map.zones[5]].filter((zone): zone is EventZone => Boolean(zone));
+        setZones(featured.length === 3 ? featured : map.zones.slice(0, 3));
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setZones([]);
+      });
+    return () => controller.abort();
+  }, [event.id]);
+
+  if (zones.length === 0) return null;
+
+  return (
+    <section className="shell !mt-[56px] max-sm:!mt-[42px]" aria-labelledby="recommended-heading">
+      <span className="sl-kicker">Recommended locations</span>
+      <h2 id="recommended-heading" className="mt-[7px] text-[26px] font-black tracking-[-0.025em]">พื้นที่นิยมที่เหมาะกับร้าน</h2>
+      <p className="mt-1 text-xs text-muted">ดูตำแหน่งบูธยอดนิยม และเลือกพื้นที่ที่เหมาะกับสินค้าของคุณ</p>
+
+      <div className="mt-[18px] grid gap-4 lg:grid-cols-3">
+        {zones.map((zone) => {
+          const available = zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length;
+          return (
+            <Link
+              key={zone.id}
+              href={`/events/${event.id}/map?zone=${encodeURIComponent(zone.code)}`}
+              className="sl-surface flex items-start gap-[14px] p-5 text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
+            >
+              <span className="grid h-[43px] w-[43px] shrink-0 place-items-center rounded-[13px] bg-[#f3edff] font-extrabold text-[#6d28d9]">{zone.code}</span>
+              <span>
+                <strong className="block text-sm">โซน {zone.code} · {zone.name ?? `โซน ${zone.code}`}</strong>
+                <span className="mt-1.5 block text-[11px] leading-[1.7] text-muted">มี {available} บูธว่าง ตรวจสอบตำแหน่งและราคาจากแผนผังจริง</span>
+                <span className="mt-2.5 inline-block text-[11px] font-bold text-[#6d28d9]">ดูตำแหน่งบูธ →</span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function BookingJourney({ event }: { event?: DiscoveryEvent }) {
+  const steps: Array<{
+    number: string;
+    title: string;
+    description: string;
+    icon: LucideIcon;
+    href: string;
+    action: string;
+  }> = [
+    {
+      number: '01',
+      title: 'ค้นหา Event ที่เหมาะกับร้าน',
+      description: 'ค้นหาจากชื่องาน พื้นที่ หรือหมวดสินค้า เพื่อดูงานที่ตรงกับรูปแบบร้านของคุณ',
+      icon: CalendarSearch,
+      href: '#eventSearch',
+      action: 'เริ่มค้นหา',
+    },
+    {
+      number: '02',
+      title: 'เลือก Zone และ Booth จากแผนผัง',
+      description: 'ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย',
+      icon: MapPinned,
+      href: event ? `/events/${event.id}/map` : '#latest-updates',
+      action: 'ดูตัวอย่างแผนผัง',
+    },
+    {
+      number: '03',
+      title: 'ชำระเงินและติดตามสถานะ',
+      description: 'ตรวจสอบรายละเอียดการจอง ส่งหลักฐานการชำระเงิน และติดตามสถานะได้ในที่เดียว',
+      icon: CreditCard,
+      href: '/bookings',
+      action: 'ดูการจองของฉัน',
+    },
+  ];
+
+  return (
+    <section className="shell !mt-[72px] max-sm:!mt-[48px]" aria-labelledby="booking-journey-heading">
+      <div className="mx-auto max-w-[680px] text-center">
+        <span className="sl-kicker">How it works</span>
+        <h2 id="booking-journey-heading" className="mt-2 text-[clamp(27px,3vw,36px)] font-black tracking-[-0.035em]">
+          จองพื้นที่ขายได้ใน 3 ขั้นตอน
+        </h2>
+        <p className="mt-2 text-sm leading-7 text-muted">
+          ตั้งแต่ค้นหางานจนถึงติดตามการจอง ทุกขั้นตอนอยู่ใน SpaceLink
+        </p>
+      </div>
+
+      <div className="relative mt-7 grid gap-4 lg:grid-cols-3">
+        <span aria-hidden className="absolute left-[16%] right-[16%] top-10 hidden border-t border-dashed border-[#d8cbea] lg:block" />
+        {steps.map((step) => {
+          const Icon = step.icon;
+          return (
+            <article key={step.number} className="sl-surface group relative overflow-hidden p-6 transition hover:-translate-y-1 hover:shadow-soft">
+              <div className="relative z-[1] flex items-center justify-between">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[linear-gradient(135deg,#f1e8ff,#e9f7f3)] text-[#6d28d9] shadow-[0_8px_22px_rgba(109,40,217,0.10)]">
+                  <Icon aria-hidden className="h-5 w-5" />
+                </span>
+                <span className="text-[34px] font-black tracking-[-0.06em] text-[#eee8f5]">{step.number}</span>
+              </div>
+              <h3 className="mt-5 text-lg font-extrabold tracking-[-0.02em]">{step.title}</h3>
+              <p className="mt-2 min-h-[68px] text-[12px] leading-7 text-muted">{step.description}</p>
+              <Link href={step.href} className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-[#6d28d9] transition group-hover:gap-3">
+                {step.action} <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+              </Link>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function PlatformBenefits() {
+  const benefits: Array<{ title: string; description: string; icon: LucideIcon }> = [
+    {
+      title: 'ข้อมูลบูธชัดเจน',
+      description: 'ดูตำแหน่ง ราคา และสถานะว่างจากแผนผังของผู้จัดงาน',
+      icon: MapPinned,
+    },
+    {
+      title: 'จัดการร้านได้ในโปรไฟล์เดียว',
+      description: 'เตรียมข้อมูลร้านและใช้ประกอบการจองพื้นที่ของคุณ',
+      icon: Store,
+    },
+    {
+      title: 'ไม่พลาดสถานะสำคัญ',
+      description: 'ติดตามการจอง การชำระเงิน และการแจ้งเตือนจากระบบ',
+      icon: BellRing,
+    },
+    {
+      title: 'มีช่องทางช่วยเหลือ',
+      description: 'เปิดหน้าช่วยเหลือเมื่อมีคำถามเกี่ยวกับการใช้งานและการจอง',
+      icon: Headphones,
+    },
+  ];
+
+  return (
+    <section className="shell !mt-[56px] max-sm:!mt-[42px]" aria-labelledby="benefit-heading">
+      <div className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(120deg,#201132_0%,#3c1d69_55%,#245b5b_100%)] px-8 py-10 text-white shadow-[0_28px_70px_rgba(45,25,73,0.16)] max-sm:rounded-[24px] max-sm:px-5 max-sm:py-7">
+        <span aria-hidden className="absolute -right-20 -top-24 h-72 w-72 rounded-full border-[50px] border-white/[0.035]" />
+        <div className="relative grid items-center gap-8 lg:grid-cols-[.72fr_1.28fr]">
+          <div>
+            <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#c8a9ff]">Why SpaceLink</span>
+            <h2 id="benefit-heading" className="mt-3 text-[clamp(28px,3vw,38px)] font-black leading-[1.25] tracking-[-0.04em]">
+              เตรียมร้านให้พร้อม<br className="max-lg:hidden" /> ก่อนออกงาน
+            </h2>
+            <p className="mt-3 max-w-[430px] text-sm leading-7 text-white/70">
+              เครื่องมือที่ช่วยให้คุณเห็นข้อมูลที่ต้องใช้ตัดสินใจ และกลับมาติดตามทุกการจองได้ง่ายขึ้น
+            </p>
+            <Link href="/help" className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15">
+              ศูนย์ช่วยเหลือ <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {benefits.map((benefit) => {
+              const Icon = benefit.icon;
+              return (
+                <article key={benefit.title} className="rounded-[18px] border border-white/10 bg-white/[0.075] p-5 backdrop-blur-sm">
+                  <Icon aria-hidden className="h-5 w-5 text-[#cdb3ff]" />
+                  <h3 className="mt-4 text-sm font-extrabold text-white">{benefit.title}</h3>
+                  <p className="mt-1.5 text-[11px] leading-6 text-white/65">{benefit.description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomepageCallToAction() {
+  return (
+    <section className="shell !mb-[40px] !mt-[48px] max-sm:!mb-[24px] max-sm:!mt-[36px]" aria-labelledby="homepage-cta-heading">
+      <div className="sl-surface relative overflow-hidden px-8 py-9 max-sm:px-5">
+        <span aria-hidden className="absolute -bottom-28 -right-10 h-64 w-64 rounded-full bg-[radial-gradient(circle,#e8dcff_0%,rgba(232,220,255,0)_70%)]" />
+        <div className="relative flex items-center justify-between gap-7 max-md:flex-col max-md:items-start">
+          <div className="flex items-start gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#f1e9ff] text-[#6d28d9]">
+              <ShieldCheck aria-hidden className="h-6 w-6" />
+            </span>
+            <div>
+              <span className="sl-kicker">Ready to explore</span>
+              <h2 id="homepage-cta-heading" className="mt-1.5 text-[clamp(23px,2.8vw,31px)] font-black tracking-[-0.035em]">
+                พร้อมหาพื้นที่ใหม่ให้ร้านของคุณแล้วหรือยัง?
+              </h2>
+              <p className="mt-2 text-xs leading-6 text-muted">เลือกดู Event และตรวจสอบ Booth จากข้อมูลที่ผู้จัดงานเผยแพร่ในระบบ</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2.5 max-sm:w-full">
+            <a href="#eventSearch" className="sl-action-primary min-h-11 px-5 max-sm:flex-1">
+              ค้นหา Event
+            </a>
+            <Link href="/bookings" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#ded5e9] bg-white px-5 text-xs font-bold text-[#4e415c] transition hover:border-[#a98ae2] hover:text-[#6d28d9] max-sm:flex-1">
+              การจองของฉัน
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -697,180 +534,14 @@ function uniqueOptions(options: FilterOption[]): FilterOption[] {
 
 function uniqueOrganizations(events: DiscoveryEvent[]) {
   const organizations = new Map<string, { id: string; name: string }>();
-  events.forEach((event) => {
-    organizations.set(event.organization.id, event.organization);
-  });
+  events.forEach((event) => organizations.set(event.organization.id, event.organization));
   return [...organizations.values()];
 }
 
 function announcementTimestamp(announcement: AdminAnnouncement) {
-  return new Date(
-    announcement.publishedAt ?? announcement.createdAt,
-  ).getTime();
+  return new Date(announcement.publishedAt ?? announcement.createdAt).getTime();
 }
 
-/**
- * The native `<select>` this replaced used an `<option value="">` for the
- * unfiltered case; the listbox needs it as a real row so it can be chosen
- * again to clear the filter.
- */
-function withAllOption(
-  options: FilterOption[],
-  allLabel: string,
-): SelectMenuOption[] {
+function withAllOption(options: FilterOption[], allLabel: string): SelectMenuOption[] {
   return [{ value: '', label: allLabel }, ...options];
-}
-
-/**
- * Issue 1: this block used to offer สมัครสมาชิก / เข้าสู่ระบบ unconditionally,
- * so a signed-in visitor was invited to register moments after seeing their own
- * name in the topbar. Signed in, it points at what they can actually do next
- * instead — browse the open events, or open their bookings.
- */
-function ClosingCta({ auth }: { auth: ReturnType<typeof useAuthState>['auth'] }) {
-  const signedIn = auth.status === 'signed-in';
-
-  return (
-    <section className="shell pb-16">
-      <div className="relative overflow-hidden rounded-[32px] border border-[#e7e2ed] bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.12),transparent_22rem),#fff] px-8 py-12 text-center shadow-soft sm:px-14">
-        <h2 className="text-3xl font-black tracking-[-0.04em]">
-          พร้อมจองบูธในงานถัดไปแล้วหรือยัง
-        </h2>
-        <p className="mx-auto mt-4 max-w-[46ch] leading-8 text-[#7a7487]">
-          {signedIn
-            ? 'เลือกงานที่เปิดรับสมัคร แล้วดูผังบูธว่างได้ทันที'
-            : 'สมัครด้วยอีเมลอย่างเดียว ไม่ต้องตั้งรหัสผ่าน'}
-        </p>
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          {auth.status === 'loading' && (
-            // Holds the row's height so the card does not resize when the
-            // session resolves.
-            <span aria-hidden className="skeleton h-[52px] w-[280px] rounded-full" />
-          )}
-
-          {auth.status === 'signed-out' && (
-            <>
-              <Link
-                href="/register"
-                className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
-              >
-                สมัครสมาชิก
-              </Link>
-              <Link
-                href="/login"
-                className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
-              >
-                เข้าสู่ระบบ
-              </Link>
-            </>
-          )}
-
-          {signedIn && (
-            <>
-              <a
-                href={`#${EVENTS_SECTION_ID}`}
-                className="rounded-full bg-gradient-to-r from-violet to-[#a442e8] px-7 py-3.5 font-bold text-white shadow-lg shadow-violet/25"
-              >
-                ดูงานที่เปิดรับสมัคร
-              </a>
-              <Link
-                href="/bookings"
-                className="rounded-full border border-[#e4dff0] bg-white px-7 py-3.5 font-bold text-violet shadow-sm"
-              >
-                การจองของฉัน
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PopularAreaRecommendations({
-  eventId,
-  shopName,
-}: {
-  eventId: string;
-  shopName: string;
-}) {
-  const recommendations = [
-    {
-      zone: 'โซน A · อาหาร',
-      booth: 'A01–A04',
-      title: 'ใกล้ทางเข้าและจุดลงทะเบียน',
-      reason: 'ลูกค้าเห็นร้านได้ตั้งแต่เข้าพื้นที่ เหมาะกับอาหารและเครื่องดื่มที่ตัดสินใจซื้อเร็ว',
-      score: 'นิยม 96%',
-      tone: 'from-[#fff2d8] to-[#fffaf0]',
-    },
-    {
-      zone: 'โซน B · เครื่องดื่ม',
-      booth: 'B03–B06',
-      title: 'ติดทางเดินหลักระหว่างโซน',
-      reason: 'เป็นเส้นทางเชื่อมกลางงาน มีผู้เข้าชมเดินผ่านซ้ำ เหมาะกับร้านคาเฟ่และของหวาน',
-      score: 'นิยม 92%',
-      tone: 'from-[#eee8ff] to-[#faf8ff]',
-    },
-    {
-      zone: 'โซน F · กิจกรรม',
-      booth: 'F01–F04',
-      title: 'ใกล้เวิร์กช็อปและจุดพัก',
-      reason: 'ลูกค้าใช้เวลาอยู่บริเวณนี้นาน เหมาะกับสินค้าที่ต้องอธิบายหรือให้ทดลองก่อนซื้อ',
-      score: 'นิยม 87%',
-      tone: 'from-[#e7f7f1] to-[#f7fffc]',
-    },
-  ];
-
-  return (
-    <section className="shell pb-12 sm:pb-14" aria-labelledby="popular-area-heading">
-      <div className="rounded-[30px] border border-[#e3d9f2] bg-white/90 p-5 shadow-soft sm:p-7">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <span className="sl-kicker">
-              <Sparkles className="h-4 w-4" aria-hidden />
-              Recommended for your shop
-            </span>
-            <h2 id="popular-area-heading" className="mt-2 text-2xl font-black tracking-[-0.04em] sm:text-3xl">
-              พื้นที่นิยมที่เหมาะกับ {shopName}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              แนะนำจากประเภทร้าน ตำแหน่งทางเข้า ทางเดินหลัก และจุดที่ผู้เข้าชมมีแนวโน้มเดินผ่านบ่อย
-            </p>
-          </div>
-          <span className="sl-chip">
-            <TrendingUp className="h-4 w-4" aria-hidden />
-            จัดอันดับจากข้อมูลพื้นที่
-          </span>
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          {recommendations.map((item, index) => (
-            <Link
-              key={item.zone}
-              href={`/events/${eventId}/book`}
-              className={`group rounded-[24px] border border-white bg-gradient-to-br ${item.tone} p-5 shadow-[0_10px_28px_rgba(54,36,91,0.06)] transition hover:-translate-y-1 hover:border-[#d7c6f0]`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-violet shadow-sm">
-                  <MapPinned className="h-5 w-5" aria-hidden />
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-violet shadow-sm">
-                  #{index + 1} · {item.score}
-                </span>
-              </div>
-              <p className="mt-5 text-xs font-extrabold uppercase tracking-[.1em] text-violet">
-                {item.zone} · {item.booth}
-              </p>
-              <h3 className="mt-2 text-lg font-black">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted">{item.reason}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-violet">
-                ดูตำแหน่งบูธ <ArrowUpRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
-              </span>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
 }

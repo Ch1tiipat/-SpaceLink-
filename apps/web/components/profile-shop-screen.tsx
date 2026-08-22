@@ -328,13 +328,18 @@ export function ProfileShopScreen() {
                   <h2 className="mt-2 text-lg font-bold">ข้อมูลร้านค้า</h2>
                 </div>
                 {!isEditing && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="sl-chip text-violet"
-                  >
-                    แก้ไขข้อมูล
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/bookings" className="sl-chip text-violet">
+                      การจองของฉัน
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="sl-chip text-violet"
+                    >
+                      แก้ไขข้อมูล
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -681,12 +686,12 @@ function ShopForm({
     event.preventDefault();
     if (isSubmitting) return;
 
-    const trimmedPhone = phone.trim();
+    const normalizedPhone = phone.replace(/[\s-]/g, '');
     const nextNameError = name.trim() ? null : 'กรุณากรอกชื่อร้าน';
     const nextCategoryError =
       categoryIds.length > 0 ? null : 'กรุณาเลือกหมวดสินค้าอย่างน้อย 1 หมวด';
     const nextPhoneError =
-      trimmedPhone && !THAI_PHONE_PATTERN.test(trimmedPhone)
+      normalizedPhone && !THAI_PHONE_PATTERN.test(normalizedPhone)
         ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0'
         : null;
 
@@ -741,9 +746,9 @@ function ShopForm({
 
     // The shop is saved from here on. Everything below runs whatever the phone
     // write does — a failure there is reported, it does not undo the save.
-    if (trimmedPhone) {
+    if (normalizedPhone) {
       try {
-        await updateMe({ phone: trimmedPhone }, token);
+        await updateMe({ phone: normalizedPhone }, token);
       } catch {
         setPhoneSaveWarning(
           'บันทึกข้อมูลร้านค้าแล้ว แต่บันทึกเบอร์โทรศัพท์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',

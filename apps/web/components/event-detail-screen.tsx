@@ -1,21 +1,19 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
-  Accessibility,
   CalendarDays,
-  Camera,
+  Check,
   CircleDollarSign,
   Clock3,
+  Heart,
+  ImageIcon,
   LayoutGrid,
   MapPin,
-  Megaphone,
   Navigation,
   ParkingCircle,
-  ShieldCheck,
-  Utensils,
+  Store,
 } from 'lucide-react';
 import {
   getEventMap,
@@ -33,13 +31,11 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
 const compactDateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
   month: 'short',
-  year: '2-digit',
+  year: 'numeric',
 });
 
 function formatMoney(value: number): string {
-  return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(
-    value,
-  );
+  return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(value);
 }
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
@@ -49,28 +45,19 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-
     getEventMap(eventId, controller.signal)
       .then(setData)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        setError(
-          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
-        );
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
       });
-
     return () => controller.abort();
   }, [eventId]);
 
   const organizationId = data?.event.organization.id;
 
   useEffect(() => {
-    if (!organizationId) {
-      setAnnouncements([]);
-      return;
-    }
-
+    if (!organizationId) return;
     const controller = new AbortController();
     getPublicAnnouncements(organizationId, controller.signal)
       .then(setAnnouncements)
@@ -78,18 +65,16 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setAnnouncements([]);
       });
-
     return () => controller.abort();
   }, [organizationId]);
 
   if (!data && !error) {
     return (
-      <main>
-        <div className="shell py-10">
-          <div className="skeleton h-72 rounded-[32px]" />
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
-            <div className="skeleton h-80 rounded-3xl" />
-            <div className="skeleton h-80 rounded-3xl" />
+      <main className="sl-page">
+        <div className="shell max-w-[1100px] py-10">
+          <div className="skeleton h-[390px] rounded-[32px]" />
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((item) => <div key={item} className="skeleton h-28 rounded-[22px]" />)}
           </div>
         </div>
       </main>
@@ -98,390 +83,221 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
   if (error || !data) {
     return (
-      <main>
-        <div className="shell py-20 text-center">
-          <p className="text-2xl font-bold">เปิดรายละเอียด Event ไม่ได้</p>
+      <main className="sl-page">
+        <div className="shell max-w-[1100px] py-20 text-center">
+          <h1 className="text-2xl font-black">เปิดรายละเอียด Event ไม่ได้</h1>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
-          <Link
-            href="/"
-            className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white"
-          >
-            กลับหน้าค้นหา Event
-          </Link>
+          <Link href="/" className="sl-action-primary mt-7">กลับหน้าค้นหา Event</Link>
         </div>
       </main>
     );
   }
 
   const { event, zones } = data;
-  const availableBooths = zones.reduce(
-    (total, zone) =>
-      total +
-      zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length,
-    0,
-  );
-  const categories = [
-    ...new Set(
-      zones.flatMap((zone) => zone.categories.map((category) => category.name)),
-    ),
-  ];
-  const contact =
-    event.contactPhone ??
-    event.contactEmail ??
-    event.organization.contactPhone ??
-    event.organization.contactEmail;
-  const boothPrices = zones
-    .flatMap((zone) => zone.booths)
-    .map((booth) => Number(booth.boothPrice))
-    .filter(Number.isFinite);
+  const booths = zones.flatMap((zone) => zone.booths);
+  const availableBooths = booths.filter((booth) => booth.availability === 'AVAILABLE').length;
+  const boothPrices = booths.map((booth) => Number(booth.boothPrice)).filter(Number.isFinite);
   const startingPrice = boothPrices.length ? Math.min(...boothPrices) : null;
+  const categories = [...new Set(zones.flatMap((zone) => zone.categories.map((category) => category.name)))];
+  const contactPhone = event.contactPhone ?? event.organization.contactPhone;
+  const contactEmail = event.contactEmail ?? event.organization.contactEmail;
+  const address = event.venue.address ?? event.venue.name;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
+  const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
 
   return (
-    <main className="sl-page pb-16">
-      <div className="shell py-8">
-        <Link href="/" className="sl-chip">
-          ← กลับไปค้นหา Event
-        </Link>
+    <main className="sl-page pb-0">
+      <div className="shell max-w-[1100px] py-8">
+        <Link href="/" className="sl-chip">← กลับไปค้นหา Event</Link>
 
         <section
-          className="relative mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_85%_10%,rgba(255,255,255,0.16),transparent_20rem),linear-gradient(135deg,#28134f,#7440de_56%,#247668)] text-white shadow-[0_28px_75px_rgba(49,27,89,0.2)]"
-          style={
-            event.bannerUrl
-              ? {
-                  backgroundImage: `linear-gradient(100deg, rgba(35, 15, 74, .94), rgba(109, 60, 232, .68)), url("${event.bannerUrl}")`,
-                  backgroundPosition: 'center',
-                  backgroundSize: 'cover',
-                }
-              : undefined
-          }
+          className="relative mt-5 flex min-h-[390px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] px-11 py-12 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[340px] max-sm:px-7"
+          style={event.bannerUrl ? {
+            backgroundImage: `linear-gradient(100deg,rgba(36,16,62,.93),rgba(78,30,150,.74),rgba(56,101,104,.58)),url("${event.bannerUrl}")`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+          } : undefined}
         >
-          <div className="max-w-3xl px-6 py-14 sm:px-10 sm:py-20">
-            <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-              กำลังเปิดให้สำรวจพื้นที่
+          <div className="relative z-10 max-w-[720px]">
+            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-[11px] font-bold">
+              กำลังเปิดให้สำรองพื้นที่
             </span>
-            <h1 className="mt-4 max-w-[18ch] text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
               {event.name}
             </h1>
-            <p className="mt-4 text-sm leading-7 text-white/85 sm:text-base">
-              {dateFormatter.format(new Date(event.startDate))} –{' '}
-              {dateFormatter.format(new Date(event.endDate))} ·{' '}
-              {event.venue.name}
+            <p className="mt-4 max-w-3xl text-[15px] leading-7 text-white/88">
+              {event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                href={`/events/${event.id}/book`}
-                className="inline-flex min-h-11 items-center rounded-2xl bg-white px-5 py-3 font-extrabold text-violet shadow-lg transition hover:-translate-y-0.5"
-              >
-                เลือกบูธและจองพื้นที่ →
+            <div className="mt-7 flex flex-wrap gap-3 max-sm:flex-col">
+              <Link href={`/events/${event.id}/map`} className="inline-flex min-h-[46px] items-center justify-center rounded-[13px] bg-white px-5 font-bold text-violet shadow-lg transition hover:-translate-y-0.5">
+                ดู Zone Map →
               </Link>
-              <Link
-                href={`/events/${event.id}/map`}
-                className="inline-flex min-h-11 items-center rounded-2xl border border-white/35 bg-white/10 px-5 py-3 font-extrabold text-white backdrop-blur transition hover:bg-white/15"
-              >
-                ดู Zone Map แบบอ่านอย่างเดียว
-              </Link>
+              <button type="button" disabled title="ระบบจริงยังไม่มี API สำหรับบันทึก Event" className="inline-flex min-h-[46px] cursor-not-allowed items-center justify-center gap-2 rounded-[13px] border border-white/35 bg-white/10 px-5 font-bold text-white/65">
+                <Heart className="h-4 w-4" aria-hidden /> บันทึก Event · เร็ว ๆ นี้
+              </button>
             </div>
           </div>
         </section>
 
-        <section
-          className="relative z-10 -mt-3 grid gap-3 px-3 sm:-mt-5 sm:grid-cols-2 sm:px-5 lg:grid-cols-4"
-          aria-label="ข้อมูลสำคัญของ Event"
-        >
-          <EventStat
-            icon={CalendarDays}
-            label="วันที่จัดงาน"
-            value={`${compactDateFormatter.format(new Date(event.startDate))} – ${compactDateFormatter.format(new Date(event.endDate))}`}
-          />
-          <EventStat
-            icon={MapPin}
-            label="สถานที่"
-            value={event.venue.name}
-          />
-          <EventStat
-            icon={LayoutGrid}
-            label="บูธว่าง"
-            value={`${availableBooths} บูธ`}
-          />
-          <EventStat
-            icon={CircleDollarSign}
-            label="ราคาเริ่มต้น"
-            value={
-              startingPrice === null
-                ? 'ยังไม่ระบุ'
-                : `${formatMoney(startingPrice)} บาท`
-            }
-          />
+        <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="ข้อมูลสำคัญของ Event">
+          <EventStat icon={CalendarDays} label="วันที่จัดงาน" value={`${compactDateFormatter.format(new Date(event.startDate))} – ${compactDateFormatter.format(new Date(event.endDate))}`} />
+          <EventStat icon={MapPin} label="สถานที่" value={event.venue.name} />
+          <EventStat icon={LayoutGrid} label="บูธว่าง" value={`${availableBooths} บูธ`} />
+          <EventStat icon={CircleDollarSign} label="ราคาเริ่มต้น" value={startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`} />
         </section>
 
-        {announcements.length > 0 && (
-          <section className="sl-surface mt-7 p-6 sm:p-8">
-            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
-              <Megaphone className="h-4 w-4" aria-hidden /> ประกาศจากผู้จัดงาน
-            </span>
-            <h2 className="mt-2 text-2xl font-black">ข่าวสารสำคัญก่อนเข้าร่วมงาน</h2>
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        <DetailSection kicker="EVENT INFORMATION" title="เกี่ยวกับ Event">
+          <p className="whitespace-pre-line text-sm leading-7 text-muted">{event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}</p>
+        </DetailSection>
+
+        <DetailSection kicker="ANNOUNCEMENT" title="ข่าวสารสำคัญก่อนเข้าร่วมงาน">
+          {announcements.length > 0 ? (
+            <div className="grid gap-3">
               {announcements.map((announcement) => (
-                <article
-                  key={announcement.id}
-                  className="rounded-2xl border border-[#e6dcf7] bg-[#faf7ff] p-5"
-                >
-                  <h3 className="font-extrabold text-ink">{announcement.title}</h3>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted">
-                    {announcement.body}
-                  </p>
-                  {announcement.publishedAt && (
-                    <p className="mt-4 text-xs font-bold text-violet">
-                      เผยแพร่ {dateFormatter.format(new Date(announcement.publishedAt))}
-                    </p>
-                  )}
+                <article key={announcement.id} className="rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
+                  <h3 className="text-[13px] font-extrabold">{announcement.title}</h3>
+                  <p className="mt-1.5 whitespace-pre-line text-xs leading-7 text-muted">{announcement.body}</p>
                 </article>
               ))}
             </div>
-          </section>
-        )}
+          ) : <EmptyState text="ยังไม่มีประกาศสำหรับ Event นี้" />}
+        </DetailSection>
 
-        <div className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_330px]">
-          <section className="sl-surface p-6 sm:p-8">
-            <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
-              Event overview
-            </span>
-            <h2 className="mt-2 text-2xl font-bold">เกี่ยวกับงานนี้</h2>
-            <p className="mt-4 whitespace-pre-line leading-8 text-muted">
-              {event.description ??
-                'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
-            </p>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <EventFeature
-                icon={CalendarDays}
-                title="วันและเวลาเปิดงาน"
-                detail={`${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))} · ${event.startTime ?? '08:00'}–${event.endTime ?? '21:00'} น.`}
-              />
-              <EventFeature
-                icon={Utensils}
-                title="กิจกรรมภายในงาน"
-                detail="สินค้าเกษตร อาหาร ผ้าไหม OTOP นวัตกรรม และเวิร์กช็อปจากชุมชน"
-              />
-              <EventFeature
-                icon={ParkingCircle}
-                title="ที่จอดรถและจุดรับส่ง"
-                detail="มีพื้นที่จอดรถสำหรับผู้เข้าชม จุดรับส่ง และทางเดินเชื่อมเข้าสู่หน้างาน"
-              />
-              <EventFeature
-                icon={Accessibility}
-                title="สิ่งอำนวยความสะดวก"
-                detail="ห้องน้ำ จุดปฐมพยาบาล จุดประชาสัมพันธ์ และเส้นทางสำหรับผู้ใช้รถเข็น"
-              />
-            </div>
-
-            <div className="mt-9 border-t border-line pt-8">
-              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
-                <Camera className="h-4 w-4" aria-hidden /> Event atmosphere
-              </span>
-              <h2 className="mt-2 text-xl font-bold">บรรยากาศภายในงาน</h2>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                ดูรูปแบบพื้นที่ ผู้เข้าชม และประเภทสินค้าภายในงานก่อนตัดสินใจเลือกตำแหน่งบูธ
-              </p>
-              <div className="mt-5 grid h-[420px] gap-3 overflow-hidden rounded-[26px] sm:grid-cols-[1.45fr_.8fr] sm:grid-rows-2">
-                <div className="relative overflow-hidden rounded-[22px] sm:row-span-2">
-                  <Image
-                    src="/event-atmosphere-sut-2569.png"
-                    alt="บรรยากาศผู้เข้าชมและร้านค้าภายในงานเกษตร มทส."
-                    fill
-                    sizes="(max-width: 640px) 100vw, 55vw"
-                    className="object-cover"
-                  />
-                </div>
-                <div className="relative hidden overflow-hidden rounded-[22px] sm:block">
-                  <Image
-                    src="/event-atmosphere-sut-2569.png"
-                    alt="บรรยากาศร้านสินค้าเกษตรและอาหาร"
-                    fill
-                    sizes="30vw"
-                    className="scale-125 object-cover object-right"
-                  />
-                </div>
-                <div className="relative hidden overflow-hidden rounded-[22px] sm:block">
-                  <Image
-                    src="/hero-spacelink.png"
-                    alt="พื้นที่บูธและทางเดินภายในงาน"
-                    fill
-                    sizes="30vw"
-                    className="object-cover object-center"
-                  />
-                </div>
+        <DetailSection kicker="EVENT ATMOSPHERE" title="บรรยากาศภายในงาน" description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ" count={event.bannerUrl ? '1 รูป' : '0 รูป'}>
+          <div className="rounded-[22px] border border-[#e4d8ee] bg-[linear-gradient(180deg,#fcfaff,#f8f5fb)] p-4">
+            <div className="mb-4 flex items-center justify-between gap-4 max-sm:items-start max-sm:flex-col">
+              <div className="flex items-center gap-3">
+                <span className="grid h-[38px] w-[38px] place-items-center rounded-xl bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">✦</span>
+                <span><strong className="block text-[13px]">สำรวจบรรยากาศก่อนจอง</strong><span className="block text-[11px] text-muted">ภาพที่ผู้จัดงานเผยแพร่ในระบบ</span></span>
               </div>
+              <span className="rounded-full border border-line bg-white px-3 py-2 text-[10px] text-muted">ภาพจากข้อมูล Event</span>
             </div>
-
-            <h2 className="mt-9 text-xl font-bold">โซนและพื้นที่ว่าง</h2>
-            <p className="mt-2 text-sm text-muted">
-              ดูประเภทสินค้าและจำนวนบูธว่างก่อนเปิดแผนผัง
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {zones.map((zone) => {
-                const free = zone.booths.filter(
-                  (booth) => booth.availability === 'AVAILABLE',
-                ).length;
-
-                return (
-                  <div
-                    key={zone.id}
-                    className="sl-soft-surface p-4 transition hover:border-violet/25 hover:shadow-sm"
-                  >
-                    <p className="text-xs font-bold text-violet">{zone.code}</p>
-                    <h3 className="mt-1 font-bold">
-                      {zone.name ?? 'ยังไม่ระบุชื่อโซน'}
-                    </h3>
-                    <p className="mt-2 text-sm text-muted">
-                      {free} / {zone.booths.length} บูธว่าง
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <Link
-              href={`/events/${event.id}/map`}
-              className="sl-action-primary mt-6"
-            >
-              เปิดแผนผังโซน
-            </Link>
-          </section>
-
-          <aside className="sl-surface p-6 lg:sticky lg:top-[96px]">
-            <span className="text-xs font-bold uppercase tracking-[.14em] text-violet">
-              Quick info
-            </span>
-            <h2 className="mt-2 text-xl font-bold">ข้อมูลงาน</h2>
-            <dl className="mt-5 divide-y divide-line text-sm">
-              <InfoRow label="ผู้จัดงาน" value={event.organization.name} />
-              <InfoRow label="สถานที่" value={event.venue.name} />
-              <InfoRow label="บูธว่าง" value={`${availableBooths} บูธ`} />
-              <InfoRow
-                label="หมวดสินค้า"
-                value={categories.length ? categories.join(', ') : 'ยังไม่ระบุ'}
-              />
-              <InfoRow label="ติดต่อ" value={contact ?? 'ยังไม่ระบุ'} />
-            </dl>
-
-            {(event.policy?.generalRules ||
-              event.policy?.cancellationPolicy ||
-              event.policy?.refundPolicy) && (
-              <div className="mt-5 rounded-2xl bg-mist p-4">
-                <p className="font-bold text-violet">นโยบาย Event</p>
-                <p className="mt-2 text-sm leading-6 text-muted">
-                  {event.policy.generalRules ??
-                    event.policy.cancellationPolicy ??
-                    event.policy.refundPolicy}
-                </p>
+            {event.bannerUrl ? (
+              <div className="min-h-[320px] rounded-[18px] bg-cover bg-center" role="img" aria-label={`ภาพประชาสัมพันธ์ ${event.name}`} style={{ backgroundImage: `url("${event.bannerUrl}")` }} />
+            ) : (
+              <div className="grid min-h-[220px] place-items-center rounded-[18px] border border-dashed border-[#ddd2e6] bg-[#f8f4fc] px-5 text-center">
+                <div><span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><ImageIcon className="h-5 w-5" aria-hidden /></span><strong className="mt-3 block text-sm">ยังไม่มีภาพบรรยากาศ</strong><span className="mt-1 block text-[11px] text-muted">เมื่อผู้จัดงานเพิ่มรูป ภาพจะปรากฏในกรอบนี้อัตโนมัติ</span></div>
               </div>
             )}
-          </aside>
-        </div>
+          </div>
+        </DetailSection>
 
-        <section className="sl-surface mt-7 overflow-hidden">
-          <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-6 sm:px-8">
-            <div>
-              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-violet">
-                <Navigation className="h-4 w-4" aria-hidden /> Arrival guide
-              </span>
-              <h2 className="mt-2 text-2xl font-black">แผนที่การเดินทางและทางเข้างาน</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-                เส้นทางจากประตูมหาวิทยาลัยไปยังจุดลงทะเบียน ที่จอดรถ และทางเข้าสำหรับผู้เข้าชม
-              </p>
+        <DetailSection kicker="ACTIVITIES" title="กิจกรรมภายในงาน">
+          <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลกิจกรรม" />
+        </DetailSection>
+
+        <DetailSection kicker="FACILITIES" title="สิ่งอำนวยความสะดวกภายในงาน">
+          <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลสิ่งอำนวยความสะดวก" />
+        </DetailSection>
+
+        <DetailSection kicker="ZONE & BOOTH" title="พื้นที่ภายในงาน" description="ตรวจสอบ Zone และตำแหน่งบูธก่อนทำการจอง" action={<Link href={`/events/${event.id}/map`} className="sl-action-secondary text-violet">ดูแผนผัง</Link>}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <NumberCard label="Zone" value={`${zones.length}`} />
+            <NumberCard label="บูธทั้งหมด" value={`${booths.length}`} />
+            <NumberCard label="บูธว่าง" value={`${availableBooths}`} />
+            <NumberCard label="จองได้สูงสุด" value="ยังไม่ระบุ" />
+          </div>
+          <div className="mt-5 border-t border-line pt-5">
+            <h3 className="font-extrabold">หมวดสินค้าในพื้นที่</h3>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {categories.length > 0 ? categories.map((category) => <span key={category} className="sl-chip">{category}</span>) : <span className="text-sm text-muted">ยังไม่ระบุ</span>}
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#effaf6] px-3 py-2 text-xs font-bold text-emerald">
-              <ShieldCheck className="h-4 w-4" aria-hidden /> ภาพเส้นทางจากผู้จัดงาน
-            </span>
           </div>
-          <div className="relative aspect-[16/9] overflow-hidden border-t border-line bg-[#eef5e7]">
-            <Image
-              src="/event-travel-map-sut-2569.png"
-              alt="แผนที่เส้นทางจากประตูมหาวิทยาลัยไปยังทางเข้าและที่จอดรถของงาน"
-              fill
-              sizes="(max-width: 1024px) 100vw, 1200px"
-              className="object-cover"
-            />
+        </DetailSection>
+
+        <DetailSection kicker="RULES & POLICY" title="กฎและเงื่อนไข">
+          <div className="grid gap-3 md:grid-cols-2">
+            <PolicyCard icon={<Check className="h-5 w-5" />} title="กฎร้านค้า" value={event.policy?.generalRules} />
+            <PolicyCard warning icon={<span className="font-black">!</span>} title="การยกเลิก" value={event.policy?.cancellationPolicy} />
+            <PolicyCard icon={<CircleDollarSign className="h-5 w-5" />} title="การคืนเงิน" value={event.policy?.refundPolicy} />
+            <PolicyCard icon={<Clock3 className="h-5 w-5" />} title="เวลาเข้าติดตั้ง" value={null} />
           </div>
-          <div className="grid gap-3 border-t border-line p-5 sm:grid-cols-3 sm:p-6">
-            <TravelStep number="01" title="เข้าทางประตูหลัก" detail="ใช้ถนนมหาวิทยาลัยและตรงไปยังวงเวียนกลาง" />
-            <TravelStep number="02" title="ตามป้ายพื้นที่จัดงาน" detail="เลี้ยวเข้าสู่ถนนด้านลานเกษตรและจุดรับส่ง" />
-            <TravelStep number="03" title="จอดรถและเดินเข้างาน" detail="จอดในพื้นที่ผู้เข้าชมแล้วเดินเข้าจุดลงทะเบียน" />
+        </DetailSection>
+
+        <DetailSection kicker="LOCATION" title="การเดินทางเข้างาน" description={address}>
+          <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
+            <div>
+              <TravelRow icon={<MapPin className="h-5 w-5" />} label="สถานที่จัดงาน" value={event.venue.name} />
+              <TravelRow icon={<Navigation className="h-5 w-5" />} label="คำแนะนำการเดินทาง" value="ผู้จัดงานยังไม่ได้ระบุคำแนะนำการเดินทาง" />
+              <TravelRow icon={<ParkingCircle className="h-5 w-5" />} label="ที่จอดรถ" value="ผู้จัดงานยังไม่ได้ระบุข้อมูลที่จอดรถ" />
+              <a href={mapsUrl} target="_blank" rel="noreferrer" className="sl-action-primary mt-3 w-full">เปิดเส้นทางใน Google Maps →</a>
+            </div>
+            <div className="relative grid min-h-[390px] place-items-center overflow-hidden rounded-[18px] border border-[#ded4e5] bg-[linear-gradient(135deg,#f8f5fa,#eff4f2)] px-6 text-center shadow-soft">
+              <div><span className="mx-auto grid h-[46px] w-[46px] place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><MapPin className="h-5 w-5" /></span><strong className="mt-3 block text-sm">เปิดดูตำแหน่งบน Google Maps</strong><span className="mt-1 block text-[11px] text-muted">ระบบ API ปัจจุบันส่งชื่อและที่อยู่สถานที่ โดยยังไม่มีพิกัดสาธารณะ</span></div>
+              <div className="absolute bottom-4 left-4 flex max-w-[calc(100%-32px)] items-center gap-3 rounded-xl border border-white bg-white/95 px-3 py-2.5 text-left shadow-soft"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald ring-4 ring-emerald/15" /><span><strong className="block truncate text-[11px]">{event.name}</strong><span className="block truncate text-[9px] text-muted">{address}</span></span></div>
+            </div>
           </div>
+        </DetailSection>
+
+        <DetailSection kicker="EVENT REVIEWS" title="รีวิวจากผู้เข้าร่วมงาน" count="0.0 ★">
+          <EmptyState text="Event นี้ยังไม่มีรีวิวจาก API" />
+        </DetailSection>
+
+        <section className="mt-5 grid gap-5 lg:grid-cols-[.85fr_1.15fr]">
+          <article className="sl-surface p-7">
+            <div className="flex items-start justify-between gap-5">
+              <div><span className="sl-kicker">RESERVATION</span><h2 className="mt-2 text-2xl font-black">พร้อมเลือกพื้นที่แล้ว?</h2><p className="mt-3 text-sm leading-7 text-muted">เปิด Zone Map เพื่อตรวจสอบตำแหน่ง ราคา และเลือกบูธที่เหมาะกับร้านของคุณ</p></div>
+              <span className="grid h-[62px] w-[62px] shrink-0 place-items-center rounded-[17px] bg-[#f1e9ff] text-violet"><Store className="h-6 w-6" /></span>
+            </div>
+            <div className="mt-6 grid grid-cols-[1fr_auto] gap-3 max-sm:grid-cols-1"><div className="rounded-xl bg-[#f4edff] px-4 py-3"><span className="text-[10px] text-muted">ราคาเริ่มต้น</span><strong className="mt-1 block text-base text-violet">{startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`}</strong></div><Link href={`/events/${event.id}/map`} className="sl-action-primary min-w-[150px]">เลือกพื้นที่ →</Link></div>
+          </article>
+
+          <article className="sl-surface p-7">
+            <span className="sl-kicker">EVENT INFO</span>
+            <h2 className="mt-2 text-2xl font-black">ข้อมูล Event</h2>
+            <p className="mt-2 text-sm text-muted">ข้อมูลสำคัญและช่องทางติดต่อผู้จัดงาน</p>
+            <dl className="mt-5 grid sm:grid-cols-2 sm:gap-x-5">
+              <InfoItem label="ประเภท" value={categories.join(', ') || 'ยังไม่ระบุ'} />
+              <InfoItem label="สถานที่" value={event.venue.name} />
+              <InfoItem label="วันที่" value={dateRange} />
+              <InfoItem label="เวลา" value={timeRange} />
+              <InfoItem label="ผู้จัดงาน" value={event.organization.name} />
+              <InfoItem label="เบอร์ติดต่อ" value={contactPhone ?? 'ยังไม่ระบุ'} />
+              <InfoItem label="Email" value={contactEmail ?? 'ยังไม่ระบุ'} />
+            </dl>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {contactPhone ? <a href={`tel:${contactPhone.replace(/\s/g, '')}`} className="sl-action-primary">โทรหาผู้จัดงาน</a> : <button disabled className="sl-action-primary cursor-not-allowed opacity-50">ยังไม่มีเบอร์ติดต่อ</button>}
+              {contactEmail ? <a href={`mailto:${contactEmail}`} className="sl-action-secondary text-violet">ส่ง Email</a> : <button disabled className="sl-action-secondary cursor-not-allowed text-muted opacity-60">ยังไม่มี Email</button>}
+            </div>
+          </article>
         </section>
       </div>
+
     </main>
   );
 }
 
-function EventStat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Clock3;
-  label: string;
-  value: string;
-}) {
+function DetailSection({ kicker, title, description, count, action, children }: { kicker: string; title: string; description?: string; count?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
-        <Icon className="h-5 w-5" aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold text-muted">{label}</p>
-        <p className="mt-1 line-clamp-2 text-sm font-extrabold leading-5 text-ink">
-          {value}
-        </p>
-      </div>
-    </article>
+    <section className="sl-surface mt-5 p-7 sm:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><span className="sl-kicker">{kicker}</span><h2 className="mt-2 text-[26px] font-black tracking-[-0.03em]">{title}</h2></div>{action ?? (count ? <span className="sl-chip">{count}</span> : null)}</div>
+      {description && <p className="mt-3 text-sm leading-7 text-muted">{description}</p>}
+      <div className="mt-5">{children}</div>
+    </section>
   );
 }
 
-function EventFeature({
-  icon: Icon,
-  title,
-  detail,
-}: {
-  icon: typeof Clock3;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-line bg-[#faf8ff] p-4">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-tint text-violet">
-        <Icon className="h-[18px] w-[18px]" aria-hidden />
-      </span>
-      <h3 className="mt-3 font-extrabold">{title}</h3>
-      <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
-    </div>
-  );
+function EmptyState({ text }: { text: string }) {
+  return <div className="grid min-h-[118px] place-items-center rounded-[16px] border border-dashed border-[#ddd2e6] bg-[#fcfbfd] px-5 text-center text-sm text-muted">{text}</div>;
 }
 
-function TravelStep({
-  number,
-  title,
-  detail,
-}: {
-  number: string;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-[#faf8ff] p-4">
-      <span className="text-xs font-black text-violet">{number}</span>
-      <h3 className="mt-1 font-extrabold">{title}</h3>
-      <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
-    </div>
-  );
+function EventStat({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) {
+  return <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><Icon className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-[11px] text-muted">{label}</span><strong className="mt-1 line-clamp-2 block text-sm leading-5">{value}</strong></span></article>;
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[90px_1fr] gap-4 py-4">
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right font-bold">{value}</dd>
-    </div>
-  );
+function NumberCard({ label, value }: { label: string; value: string }) {
+  return <article className="rounded-xl border border-line bg-[#fcfbfd] p-4"><span className="text-[10px] text-muted">{label}</span><strong className="mt-1 block text-xl">{value}</strong></article>;
+}
+
+function PolicyCard({ icon, title, value, warning = false }: { icon: ReactNode; title: string; value?: string | null; warning?: boolean }) {
+  return <article className="flex gap-3 rounded-[13px] border border-line p-4"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] ${warning ? 'bg-[#fff4e7] text-[#b5680a]' : 'bg-[#eafaf1] text-[#16834e]'}`}>{icon}</span><span><strong className="text-xs">{title}</strong><span className="mt-1.5 block whitespace-pre-line text-[11px] leading-7 text-muted">{value ?? 'ผู้จัดงานยังไม่ได้ระบุ'}</span></span></article>;
+}
+
+function TravelRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return <div className="flex gap-3 border-b border-line py-3"><span className="grid h-[37px] w-[37px] shrink-0 place-items-center rounded-[10px] bg-[#eee6ff] text-violet">{icon}</span><span><span className="block text-[10px] text-muted">{label}</span><strong className="mt-1 block text-xs leading-6">{value}</strong></span></div>;
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return <div className="flex min-h-[55px] items-center justify-between gap-4 border-b border-line"><dt className="text-[10px] text-muted">{label}</dt><dd className="max-w-[68%] text-right text-[11px] font-bold">{value}</dd></div>;
 }

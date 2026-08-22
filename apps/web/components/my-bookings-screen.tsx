@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
-import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
-  cancelBooking,
-  createReview,
+  getPreviewBookings,
+  isBookingReviewEligible,
+} from '@/components/booking-detail-screen';
+import {
   getMyBookings,
   type BookingStatus,
   type MyBooking,
@@ -55,8 +56,6 @@ const bookingFilters: readonly { value: BookingFilter; label: string }[] = [
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
-const MS_PER_HOUR = 60 * 60 * 1000;
-const REVIEW_ELIGIBLE_OFFSET_HOURS = 17;
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -82,26 +81,12 @@ function isExpired(booking: MyBooking): boolean {
   );
 }
 
-function isReviewEligible(booking: MyBooking): boolean {
-  const eligibleFrom = new Date(
-    new Date(booking.bookingEndDate).getTime() +
-      REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR,
-  );
-  return (
-    (booking.status === 'CONFIRMED' || booking.status === 'COMPLETED') &&
-    eligibleFrom <= new Date()
-  );
-}
-
 export function MyBookingsScreen() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
   const [bookings, setBookings] = useState<MyBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<Set<string>>(new Set());
-  const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
-  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingFilter>('ALL');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
@@ -136,7 +121,7 @@ export function MyBookingsScreen() {
             ? { status: 'ready', token: UX_PREVIEW_TOKEN }
             : { status: 'signed-out' },
         );
-        setBookings([]);
+        setBookings(mode === 'signed-in' ? getPreviewBookings() : []);
         setLoadError(null);
         setIsLoading(false);
       };
@@ -195,6 +180,24 @@ export function MyBookingsScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search)
+      .get('tab')
+      ?.toLowerCase();
+    const filtersByTab: Record<string, BookingFilter> = {
+      all: 'ALL',
+      pending: 'PENDING_PAYMENT',
+      pending_payment: 'PENDING_PAYMENT',
+      confirmed: 'CONFIRMED',
+      completed: 'COMPLETED',
+      cancelled: 'CANCELLED',
+      no_show: 'NO_SHOW',
+    };
+    if (requestedTab && filtersByTab[requestedTab]) {
+      setStatusFilter(filtersByTab[requestedTab]);
+    }
+  }, []);
+
   async function handleExpired(bookingId: string) {
     setExpiredIds((current) => new Set(current).add(bookingId));
     if (access.status !== 'ready') return;
@@ -220,34 +223,6 @@ export function MyBookingsScreen() {
       if (attempt < HOLD_STATUS_REFRESH_ATTEMPTS - 1) {
         await wait(HOLD_STATUS_REFRESH_INTERVAL_MS);
       }
-    }
-  }
-
-  async function handleCancel(booking: MyBooking) {
-    if (access.status !== 'ready') return;
-    const reason = cancelReasons[booking.id]?.trim() ?? '';
-    if (!reason) {
-      setActionErrors((current) => ({
-        ...current,
-        [booking.id]: 'กรุณาระบุเหตุผลที่ต้องการยกเลิก',
-      }));
-      return;
-    }
-
-    setCancellingId(booking.id);
-    setActionErrors((current) => ({ ...current, [booking.id]: '' }));
-    try {
-      await cancelBooking(booking.id, reason, access.token);
-      setCancelReasons((current) => ({ ...current, [booking.id]: '' }));
-      await refreshBookings(access.token);
-    } catch (cause) {
-      setActionErrors((current) => ({
-        ...current,
-        [booking.id]:
-          cause instanceof Error ? cause.message : 'ยกเลิกการจองไม่สำเร็จ',
-      }));
-    } finally {
-      setCancellingId(null);
     }
   }
 
@@ -464,11 +439,6 @@ export function MyBookingsScreen() {
             )}
             {visibleBookings.map((booking) => {
               const holdExpired = expiredIds.has(booking.id) || isExpired(booking);
-              const cancellable =
-                (booking.status === 'PENDING_PAYMENT' ||
-                  booking.status === 'CONFIRMED') &&
-                new Date(booking.bookingStartDate).getTime() > Date.now();
-
               return (
                 <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -511,54 +481,33 @@ export function MyBookingsScreen() {
                     />
                   </dl>
 
-                  {booking.status === 'PENDING_PAYMENT' && (
-                    <div className="mt-5">
-                      {holdExpired && (
-                        <p className="mb-4 rounded-2xl bg-[#fff0ee] px-4 py-3 text-sm font-bold text-[#b42318]">
-                          Hold หมดเวลาแล้ว ไม่สามารถอัปโหลดสลิปได้ ระบบกำลังอัปเดตสถานะการจอง
-                        </p>
-                      )}
-                      <SlipUploadPanel
-                        bookingId={booking.id}
-                        token={access.token}
-                        disabled={holdExpired}
-                        onConfirmed={() => void refreshBookings(access.token)}
-                      />
-                    </div>
-                  )}
+                  {holdExpired ? (
+                    <p className="mt-5 rounded-2xl bg-[#fff0ee] px-4 py-3 text-sm font-bold text-[#b42318]">
+                      Hold หมดเวลาแล้ว ระบบกำลังอัปเดตสถานะการจอง
+                    </p>
+                  ) : null}
 
-                  {cancellable && (
-                    <div className="mt-5 border-t border-line pt-5">
-                      <label className="block max-w-xl">
-                        <span className="mb-2 block text-sm font-bold">เหตุผลที่ยกเลิก</span>
-                        <textarea
-                          value={cancelReasons[booking.id] ?? ''}
-                          onChange={(event) =>
-                            setCancelReasons((current) => ({
-                              ...current,
-                              [booking.id]: event.target.value,
-                            }))
-                          }
-                          rows={2}
-                          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
-                          placeholder="ระบุเหตุผลก่อนยกเลิกการจอง"
-                        />
-                      </label>
-                      {actionErrors[booking.id] && (
-                        <p role="alert" className="mt-2 text-sm text-[#b42318]">
-                          {actionErrors[booking.id]}
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void handleCancel(booking)}
-                        disabled={cancellingId === booking.id}
-                        className="mt-3 rounded-xl border border-[#d92d20] px-4 py-2 text-sm font-bold text-[#b42318] disabled:opacity-50"
-                      >
-                        {cancellingId === booking.id ? 'กำลังยกเลิก…' : 'ยกเลิกการจอง'}
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-5">
+                    <Link href={`/bookings/${booking.id}`} className="sl-action-secondary text-violet">
+                      ดูรายละเอียด
+                    </Link>
+                    <Link href={`/events/${booking.event.id}`} className="sl-action-secondary text-violet">
+                      ดู Event
+                    </Link>
+                    {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
+                      <Link href={`/bookings/${booking.id}/payment`} className="sl-action-primary">
+                        ชำระเงิน
+                      </Link>
+                    ) : null}
+                    <Link href={`/events/${booking.event.id}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">
+                      ดู Zone Map
+                    </Link>
+                    {isBookingReviewEligible(booking) ? (
+                      <Link href={`/bookings/${booking.id}/review`} className="sl-action-secondary text-violet">
+                        รีวิวพื้นที่
+                      </Link>
+                    ) : null}
+                  </div>
 
                   {booking.status === 'CANCELLED' && booking.cancelReason && (
                     <p className="mt-5 text-sm text-muted">
@@ -566,9 +515,6 @@ export function MyBookingsScreen() {
                     </p>
                   )}
 
-                  {isReviewEligible(booking) && (
-                    <ReviewForm booking={booking} token={access.token} />
-                  )}
                 </article>
               );
             })}
@@ -585,128 +531,5 @@ function BookingDetail({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-bold text-muted">{label}</dt>
       <dd className="mt-1 font-bold text-ink">{value}</dd>
     </div>
-  );
-}
-
-function ReviewForm({ booking, token }: { booking: MyBooking; token: string }) {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [reviewerDisplayName, setReviewerDisplayName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  async function submitReview(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (rating < 1 || rating > 5) {
-      setError('กรุณาเลือกคะแนน 1–5 ดาว');
-      setSuccess(null);
-      return;
-    }
-
-    const trimmedComment = comment.trim();
-    const trimmedDisplayName = reviewerDisplayName.trim();
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await createReview(
-        {
-          targetType: 'BOOTH',
-          targetId: booking.booth.id,
-          rating,
-          ...(trimmedComment ? { comment: trimmedComment } : {}),
-          ...(trimmedDisplayName
-            ? { reviewerDisplayName: trimmedDisplayName }
-            : {}),
-        },
-        token,
-      );
-      setSuccess('บันทึกคะแนนพื้นที่เรียบร้อยแล้ว');
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'ไม่สามารถบันทึกคะแนนได้',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submitReview} className="mt-5 border-t border-line pt-5">
-      <h3 className="font-extrabold text-ink">ให้คะแนนบูธ {booking.booth.code}</h3>
-      <p className="mt-1 text-sm text-muted">
-        ประเมินพื้นที่จากประสบการณ์การจองครั้งนี้ คุณสามารถส่งซ้ำเพื่ออัปเดตคะแนนเดิมได้
-      </p>
-
-      <fieldset className="mt-4">
-        <legend className="text-sm font-bold">คะแนนพื้นที่ *</legend>
-        <div className="mt-2 flex flex-wrap gap-2" aria-label="เลือกคะแนนพื้นที่">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-label={`${value} ดาว`}
-              aria-pressed={rating === value}
-              onClick={() => {
-                setRating(value);
-                setError(null);
-                setSuccess(null);
-              }}
-              className={
-                'grid h-11 w-11 place-items-center rounded-xl border text-xl transition ' +
-                (rating >= value
-                  ? 'border-[#f3b61f] bg-[#fff8dc] text-[#b77900]'
-                  : 'border-line bg-white text-[#aaa3b2]')
-              }
-            >
-              ★
-            </button>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <label className="text-sm font-bold text-ink">
-          ชื่อที่ใช้แสดง (ไม่บังคับ)
-          <input
-            value={reviewerDisplayName}
-            onChange={(event) => setReviewerDisplayName(event.target.value)}
-            maxLength={80}
-            placeholder="ไม่ระบุชื่อ (จะแสดงเป็นไม่ระบุตัวตน)"
-            className="mt-1.5 h-11 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
-          />
-        </label>
-        <label className="text-sm font-bold text-ink lg:row-span-2">
-          ความคิดเห็น (ไม่บังคับ)
-          <textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            maxLength={1000}
-            rows={4}
-            placeholder="บอกผู้จัดงานว่าพื้นที่นี้เป็นอย่างไร"
-            className="mt-1.5 w-full resize-y rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-violet"
-          />
-        </label>
-      </div>
-
-      {error && (
-        <p role="alert" className="mt-3 text-sm font-semibold text-[#b42318]">
-          {error}
-        </p>
-      )}
-      {success && (
-        <p role="status" className="mt-3 text-sm font-semibold text-[#13795b]">
-          {success}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-4 rounded-xl bg-violet px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {submitting ? 'กำลังบันทึก…' : 'บันทึกคะแนน'}
-      </button>
-    </form>
   );
 }

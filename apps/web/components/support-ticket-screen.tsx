@@ -19,6 +19,7 @@ import {
   type UserRole,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
 type AccessState =
   | { status: 'loading' }
@@ -34,6 +35,11 @@ export function SupportTicketScreen() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
 
   useEffect(() => {
+    if (canUseUxPreview()) {
+      setAccess({ status: 'ready', token: UX_PREVIEW_TOKEN, role: 'VENDOR' });
+      return;
+    }
+
     const controller = new AbortController();
     let active = true;
 
@@ -104,14 +110,17 @@ export function SupportTicketScreen() {
   }
 
   return access.role === 'VENDOR' ? (
-    <VendorTicketForm token={access.token} />
+    <VendorTicketForm
+      token={access.token}
+      preview={access.token === UX_PREVIEW_TOKEN}
+    />
   ) : (
     <AdminApprovalForm token={access.token} />
   );
 }
 
-function VendorTicketForm({ token }: { token: string }) {
-  const [eventId, setEventId] = useState('');
+function VendorTicketForm({ token, preview }: { token: string; preview: boolean }) {
+  const [eventId, setEventId] = useState(preview ? 'demo-event' : '');
   const [subject, setSubject] = useState('ขอเพิ่มโควตาการจองบูธ');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -129,10 +138,19 @@ function VendorTicketForm({ token }: { token: string }) {
     setError(null);
     setTicket(null);
     try {
-      const created = await createSupportTicket(
-        { eventId, subject, message },
-        token,
-      );
+      const created = preview
+        ? {
+            id: 'preview-support-ticket',
+            userId: 'preview-vendor',
+            organizationId: null,
+            bookingId: null,
+            type: 'QUOTA_EXCEPTION',
+            subject,
+            status: 'OPEN' as const,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : await createSupportTicket({ eventId, subject, message }, token);
       setTicket(created);
     } catch (cause) {
       setError(describeError(cause, 'ส่งคำร้องขอเพิ่มโควตาไม่สำเร็จ'));
@@ -155,6 +173,11 @@ function VendorTicketForm({ token }: { token: string }) {
           <p className="mt-2 text-sm leading-6 text-muted">
             ใช้เมื่อจองครบโควตาแล้ว ระบุ Event และบูธที่ต้องการให้ผู้ดูแลองค์กรพิจารณา
           </p>
+          {preview ? (
+            <p className="mt-3 rounded-xl bg-violet-tint px-3 py-2 text-xs font-semibold text-violet">
+              โหมดตรวจ UX/UI — การส่งแบบฟอร์มจะไม่สร้างคำร้องจริง
+            </p>
+          ) : null}
         </div>
       </div>
 
