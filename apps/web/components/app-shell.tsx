@@ -790,7 +790,7 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
 
 function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
   const initialAnswer =
-    'สวัสดีครับ 👋 ผมคือ SpaceLink AI ถามเรื่อง Event, การจองบูธ, การชำระเงิน หรือช่องทางติดต่อได้เลยครับ';
+    'สวัสดีครับ 👋 นี่คือคำถามที่พบบ่อยของ SpaceLink เลือกดูเรื่อง Event, การจองบูธ, การชำระเงิน หรือช่องทางติดต่อได้เลยครับ';
   const [view, setView] = useState<'closed' | 'menu' | 'chat'>('closed');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(initialAnswer);
@@ -856,7 +856,7 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
           className="mb-3 grid w-[min(305px,calc(100vw-32px))] gap-2"
         >
           <button type="button" onClick={() => setView('chat')} className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]">
-            <span><strong className="block text-[11px] text-ink">ถาม AI</strong><small className="mt-1 block text-[7px] text-muted">แชทกับ SpaceLink AI</small></span>
+            <span><strong className="block text-[11px] text-ink">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[7px] text-muted">ดูคำตอบและวิธีใช้งาน</small></span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
           </button>
           <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน LINE" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]">
@@ -875,12 +875,12 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
       ) : null}
 
       {view === 'chat' ? (
-        <section aria-label="SpaceLink AI" className="mb-3 flex h-[min(620px,calc(100vh-170px))] w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
+        <section aria-label="คำถามที่พบบ่อย SpaceLink" className="mb-3 flex h-[min(620px,calc(100vh-170px))] w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
           <header className="flex min-h-[86px] shrink-0 items-center gap-3 border-b border-line px-4">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
-            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">SpaceLink AI</strong><small className="mt-1 block text-[8px] text-muted">ผู้ช่วยตอบคำถามการใช้งาน</small></div>
+            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[8px] text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
             <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><RotateCcw className="h-4 w-4" aria-hidden /></button>
-            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่าง SpaceLink AI" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><X className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><X className="h-4 w-4" aria-hidden /></button>
           </header>
           <div className="shrink-0 border-b border-[#e6ddf2] bg-[#f7f2ff] px-4 py-2 text-[8px] text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfbff] p-4">
@@ -892,7 +892,7 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
               {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-[8px] font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
             </div>
             <div className="mt-3 flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
-              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามถึง SpaceLink AI" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-[9px] outline-none placeholder:text-[#978ba5]" />
+              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-[9px] outline-none placeholder:text-[#978ba5]" />
               <button type="button" onClick={() => askAssistant()} aria-label="ส่งคำถาม" className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9]"><Send className="h-4 w-4" aria-hidden /></button>
             </div>
           </div>
@@ -902,8 +902,8 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={expanded ? 'ปิดเมนูช่วยเหลือ SpaceLink' : 'เปิดตัวช่วยแนะนำโซนและติดต่อ SpaceLink'}
-        title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'SpaceLink Assistant'}
+        aria-label={expanded ? 'ปิดเมนูช่วยเหลือ SpaceLink' : 'เปิดคำถามที่พบบ่อยและช่องทางติดต่อ SpaceLink'}
+        title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'คำถามที่พบบ่อย · ติดต่อเรา'}
         onClick={() => setView((current) => current === 'closed' ? 'menu' : 'closed')}
         className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
       >
