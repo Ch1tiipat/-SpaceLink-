@@ -7,7 +7,7 @@ export type EventSummary = {
   startTime: string | null;
   endTime: string | null;
   bannerUrl: string | null;
-  status: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
 };
 
 export type DiscoveryEvent = EventSummary & {

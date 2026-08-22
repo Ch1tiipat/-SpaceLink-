@@ -12,6 +12,7 @@ import {
   type EventZone,
   type ZoneRecommendation,
 } from '@/lib/api';
+import { isEventBookable } from '@/lib/event-booking-rules';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 function availableCount(zone: EventZone) {
@@ -154,6 +155,11 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     );
   }
 
+  const eventBookable = isEventBookable(data.event);
+  const bookingAvailabilityText = eventBookable
+    ? 'กด Booth ว่างเพื่อจองได้ทันที'
+    : 'Event นี้ปิดรับจองแล้ว';
+
   return (
     <main className="sl-page pb-8">
       <div className="shell max-w-[1280px] py-4">
@@ -161,7 +167,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           <div className="min-w-[220px] flex-1 px-2">
             <span className="sl-kicker">EVENT MAP</span>
             <h1 className="mt-1 text-2xl font-black tracking-[-0.04em] max-sm:text-xl">แผนผังพื้นที่จัดงาน</h1>
-            <p className="mt-0.5 truncate text-[9px] text-muted">{data.event.name} · กด Booth ว่างเพื่อจองได้ทันที</p>
+            <p className="mt-0.5 truncate text-[9px] text-muted">{data.event.name} · {bookingAvailabilityText}</p>
           </div>
           <div className="grid grid-cols-3 gap-2" aria-label="สรุปแผนผัง Event">
             <SummaryStat label="Zone" value={`${metrics.zones}`} />
@@ -202,7 +208,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             ) : null}
           </div>
 
-          {recommendedLocation ? (
+          {recommendedLocation && eventBookable ? (
             <Link
               href={`/events/${eventId}/book?zone=${encodeURIComponent(recommendedLocation.zone.code)}&booth=${encodeURIComponent(recommendedLocation.booth.code)}`}
               className="group flex min-h-10 items-center gap-3 rounded-[12px] border border-[#cbb6f3] bg-white px-3 py-2 shadow-[0_6px_18px_rgba(109,40,217,.08)] transition hover:border-violet"
@@ -212,6 +218,10 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <strong className="text-[10px] text-violet">Zone {recommendedLocation.zone.code} · Booth {recommendedLocation.booth.code}</strong>
               <span aria-hidden className="text-violet transition group-hover:translate-x-0.5">→</span>
             </Link>
+          ) : recommendedLocation ? (
+            <span className="flex min-h-10 items-center rounded-[12px] border border-[#ded7e4] bg-[#f5f3f6] px-3 py-2 text-[9px] font-bold text-muted">
+              Event นี้ปิดรับจองแล้ว
+            </span>
           ) : null}
 
           {vendor.status === 'signed-out' ? (
@@ -234,12 +244,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         <section className="sl-surface min-w-0 overflow-hidden">
             <div className="flex min-h-[48px] items-center justify-between gap-4 border-b border-line px-4 py-2">
               <div><span className="block text-[8px] font-extrabold text-[#a095a5]">EVENT FLOOR PLAN</span><strong className="mt-1 block text-[11px]">{data.event.name}</strong></div>
-              <div className="flex items-center gap-2 text-[8px] text-muted max-sm:hidden"><span className="h-2 w-2 rounded-full bg-[#22c55e] ring-4 ring-[#22c55e]/10" />เห็นทุก Zone · กด Booth ว่างเพื่อจองได้ทันที</div>
+              <div className="flex items-center gap-2 text-[8px] text-muted max-sm:hidden"><span className={`h-2 w-2 rounded-full ring-4 ${eventBookable ? 'bg-[#22c55e] ring-[#22c55e]/10' : 'bg-[#9b929e] ring-[#9b929e]/10'}`} />เห็นทุก Zone · {bookingAvailabilityText}</div>
             </div>
 
             {data.zones.length > 0 ? (
               <div className="[&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
                 <ZoneMap
+                  readOnly={!eventBookable}
                   mapImageUrl={data.event.mapImageUrl}
                   zones={data.zones}
                   focusedZoneId={selectedZoneId}
@@ -247,12 +258,15 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   recommendedBoothId={recommendation?.boothId ?? null}
                   keepOverview
                   showLegend={false}
-                  boothHref={(booth) => {
-                    const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
-                    return `/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
-                  }}
+                  boothHref={eventBookable
+                    ? (booth) => {
+                        const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
+                        return `/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
+                      }
+                    : undefined}
                   onFocusZone={setSelectedZoneId}
                   onSelectBooth={(booth) => {
+                    if (!eventBookable) return;
                     const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
                     router.push(`/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`);
                   }}
@@ -269,10 +283,14 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             {selectedZone ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
                 <div><h2 className="text-lg font-black">Zone {selectedZone.code} · {selectedZone.name ?? 'ยังไม่ระบุชื่อโซน'}</h2><p className="mt-1 text-[11px] text-muted">{availableCount(selectedZone)} จาก {selectedZone.booths.length} Booth ยังว่าง · เริ่มต้น {zoneMinimumPrice(selectedZone)}</p></div>
-                <Link href={`/events/${eventId}/book?zone=${encodeURIComponent(selectedZone.code)}`} className="sl-action-primary">เลือกบูธใน Zone นี้</Link>
+                {eventBookable ? (
+                  <Link href={`/events/${eventId}/book?zone=${encodeURIComponent(selectedZone.code)}`} className="sl-action-primary">เลือกบูธใน Zone นี้</Link>
+                ) : (
+                  <span className="sl-chip cursor-not-allowed bg-[#f1eef2] text-muted">Event นี้ปิดรับจองแล้ว</span>
+                )}
               </div>
             ) : (
-              <div className="mt-3"><h2 className="text-lg font-black">เลือกได้จากแผนผังทันที</h2><p className="mt-1 text-[11px] text-muted">กด Zone เพื่อดูข้อมูล หรือกด Booth สีขาวเพื่อไปหน้าจองโดยตรง</p></div>
+              <div className="mt-3"><h2 className="text-lg font-black">เลือกได้จากแผนผังทันที</h2><p className="mt-1 text-[11px] text-muted">{eventBookable ? 'กด Zone เพื่อดูข้อมูล หรือกด Booth สีขาวเพื่อไปหน้าจองโดยตรง' : 'ดูข้อมูล Zone และ Booth ได้ แต่ Event นี้ปิดรับจองแล้ว'}</p></div>
             )}
           </article>
 
