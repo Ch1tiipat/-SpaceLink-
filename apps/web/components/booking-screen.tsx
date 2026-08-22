@@ -23,6 +23,7 @@ import {
   type EventBooth,
   type EventMap,
 } from '@/lib/api';
+import { isEventBookable } from '@/lib/event-booking-rules';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
@@ -169,7 +170,13 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           : 'ยังไม่มีรีวิว';
 
   async function handleCreate() {
-    if (vendor.status !== 'ready' || !vendor.shop || !selectedBooth) {
+    if (
+      vendor.status !== 'ready' ||
+      !vendor.shop ||
+      !selectedBooth ||
+      !data ||
+      !isEventBookable(data.event)
+    ) {
       return;
     }
 
@@ -267,6 +274,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     );
   }
 
+  const eventBookable = isEventBookable(data.event);
+
   return (
     <main className="sl-page pb-16">
       <div className="shell max-w-[1180px] py-6">
@@ -302,10 +311,20 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             <h1 className="mt-1 text-[30px] font-black tracking-[-0.045em] max-sm:text-2xl">เลือก Booth และตรวจสอบการจอง</h1>
             <p className="mt-1 text-[10px] text-muted"><strong className="text-[#5c5061]">{data.event.name}</strong> · {data.event.id}</p>
           </div>
-          <span className={`rounded-full px-3 py-2 text-[9px] font-extrabold ${data.event.status === 'OPEN' ? 'bg-[#e5f7ed] text-[#15794a]' : 'bg-[#ffe9ec] text-[#ae3949]'}`}>
-            {data.event.status === 'OPEN' ? 'เปิดให้จอง' : 'ยังไม่เปิดให้จอง'}
+          <span className={`rounded-full px-3 py-2 text-[9px] font-extrabold ${eventBookable ? 'bg-[#e5f7ed] text-[#15794a]' : 'bg-[#ffe9ec] text-[#ae3949]'}`}>
+            {eventBookable ? 'เปิดให้จอง' : 'ปิดรับจอง'}
           </span>
         </header>
+
+        {!eventBookable ? (
+          <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[15px] border border-[#ebc8cf] bg-[#fff7f8] p-4">
+            <div>
+              <strong className="block text-[11px] text-[#a93545]">Event นี้ปิดรับจองแล้ว</strong>
+              <p className="mt-1 text-[9px] text-[#8f6269]">ดูข้อมูล Zone และ Booth ได้ แต่ไม่สามารถสร้าง Booking ใหม่สำหรับ Event นี้</p>
+            </div>
+            <Link href="/" className="sl-chip min-h-9 whitespace-nowrap text-[9px]">ค้นหา Event อื่น →</Link>
+          </section>
+        ) : null}
 
         {!createdBooking ? (
           <>
@@ -604,13 +623,13 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 <span className="text-[7px] font-extrabold tracking-[.1em] text-violet">BOOKING POLICY</span>
                 <strong className="mt-1 block text-[10px]">เงื่อนไขก่อนสร้าง Booking</strong>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[8px]">
-                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Event</span><b className="mt-1 block">{data.event.status === 'OPEN' ? 'เปิดให้จอง' : 'ปิดรับจอง'}</b></div>
-                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Booth</span><b className="mt-1 block">{selectedBooth ? 'พร้อมสร้างรายการ' : 'รอเลือกพื้นที่'}</b></div>
+                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Event</span><b className="mt-1 block">{eventBookable ? 'เปิดให้จอง' : 'ปิดรับจอง'}</b></div>
+                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Booth</span><b className="mt-1 block">{!eventBookable ? 'ไม่เปิดให้สร้างรายการ' : selectedBooth ? 'พร้อมสร้างรายการ' : 'รอเลือกพื้นที่'}</b></div>
                 </div>
               </section>
 
               <section className="mt-3 rounded-[12px] border border-[#d9e6dc] bg-[#f8fcf9] p-3">
-                <div className="flex items-start justify-between gap-2"><div><span className="text-[7px] font-extrabold text-muted">PAYMENT RECEIVER</span><strong className="mt-1 block text-[10px]">{data.event.organization.name}</strong></div><b className="rounded-full bg-[#e5f7ed] px-2 py-1 text-[7px] text-[#15794a]">พร้อมรับชำระ</b></div>
+                <div className="flex items-start justify-between gap-2"><div><span className="text-[7px] font-extrabold text-muted">PAYMENT RECEIVER</span><strong className="mt-1 block text-[10px]">{data.event.organization.name}</strong></div><b className={`rounded-full px-2 py-1 text-[7px] ${eventBookable ? 'bg-[#e5f7ed] text-[#15794a]' : 'bg-[#f1eef2] text-muted'}`}>{eventBookable ? 'พร้อมรับชำระ' : 'ปิดรับรายการ'}</b></div>
                 <p className="mt-2 text-[8px] font-bold text-[#4e694f]">{data.event.organization.contactEmail}</p>
                 <small className="mt-1 block text-[7px] leading-4 text-[#829084]">หลังสร้าง Booking ระบบจะพาไปหน้าชำระเงินและ Hold Booth ตามเวลาที่ระบบกำหนด</small>
               </section>
@@ -632,6 +651,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 }}
                 disabled={
                   isCreating ||
+                  !eventBookable ||
                   !selectedBooth ||
                   vendor.status === 'loading' ||
                   vendor.status === 'signed-out' ||
@@ -641,6 +661,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               >
                 {isCreating
                   ? 'กำลังสร้างการจอง…'
+                  : !eventBookable
+                    ? 'Event นี้ปิดรับจองแล้ว'
                   : vendor.status === 'ready' && !shop
                     ? 'เพิ่มข้อมูลร้านค้าก่อนจอง'
                     : 'สร้าง Booking และไปชำระเงิน →'}

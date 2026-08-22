@@ -250,6 +250,11 @@ export class BookingsService {
     if (!BOOKABLE_EVENT_STATUSES.includes(event.status)) {
       throw new ConflictException('อีเวนต์นี้ยังไม่เปิดให้จอง');
     }
+    if (
+      this.thailandDateKey(event.endDate) < this.thailandDateKey(new Date())
+    ) {
+      throw new ConflictException('อีเวนต์นี้สิ้นสุดแล้ว');
+    }
     if (!booth) {
       throw new NotFoundException('ไม่พบบูธ');
     }
@@ -345,7 +350,7 @@ export class BookingsService {
         boothPrice: true,
         holdExpiresAt: true,
         confirmedAt: true,
-        event: { select: { status: true } },
+        event: { select: { status: true, endDate: true } },
         booth: { select: { status: true } },
       },
     });
@@ -358,6 +363,12 @@ export class BookingsService {
     }
     if (!BOOKABLE_EVENT_STATUSES.includes(booking.event.status)) {
       throw new ConflictException('อีเวนต์นี้ไม่เปิดรับการจองแล้ว');
+    }
+    if (
+      this.thailandDateKey(booking.event.endDate) <
+      this.thailandDateKey(new Date())
+    ) {
+      throw new ConflictException('อีเวนต์นี้สิ้นสุดแล้ว');
     }
     if (booking.booth.status !== BoothStatus.AVAILABLE) {
       throw new ConflictException('บูธนี้ไม่พร้อมสำหรับการจองแล้ว');

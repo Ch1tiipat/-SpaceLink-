@@ -22,6 +22,7 @@ import {
   type DiscoveryEvent,
   type EventZone,
 } from '@/lib/api';
+import { isEventBookable } from '@/lib/event-booking-rules';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
 type UpdateFilter = 'all' | 'event' | 'announcement';
@@ -296,10 +297,13 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
   }
 
   const { event } = update;
+  const bookable = isEventBookable(event);
   return (
     <Link href={`/events/${event.id}`} className="sl-surface relative overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft">
       <div className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}><strong className="text-[23px]">{formatDateRange(event)}</strong></div>
-      <span className="absolute right-[13px] top-[13px] rounded-full bg-[#ecfff3] px-[9px] py-[5px] text-[9px] font-bold text-[#16723f]">เปิดจอง</span>
+      <span className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-[9px] font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}>
+        {bookable ? 'เปิดจอง' : 'ปิดรับจอง'}
+      </span>
       <div className="p-[17px]">
         <h3 className="text-[15px] font-extrabold">{event.name}</h3>
         <p className="mt-1.5 min-h-[38px] text-[11px] leading-[1.65] text-muted">{event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}</p>

@@ -140,7 +140,7 @@ const PENDING_SLIP_BOOKING = {
   boothPrice: BOOTH_PRICE,
   holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
   confirmedAt: null,
-  event: { status: EventStatus.PUBLISHED },
+  event: { status: EventStatus.PUBLISHED, endDate: EVENT_END },
   booth: { status: BoothStatus.AVAILABLE },
 };
 
@@ -293,6 +293,41 @@ describe('BookingsService', () => {
       expect(bookingCreate).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects a published event after its final Bangkok calendar day', async () => {
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      status: EventStatus.PUBLISHED,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: new Date('2026-08-01T00:00:00.000Z'),
+      endDate: new Date('2026-08-01T00:00:00.000Z'),
+      organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+    });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+      'อีเวนต์นี้สิ้นสุดแล้ว',
+    );
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  it('keeps an ongoing event bookable through its final Bangkok calendar day', async () => {
+    jest.setSystemTime(new Date('2026-09-11T18:00:00.000Z'));
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      status: EventStatus.ONGOING,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: EVENT_START,
+      endDate: EVENT_END,
+      organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+    });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).resolves.toEqual({
+      ...CREATED_BOOKING,
+      boothPrice: '1500',
+    });
+  });
 
   it.each([BoothStatus.BOOKED, BoothStatus.MAINTENANCE, BoothStatus.INACTIVE])(
     'rejects a booth in %s status',
@@ -540,7 +575,7 @@ describe('BookingsService', () => {
           boothPrice: true,
           holdExpiresAt: true,
           confirmedAt: true,
-          event: { select: { status: true } },
+          event: { select: { status: true, endDate: true } },
           booth: { select: { status: true } },
         },
       });
@@ -565,7 +600,7 @@ describe('BookingsService', () => {
       async (status) => {
         bookingFindFirst.mockResolvedValue({
           ...PENDING_SLIP_BOOKING,
-          event: { status },
+          event: { status, endDate: EVENT_END },
         });
 
         await expect(
@@ -574,6 +609,21 @@ describe('BookingsService', () => {
         expect(uploadForVerification).not.toHaveBeenCalled();
       },
     );
+
+    it('rejects slip confirmation after the event final day', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...PENDING_SLIP_BOOKING,
+        event: {
+          status: EventStatus.PUBLISHED,
+          endDate: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      });
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toThrow('อีเวนต์นี้สิ้นสุดแล้ว');
+      expect(uploadForVerification).not.toHaveBeenCalled();
+    });
 
     it.each([
       BoothStatus.BOOKED,
