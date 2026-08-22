@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { useAuthState } from '@/lib/use-auth-state';
+import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
 type NotificationKind =
   | 'event'
@@ -34,7 +35,7 @@ type NotificationKind =
   | 'penalty'
   | 'payment'
   | 'system';
-type NotificationFilter = 'all' | 'unread';
+type NotificationFilter = 'all' | 'unread' | NotificationKind;
 type NotificationPreference =
   | 'all'
   | 'booking'
@@ -119,19 +120,29 @@ function toUserNotification(notification: NotificationRecord): UserNotification 
     description: notification.body ?? '',
     createdAt: notification.createdAt,
     unread: !notification.isRead,
-    href: notificationHref(notification.type),
+    href: notificationHref(notification),
   };
 }
 
-function notificationHref(type: NotificationType): string | undefined {
-  switch (type) {
+function notificationHref(notification: NotificationRecord): string | undefined {
+  const relatedBookingId =
+    notification.relatedEntityType?.toUpperCase() === 'BOOKING'
+      ? notification.relatedEntityId
+      : null;
+
+  switch (notification.type) {
     case 'ANNOUNCEMENT':
     case 'SYSTEM':
       return '/';
-    case 'BOOKING_STATUS':
-    case 'PAYMENT':
     case 'REFUND':
-      return '/bookings';
+    case 'BOOKING_STATUS':
+      return relatedBookingId
+        ? `/bookings/${encodeURIComponent(relatedBookingId)}`
+        : '/bookings';
+    case 'PAYMENT':
+      return relatedBookingId
+        ? `/bookings/${encodeURIComponent(relatedBookingId)}/payment`
+        : '/bookings?tab=pending';
     case 'SUPPORT_TICKET':
       return '/help';
     case 'PENALTY':
@@ -168,6 +179,16 @@ function describeError(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
+function createPreviewNotifications(): UserNotification[] {
+  const now = Date.now();
+  return [
+    { id: 'preview-payment', kind: 'payment', title: 'การจองกำลังรอชำระเงิน', description: 'อัปโหลดสลิปสำหรับบูธ A01 ภายในเวลาที่กำหนด', createdAt: new Date(now - 8 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-booking/payment' },
+    { id: 'preview-confirmed', kind: 'booking', title: 'ยืนยันการจองเรียบร้อยแล้ว', description: 'บูธ A01 ในงานเกษตร มทส. 2569 พร้อมสำหรับร้านของคุณ', createdAt: new Date(now - 65 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-confirmed-booking' },
+    { id: 'preview-event', kind: 'event', title: 'ประกาศจากผู้จัดงาน', description: 'ตรวจสอบเวลาเข้าพื้นที่และกฎร้านค้าก่อนวันเริ่มงาน', createdAt: new Date(now - 5 * 3_600_000).toISOString(), unread: false, href: '/events/demo-event' },
+    { id: 'preview-review', kind: 'system', title: 'แชร์ประสบการณ์พื้นที่ของคุณ', description: 'รายการเสร็จสิ้นแล้ว คุณสามารถรีวิวบูธและพื้นที่ได้', createdAt: new Date(now - 2 * 86_400_000).toISOString(), unread: false, href: '/bookings/local-preview-completed-booking/review' },
+  ];
+}
+
 export default function NotificationsPage() {
   const { auth } = useAuthState();
   const [access, setAccess] = useState<NotificationAccess>({
@@ -199,6 +220,13 @@ export default function NotificationsPage() {
     if (auth.status === 'signed-out') {
       setNotifications([]);
       setAccess({ status: 'signed-out' });
+      return;
+    }
+
+    if (canUseUxPreview()) {
+      setNotifications(createPreviewNotifications());
+      setAccess({ status: 'ready', token: UX_PREVIEW_TOKEN });
+      setActionError(null);
       return;
     }
 
@@ -246,10 +274,15 @@ export default function NotificationsPage() {
   }, [auth.status, reloadVersion]);
 
   const visibleNotifications = useMemo(
-    () =>
-      filter === 'unread'
-        ? notifications.filter((notification) => notification.unread)
-        : notifications,
+    () => {
+      if (filter === 'unread') {
+        return notifications.filter((notification) => notification.unread);
+      }
+      if (filter !== 'all') {
+        return notifications.filter((notification) => notification.kind === filter);
+      }
+      return notifications;
+    },
     [filter, notifications],
   );
   const unreadCount = notifications.filter(
@@ -263,6 +296,8 @@ export default function NotificationsPage() {
     setNotifications((current) =>
       current.map((notification) => ({ ...notification, unread: false })),
     );
+
+    if (access.token === UX_PREVIEW_TOKEN) return;
 
     try {
       await markAllNotificationsRead(access.token);
@@ -286,6 +321,8 @@ export default function NotificationsPage() {
           : notification,
       ),
     );
+
+    if (access.token === UX_PREVIEW_TOKEN) return;
 
     try {
       await markNotificationRead(id, access.token);
@@ -398,25 +435,40 @@ export default function NotificationsPage() {
             ) : null}
 
             <section className="sl-surface overflow-hidden">
-              <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                <div className="flex rounded-2xl bg-[#f5f2f9] p-1" role="tablist">
-                  <FilterButton
-                    active={filter === 'all'}
-                    onClick={() => setFilter('all')}
-                    label="ทั้งหมด"
-                    count={notifications.length}
-                  />
-                  <FilterButton
-                    active={filter === 'unread'}
-                    onClick={() => setFilter('unread')}
-                    label="ยังไม่ได้อ่าน"
-                    count={unreadCount}
-                  />
+              <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:px-7">
+                <div className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-[#f5f2f9] p-1" role="tablist" aria-label="กรองการแจ้งเตือน">
+                  {([
+                    ['all', 'ทั้งหมด'],
+                    ['unread', 'ยังไม่ได้อ่าน'],
+                    ['booking', 'การจอง'],
+                    ['payment', 'ชำระเงิน'],
+                    ['event', 'ข่าวงาน'],
+                    ['penalty', 'แต้มโทษ'],
+                    ['system', 'แนะนำ'],
+                  ] as const).map(([value, label]) => (
+                    <FilterButton
+                      key={value}
+                      active={filter === value}
+                      onClick={() => setFilter(value)}
+                      label={label}
+                      count={
+                        value === 'all'
+                          ? notifications.length
+                          : value === 'unread'
+                            ? unreadCount
+                            : notifications.filter((notification) => notification.kind === value).length
+                      }
+                    />
+                  ))}
                 </div>
 
-                <span className="inline-flex items-center gap-2 text-xs font-semibold text-muted">
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-muted sm:self-end"
+                >
                   <Clock3 className="h-4 w-4" aria-hidden />
-                  เรียงจากรายการล่าสุด
+                  แสดง {visibleNotifications.length} รายการ · เรียงจากล่าสุด
                 </span>
               </div>
 

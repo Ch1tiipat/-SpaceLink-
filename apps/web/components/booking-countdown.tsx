@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Clock3 } from 'lucide-react';
 
 type BookingCountdownProps = {
   expiresAt: string | null;
@@ -54,15 +55,26 @@ export function BookingCountdown({
   if (!active) return null;
 
   if (remainingSeconds === 0) {
-    return <span className="font-bold text-[#b42318]">หมดเวลาชำระเงินแล้ว</span>;
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff0ee] px-3 py-1.5 text-xs font-extrabold text-[#b42318]">
+        <Clock3 className="h-3.5 w-3.5" aria-hidden />
+        หมดเวลาชำระเงินแล้ว
+      </span>
+    );
   }
 
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
 
   return (
-    <span className="font-bold text-violet" role="timer" aria-live="polite">
-      เหลือเวลา {minutes}:{seconds.toString().padStart(2, '0')} นาที
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full bg-violet-tint px-3 py-1.5 text-xs font-extrabold tabular-nums text-violet"
+      role="timer"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <Clock3 className="h-3.5 w-3.5" aria-hidden />
+      ชำระภายใน {minutes}:{seconds.toString().padStart(2, '0')} นาที
     </span>
   );
 }

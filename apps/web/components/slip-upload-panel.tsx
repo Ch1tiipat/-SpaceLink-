@@ -1,7 +1,12 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useRef, useState } from 'react';
-import { ShieldCheck, UploadCloud } from 'lucide-react';
+import {
+  CheckCircle2,
+  FileImage,
+  ShieldCheck,
+  UploadCloud,
+} from 'lucide-react';
 
 import {
   ApiError,
@@ -111,6 +116,18 @@ export function SlipUploadPanel({
         </div>
       </div>
 
+      <ol className="mt-5 grid grid-cols-3 gap-2" aria-label="ขั้นตอนตรวจสลิป">
+        {['เลือกไฟล์', 'ตรวจสอบสลิป', 'ยืนยันการจอง'].map((label, index) => (
+          <li
+            key={label}
+            className="rounded-xl bg-[#faf8ff] px-2 py-2.5 text-center text-[10px] font-extrabold text-muted sm:text-xs"
+          >
+            <span className="mr-1 text-violet">{index + 1}</span>
+            {label}
+          </li>
+        ))}
+      </ol>
+
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
         <div>
           <label
@@ -131,9 +148,20 @@ export function SlipUploadPanel({
             />
           </div>
           {file ? (
-            <p className="mt-2 text-xs text-muted">
-              เลือกแล้ว: {file.name} ({formatFileSize(file.size)})
-            </p>
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[#d8ccef] bg-violet-tint p-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-violet shadow-sm">
+                <FileImage className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-extrabold text-ink">
+                  {file.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {formatFileSize(file.size)} · พร้อมอัปโหลด
+                </p>
+              </div>
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald" aria-hidden />
+            </div>
           ) : null}
         </div>
 
@@ -172,6 +200,10 @@ export function SlipUploadPanel({
           <ShieldCheck className="h-4 w-4" aria-hidden />
           {isUploading ? 'กำลังอัปโหลดและตรวจสอบ…' : 'อัปโหลดสลิป'}
         </button>
+        <p className="flex items-center justify-center gap-1.5 text-center text-[11px] leading-5 text-muted">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald" aria-hidden />
+          ระบบใช้ไฟล์นี้เพื่อตรวจสอบการชำระเงินของการจองรายการนี้เท่านั้น
+        </p>
       </form>
     </section>
   );

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
-import { SelectMenu } from '@/components/select-menu';
 import {
   getEventMap,
   getZoneRecommendations,
@@ -14,70 +15,83 @@ import {
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 function availableCount(zone: EventZone) {
-  return zone.booths.filter((booth) => booth.availability === 'AVAILABLE')
-    .length;
+  return zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length;
 }
 
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(value);
+}
+
+const zoneColors = ['#7c3aed', '#159461', '#e47b00', '#3281c8', '#8b5cf6', '#5b21b6'];
+
 export function EventMapScreen({ eventId }: { eventId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { state: vendor } = useVendorProfile();
+  const requestedZoneCode = searchParams.get('zone');
   const [data, setData] = useState<EventMap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
-  const [recommendation, setRecommendation] =
-    useState<ZoneRecommendation | null>(null);
-  const [recommendationError, setRecommendationError] = useState<
-    string | null
-  >(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [recommendation, setRecommendation] = useState<ZoneRecommendation | null>(null);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationIsEmpty, setRecommendationIsEmpty] = useState(false);
   const [isRecommending, setIsRecommending] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-
     getEventMap(eventId, controller.signal)
       .then(setData)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        setError(
-          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
-        );
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
       });
-
     return () => controller.abort();
   }, [eventId]);
 
-  // A vendor owns one shop at most, so there is nothing to pick: the
-  // recommendation is asked for the shop the account already has.
+  useEffect(() => {
+    if (!data || !requestedZoneCode) return;
+    const requestedZone = data.zones.find(
+      (zone) => zone.code.toLocaleLowerCase() === requestedZoneCode.toLocaleLowerCase(),
+    );
+    if (requestedZone) setSelectedZoneId(requestedZone.id);
+  }, [data, requestedZoneCode]);
+
+  const selectedZone = useMemo(
+    () => data?.zones.find((zone) => zone.id === selectedZoneId) ?? null,
+    [data, selectedZoneId],
+  );
+
   const shop = vendor.status === 'ready' ? vendor.shop : null;
   const shopId = shop?.id ?? null;
 
-  // Signing in or out changes whose shop a recommendation was made for, so the
-  // previous answer no longer describes anything. The local resolver this
-  // replaced cleared the same three pieces of state on the same transitions.
   useEffect(() => {
     setRecommendation(null);
     setRecommendationError(null);
     setRecommendationIsEmpty(false);
   }, [shopId]);
 
-  const focusedZone = useMemo(
-    () => data?.zones.find((zone) => zone.id === focusedZoneId) ?? null,
-    [data, focusedZoneId],
-  );
-
   const recommendedLocation = useMemo(() => {
     if (!data || !recommendation) return null;
-
     for (const zone of data.zones) {
       const booth = zone.booths.find(
         (candidate) => candidate.id === recommendation.boothId,
       );
       if (booth) return { zone, booth };
     }
-
     return null;
   }, [data, recommendation]);
+
+  const metrics = useMemo(() => {
+    const zones = data?.zones ?? [];
+    const booths = zones.flatMap((zone) => zone.booths);
+    const prices = booths.map((booth) => Number(booth.boothPrice)).filter(Number.isFinite);
+    return {
+      zones: zones.length,
+      booths: booths.length,
+      available: booths.filter((booth) => booth.availability === 'AVAILABLE').length,
+      minimumPrice: prices.length ? Math.min(...prices) : null,
+    };
+  }, [data]);
 
   async function handleRecommendation() {
     if (vendor.status !== 'ready' || !vendor.shop) return;
@@ -97,17 +111,17 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       setRecommendation(best);
       setRecommendationIsEmpty(!best);
 
-      if (best) {
-        const recommendedZone = data?.zones.find((zone) =>
-          zone.booths.some((booth) => booth.id === best.boothId),
+      if (best && data) {
+        const zone = data.zones.find((candidate) =>
+          candidate.booths.some((booth) => booth.id === best.boothId),
         );
-        if (recommendedZone) setFocusedZoneId(recommendedZone.id);
+        if (zone) setSelectedZoneId(zone.id);
       }
     } catch (cause) {
       setRecommendationError(
         cause instanceof Error
           ? cause.message
-          : 'ระบบไม่สามารถแนะนำโซนได้ กรุณาลองใหม่',
+          : 'ระบบไม่สามารถแนะนำพื้นที่ได้ กรุณาลองใหม่',
       );
     } finally {
       setIsRecommending(false);
@@ -116,10 +130,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   if (!data && !error) {
     return (
-      <main>
-        <div className="shell py-10">
-          <div className="skeleton h-24 rounded-3xl" />
-          <div className="skeleton mt-6 h-[620px] rounded-3xl" />
+      <main className="sl-page">
+        <div className="shell max-w-[1280px] py-8">
+          <div className="skeleton h-24 rounded-[20px]" />
+          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="skeleton h-[700px] rounded-[20px]" />
+            <div className="skeleton h-[500px] rounded-[20px]" />
+          </div>
         </div>
       </main>
     );
@@ -127,266 +144,169 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   if (error || !data) {
     return (
-      <main>
+      <main className="sl-page">
         <div className="shell py-20 text-center">
-          <p className="text-2xl font-bold">เปิด Zone Map ไม่ได้</p>
+          <h1 className="text-2xl font-black">เปิด Zone Map ไม่ได้</h1>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
-          <Link
-            href="/"
-            className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white"
-          >
-            กลับหน้าค้นหา Event
-          </Link>
+          <Link href="/" className="sl-action-primary mt-7">กลับหน้าค้นหา Event</Link>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="sl-page pb-16">
-      <section className="border-b border-line bg-[linear-gradient(135deg,rgba(245,243,255,0.94),rgba(255,255,255,0.92))]">
-        <div className="shell py-7">
-          <Link
-            href={`/events/${eventId}`}
-            className="sl-chip"
-          >
-            ← กลับรายละเอียด Event
-          </Link>
-          <div className="mt-5">
-            <div>
-              <span className="sl-kicker">
-                Read-only zone map
-              </span>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
-                {data.event.name}
-              </h1>
-              <p className="mt-2 text-sm text-muted">
-                สำรวจโซน ประเภทสินค้า และสถานะบูธ โดยยังไม่มีการสร้างรายการจอง
-              </p>
-            </div>
+    <main className="sl-page pb-8">
+      <div className="shell max-w-[1280px] py-4">
+        <header className="sl-surface mb-3 flex min-h-[72px] items-center gap-4 p-3 max-md:flex-wrap">
+          <div className="min-w-[220px] flex-1 px-2">
+            <span className="sl-kicker">EVENT MAP</span>
+            <h1 className="mt-1 text-2xl font-black tracking-[-0.04em] max-sm:text-xl">แผนผังพื้นที่จัดงาน</h1>
+            <p className="mt-0.5 truncate text-[9px] text-muted">{data.event.name} · กด Booth ว่างเพื่อจองได้ทันที</p>
           </div>
-        </div>
-      </section>
+          <div className="grid grid-cols-3 gap-2" aria-label="สรุปแผนผัง Event">
+            <SummaryStat label="Zone" value={`${metrics.zones}`} />
+            <SummaryStat label="Booth" value={`${metrics.booths}`} />
+            <SummaryStat label="ว่าง" value={`${metrics.available}`} green />
+          </div>
+          <Link href={`/events/${eventId}`} className="sl-chip whitespace-nowrap">← กลับ Event</Link>
+        </header>
 
-      <div className="shell mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="sl-surface min-w-0 p-4 sm:p-6">
-          <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
-          <SelectMenu
-            className="flex-1"
-            label="เลือกโซนเพื่อดูรายละเอียด"
-            placeholder="ดูพื้นที่ทั้งหมด"
-            value={focusedZoneId ?? ''}
-            onChange={(value) => setFocusedZoneId(value || null)}
-            options={[
-              { value: '', label: 'ดูพื้นที่ทั้งหมด' },
-              ...data.zones.map((zone) => ({
-                value: zone.id,
-                label: `${zone.code} — ${zone.name ?? 'ไม่ระบุชื่อ'}`,
-                hint: `${availableCount(zone)} ว่าง`,
-              })),
-            ]}
-          />
+        <section className="sl-surface mb-3 flex min-h-[62px] flex-wrap items-center gap-3 border-[#dfd0f0] bg-[linear-gradient(105deg,#fbf8ff_0%,#ffffff_55%,#f2ebff_100%)] px-4 py-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_8px_20px_rgba(109,40,217,.22)]">
+            <Sparkles aria-hidden size={18} />
+          </span>
+          <div className="min-w-[220px] flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <strong className="text-sm font-black">แนะนำ Zone ด้วย AI</strong>
+              {recommendation?.source === 'RULE_BASED' ? (
+                <span className="rounded-full bg-[#eee7ff] px-2 py-0.5 text-[7px] font-extrabold text-violet">SMART MATCH</span>
+              ) : recommendation ? (
+                <span className="rounded-full bg-[#eee7ff] px-2 py-0.5 text-[7px] font-extrabold text-violet">AI MATCH</span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-[9px] text-muted">
+              {vendor.status === 'loading'
+                ? 'กำลังตรวจสอบข้อมูลร้าน…'
+                : vendor.status === 'signed-out'
+                  ? 'เข้าสู่ระบบและเพิ่มข้อมูลร้าน เพื่อให้ AI วิเคราะห์พื้นที่ที่เหมาะกับสินค้า'
+                  : vendor.status === 'error'
+                    ? vendor.message
+                    : !vendor.shop
+                      ? 'เพิ่มข้อมูลร้านและหมวดสินค้า เพื่อเริ่มวิเคราะห์ Zone ที่เหมาะสม'
+                      : `วิเคราะห์จากร้าน ${vendor.shop.name} · ${vendor.shop.categories.map((category) => category.name).join(' · ') || 'ยังไม่ระบุหมวดสินค้า'}`}
+            </p>
+            {recommendationError ? (
+              <p role="alert" className="mt-1 text-[9px] font-bold text-[#b42318]">{recommendationError}</p>
+            ) : recommendationIsEmpty ? (
+              <p role="status" className="mt-1 text-[9px] font-bold text-[#9d620c]">ยังไม่พบ Booth ว่างที่ตรงกับร้านใน Event นี้</p>
+            ) : null}
+          </div>
 
-          {focusedZoneId && (
+          {recommendedLocation ? (
+            <Link
+              href={`/events/${eventId}/book?zone=${encodeURIComponent(recommendedLocation.zone.code)}&booth=${encodeURIComponent(recommendedLocation.booth.code)}`}
+              className="group flex min-h-10 items-center gap-3 rounded-[12px] border border-[#cbb6f3] bg-white px-3 py-2 shadow-[0_6px_18px_rgba(109,40,217,.08)] transition hover:border-violet"
+              aria-label={`จอง Zone ${recommendedLocation.zone.code} Booth ${recommendedLocation.booth.code} ที่ AI แนะนำ`}
+            >
+              <span className="text-[8px] text-muted">AI แนะนำ</span>
+              <strong className="text-[10px] text-violet">Zone {recommendedLocation.zone.code} · Booth {recommendedLocation.booth.code}</strong>
+              <span aria-hidden className="text-violet transition group-hover:translate-x-0.5">→</span>
+            </Link>
+          ) : null}
+
+          {vendor.status === 'signed-out' ? (
+            <Link href="/login" className="sl-action-primary min-h-10 whitespace-nowrap px-4 py-2 text-[10px]">เข้าสู่ระบบเพื่อใช้ AI</Link>
+          ) : vendor.status === 'ready' && !vendor.shop ? (
+            <Link href="/profile" className="sl-action-primary min-h-10 whitespace-nowrap px-4 py-2 text-[10px]">เพิ่มข้อมูลร้าน</Link>
+          ) : (
             <button
               type="button"
-              onClick={() => setFocusedZoneId(null)}
-              className="sl-action-secondary"
+              onClick={handleRecommendation}
+              disabled={vendor.status !== 'ready' || !vendor.shop || isRecommending}
+              className="sl-action-primary min-h-10 whitespace-nowrap px-4 py-2 text-[10px] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ← กลับไปดูทุกโซน
+              <Sparkles aria-hidden size={13} />
+              {isRecommending ? 'กำลังวิเคราะห์…' : recommendation ? 'วิเคราะห์อีกครั้ง' : 'แนะนำโซนด้วย AI'}
             </button>
           )}
-          </div>
-
-          <div className="sl-soft-surface mt-5 p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-violet">
-                  ให้ SpaceLink ช่วยเลือกพื้นที่ที่เหมาะกับร้านของคุณ
-                </p>
-
-                {vendor.status === 'loading' && (
-                  <p className="mt-2 text-sm text-muted">
-                    กำลังตรวจสอบข้อมูลร้านค้า…
-                  </p>
-                )}
-
-                {vendor.status === 'signed-out' && (
-                  <p className="mt-2 text-sm text-muted">
-                    กรุณา{' '}
-                    <Link href="/login" className="font-bold text-violet">
-                      เข้าสู่ระบบ
-                    </Link>{' '}
-                    ด้วยบัญชีผู้ขายก่อนขอคำแนะนำ
-                  </p>
-                )}
-
-                {vendor.status === 'error' && (
-                  <p className="mt-2 text-sm text-[#b42318]">
-                    {vendor.message}
-                  </p>
-                )}
-
-                {vendor.status === 'ready' && !shop && (
-                  <p className="mt-2 text-sm">
-                    <Link href="/profile" className="font-bold text-violet underline">
-                      บัญชีนี้ยังไม่มีร้านค้า กรุณาเพิ่มข้อมูลร้านและหมวดสินค้าก่อน
-                    </Link>
-                  </p>
-                )}
-
-                {vendor.status === 'ready' && shop && (
-                  <div className="mt-3">
-                    <span className="block text-[10px] font-bold uppercase tracking-[.12em] text-muted">
-                      ร้านค้าที่ต้องการหาพื้นที่
-                    </span>
-                    <b className="mt-1.5 block text-sm">{shop.name}</b>
-                    {shop.categories.length > 0 && (
-                      <span className="block text-[11px] font-medium text-muted">
-                        {shop.categories
-                          .map((category) => category.name)
-                          .join(', ')}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void handleRecommendation()}
-                disabled={isRecommending || vendor.status !== 'ready' || !shop}
-                className="sl-action-primary disabled:hover:translate-y-0"
-              >
-                {isRecommending ? 'กำลังวิเคราะห์พื้นที่…' : 'แนะนำโซนให้ฉัน'}
-              </button>
-            </div>
-
-            {recommendationError && (
-              <p
-                role="alert"
-                className="mt-3 rounded-xl bg-[#fff0ee] px-4 py-3 text-sm text-[#b42318]"
-              >
-                {recommendationError}
-              </p>
-            )}
-
-            {recommendationIsEmpty && (
-              <p className="mt-3 rounded-xl bg-white px-4 py-3 text-sm text-muted">
-                ขณะนี้ยังไม่มีบูธว่างที่ระบบสามารถแนะนำได้ กรุณาตรวจสอบอีกครั้งภายหลัง
-              </p>
-            )}
-          </div>
-
-          <div className="mt-5">
-            <ZoneMap
-              readOnly
-              mapImageUrl={data.event.mapImageUrl}
-              zones={data.zones}
-              focusedZoneId={focusedZoneId}
-              selectedBoothId={null}
-              recommendedBoothId={recommendation?.boothId ?? null}
-              onFocusZone={setFocusedZoneId}
-              onSelectBooth={() => undefined}
-            />
-          </div>
         </section>
 
-        <aside className="sl-surface sticky top-[96px] p-6">
-          {recommendation && recommendedLocation && (
-            <div className="mb-6 rounded-2xl border border-[#d8ccf7] bg-[#f7f3ff] p-4">
-              <span className="text-xs font-bold uppercase tracking-[.13em] text-violet">
-                Recommended for you
-              </span>
-              <h2 className="mt-2 text-xl font-bold">
-                บูธ {recommendedLocation.booth.code}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-violet">
-                โซน {recommendedLocation.zone.code} —{' '}
-                {recommendedLocation.zone.name ?? 'ไม่ระบุชื่อ'}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-[#5f5870]">
-                {recommendation.reason}
-              </p>
-              <p className="mt-3 text-xs text-muted">
-                แนะนำโดย{' '}
-                {recommendation.source === 'AI_GEMINI'
-                  ? 'Gemini AI'
-                  : 'ระบบจัดอันดับของ SpaceLink'}
-              </p>
-              <Link
-                href={`/events/${eventId}/book`}
-                className="sl-action-primary mt-4 flex w-full justify-center"
-              >
-                เลือกบูธนี้ในหน้าจอง
-              </Link>
+        <section className="sl-surface min-w-0 overflow-hidden">
+            <div className="flex min-h-[48px] items-center justify-between gap-4 border-b border-line px-4 py-2">
+              <div><span className="block text-[8px] font-extrabold text-[#a095a5]">EVENT FLOOR PLAN</span><strong className="mt-1 block text-[11px]">{data.event.name}</strong></div>
+              <div className="flex items-center gap-2 text-[8px] text-muted max-sm:hidden"><span className="h-2 w-2 rounded-full bg-[#22c55e] ring-4 ring-[#22c55e]/10" />เห็นทุก Zone · กด Booth ว่างเพื่อจองได้ทันที</div>
             </div>
-          )}
 
-          <span className="text-xs font-bold uppercase tracking-[.13em] text-violet">
-            Selected zone
-          </span>
-          <h2 className="mt-2 text-xl font-bold">
-            {focusedZone?.name ?? 'ภาพรวมทุกโซน'}
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-muted">
-            {focusedZone?.description ??
-              'เลือกโซนบนแผนผังหรือจากรายการเพื่อดูหมวดสินค้าและสถานะบูธ'}
-          </p>
-          {!focusedZone && (
-            <dl className="mt-5 divide-y divide-line text-sm">
-              <InfoRow
-                label="โซนทั้งหมด"
-                value={`${data.zones.length} โซน`}
-              />
-              <InfoRow
-                label="บูธทั้งหมด"
-                value={`${data.zones.reduce((total, zone) => total + zone.booths.length, 0)} บูธ`}
-              />
-              <InfoRow
-                label="บูธว่าง"
-                value={`${data.zones.reduce((total, zone) => total + availableCount(zone), 0)} บูธ`}
-              />
-            </dl>
-          )}
-          {focusedZone && (
-            <dl className="mt-5 divide-y divide-line text-sm">
-              <InfoRow label="รหัสโซน" value={focusedZone.code} />
-              <InfoRow
-                label="บูธว่าง"
-                value={`${availableCount(focusedZone)} / ${focusedZone.booths.length}`}
-              />
-              <InfoRow
-                label="สินค้า"
-                value={
-                  focusedZone.categories
-                    .map((category) => category.name)
-                    .join(', ') || 'ยังไม่ระบุ'
-                }
-              />
-            </dl>
-          )}
-          <div className="mt-5 rounded-2xl bg-mist p-4 text-sm leading-6 text-muted">
-            หน้านี้แสดงข้อมูลแบบอ่านอย่างเดียว
-            การคลิกบูธจะไม่สร้างหรือยืนยันการจอง
-          </div>
-          <Link
-            href={`/events/${eventId}/book`}
-            className="sl-action-primary mt-4 flex w-full justify-center"
-          >
-            เริ่มเลือกโซนและจองบูธ
-          </Link>
-        </aside>
+            {data.zones.length > 0 ? (
+              <div className="[&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
+                <ZoneMap
+                  mapImageUrl={data.event.mapImageUrl}
+                  zones={data.zones}
+                  focusedZoneId={selectedZoneId}
+                  selectedBoothId={null}
+                  recommendedBoothId={recommendation?.boothId ?? null}
+                  keepOverview
+                  showLegend={false}
+                  boothHref={(booth) => {
+                    const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
+                    return `/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
+                  }}
+                  onFocusZone={setSelectedZoneId}
+                  onSelectBooth={(booth) => {
+                    const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
+                    router.push(`/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="grid min-h-[600px] place-items-center bg-[#fcfbff] p-8 text-center"><div><span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#eee6ff] text-violet">◇</span><strong className="mt-3 block text-sm">ยังไม่มีแผนผังพื้นที่</strong><p className="mt-1 text-[11px] text-muted">ผู้จัดงานยังไม่ได้เพิ่ม Zone และ Booth สำหรับ Event นี้</p></div></div>
+            )}
+        </section>
+
+        <section className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr_.9fr]">
+          <article className="sl-surface p-5">
+            <span className="sl-kicker">SELECTED ZONE</span>
+            {selectedZone ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+                <div><h2 className="text-lg font-black">Zone {selectedZone.code} · {selectedZone.name ?? 'ยังไม่ระบุชื่อโซน'}</h2><p className="mt-1 text-[11px] text-muted">{availableCount(selectedZone)} จาก {selectedZone.booths.length} Booth ยังว่าง · เริ่มต้น {zoneMinimumPrice(selectedZone)}</p></div>
+                <Link href={`/events/${eventId}/book?zone=${encodeURIComponent(selectedZone.code)}`} className="sl-action-primary">เลือกบูธใน Zone นี้</Link>
+              </div>
+            ) : (
+              <div className="mt-3"><h2 className="text-lg font-black">เลือกได้จากแผนผังทันที</h2><p className="mt-1 text-[11px] text-muted">กด Zone เพื่อดูข้อมูล หรือกด Booth สีขาวเพื่อไปหน้าจองโดยตรง</p></div>
+            )}
+          </article>
+
+          <article className="sl-surface p-5">
+            <div className="flex items-center justify-between"><div><span className="sl-kicker">QUICK ZONES</span><h2 className="mt-1 text-base font-black">เลือก Zone อย่างรวดเร็ว</h2></div><span className="sl-chip">{data.zones.length} Zone</span></div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.zones.map((zone, index) => (
+                <button key={zone.id} type="button" aria-pressed={selectedZoneId === zone.id} onClick={() => setSelectedZoneId(zone.id)} className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-[10px] font-bold transition ${selectedZoneId === zone.id ? 'border-violet bg-violet text-white' : 'border-line bg-white hover:border-violet'}`}>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: zoneColors[index % zoneColors.length] }} />{zone.code} · {availableCount(zone)} ว่าง
+                </button>
+              ))}
+            </div>
+          </article>
+
+          <article className="sl-surface p-5">
+            <span className="sl-kicker">BOOTH STATUS</span>
+            <h2 className="mt-1 text-base font-black">สถานะ Booth</h2>
+            <div className="mt-3 grid grid-cols-2 gap-2"><Legend color="#fff" border="#7c3aed" label="ว่าง" /><Legend color="#2c8b61" label="จองแล้ว" /><Legend color="#e7a339" label="กำลังจอง" /><Legend color="#cfc8d1" label="ปิดใช้งาน" /></div>
+          </article>
+        </section>
       </div>
     </main>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-4">
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right font-bold">{value}</dd>
-    </div>
-  );
+function SummaryStat({ label, value, green = false }: { label: string; value: string; green?: boolean }) {
+  return <div className="flex min-h-[55px] flex-col items-center justify-center rounded-[13px] border border-line bg-[#fbfafc]"><span className="text-[8px] text-muted">{label}</span><strong className={`mt-0.5 text-lg ${green ? 'text-[#118454]' : ''}`}>{value}</strong></div>;
+}
+
+function Legend({ color, label, border }: { color: string; label: string; border?: string }) {
+  return <div className="flex items-center gap-2 text-[8px] text-muted"><span className="h-3 w-3 rounded-[4px] border" style={{ backgroundColor: color, borderColor: border ?? color }} />{label}</div>;
+}
+
+function zoneMinimumPrice(zone: EventZone) {
+  const prices = zone.booths.map((booth) => Number(booth.boothPrice)).filter(Number.isFinite);
+  return prices.length ? `${formatMoney(Math.min(...prices))} บาท` : 'ยังไม่ระบุ';
 }

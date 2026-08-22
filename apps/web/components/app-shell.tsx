@@ -11,7 +11,6 @@ import {
 } from 'react';
 import {
   Bell,
-  Bot,
   House,
   Landmark,
   LayoutDashboard,
@@ -21,9 +20,9 @@ import {
   Megaphone,
   Menu,
   MessageCircle,
-  MessagesSquare,
   Orbit,
   Phone,
+  RotateCcw,
   Send,
   ShieldCheck,
   Sparkles,
@@ -331,7 +330,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ? `grid min-h-screen transition-[grid-template-columns] duration-300 ${
                 sidebarCollapsed
                   ? 'lg:grid-cols-[minmax(0,1fr)]'
-                  : 'lg:grid-cols-[264px_minmax(0,1fr)]'
+                  : 'lg:grid-cols-[280px_minmax(0,1fr)]'
               }`
             : 'min-h-screen'
         }
@@ -372,6 +371,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }`}
           >
             {children}
+            {!isAdminRoute ? <UserFooter /> : null}
           </div>
         </div>
       </div>
@@ -422,7 +422,7 @@ function Sidebar({
   }
 
   return (
-    <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#e9e3f2] bg-white/90 px-4 py-6 shadow-[12px_0_45px_rgba(49,31,82,0.035)] backdrop-blur-xl lg:flex">
+    <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#ebe5ef] bg-white px-4 py-6 shadow-[8px_0_30px_rgba(69,49,99,0.025)] lg:flex">
       <div
         className={`flex pb-7 ${
           collapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
@@ -450,7 +450,7 @@ function Sidebar({
         </button>
       </div>
 
-      <div className="grid gap-0.5">
+      <div className="grid gap-0.5 overflow-y-auto pb-3">
         {navGroups.map((group) => (
           <div key={group.label}>
             {collapsed ? (
@@ -505,7 +505,7 @@ function SidebarItem({
   selectedOrganizationId: string;
 }) {
   const Icon = item.icon;
-  const shared = `flex min-h-11 w-full items-center rounded-2xl py-2.5 text-left text-[14px] font-semibold transition-colors ${
+  const shared = `flex min-h-12 w-full items-center rounded-[13px] py-2.5 text-left text-[14px] font-medium transition-colors ${
     collapsed ? 'justify-center px-2' : 'gap-[11px] px-3.5'
   }`;
 
@@ -534,8 +534,8 @@ function SidebarItem({
       title={collapsed ? item.label : undefined}
       className={`${shared} ${
         active
-          ? 'bg-gradient-to-r from-[#f0eaff] to-[#f8f5ff] font-extrabold text-[#5B21B6] shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)]'
-          : 'text-[#675F73] hover:bg-[#FAF8FF] hover:text-violet'
+          ? 'bg-[#f4edfc] font-semibold text-[#6d28d9]'
+          : 'text-[#817884] hover:bg-[#faf7ff] hover:text-[#6d28d9]'
       }`}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
@@ -574,7 +574,7 @@ function Topbar({
   showUnreadNotificationDot: boolean;
 }) {
   return (
-    <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ece7f3] bg-white/[0.82] px-[18px] shadow-[0_8px_28px_rgba(54,36,91,0.035)] backdrop-blur-xl lg:h-[72px] lg:px-8">
+    <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ebe5ef] bg-white/95 px-[18px] shadow-[0_5px_20px_rgba(61,43,88,0.025)] backdrop-blur-xl lg:h-[72px] lg:px-[26px]">
       {/* The sidebar carries the brand from `lg` up; below that it is the only
           thing identifying the page, so it appears here instead. */}
       <Link
@@ -683,9 +683,14 @@ const UX_REVIEW_ROUTES = [
   ['แผนผังโซน', '/events/demo-event/map'],
   ['เลือกบูธ', '/events/demo-event/book'],
   ['การจอง', '/bookings'],
+  ['รายละเอียดจอง', '/bookings/local-preview-confirmed-booking'],
+  ['ชำระเงิน', '/bookings/local-preview-booking/payment'],
+  ['รีวิว', '/bookings/local-preview-completed-booking/review'],
   ['แจ้งเตือน', '/notifications'],
   ['ช่วยเหลือ', '/help'],
   ['โปรไฟล์', '/profile'],
+  ['เข้าสู่ระบบ', '/login'],
+  ['สมัครสมาชิก', '/register'],
 ] as const;
 
 function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }) {
@@ -784,11 +789,11 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
 }
 
 function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
-  const [open, setOpen] = useState(false);
+  const initialAnswer =
+    'สวัสดีครับ 👋 นี่คือคำถามที่พบบ่อยของ SpaceLink เลือกดูเรื่อง Event, การจองบูธ, การชำระเงิน หรือช่องทางติดต่อได้เลยครับ';
+  const [view, setView] = useState<'closed' | 'menu' | 'chat'>('closed');
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState(
-    'พิมพ์คำถามเกี่ยวกับโซนหรือบูธได้เลย ผู้ช่วยจะพาคุณไปดูพื้นที่ที่เหมาะกับประเภทร้านและ Event ที่สนใจ',
-  );
+  const [answer, setAnswer] = useState(initialAnswer);
 
   const quickQuestions = [
     'แนะนำบูธสำหรับร้านอาหาร',
@@ -834,136 +839,61 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
     );
   }
 
+  function resetAssistant() {
+    setQuestion('');
+    setAnswer(initialAnswer);
+  }
+
+  const expanded = view !== 'closed';
+
   return (
     <div
-      className={`fixed right-4 z-[75] ${hasBottomNav ? 'bottom-[84px] lg:bottom-5' : 'bottom-5'}`}
-      onMouseEnter={() => setOpen(true)}
+      className={`fixed right-4 z-[75] sm:right-5 ${hasBottomNav ? 'bottom-[82px] lg:bottom-5' : 'bottom-5'}`}
     >
-      {open ? (
+      {view === 'menu' ? (
         <section
-          aria-label="SpaceLink Assistant และช่องทางติดต่อ"
-          className="mb-3 w-[min(380px,calc(100vw-32px))] overflow-hidden rounded-[26px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,0.24)]"
+          aria-label="ช่องทางติดต่อ SpaceLink"
+          className="mb-3 grid w-[min(305px,calc(100vw-32px))] gap-2"
         >
-          <div className="bg-gradient-to-br from-[#6d28d9] via-[#7c3aed] to-[#4f7c82] p-5 text-white">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15">
-                  <Bot className="h-6 w-6" aria-hidden />
-                </span>
-                <div>
-                  <p className="text-base font-extrabold">SpaceLink Assistant</p>
-                  <p className="mt-1 text-xs leading-5 text-white/75">
-                    ช่วยแนะนำโซนและบูธที่เหมาะกับร้านของคุณ
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="ปิดหน้าต่างช่วยเหลือ"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-white transition hover:bg-white/20"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
+          <button type="button" onClick={() => setView('chat')} className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]">
+            <span><strong className="block text-[11px] text-ink">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[7px] text-muted">ดูคำตอบและวิธีใช้งาน</small></span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
+          </button>
+          <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน LINE" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]">
+            <span><strong className="block text-[11px] text-ink">LINE</strong><small className="mt-1 block text-[7px] text-muted">@spacelink</small></span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#20b955] text-white"><MessageCircle className="h-5 w-5" aria-hidden /></span>
+          </a>
+          <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน Facebook" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c9dcfb]">
+            <span><strong className="block text-[11px] text-ink">Facebook</strong><small className="mt-1 block text-[7px] text-muted">SpaceLink</small></span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#1877f2] text-lg font-black text-white">f</span>
+          </a>
+          <a href="tel:+6644223000" aria-label="โทรหาเจ้าหน้าที่ SpaceLink" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#bfe3d4]">
+            <span><strong className="block text-[11px] text-ink">โทรหาเรา</strong><small className="mt-1 block text-[7px] text-muted">044-223-000</small></span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#278b68] text-white"><Phone className="h-5 w-5" aria-hidden /></span>
+          </a>
+        </section>
+      ) : null}
+
+      {view === 'chat' ? (
+        <section aria-label="คำถามที่พบบ่อย SpaceLink" className="mb-3 flex h-[min(620px,calc(100vh-170px))] w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
+          <header className="flex min-h-[86px] shrink-0 items-center gap-3 border-b border-line px-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
+            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[8px] text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
+            <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><RotateCcw className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><X className="h-4 w-4" aria-hidden /></button>
+          </header>
+          <div className="shrink-0 border-b border-[#e6ddf2] bg-[#f7f2ff] px-4 py-2 text-[8px] text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
+          <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfbff] p-4">
+            {question.trim() ? <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-[9px] leading-5 text-white">{question}</div> : null}
+            <div aria-live="polite" className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-[9px] leading-5 text-ink">{answer}</div>
           </div>
-
-          <div className="p-4">
-            <div className="rounded-2xl bg-[#f6f2ff] p-4 text-sm leading-6 text-[#4d4260]">
-              <span className="mb-2 flex items-center gap-2 font-extrabold text-violet">
-                <Sparkles className="h-4 w-4" aria-hidden />
-                คำแนะนำสำหรับร้านคุณ
-              </span>
-              {answer}
+          <div className="shrink-0 border-t border-line bg-white p-3">
+            <div className="flex flex-wrap gap-2">
+              {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-[8px] font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
             </div>
-
-            <div className="mt-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
-                คำถามพบบ่อย
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {quickQuestions.map((quickQuestion) => (
-                  <button
-                    key={quickQuestion}
-                    type="button"
-                    onClick={() => askAssistant(quickQuestion)}
-                    className="rounded-full border border-[#e3daf4] bg-white px-3 py-2 text-left text-xs font-bold text-[#5d506d] transition hover:border-violet hover:text-violet"
-                  >
-                    {quickQuestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-3 flex gap-2 rounded-2xl border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
-              <input
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') askAssistant();
-                }}
-                placeholder="ถามเรื่องโซน บูธ หรือการจอง..."
-                aria-label="พิมพ์คำถามเกี่ยวกับโซนและบูธ"
-                className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none placeholder:text-[#978ba5]"
-              />
-              <button
-                type="button"
-                onClick={() => askAssistant()}
-                aria-label="ส่งคำถาม"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,0.24)] transition hover:bg-[#6d28d9]"
-              >
-                <Send className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
-
-            <Link
-              href="/"
-              className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#211a2e] px-4 text-sm font-extrabold text-white transition hover:bg-[#352746]"
-            >
-              <MapPinned className="h-4 w-4" aria-hidden />
-              เลือก Event เพื่อดูคำแนะนำจากข้อมูลจริง
-            </Link>
-
-            <div className="mt-4 border-t border-line pt-4">
-              <p className="text-xs font-bold uppercase tracking-[0.1em] text-muted">
-                ติดต่อเจ้าหน้าที่
-              </p>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <a
-                  href="https://www.facebook.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="ติดต่อผ่าน Facebook"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#eef4ff] px-2 text-xs font-bold text-[#2459a9] transition hover:-translate-y-0.5"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <MessagesSquare className="h-4 w-4" aria-hidden /> Facebook
-                  </span>
-                </a>
-                <a
-                  href="https://line.me/R/ti/p/"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="ติดต่อผ่าน LINE"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#ecfbf1] px-2 text-xs font-bold text-[#168a46] transition hover:-translate-y-0.5"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <MessageCircle className="h-4 w-4" aria-hidden /> LINE
-                  </span>
-                </a>
-                <a
-                  href="tel:+6644224000"
-                  aria-label="โทรหาเจ้าหน้าที่ SpaceLink"
-                  className="grid min-h-14 place-items-center rounded-2xl bg-[#fff5e9] px-2 text-xs font-bold text-[#a85c00] transition hover:-translate-y-0.5"
-                >
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-3.5 w-3.5" aria-hidden /> โทร
-                  </span>
-                </a>
-              </div>
-              <p className="mt-2 text-[11px] leading-5 text-muted">
-                ช่องทาง Facebook และ LINE เป็นตัวอย่าง UX รอผู้ดูแลระบบใส่บัญชีจริง
-              </p>
+            <div className="mt-3 flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-[9px] outline-none placeholder:text-[#978ba5]" />
+              <button type="button" onClick={() => askAssistant()} aria-label="ส่งคำถาม" className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9]"><Send className="h-4 w-4" aria-hidden /></button>
             </div>
           </div>
         </section>
@@ -971,19 +901,65 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
 
       <button
         type="button"
-        aria-expanded={open}
-        aria-label="เปิดตัวช่วยแนะนำโซนและติดต่อ SpaceLink"
-        onClick={() => setOpen((current) => !current)}
-        className="group flex min-h-14 items-center gap-3 rounded-full bg-[#211a2e] px-4 text-sm font-extrabold text-white shadow-[0_16px_36px_rgba(33,26,46,0.3)] transition hover:-translate-y-0.5 hover:bg-violet"
+        aria-expanded={expanded}
+        aria-label={expanded ? 'ปิดเมนูช่วยเหลือ SpaceLink' : 'เปิดคำถามที่พบบ่อยและช่องทางติดต่อ SpaceLink'}
+        title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'คำถามที่พบบ่อย · ติดต่อเรา'}
+        onClick={() => setView((current) => current === 'closed' ? 'menu' : 'closed')}
+        className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
       >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-white/12">
-          <MessagesSquare className="h-5 w-5" aria-hidden />
-        </span>
-        <span className="hidden pr-1 sm:inline">
-          คำถามที่พบบ่อย · ติดต่อเรา
-        </span>
+        {expanded ? <X className="h-5 w-5" aria-hidden /> : <Sparkles className="h-5 w-5" aria-hidden />}
       </button>
     </div>
+  );
+}
+
+function UserFooter() {
+  return (
+    <footer className="border-t border-white/10 bg-[#211b2f] text-white" aria-label="ข้อมูลส่วนท้าย SpaceLink">
+      <div className="mx-auto max-w-[1180px] px-5 py-10 sm:px-7 lg:py-12">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-12">
+          <section>
+            <Link href="/" className="inline-flex items-center gap-3" aria-label="SpaceLink หน้าแรก">
+              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-[11px] font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">SL</span>
+              <strong className="text-lg font-black tracking-[-.02em]">SpaceLink</strong>
+            </Link>
+            <p className="mt-4 max-w-[320px] text-[11px] leading-6 text-white/70">แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว</p>
+          </section>
+
+          <FooterColumn title="สำรวจแพลตฟอร์ม">
+            <Link href="/">ค้นหา Event</Link>
+            <Link href="/bookings">การจองของฉัน</Link>
+            <Link href="/profile">โปรไฟล์ร้านค้า</Link>
+          </FooterColumn>
+
+          <FooterColumn title="บริการช่วยเหลือ">
+            <Link href="/help">ศูนย์ช่วยเหลือ</Link>
+            <Link href="/notifications">การแจ้งเตือน</Link>
+            <Link href="/login">เข้าสู่ระบบ</Link>
+          </FooterColumn>
+
+          <FooterColumn title="ติดต่อ SpaceLink">
+            <a href="tel:+6644224000">โทร 044-224-000</a>
+            <span>LINE Official</span>
+            <span>Facebook Page</span>
+          </FooterColumn>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-[9px] text-white/45">
+          <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
+          <div className="flex flex-wrap gap-x-2 gap-y-1"><span>ความเป็นส่วนตัว</span><span>·</span><span>เงื่อนไขการใช้งาน</span><span>·</span><span>การเข้าถึงสำหรับทุกคน</span></div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function FooterColumn({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-[11px] font-extrabold text-white">{title}</h2>
+      <div className="mt-4 grid gap-3 text-[10px] text-white/58 [&_a]:transition [&_a:hover]:text-white">{children}</div>
+    </section>
   );
 }
 

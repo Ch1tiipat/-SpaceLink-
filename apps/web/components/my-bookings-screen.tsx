@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { type FormEvent, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
-import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
-  cancelBooking,
-  createReview,
+  getPreviewBookings,
+  isBookingReviewEligible,
+} from '@/components/booking-detail-screen';
+import {
   getMyBookings,
   type BookingStatus,
   type MyBooking,
@@ -24,6 +26,9 @@ type AccessState =
   | { status: 'ready'; token: string }
   | { status: 'error'; message: string };
 
+type BookingFilter = 'ALL' | BookingStatus;
+type SortOrder = 'newest' | 'oldest' | 'price-desc' | 'price-asc';
+
 const statusLabel: Record<BookingStatus, string> = {
   PENDING_PAYMENT: 'รอชำระเงิน',
   CONFIRMED: 'ยืนยันแล้ว',
@@ -32,10 +37,25 @@ const statusLabel: Record<BookingStatus, string> = {
   COMPLETED: 'เสร็จสิ้น',
 };
 
+const statusTone: Record<BookingStatus, string> = {
+  PENDING_PAYMENT: 'border-[#d5e6f5] bg-[#edf6ff] text-[#1d67a8]',
+  CONFIRMED: 'border-[#b9dfd3] bg-[#ebfaf3] text-[#13795b]',
+  CANCELLED: 'border-[#fac5bf] bg-[#fff0ee] text-[#b42318]',
+  NO_SHOW: 'border-[#ead8b7] bg-[#fff8e8] text-[#895b08]',
+  COMPLETED: 'border-[#d9ccef] bg-[#f4efff] text-violet',
+};
+
+const bookingFilters: readonly { value: BookingFilter; label: string }[] = [
+  { value: 'ALL', label: 'ทั้งหมด' },
+  { value: 'PENDING_PAYMENT', label: 'รอชำระ' },
+  { value: 'CONFIRMED', label: 'ยืนยันแล้ว' },
+  { value: 'COMPLETED', label: 'เสร็จสิ้น' },
+  { value: 'CANCELLED', label: 'ยกเลิก' },
+  { value: 'NO_SHOW', label: 'ไม่มาเข้าร่วม' },
+];
+
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
-const MS_PER_HOUR = 60 * 60 * 1000;
-const REVIEW_ELIGIBLE_OFFSET_HOURS = 17;
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -61,26 +81,15 @@ function isExpired(booking: MyBooking): boolean {
   );
 }
 
-function isReviewEligible(booking: MyBooking): boolean {
-  const eligibleFrom = new Date(
-    new Date(booking.bookingEndDate).getTime() +
-      REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR,
-  );
-  return (
-    (booking.status === 'CONFIRMED' || booking.status === 'COMPLETED') &&
-    eligibleFrom <= new Date()
-  );
-}
-
 export function MyBookingsScreen() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
   const [bookings, setBookings] = useState<MyBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<Set<string>>(new Set());
-  const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
-  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<BookingFilter>('ALL');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   async function refreshBookings(token: string, signal?: AbortSignal) {
     setIsLoading(true);
@@ -112,7 +121,7 @@ export function MyBookingsScreen() {
             ? { status: 'ready', token: UX_PREVIEW_TOKEN }
             : { status: 'signed-out' },
         );
-        setBookings([]);
+        setBookings(mode === 'signed-in' ? getPreviewBookings() : []);
         setLoadError(null);
         setIsLoading(false);
       };
@@ -171,6 +180,24 @@ export function MyBookingsScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search)
+      .get('tab')
+      ?.toLowerCase();
+    const filtersByTab: Record<string, BookingFilter> = {
+      all: 'ALL',
+      pending: 'PENDING_PAYMENT',
+      pending_payment: 'PENDING_PAYMENT',
+      confirmed: 'CONFIRMED',
+      completed: 'COMPLETED',
+      cancelled: 'CANCELLED',
+      no_show: 'NO_SHOW',
+    };
+    if (requestedTab && filtersByTab[requestedTab]) {
+      setStatusFilter(filtersByTab[requestedTab]);
+    }
+  }, []);
+
   async function handleExpired(bookingId: string) {
     setExpiredIds((current) => new Set(current).add(bookingId));
     if (access.status !== 'ready') return;
@@ -199,40 +226,48 @@ export function MyBookingsScreen() {
     }
   }
 
-  async function handleCancel(booking: MyBooking) {
-    if (access.status !== 'ready') return;
-    const reason = cancelReasons[booking.id]?.trim() ?? '';
-    if (!reason) {
-      setActionErrors((current) => ({
-        ...current,
-        [booking.id]: 'กรุณาระบุเหตุผลที่ต้องการยกเลิก',
-      }));
-      return;
-    }
-
-    setCancellingId(booking.id);
-    setActionErrors((current) => ({ ...current, [booking.id]: '' }));
-    try {
-      await cancelBooking(booking.id, reason, access.token);
-      setCancelReasons((current) => ({ ...current, [booking.id]: '' }));
-      await refreshBookings(access.token);
-    } catch (cause) {
-      setActionErrors((current) => ({
-        ...current,
-        [booking.id]:
-          cause instanceof Error ? cause.message : 'ยกเลิกการจองไม่สำเร็จ',
-      }));
-    } finally {
-      setCancellingId(null);
-    }
-  }
-
   const pendingCount = bookings.filter(
     (booking) => booking.status === 'PENDING_PAYMENT',
   ).length;
   const confirmedCount = bookings.filter(
     (booking) => booking.status === 'CONFIRMED',
   ).length;
+  const completedCount = bookings.filter(
+    (booking) => booking.status === 'COMPLETED',
+  ).length;
+  const statusCounts = useMemo(() => {
+    const counts = new Map<BookingStatus, number>();
+    bookings.forEach((booking) => {
+      counts.set(booking.status, (counts.get(booking.status) ?? 0) + 1);
+    });
+    return counts;
+  }, [bookings]);
+  const visibleBookings = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('th');
+    const filtered = bookings.filter((booking) => {
+      const matchesStatus =
+        statusFilter === 'ALL' || booking.status === statusFilter;
+      const matchesKeyword =
+        !keyword ||
+        `${booking.event.name} ${booking.bookingCode} ${booking.booth.code} ${booking.shop.name}`
+          .toLocaleLowerCase('th')
+          .includes(keyword);
+      return matchesStatus && matchesKeyword;
+    });
+
+    return filtered.sort((left, right) => {
+      if (sortOrder === 'price-desc') {
+        return Number(right.boothPrice) - Number(left.boothPrice);
+      }
+      if (sortOrder === 'price-asc') {
+        return Number(left.boothPrice) - Number(right.boothPrice);
+      }
+
+      const difference =
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      return sortOrder === 'oldest' ? -difference : difference;
+    });
+  }, [bookings, query, sortOrder, statusFilter]);
 
   return (
     <main className="sl-page pb-16">
@@ -254,22 +289,89 @@ export function MyBookingsScreen() {
           </Link>
         </div>
 
-        {access.status === 'ready' && !isLoading && !loadError && bookings.length > 0 ? (
-          <section className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="สรุปการจอง">
+        {access.status === 'ready' && !isLoading && !loadError ? (
+          <section className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="สรุปการจอง">
             {[
               ['การจองทั้งหมด', bookings.length, 'bg-[#f4efff] text-violet'],
               ['รอชำระเงิน', pendingCount, 'bg-[#edf6ff] text-[#1d67a8]'],
               ['ยืนยันแล้ว', confirmedCount, 'bg-[#ebfaf3] text-[#13795b]'],
+              ['เสร็จสิ้น', completedCount, 'bg-[#eef7fb] text-[#276b87]'],
             ].map(([label, value, tone]) => (
-              <div key={label} className="sl-soft-surface flex items-center justify-between gap-4 p-4">
-                <span className="text-sm font-bold text-muted">{label}</span>
-                <strong className={`grid h-10 min-w-10 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
+              <div key={label} className="sl-soft-surface p-4 sm:p-5">
+                <span className="text-xs font-bold text-muted">{label}</span>
+                <strong className={`mt-3 grid h-11 w-11 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
                   {value}
                 </strong>
+                <p className="mt-2 text-[10px] font-extrabold tracking-[.1em] text-muted">
+                  {label === 'การจองทั้งหมด' ? 'ALL BOOKINGS' : label === 'รอชำระเงิน' ? 'PENDING' : label === 'ยืนยันแล้ว' ? 'CONFIRMED' : 'COMPLETED'}
+                </p>
               </div>
             ))}
           </section>
         ) : null}
+
+        {access.status === 'ready' && !isLoading && !loadError && (
+          <section className="mt-5" aria-label="ค้นหาและกรองการจอง">
+            <div className="sl-surface grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-white px-4 focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/15">
+                <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                <span className="sr-only">ค้นหารายการจอง</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="ค้นหา Event, รหัสจอง, บูธ หรือร้านค้า"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+                />
+              </label>
+              <label>
+                <span className="sr-only">เรียงรายการจอง</span>
+                <select
+                  value={sortOrder}
+                  onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+                  className="min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm font-bold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+                >
+                  <option value="newest">ล่าสุดก่อน</option>
+                  <option value="oldest">เก่าก่อน</option>
+                  <option value="price-desc">ราคาสูง → ต่ำ</option>
+                  <option value="price-asc">ราคาต่ำ → สูง</option>
+                </select>
+              </label>
+            </div>
+
+            <nav
+              className="mt-3 flex gap-2 overflow-x-auto rounded-[22px] border border-line bg-white p-2 shadow-sm"
+              aria-label="กรองสถานะการจอง"
+            >
+              {bookingFilters.map((filter) => {
+                const count =
+                  filter.value === 'ALL'
+                    ? bookings.length
+                    : (statusCounts.get(filter.value) ?? 0);
+                const active = statusFilter === filter.value;
+
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStatusFilter(filter.value)}
+                    className={`flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 text-xs font-extrabold transition ${
+                      active
+                        ? 'bg-violet-tint text-violet'
+                        : 'text-muted hover:bg-mist hover:text-ink'
+                    }`}
+                  >
+                    {filter.label}
+                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </section>
+        )}
 
         {access.status === 'signed-out' && (
           <section className="sl-surface mt-8 p-8 text-center">
@@ -317,18 +419,31 @@ export function MyBookingsScreen() {
 
         {access.status === 'ready' && !isLoading && !loadError && (
           <div className="mt-8 grid gap-6">
-            {bookings.map((booking) => {
+            {bookings.length > 0 && visibleBookings.length === 0 && (
+              <section className="sl-surface p-10 text-center">
+                <h2 className="text-xl font-bold">ไม่พบรายการที่ตรงกับตัวกรอง</h2>
+                <p className="mt-2 text-muted">
+                  ลองเปลี่ยนคำค้นหาหรือเลือกดูสถานะอื่น
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setStatusFilter('ALL');
+                  }}
+                  className="sl-action-secondary mt-5 text-violet"
+                >
+                  ล้างตัวกรอง
+                </button>
+              </section>
+            )}
+            {visibleBookings.map((booking) => {
               const holdExpired = expiredIds.has(booking.id) || isExpired(booking);
-              const cancellable =
-                (booking.status === 'PENDING_PAYMENT' ||
-                  booking.status === 'CONFIRMED') &&
-                new Date(booking.bookingStartDate).getTime() > Date.now();
-
               return (
                 <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <span className="inline-flex rounded-full bg-[#eee8ff] px-3 py-1 text-xs font-bold text-violet">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}>
                         {statusLabel[booking.status]}
                       </span>
                       <h2 className="mt-3 text-xl font-bold">{booking.event.name}</h2>
@@ -366,54 +481,33 @@ export function MyBookingsScreen() {
                     />
                   </dl>
 
-                  {booking.status === 'PENDING_PAYMENT' && (
-                    <div className="mt-5">
-                      {holdExpired && (
-                        <p className="mb-4 rounded-2xl bg-[#fff0ee] px-4 py-3 text-sm font-bold text-[#b42318]">
-                          Hold หมดเวลาแล้ว ไม่สามารถอัปโหลดสลิปได้ ระบบกำลังอัปเดตสถานะการจอง
-                        </p>
-                      )}
-                      <SlipUploadPanel
-                        bookingId={booking.id}
-                        token={access.token}
-                        disabled={holdExpired}
-                        onConfirmed={() => void refreshBookings(access.token)}
-                      />
-                    </div>
-                  )}
+                  {holdExpired ? (
+                    <p className="mt-5 rounded-2xl bg-[#fff0ee] px-4 py-3 text-sm font-bold text-[#b42318]">
+                      Hold หมดเวลาแล้ว ระบบกำลังอัปเดตสถานะการจอง
+                    </p>
+                  ) : null}
 
-                  {cancellable && (
-                    <div className="mt-5 border-t border-line pt-5">
-                      <label className="block max-w-xl">
-                        <span className="mb-2 block text-sm font-bold">เหตุผลที่ยกเลิก</span>
-                        <textarea
-                          value={cancelReasons[booking.id] ?? ''}
-                          onChange={(event) =>
-                            setCancelReasons((current) => ({
-                              ...current,
-                              [booking.id]: event.target.value,
-                            }))
-                          }
-                          rows={2}
-                          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2"
-                          placeholder="ระบุเหตุผลก่อนยกเลิกการจอง"
-                        />
-                      </label>
-                      {actionErrors[booking.id] && (
-                        <p role="alert" className="mt-2 text-sm text-[#b42318]">
-                          {actionErrors[booking.id]}
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void handleCancel(booking)}
-                        disabled={cancellingId === booking.id}
-                        className="mt-3 rounded-xl border border-[#d92d20] px-4 py-2 text-sm font-bold text-[#b42318] disabled:opacity-50"
-                      >
-                        {cancellingId === booking.id ? 'กำลังยกเลิก…' : 'ยกเลิกการจอง'}
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-5">
+                    <Link href={`/bookings/${booking.id}`} className="sl-action-secondary text-violet">
+                      ดูรายละเอียด
+                    </Link>
+                    <Link href={`/events/${booking.event.id}`} className="sl-action-secondary text-violet">
+                      ดู Event
+                    </Link>
+                    {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
+                      <Link href={`/bookings/${booking.id}/payment`} className="sl-action-primary">
+                        ชำระเงิน
+                      </Link>
+                    ) : null}
+                    <Link href={`/events/${booking.event.id}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">
+                      ดู Zone Map
+                    </Link>
+                    {isBookingReviewEligible(booking) ? (
+                      <Link href={`/bookings/${booking.id}/review`} className="sl-action-secondary text-violet">
+                        รีวิวพื้นที่
+                      </Link>
+                    ) : null}
+                  </div>
 
                   {booking.status === 'CANCELLED' && booking.cancelReason && (
                     <p className="mt-5 text-sm text-muted">
@@ -421,9 +515,6 @@ export function MyBookingsScreen() {
                     </p>
                   )}
 
-                  {isReviewEligible(booking) && (
-                    <ReviewForm booking={booking} token={access.token} />
-                  )}
                 </article>
               );
             })}
@@ -440,128 +531,5 @@ function BookingDetail({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-bold text-muted">{label}</dt>
       <dd className="mt-1 font-bold text-ink">{value}</dd>
     </div>
-  );
-}
-
-function ReviewForm({ booking, token }: { booking: MyBooking; token: string }) {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [reviewerDisplayName, setReviewerDisplayName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  async function submitReview(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (rating < 1 || rating > 5) {
-      setError('กรุณาเลือกคะแนน 1–5 ดาว');
-      setSuccess(null);
-      return;
-    }
-
-    const trimmedComment = comment.trim();
-    const trimmedDisplayName = reviewerDisplayName.trim();
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await createReview(
-        {
-          targetType: 'BOOTH',
-          targetId: booking.booth.id,
-          rating,
-          ...(trimmedComment ? { comment: trimmedComment } : {}),
-          ...(trimmedDisplayName
-            ? { reviewerDisplayName: trimmedDisplayName }
-            : {}),
-        },
-        token,
-      );
-      setSuccess('บันทึกคะแนนพื้นที่เรียบร้อยแล้ว');
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'ไม่สามารถบันทึกคะแนนได้',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submitReview} className="mt-5 border-t border-line pt-5">
-      <h3 className="font-extrabold text-ink">ให้คะแนนบูธ {booking.booth.code}</h3>
-      <p className="mt-1 text-sm text-muted">
-        ประเมินพื้นที่จากประสบการณ์การจองครั้งนี้ คุณสามารถส่งซ้ำเพื่ออัปเดตคะแนนเดิมได้
-      </p>
-
-      <fieldset className="mt-4">
-        <legend className="text-sm font-bold">คะแนนพื้นที่ *</legend>
-        <div className="mt-2 flex flex-wrap gap-2" aria-label="เลือกคะแนนพื้นที่">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-label={`${value} ดาว`}
-              aria-pressed={rating === value}
-              onClick={() => {
-                setRating(value);
-                setError(null);
-                setSuccess(null);
-              }}
-              className={
-                'grid h-11 w-11 place-items-center rounded-xl border text-xl transition ' +
-                (rating >= value
-                  ? 'border-[#f3b61f] bg-[#fff8dc] text-[#b77900]'
-                  : 'border-line bg-white text-[#aaa3b2]')
-              }
-            >
-              ★
-            </button>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <label className="text-sm font-bold text-ink">
-          ชื่อที่ใช้แสดง (ไม่บังคับ)
-          <input
-            value={reviewerDisplayName}
-            onChange={(event) => setReviewerDisplayName(event.target.value)}
-            maxLength={80}
-            placeholder="ไม่ระบุชื่อ (จะแสดงเป็นไม่ระบุตัวตน)"
-            className="mt-1.5 h-11 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
-          />
-        </label>
-        <label className="text-sm font-bold text-ink lg:row-span-2">
-          ความคิดเห็น (ไม่บังคับ)
-          <textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            maxLength={1000}
-            rows={4}
-            placeholder="บอกผู้จัดงานว่าพื้นที่นี้เป็นอย่างไร"
-            className="mt-1.5 w-full resize-y rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-violet"
-          />
-        </label>
-      </div>
-
-      {error && (
-        <p role="alert" className="mt-3 text-sm font-semibold text-[#b42318]">
-          {error}
-        </p>
-      )}
-      {success && (
-        <p role="status" className="mt-3 text-sm font-semibold text-[#13795b]">
-          {success}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-4 rounded-xl bg-violet px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {submitting ? 'กำลังบันทึก…' : 'บันทึกคะแนน'}
-      </button>
-    </form>
   );
 }

@@ -3,10 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BadgeCheck,
+  CircleAlert,
   ImageUp,
+  Layers3,
   Mail,
   Package,
   Phone,
+  Star,
   Store,
   UserRound,
   type LucideIcon,
@@ -68,16 +72,6 @@ function readImageDimensions(
     image.src = objectUrl;
   });
 }
-
-/**
- * Intentionally still mocked — no ticket yet wires blacklistPoints from real
- * Penalty totals into this screen.
- */
-type VendorStats = {
-  blacklistPoints: number;
-};
-
-const MOCK_STATS: VendorStats = { blacklistPoints: 0 };
 
 export function ProfileShopScreen() {
   const { state, refresh } = useVendorProfile();
@@ -166,15 +160,6 @@ export function ProfileShopScreen() {
             </p>
           </div>
 
-          {ready && ready.shop && !isEditing && (
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className="sl-action-secondary mt-4 text-violet sm:mt-0"
-            >
-              แก้ไขโปรไฟล์
-            </button>
-          )}
         </div>
 
         {state.status === 'loading' && (
@@ -242,101 +227,174 @@ export function ProfileShopScreen() {
               </p>
             )}
 
-            <div className="mt-8 grid gap-[18px] lg:grid-cols-[290px_minmax(0,1fr)]">
-              <aside className="sl-surface relative overflow-hidden p-6 text-center">
+            <section className="sl-surface relative mt-8 overflow-hidden p-6 sm:p-7">
+              <span
+                aria-hidden
+                className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_70%_30%,rgba(124,58,237,0.13),transparent_65%)]"
+              />
+              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
                 <span
                   aria-hidden
-                  className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-violet-tint to-transparent"
+                  className="absolute -left-10 -top-14 h-40 w-40 rounded-full bg-violet-tint blur-3xl"
                 />
                 <ShopLogoUploader
                   shop={ready.shop}
                   token={ready.token}
                   refresh={refresh}
                 />
-                <h2 className="mt-3.5 text-lg font-bold">{ready.shop.name}</h2>
-                <p className="mt-0.5 text-[13px] text-muted">
-                  {ready.profile.fullName}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.12em] text-violet">
+                    Vendor profile
+                  </span>
+                  <h2 className="mt-3 truncate text-2xl font-black tracking-[-0.035em] text-ink">
+                    {ready.shop.name}
+                  </h2>
+                  <p className="mt-1 text-sm font-bold text-muted">
+                    {ready.profile.fullName}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-muted">
+                    {ready.profile.email}
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-2 self-start rounded-full px-3 py-2 text-xs font-extrabold sm:self-center ${
+                    ready.profile.isBlacklisted
+                      ? 'bg-[#fff0ee] text-[#b42318]'
+                      : 'bg-[#ebfaf3] text-[#13795b]'
+                  }`}
+                >
+                  {ready.profile.isBlacklisted ? (
+                    <CircleAlert className="h-4 w-4" aria-hidden />
+                  ) : (
+                    <BadgeCheck className="h-4 w-4" aria-hidden />
+                  )}
+                  {ready.profile.isBlacklisted
+                    ? 'บัญชีถูกระงับ'
+                    : 'บัญชีพร้อมใช้งาน'}
+                </span>
+              </div>
+            </section>
 
-                <div className="mt-5 grid grid-cols-2 gap-2">
-                  <ScoreCell
-                    label="Vendor Score"
-                    value={
-                      ratingState === 'loading'
-                        ? 'กำลังโหลด…'
-                        : ratingState === 'error'
-                          ? 'โหลดคะแนนไม่ได้'
-                          : averageRating === null
-                            ? 'ยังไม่มีรีวิว'
-                            : averageRating.toFixed(1)
-                    }
-                    muted={ratingState !== 'ready' || averageRating === null}
-                  />
-                  <ScoreCell
-                    label="Blacklist Point"
-                    value={String(MOCK_STATS.blacklistPoints)}
+            {ready.profile.isBlacklisted && (
+              <p
+                role="alert"
+                className="mt-4 flex items-start gap-3 rounded-2xl border border-[#fac5bf] bg-[#fff0ee] px-5 py-4 text-sm leading-6 text-[#b42318]"
+              >
+                <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+                บัญชีนี้ถูกระงับการใช้งาน การดำเนินการบางอย่างอาจไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ
+              </p>
+            )}
+
+            <section
+              className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
+              aria-label="สรุปโปรไฟล์ร้านค้า"
+            >
+              <ProfileStat
+                icon={Star}
+                label="คะแนนร้านค้า"
+                value={
+                  ratingState === 'loading'
+                    ? 'กำลังโหลด…'
+                    : ratingState === 'error'
+                      ? 'โหลดไม่ได้'
+                      : averageRating === null
+                        ? 'ยังไม่มีรีวิว'
+                        : `${averageRating.toFixed(1)} / 5`
+                }
+              />
+              <ProfileStat
+                icon={Layers3}
+                label="หมวดสินค้า"
+                value={`${ready.shop.categories.length} หมวด`}
+              />
+              <ProfileStat
+                icon={Phone}
+                label="ข้อมูลติดต่อ"
+                value={ready.profile.phone ? 'พร้อมใช้งาน' : 'ยังไม่ระบุ'}
+                tone={ready.profile.phone ? 'green' : 'amber'}
+              />
+              <ProfileStat
+                icon={ready.profile.isBlacklisted ? CircleAlert : BadgeCheck}
+                label="สถานะบัญชี"
+                value={ready.profile.isBlacklisted ? 'ถูกระงับ' : 'พร้อมใช้งาน'}
+                tone={ready.profile.isBlacklisted ? 'danger' : 'green'}
+              />
+            </section>
+
+            <section className="sl-surface mt-5 p-6 sm:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+                <div>
+                  <span className="sl-kicker">Shop information</span>
+                  <h2 className="mt-2 text-lg font-bold">ข้อมูลร้านค้า</h2>
+                </div>
+                {!isEditing && (
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/bookings" className="sl-chip text-violet">
+                      การจองของฉัน
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="sl-chip text-violet"
+                    >
+                      แก้ไขข้อมูล
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isEditing ? (
+                <div className="mt-5 max-w-2xl">
+                  <ShopForm
+                    mode="edit"
+                    profile={ready.profile}
+                    shop={ready.shop}
+                    token={ready.token}
+                    refresh={refresh}
+                    setPhoneSaveWarning={setPhoneSaveWarning}
+                    options={categoryOptions}
+                    optionsLoading={categoriesLoading}
+                    optionsError={categoriesError}
+                    onCancel={() => setIsEditing(false)}
                   />
                 </div>
-              </aside>
-
-              <section className="sl-surface p-6 sm:p-7">
-                <h2 className="text-lg font-bold">ข้อมูลร้านค้า</h2>
-
-                {isEditing ? (
-                  <div className="mt-4 max-w-2xl">
-                    <ShopForm
-                      mode="edit"
-                      profile={ready.profile}
-                      shop={ready.shop}
-                      token={ready.token}
-                      refresh={refresh}
-                      setPhoneSaveWarning={setPhoneSaveWarning}
-                      options={categoryOptions}
-                      optionsLoading={categoriesLoading}
-                      optionsError={categoriesError}
-                      onCancel={() => setIsEditing(false)}
-                    />
-                  </div>
-                ) : (
-                  <dl className="mt-4 grid gap-3">
-                    <InfoLine
-                      icon={UserRound}
-                      label="ชื่อร้าน"
-                      value={ready.shop.name}
-                    />
-                    <InfoLine
-                      icon={Phone}
-                      label="เบอร์โทรศัพท์"
-                      value={ready.profile.phone ?? 'ยังไม่ระบุ'}
-                    />
-                    <InfoLine
-                      icon={Mail}
-                      label="อีเมล"
-                      value={ready.profile.email}
-                    />
-                    <InfoLine
-                      icon={Store}
-                      label="รายละเอียดร้าน"
-                      // `||`, not `??`: clearing the textarea now sends `''`
-                      // and the API stores it as-is, so a description that was
-                      // emptied comes back as an empty string rather than null.
-                      // The categories line below does the same for the same
-                      // reason — `??` would render a blank row.
-                      value={ready.shop.description || 'ยังไม่ระบุ'}
-                    />
-                    <InfoLine
-                      icon={Package}
-                      label="สินค้าที่ขาย"
-                      value={
-                        ready.shop.categories
-                          .map((category) => category.name)
-                          .join(', ') || 'ยังไม่ระบุ'
-                      }
-                    />
-                  </dl>
-                )}
-              </section>
-            </div>
+              ) : (
+                <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <InfoLine
+                    icon={UserRound}
+                    label="ชื่อร้าน"
+                    value={ready.shop.name}
+                  />
+                  <InfoLine
+                    icon={Phone}
+                    label="เบอร์โทรศัพท์"
+                    value={ready.profile.phone ?? 'ยังไม่ระบุ'}
+                  />
+                  <InfoLine
+                    icon={Mail}
+                    label="อีเมล"
+                    value={ready.profile.email}
+                  />
+                  <InfoLine
+                    icon={Store}
+                    label="รายละเอียดร้าน"
+                    // `||`, not `??`: clearing the textarea now sends `''`
+                    // and the API stores it as-is, so a description that was
+                    // emptied comes back as an empty string rather than null.
+                    value={ready.shop.description || 'ยังไม่ระบุ'}
+                  />
+                  <InfoLine
+                    icon={Package}
+                    label="สินค้าที่ขาย"
+                    value={
+                      ready.shop.categories
+                        .map((category) => category.name)
+                        .join(', ') || 'ยังไม่ระบุ'
+                    }
+                  />
+                </dl>
+              )}
+            </section>
           </>
         )}
       </div>
@@ -525,22 +583,34 @@ function ShopLogoUploader({
   );
 }
 
-function ScoreCell({
+function ProfileStat({
+  icon: Icon,
   label,
   value,
-  muted = false,
+  tone = 'violet',
 }: {
+  icon: LucideIcon;
   label: string;
   value: string;
-  muted?: boolean;
+  tone?: 'violet' | 'green' | 'amber' | 'danger';
 }) {
+  const tones = {
+    violet: 'bg-violet-tint text-violet',
+    green: 'bg-[#ebfaf3] text-[#13795b]',
+    amber: 'bg-[#fff8e8] text-[#895b08]',
+    danger: 'bg-[#fff0ee] text-[#b42318]',
+  } as const;
+
   return (
-    <div className="rounded-xl bg-[#FAF8FF] p-2.5">
-      <b className={`block ${muted ? 'text-[13px] text-muted' : 'text-[17px]'}`}>
-        {value}
-      </b>
-      <span className="text-[10px] text-muted">{label}</span>
-    </div>
+    <article className="sl-soft-surface flex min-w-0 items-center gap-3 p-4 sm:p-5">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${tones[tone]}`}>
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold text-muted">{label}</p>
+        <p className="mt-1 truncate text-sm font-extrabold text-ink">{value}</p>
+      </div>
+    </article>
   );
 }
 
@@ -616,12 +686,12 @@ function ShopForm({
     event.preventDefault();
     if (isSubmitting) return;
 
-    const trimmedPhone = phone.trim();
+    const normalizedPhone = phone.replace(/[\s-]/g, '');
     const nextNameError = name.trim() ? null : 'กรุณากรอกชื่อร้าน';
     const nextCategoryError =
       categoryIds.length > 0 ? null : 'กรุณาเลือกหมวดสินค้าอย่างน้อย 1 หมวด';
     const nextPhoneError =
-      trimmedPhone && !THAI_PHONE_PATTERN.test(trimmedPhone)
+      normalizedPhone && !THAI_PHONE_PATTERN.test(normalizedPhone)
         ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0'
         : null;
 
@@ -676,9 +746,9 @@ function ShopForm({
 
     // The shop is saved from here on. Everything below runs whatever the phone
     // write does — a failure there is reported, it does not undo the save.
-    if (trimmedPhone) {
+    if (normalizedPhone) {
       try {
-        await updateMe({ phone: trimmedPhone }, token);
+        await updateMe({ phone: normalizedPhone }, token);
       } catch {
         setPhoneSaveWarning(
           'บันทึกข้อมูลร้านค้าแล้ว แต่บันทึกเบอร์โทรศัพท์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
