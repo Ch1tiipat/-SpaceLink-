@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { OrgStatus, Prisma } from '@prisma/client';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,9 +18,14 @@ export const PUBLIC_ORGANIZATION_SELECT = {
 export class OrganizationsService {
   constructor(private prisma: PrismaService) {}
 
-  // TODO(SCRUM-24): implement Prisma create
-  create(_createOrganizationDto: CreateOrganizationDto) {
-    return 'This action adds a new organization';
+  async create(createOrganizationDto: CreateOrganizationDto) {
+    return this.prisma.organization.create({
+      data: createOrganizationDto,
+      select: {
+        ...PUBLIC_ORGANIZATION_SELECT,
+        promptpayId: true,
+      },
+    });
   }
 
   async findAll() {
@@ -44,6 +49,14 @@ export class OrganizationsService {
         ...PUBLIC_ORGANIZATION_SELECT,
         promptpayId: true,
       },
+    });
+  }
+
+  async updateStatus(id: string, status: OrgStatus) {
+    return this.prisma.organization.update({
+      where: { id },
+      data: { status },
+      select: PUBLIC_ORGANIZATION_SELECT,
     });
   }
 

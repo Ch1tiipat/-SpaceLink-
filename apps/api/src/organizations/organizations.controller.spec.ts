@@ -37,6 +37,24 @@ describe('OrganizationsController', () => {
     }
   });
 
+  it('protects create with authentication and SUPER_ADMIN only', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).create;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).not.toContain(
+      OrgScopeGuard,
+    );
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBeUndefined();
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
+
   it('protects update with auth, org scope, and role guards', () => {
     const handler = (
       OrganizationsController.prototype as unknown as Record<string, object>
@@ -51,6 +69,22 @@ describe('OrganizationsController', () => {
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
       UserRole.SUPER_ADMIN,
       UserRole.ORG_ADMIN,
+    ]);
+  });
+
+  it('protects status update with org scope and SUPER_ADMIN only', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).updateStatus;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
     ]);
   });
 });

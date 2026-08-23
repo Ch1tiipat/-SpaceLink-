@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { OrgStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   OrganizationsService,
@@ -7,11 +8,13 @@ import {
 
 const organizationFindMany = jest.fn();
 const organizationFindUnique = jest.fn();
+const organizationCreate = jest.fn();
 const organizationUpdate = jest.fn();
 const mockPrismaService = {
   organization: {
     findMany: organizationFindMany,
     findUnique: organizationFindUnique,
+    create: organizationCreate,
     update: organizationUpdate,
   },
 };
@@ -33,6 +36,30 @@ describe('OrganizationsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('creates an active organization with private PromptPay returned', async () => {
+    const dto = {
+      name: 'ตลาดนัดมหาวิทยาลัย',
+      contactEmail: 'admin@example.com',
+      contactPhone: '0812345678',
+      promptpayId: '0812345678',
+    };
+    organizationCreate.mockResolvedValue({
+      id: '00000000-0000-4000-8000-000000000001',
+      ...dto,
+      status: 'ACTIVE',
+    });
+
+    await service.create(dto);
+
+    expect(organizationCreate).toHaveBeenCalledWith({
+      data: dto,
+      select: {
+        ...PUBLIC_ORGANIZATION_SELECT,
+        promptpayId: true,
+      },
+    });
   });
 
   it('never exposes promptpayId from public organization reads', async () => {
@@ -65,6 +92,22 @@ describe('OrganizationsService', () => {
         ...PUBLIC_ORGANIZATION_SELECT,
         promptpayId: true,
       },
+    });
+  });
+
+  it('updates organization status with the public response shape', async () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    organizationUpdate.mockResolvedValue({
+      id,
+      status: OrgStatus.SUSPENDED,
+    });
+
+    await service.updateStatus(id, OrgStatus.SUSPENDED);
+
+    expect(organizationUpdate).toHaveBeenCalledWith({
+      where: { id },
+      data: { status: OrgStatus.SUSPENDED },
+      select: PUBLIC_ORGANIZATION_SELECT,
     });
   });
 });
