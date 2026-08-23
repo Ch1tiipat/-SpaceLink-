@@ -2,13 +2,14 @@ import {
   BadRequestException,
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { User, UserRole } from '@prisma/client';
+import { OrgStatus, User, UserRole } from '@prisma/client';
 import { isUUID } from 'class-validator';
 import type { OrgScopedRequest } from '../../common/decorators/current-org-id.decorator';
 import {
@@ -102,6 +103,15 @@ export class OrgScopeGuard implements CanActivate {
             `${organizationId} (${param}=${resourceId}); answered 404`,
         );
         throw new NotFoundException(RESOURCE_NOT_FOUND);
+      }
+
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { status: true },
+      });
+
+      if (organization?.status !== OrgStatus.ACTIVE) {
+        throw new ForbiddenException('Organization is not active');
       }
     }
 
