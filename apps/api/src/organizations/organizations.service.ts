@@ -18,9 +18,14 @@ export const PUBLIC_ORGANIZATION_SELECT = {
 export class OrganizationsService {
   constructor(private prisma: PrismaService) {}
 
-  // TODO(SCRUM-24): implement Prisma create
-  create(_createOrganizationDto: CreateOrganizationDto) {
-    return 'This action adds a new organization';
+  async create(createOrganizationDto: CreateOrganizationDto) {
+    return this.prisma.organization.create({
+      data: createOrganizationDto,
+      select: {
+        ...PUBLIC_ORGANIZATION_SELECT,
+        promptpayId: true,
+      },
+    });
   }
 
   async findAll() {
