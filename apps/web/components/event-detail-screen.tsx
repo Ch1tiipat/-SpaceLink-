@@ -21,6 +21,7 @@ import {
   type AdminAnnouncement,
   type EventMap,
 } from '@/lib/api';
+import { isEventBookable } from '@/lib/event-booking-rules';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -94,6 +95,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   }
 
   const { event, zones } = data;
+  const eventBookable = isEventBookable(event);
   const booths = zones.flatMap((zone) => zone.booths);
   const availableBooths = booths.filter((booth) => booth.availability === 'AVAILABLE').length;
   const boothPrices = booths.map((booth) => Number(booth.boothPrice)).filter(Number.isFinite);
@@ -121,7 +123,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         >
           <div className="relative z-10 max-w-[720px]">
             <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-[11px] font-bold">
-              กำลังเปิดให้สำรองพื้นที่
+              {eventBookable ? 'กำลังเปิดให้สำรองพื้นที่' : 'ปิดรับจอง'}
             </span>
             <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
               {event.name}
@@ -191,7 +193,14 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลสิ่งอำนวยความสะดวก" />
         </DetailSection>
 
-        <DetailSection kicker="ZONE & BOOTH" title="พื้นที่ภายในงาน" description="ตรวจสอบ Zone และตำแหน่งบูธก่อนทำการจอง" action={<Link href={`/events/${event.id}/map`} className="sl-action-secondary text-violet">ดูแผนผัง</Link>}>
+        <DetailSection
+          kicker="ZONE & BOOTH"
+          title="พื้นที่ภายในงาน"
+          description={eventBookable
+            ? 'ตรวจสอบ Zone และตำแหน่งบูธก่อนทำการจอง'
+            : 'ดูข้อมูล Zone และตำแหน่งบูธได้ แต่ Event นี้ปิดรับจองแล้ว'}
+          action={<Link href={`/events/${event.id}/map`} className="sl-action-secondary text-violet">ดูแผนผัง</Link>}
+        >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <NumberCard label="Zone" value={`${zones.length}`} />
             <NumberCard label="บูธทั้งหมด" value={`${booths.length}`} />
@@ -237,10 +246,28 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         <section className="mt-5 grid gap-5 lg:grid-cols-[.85fr_1.15fr]">
           <article className="sl-surface p-7">
             <div className="flex items-start justify-between gap-5">
-              <div><span className="sl-kicker">RESERVATION</span><h2 className="mt-2 text-2xl font-black">พร้อมเลือกพื้นที่แล้ว?</h2><p className="mt-3 text-sm leading-7 text-muted">เปิด Zone Map เพื่อตรวจสอบตำแหน่ง ราคา และเลือกบูธที่เหมาะกับร้านของคุณ</p></div>
+              <div>
+                <span className="sl-kicker">RESERVATION</span>
+                <h2 className="mt-2 text-2xl font-black">
+                  {eventBookable ? 'พร้อมเลือกพื้นที่แล้ว?' : 'Event นี้ปิดรับจองแล้ว'}
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-muted">
+                  {eventBookable
+                    ? 'เปิด Zone Map เพื่อตรวจสอบตำแหน่ง ราคา และเลือกบูธที่เหมาะกับร้านของคุณ'
+                    : 'ยังดู Zone ราคา และตำแหน่ง Booth ได้ แต่ไม่สามารถสร้าง Booking ใหม่สำหรับ Event นี้'}
+                </p>
+              </div>
               <span className="grid h-[62px] w-[62px] shrink-0 place-items-center rounded-[17px] bg-[#f1e9ff] text-violet"><Store className="h-6 w-6" /></span>
             </div>
-            <div className="mt-6 grid grid-cols-[1fr_auto] gap-3 max-sm:grid-cols-1"><div className="rounded-xl bg-[#f4edff] px-4 py-3"><span className="text-[10px] text-muted">ราคาเริ่มต้น</span><strong className="mt-1 block text-base text-violet">{startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`}</strong></div><Link href={`/events/${event.id}/map`} className="sl-action-primary min-w-[150px]">เลือกพื้นที่ →</Link></div>
+            <div className="mt-6 grid grid-cols-[1fr_auto] gap-3 max-sm:grid-cols-1">
+              <div className="rounded-xl bg-[#f4edff] px-4 py-3">
+                <span className="text-[10px] text-muted">ราคาเริ่มต้น</span>
+                <strong className="mt-1 block text-base text-violet">{startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`}</strong>
+              </div>
+              <Link href={`/events/${event.id}/map`} className="sl-action-primary min-w-[150px]">
+                {eventBookable ? 'เลือกพื้นที่ →' : 'ดูแผนผัง →'}
+              </Link>
+            </div>
           </article>
 
           <article className="sl-surface p-7">
