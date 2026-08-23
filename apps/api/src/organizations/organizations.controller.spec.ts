@@ -71,4 +71,20 @@ describe('OrganizationsController', () => {
       UserRole.ORG_ADMIN,
     ]);
   });
+
+  it('protects status update with org scope and SUPER_ADMIN only', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).updateStatus;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
 });

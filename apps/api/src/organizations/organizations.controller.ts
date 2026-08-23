@@ -13,6 +13,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationStatusDto } from './dto/update-organization-status.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
 
@@ -48,6 +49,20 @@ export class OrganizationsController {
     return this.organizationsService.update(
       organizationId,
       updateOrganizationDto,
+    );
+  }
+
+  @Patch(':organizationId/status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  updateStatus(
+    @Param('organizationId') organizationId: string,
+    @Body() updateStatusDto: UpdateOrganizationStatusDto,
+  ) {
+    return this.organizationsService.updateStatus(
+      organizationId,
+      updateStatusDto.status,
     );
   }
 }
