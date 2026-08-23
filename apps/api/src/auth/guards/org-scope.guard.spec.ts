@@ -1,12 +1,13 @@
 import {
   BadRequestException,
   ExecutionContext,
+  ForbiddenException,
   Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { User, UserRole } from '@prisma/client';
+import { OrgStatus, User, UserRole } from '@prisma/client';
 import { OrgScope } from '../../common/decorators/org-scope.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgScopeGuard } from './org-scope.guard';
@@ -111,6 +112,9 @@ describe('OrgScopeGuard', () => {
       supportTicket: { findUnique: jest.fn() },
       orgMembership: { findUnique: jest.fn() },
     };
+    prisma.organization.findUnique.mockResolvedValue({
+      status: OrgStatus.ACTIVE,
+    });
     guard = new OrgScopeGuard(
       new Reflector(),
       prisma as unknown as PrismaService,
@@ -173,7 +177,10 @@ describe('OrgScopeGuard', () => {
   });
 
   it('lets a member through and stores the resolved organization id', async () => {
-    prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID });
+    prisma.organization.findUnique.mockResolvedValue({
+      id: ORG_ID,
+      status: OrgStatus.ACTIVE,
+    });
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
     const request: RequestStub = {
       params: { organizationId: ORG_ID },
@@ -193,6 +200,94 @@ describe('OrgScopeGuard', () => {
       select: { id: true },
     });
     expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('lets a SUPER_ADMIN through even when the organization is suspended', async () => {
+    prisma.organization.findUnique.mockResolvedValueOnce({
+      id: ORG_ID,
+      status: OrgStatus.SUSPENDED,
+    });
+    const request: RequestStub = {
+      params: { organizationId: ORG_ID },
+      user: createUser('user-1', UserRole.SUPER_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byOrganization, request),
+      ),
+    ).resolves.toBe(true);
+
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+    expect(prisma.organization.findUnique).toHaveBeenCalledTimes(1);
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('blocks a non-SUPER_ADMIN when the organization is suspended', async () => {
+    prisma.organization.findUnique.mockResolvedValue({
+      id: ORG_ID,
+      status: OrgStatus.SUSPENDED,
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { organizationId: ORG_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byOrganization, request),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(request.organizationId).toBeUndefined();
+  });
+
+  it('blocks a non-SUPER_ADMIN when the organization is inactive', async () => {
+    prisma.organization.findUnique.mockResolvedValue({
+      id: ORG_ID,
+      status: OrgStatus.INACTIVE,
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { organizationId: ORG_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byOrganization, request),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(request.organizationId).toBeUndefined();
+  });
+
+  it('checks membership before organization status', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    prisma.organization.findUnique.mockResolvedValue({
+      id: ORG_ID,
+      status: OrgStatus.SUSPENDED,
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+    const request: RequestStub = {
+      params: { organizationId: ORG_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    const error: unknown = await guard
+      .canActivate(
+        createContext(TestController.prototype.byOrganization, request),
+      )
+      .catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(error).not.toBeInstanceOf(ForbiddenException);
+    expect(prisma.organization.findUnique).toHaveBeenCalledTimes(1);
+    expect(request.organizationId).toBeUndefined();
+    warn.mockRestore();
   });
 
   // A resource in another organization is indistinguishable from one that does

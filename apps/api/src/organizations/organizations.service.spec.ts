@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { OrgStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   OrganizationsService,
@@ -91,6 +92,22 @@ describe('OrganizationsService', () => {
         ...PUBLIC_ORGANIZATION_SELECT,
         promptpayId: true,
       },
+    });
+  });
+
+  it('updates organization status with the public response shape', async () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    organizationUpdate.mockResolvedValue({
+      id,
+      status: OrgStatus.SUSPENDED,
+    });
+
+    await service.updateStatus(id, OrgStatus.SUSPENDED);
+
+    expect(organizationUpdate).toHaveBeenCalledWith({
+      where: { id },
+      data: { status: OrgStatus.SUSPENDED },
+      select: PUBLIC_ORGANIZATION_SELECT,
     });
   });
 });
