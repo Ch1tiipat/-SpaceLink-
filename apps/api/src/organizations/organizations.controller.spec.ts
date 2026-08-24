@@ -1,4 +1,4 @@
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, HTTP_CODE_METADATA } from '@nestjs/common/constants';
 
 jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn(),
@@ -86,5 +86,34 @@ describe('OrganizationsController', () => {
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
       UserRole.SUPER_ADMIN,
     ]);
+  });
+
+  it.each(['listAdmins', 'grantAdmin', 'revokeAdmin'])(
+    'protects %s with org scope and SUPER_ADMIN only',
+    (name) => {
+      const handler = (
+        OrganizationsController.prototype as unknown as Record<string, object>
+      )[name];
+
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+        SupabaseAuthGuard,
+        OrgScopeGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe(
+        'organizationId',
+      );
+      expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+        UserRole.SUPER_ADMIN,
+      ]);
+    },
+  );
+
+  it('returns 204 after revoking an organization admin', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).revokeAdmin;
+
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(204);
   });
 });

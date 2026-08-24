@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { OrgStatus, Prisma } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -57,6 +57,69 @@ export class OrganizationsService {
       where: { id },
       data: { status },
       select: PUBLIC_ORGANIZATION_SELECT,
+    });
+  }
+
+  async listAdmins(organizationId: string) {
+    return this.prisma.orgMembership.findMany({
+      where: { organizationId, role: MembershipRole.ADMIN },
+      select: {
+        id: true,
+        joinedAt: true,
+        user: {
+          select: { id: true, email: true, fullName: true },
+        },
+      },
+    });
+  }
+
+  async grantAdmin(organizationId: string, email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const membership = await transaction.orgMembership.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          role: MembershipRole.ADMIN,
+        },
+      });
+
+      if (user.role === UserRole.VENDOR) {
+        await transaction.user.update({
+          where: { id: user.id },
+          data: { role: UserRole.ORG_ADMIN },
+        });
+      }
+
+      return membership;
+    });
+  }
+
+  async revokeAdmin(organizationId: string, userId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.orgMembership.delete({
+        where: {
+          organizationId_userId: { organizationId, userId },
+        },
+      });
+
+      const remainingMemberships = await transaction.orgMembership.count({
+        where: { userId },
+      });
+      const user = await transaction.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (remainingMemberships === 0 && user?.role === UserRole.ORG_ADMIN) {
+        await transaction.user.update({
+          where: { id: userId },
+          data: { role: UserRole.VENDOR },
+        });
+      }
     });
   }
 

@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -13,6 +15,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { GrantAdminDto } from './dto/grant-admin.dto';
 import { UpdateOrganizationStatusDto } from './dto/update-organization-status.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -36,6 +39,40 @@ export class OrganizationsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.organizationsService.findOne(id);
+  }
+
+  @Get(':organizationId/admins')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  listAdmins(@Param('organizationId') organizationId: string) {
+    return this.organizationsService.listAdmins(organizationId);
+  }
+
+  @Post(':organizationId/admins')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  grantAdmin(
+    @Param('organizationId') organizationId: string,
+    @Body() grantAdminDto: GrantAdminDto,
+  ) {
+    return this.organizationsService.grantAdmin(
+      organizationId,
+      grantAdminDto.email,
+    );
+  }
+
+  @Delete(':organizationId/admins/:userId')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  revokeAdmin(
+    @Param('organizationId') organizationId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.organizationsService.revokeAdmin(organizationId, userId);
   }
 
   @Patch(':organizationId')
