@@ -194,6 +194,45 @@ describe('OrganizationsService', () => {
     await expect(service.listAdmins(ORGANIZATION_ID)).resolves.toEqual([]);
   });
 
+  it('lists admins across organizations with user and organization details', async () => {
+    const admins = [
+      {
+        id: MEMBERSHIP_ID,
+        joinedAt: JOINED_AT,
+        user: {
+          id: USER_ID,
+          email: USER_EMAIL,
+          fullName: 'Admin One',
+        },
+        organization: {
+          id: ORGANIZATION_ID,
+          name: 'ตลาดนัดมหาวิทยาลัย',
+        },
+      },
+    ];
+    orgMembershipFindMany.mockResolvedValue(admins);
+
+    await expect(service.listAllAdmins()).resolves.toEqual(admins);
+
+    expect(orgMembershipFindMany).toHaveBeenCalledWith({
+      where: { role: MembershipRole.ADMIN },
+      select: {
+        id: true,
+        joinedAt: true,
+        user: {
+          select: { id: true, email: true, fullName: true },
+        },
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  });
+
+  it('returns an empty cross-organization admin list when none exist', async () => {
+    await expect(service.listAllAdmins()).resolves.toEqual([]);
+  });
+
   it('grants admin membership and promotes a vendor atomically', async () => {
     await expect(
       service.grantAdmin(ORGANIZATION_ID, USER_EMAIL),
