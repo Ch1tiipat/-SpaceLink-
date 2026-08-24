@@ -85,6 +85,12 @@ export class BookingsController {
     return this.bookingsService.findAll(currentUser.id);
   }
 
+  @Get('all')
+  @Roles(UserRole.SUPER_ADMIN)
+  findAllAcrossOrganizations() {
+    return this.bookingsService.findAllAcrossOrganizations();
+  }
+
   /**
    * Admin lookup by the code a vendor is actually shown. Declared before the
    * `:bookingId` route so the two never compete for a match.

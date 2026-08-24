@@ -48,6 +48,36 @@ export type RefundResponse = Omit<
   approvedAmount: string | null;
 };
 
+const refundOverviewSelect = {
+  ...refundSelect,
+  booking: {
+    select: {
+      id: true,
+      bookingCode: true,
+      event: {
+        select: {
+          id: true,
+          name: true,
+          organization: { select: { id: true, name: true } },
+        },
+      },
+      shop: { select: { id: true, name: true } },
+    },
+  },
+  requestedBy: { select: { id: true, email: true, fullName: true } },
+} satisfies Prisma.RefundRequestSelect;
+
+type RefundOverviewRecord = Prisma.RefundRequestGetPayload<{
+  select: typeof refundOverviewSelect;
+}>;
+export type RefundOverviewResponse = Omit<
+  RefundOverviewRecord,
+  'requestedAmount' | 'approvedAmount'
+> & {
+  requestedAmount: string;
+  approvedAmount: string | null;
+};
+
 const adminRefundSelect = {
   status: true,
   requestedAmount: true,
@@ -208,6 +238,14 @@ export class RefundsService {
       orderBy: { createdAt: 'desc' },
     });
     return refunds.map((refund) => this.toResponse(refund));
+  }
+
+  async findAllAcrossOrganizations(): Promise<RefundOverviewResponse[]> {
+    const refunds = await this.prisma.refundRequest.findMany({
+      select: refundOverviewSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+    return refunds.map((refund) => this.toOverviewResponse(refund));
   }
 
   async approve(
@@ -457,6 +495,17 @@ export class RefundsService {
       ...rest,
       requestedAmount: requestedAmount.toString(),
       approvedAmount: approvedAmount?.toString() ?? null,
+    };
+  }
+
+  private toOverviewResponse(
+    refund: RefundOverviewRecord,
+  ): RefundOverviewResponse {
+    const { booking, requestedBy, ...refundRecord } = refund;
+    return {
+      ...this.toResponse(refundRecord),
+      booking,
+      requestedBy,
     };
   }
 }
