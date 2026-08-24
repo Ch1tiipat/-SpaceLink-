@@ -456,7 +456,7 @@ function Sidebar({
             {collapsed ? (
               <span aria-hidden className="mx-auto my-3 block h-px w-7 bg-[#ece7f3]" />
             ) : (
-              <span className="block px-3 pb-[7px] pt-[13px] text-[10px] font-bold uppercase tracking-[1.2px] text-[#A39BAC]">
+              <span className="block px-3 pb-[7px] pt-[13px] text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC]">
                 {group.label}
               </span>
             )}
@@ -546,7 +546,7 @@ function SidebarItem({
 
 function SoonBadge() {
   return (
-    <span className="ml-auto rounded-full bg-[#F3F4F6] px-1.5 py-0.5 text-[9px] font-semibold text-[#6B7280]">
+    <span className="ml-auto rounded-full bg-[#F3F4F6] px-1.5 py-0.5 text-sm font-semibold text-[#6B7280]">
       เร็วๆ นี้
     </span>
   );
@@ -662,7 +662,7 @@ function Topbar({
 
         {auth.status === 'signed-in' && (
           <span className="flex items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4]">
-            <Avatar name={auth.fullName} className="h-[26px] w-[26px] text-[11px]" />
+            <Avatar name={auth.fullName} className="h-[26px] w-[26px] text-sm" />
             <span
               className={`max-w-[84px] truncate sm:max-w-[180px] ${
                 showTenantSwitcher ? 'hidden md:inline' : ''
@@ -848,7 +848,7 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
 
   return (
     <div
-      className={`fixed right-4 z-[75] sm:right-5 ${hasBottomNav ? 'bottom-[82px] lg:bottom-5' : 'bottom-5'}`}
+      className={`sl-floating-support fixed z-[75] ${hasBottomNav ? 'sl-floating-support--with-bottom-nav' : ''}`}
     >
       {view === 'menu' ? (
         <section
@@ -856,43 +856,43 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
           className="mb-3 grid w-[min(305px,calc(100vw-32px))] gap-2"
         >
           <button type="button" onClick={() => setView('chat')} className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]">
-            <span><strong className="block text-[11px] text-ink">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[7px] text-muted">ดูคำตอบและวิธีใช้งาน</small></span>
+            <span><strong className="block text-sm text-ink">คำถามที่พบบ่อย</strong><small className="mt-1 block text-xs text-muted">ดูคำตอบและวิธีใช้งาน</small></span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
           </button>
           <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน LINE" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]">
-            <span><strong className="block text-[11px] text-ink">LINE</strong><small className="mt-1 block text-[7px] text-muted">@spacelink</small></span>
+            <span><strong className="block text-sm text-ink">LINE</strong><small className="mt-1 block text-xs text-muted">@spacelink</small></span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#20b955] text-white"><MessageCircle className="h-5 w-5" aria-hidden /></span>
           </a>
           <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน Facebook" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c9dcfb]">
-            <span><strong className="block text-[11px] text-ink">Facebook</strong><small className="mt-1 block text-[7px] text-muted">SpaceLink</small></span>
+            <span><strong className="block text-sm text-ink">Facebook</strong><small className="mt-1 block text-xs text-muted">SpaceLink</small></span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#1877f2] text-lg font-black text-white">f</span>
           </a>
           <a href="tel:+6644223000" aria-label="โทรหาเจ้าหน้าที่ SpaceLink" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#bfe3d4]">
-            <span><strong className="block text-[11px] text-ink">โทรหาเรา</strong><small className="mt-1 block text-[7px] text-muted">044-223-000</small></span>
+            <span><strong className="block text-sm text-ink">โทรหาเรา</strong><small className="mt-1 block text-xs text-muted">044-223-000</small></span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#278b68] text-white"><Phone className="h-5 w-5" aria-hidden /></span>
           </a>
         </section>
       ) : null}
 
       {view === 'chat' ? (
-        <section aria-label="คำถามที่พบบ่อย SpaceLink" className="mb-3 flex h-[min(620px,calc(100vh-170px))] w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
+        <section aria-label="คำถามที่พบบ่อย SpaceLink" className="sl-floating-chat mb-3 flex w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
           <header className="flex min-h-[86px] shrink-0 items-center gap-3 border-b border-line px-4">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
-            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-[8px] text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
+            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-xs text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
             <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><RotateCcw className="h-4 w-4" aria-hidden /></button>
             <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><X className="h-4 w-4" aria-hidden /></button>
           </header>
-          <div className="shrink-0 border-b border-[#e6ddf2] bg-[#f7f2ff] px-4 py-2 text-[8px] text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
+          <div className="shrink-0 border-b border-[#e6ddf2] bg-[#f7f2ff] px-4 py-2 text-xs text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfbff] p-4">
-            {question.trim() ? <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-[9px] leading-5 text-white">{question}</div> : null}
-            <div aria-live="polite" className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-[9px] leading-5 text-ink">{answer}</div>
+            {question.trim() ? <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-sm leading-5 text-white">{question}</div> : null}
+            <div aria-live="polite" className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-sm leading-5 text-ink">{answer}</div>
           </div>
           <div className="shrink-0 border-t border-line bg-white p-3">
             <div className="flex flex-wrap gap-2">
-              {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-[8px] font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
+              {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
             </div>
             <div className="mt-3 flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
-              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-[9px] outline-none placeholder:text-[#978ba5]" />
+              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-base outline-none placeholder:text-[#978ba5]" />
               <button type="button" onClick={() => askAssistant()} aria-label="ส่งคำถาม" className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9]"><Send className="h-4 w-4" aria-hidden /></button>
             </div>
           </div>
@@ -920,10 +920,10 @@ function UserFooter() {
         <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-12">
           <section>
             <Link href="/" className="inline-flex items-center gap-3" aria-label="SpaceLink หน้าแรก">
-              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-[11px] font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">SL</span>
+              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-sm font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">SL</span>
               <strong className="text-lg font-black tracking-[-.02em]">SpaceLink</strong>
             </Link>
-            <p className="mt-4 max-w-[320px] text-[11px] leading-6 text-white/70">แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว</p>
+            <p className="mt-4 max-w-[320px] text-sm leading-6 text-white/70">แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว</p>
           </section>
 
           <FooterColumn title="สำรวจแพลตฟอร์ม">
@@ -945,7 +945,7 @@ function UserFooter() {
           </FooterColumn>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-[9px] text-white/45">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-sm text-white/45">
           <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
           <div className="flex flex-wrap gap-x-2 gap-y-1"><span>ความเป็นส่วนตัว</span><span>·</span><span>เงื่อนไขการใช้งาน</span><span>·</span><span>การเข้าถึงสำหรับทุกคน</span></div>
         </div>
@@ -957,8 +957,8 @@ function UserFooter() {
 function FooterColumn({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h2 className="text-[11px] font-extrabold text-white">{title}</h2>
-      <div className="mt-4 grid gap-3 text-[10px] text-white/58 [&_a]:transition [&_a:hover]:text-white">{children}</div>
+      <h2 className="text-sm font-extrabold text-white">{title}</h2>
+      <div className="mt-4 grid gap-3 text-sm text-white/58 [&_a]:transition [&_a:hover]:text-white">{children}</div>
     </section>
   );
 }
@@ -983,7 +983,7 @@ function BottomNav({
               key={item.label}
               type="button"
               disabled
-              className="grid min-w-[54px] cursor-not-allowed place-items-center gap-0.5 text-[10px] text-[#BDB6C6]"
+              className="grid min-w-[54px] cursor-not-allowed place-items-center gap-0.5 text-sm text-[#BDB6C6]"
             >
               <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
               <span>{item.label}</span>
@@ -998,7 +998,7 @@ function BottomNav({
             key={item.label}
             href={navItemHref(item, selectedOrganizationId)}
             aria-current={active ? 'page' : undefined}
-            className={`relative grid min-w-[62px] place-items-center gap-0.5 rounded-xl px-2 text-[10px] transition-colors ${
+            className={`relative grid min-w-[62px] place-items-center gap-0.5 rounded-xl px-2 text-sm transition-colors ${
               active
                 ? 'bg-violet-tint font-extrabold text-[#6D28D9]'
                 : 'text-[#837B8D]'

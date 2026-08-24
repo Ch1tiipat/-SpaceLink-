@@ -120,7 +120,7 @@ export function SlipUploadPanel({
         {['เลือกไฟล์', 'ตรวจสอบสลิป', 'ยืนยันการจอง'].map((label, index) => (
           <li
             key={label}
-            className="rounded-xl bg-[#faf8ff] px-2 py-2.5 text-center text-[10px] font-extrabold text-muted sm:text-xs"
+            className="rounded-xl bg-[#faf8ff] px-2 py-2.5 text-center text-sm font-extrabold text-muted sm:text-xs"
           >
             <span className="mr-1 text-violet">{index + 1}</span>
             {label}
@@ -144,7 +144,7 @@ export function SlipUploadPanel({
               accept="image/jpeg,image/png"
               disabled={disabled || isUploading}
               onChange={handleFileChange}
-              className="block w-full text-sm text-ink file:mr-4 file:rounded-xl file:border-0 file:bg-[#ede7ff] file:px-4 file:py-2.5 file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
+              className="block w-full text-base text-ink file:mr-4 file:rounded-xl file:border-0 file:bg-[#ede7ff] file:px-4 file:py-2.5 file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
           {file ? (
@@ -200,7 +200,7 @@ export function SlipUploadPanel({
           <ShieldCheck className="h-4 w-4" aria-hidden />
           {isUploading ? 'กำลังอัปโหลดและตรวจสอบ…' : 'อัปโหลดสลิป'}
         </button>
-        <p className="flex items-center justify-center gap-1.5 text-center text-[11px] leading-5 text-muted">
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm leading-5 text-muted">
           <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald" aria-hidden />
           ระบบใช้ไฟล์นี้เพื่อตรวจสอบการชำระเงินของการจองรายการนี้เท่านั้น
         </p>

@@ -91,7 +91,7 @@ export default function LoginPage() {
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errorId : undefined}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
+            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
           {errorBox}

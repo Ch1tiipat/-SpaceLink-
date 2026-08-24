@@ -243,7 +243,7 @@ export function ProfileShopScreen() {
                   refresh={refresh}
                 />
                 <div className="min-w-0 flex-1">
-                  <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.12em] text-violet">
+                  <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-sm font-extrabold uppercase tracking-[.12em] text-violet">
                     Vendor profile
                   </span>
                   <h2 className="mt-3 truncate text-2xl font-black tracking-[-0.035em] text-ink">
@@ -552,9 +552,9 @@ function ShopLogoUploader({
           accept="image/jpeg,image/png"
           disabled={isUploading}
           onChange={handleFileChange}
-          className="mt-2 block w-full text-[11px] text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-[#ede7ff] file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-2 block w-full text-base text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-[#ede7ff] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <p className="mt-1.5 text-[11px] leading-4 text-muted">
+        <p className="mt-1.5 text-sm leading-4 text-muted">
           JPEG หรือ PNG ไม่เกิน 2 MB และไม่เกิน {MAX_LOGO_DIMENSION}×
           {MAX_LOGO_DIMENSION} พิกเซล
         </p>
@@ -563,7 +563,7 @@ function ShopLogoUploader({
       {error && (
         <p
           role="alert"
-          className="mt-2 rounded-xl bg-[#fff4f6] px-3 py-2 text-left text-[11px] leading-4 text-danger"
+          className="mt-2 rounded-xl bg-[#fff4f6] px-3 py-2 text-left text-sm leading-4 text-danger"
         >
           {error}
         </p>
@@ -607,7 +607,7 @@ function ProfileStat({
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-bold text-muted">{label}</p>
+        <p className="text-sm font-bold text-muted">{label}</p>
         <p className="mt-1 truncate text-sm font-extrabold text-ink">{value}</p>
       </div>
     </article>
@@ -774,7 +774,7 @@ function ShopForm({
           aria-invalid={nameError ? true : undefined}
           aria-describedby={nameError ? 'shop-name-error' : undefined}
           placeholder="เช่น ครัวคุณหญิง"
-          className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none ${
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-base outline-none ${
             nameError ? 'border-danger' : 'border-line'
           }`}
         />
@@ -796,7 +796,7 @@ function ShopForm({
           onChange={(event) => setDescription(event.target.value)}
           rows={3}
           placeholder="อธิบายสินค้าและจุดเด่นของร้านสั้น ๆ"
-          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm outline-none"
+          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-base outline-none"
         />
       </label>
 
@@ -846,7 +846,7 @@ function ShopForm({
           aria-invalid={phoneError ? true : undefined}
           aria-describedby={phoneError ? 'shop-phone-error' : undefined}
           placeholder="0812345678"
-          className={`w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none ${
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-base outline-none ${
             phoneError ? 'border-danger' : 'border-line'
           }`}
         />
@@ -869,7 +869,7 @@ function ShopForm({
           value={profile.email}
           readOnly
           disabled
-          className="w-full rounded-xl border border-line bg-[#F7F5FA] px-4 py-3 text-sm text-muted outline-none"
+          className="w-full rounded-xl border border-line bg-[#F7F5FA] px-4 py-3 text-base text-muted outline-none"
         />
         <span className="mt-2 block text-xs text-muted">
           อีเมลใช้สำหรับเข้าสู่ระบบ จึงแก้ไขที่หน้านี้ไม่ได้

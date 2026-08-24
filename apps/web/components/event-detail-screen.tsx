@@ -122,7 +122,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           } : undefined}
         >
           <div className="relative z-10 max-w-[720px]">
-            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-[11px] font-bold">
+            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">
               {eventBookable ? 'กำลังเปิดให้สำรองพื้นที่' : 'ปิดรับจอง'}
             </span>
             <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
@@ -171,15 +171,15 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             <div className="mb-4 flex items-center justify-between gap-4 max-sm:items-start max-sm:flex-col">
               <div className="flex items-center gap-3">
                 <span className="grid h-[38px] w-[38px] place-items-center rounded-xl bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">✦</span>
-                <span><strong className="block text-[13px]">สำรวจบรรยากาศก่อนจอง</strong><span className="block text-[11px] text-muted">ภาพที่ผู้จัดงานเผยแพร่ในระบบ</span></span>
+                <span><strong className="block text-[13px]">สำรวจบรรยากาศก่อนจอง</strong><span className="block text-sm text-muted">ภาพที่ผู้จัดงานเผยแพร่ในระบบ</span></span>
               </div>
-              <span className="rounded-full border border-line bg-white px-3 py-2 text-[10px] text-muted">ภาพจากข้อมูล Event</span>
+              <span className="rounded-full border border-line bg-white px-3 py-2 text-sm text-muted">ภาพจากข้อมูล Event</span>
             </div>
             {event.bannerUrl ? (
               <div className="min-h-[320px] rounded-[18px] bg-cover bg-center" role="img" aria-label={`ภาพประชาสัมพันธ์ ${event.name}`} style={{ backgroundImage: `url("${event.bannerUrl}")` }} />
             ) : (
               <div className="grid min-h-[220px] place-items-center rounded-[18px] border border-dashed border-[#ddd2e6] bg-[#f8f4fc] px-5 text-center">
-                <div><span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><ImageIcon className="h-5 w-5" aria-hidden /></span><strong className="mt-3 block text-sm">ยังไม่มีภาพบรรยากาศ</strong><span className="mt-1 block text-[11px] text-muted">เมื่อผู้จัดงานเพิ่มรูป ภาพจะปรากฏในกรอบนี้อัตโนมัติ</span></div>
+                <div><span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><ImageIcon className="h-5 w-5" aria-hidden /></span><strong className="mt-3 block text-sm">ยังไม่มีภาพบรรยากาศ</strong><span className="mt-1 block text-sm text-muted">เมื่อผู้จัดงานเพิ่มรูป ภาพจะปรากฏในกรอบนี้อัตโนมัติ</span></div>
               </div>
             )}
           </div>
@@ -233,8 +233,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               <a href={mapsUrl} target="_blank" rel="noreferrer" className="sl-action-primary mt-3 w-full">เปิดเส้นทางใน Google Maps →</a>
             </div>
             <div className="relative grid min-h-[390px] place-items-center overflow-hidden rounded-[18px] border border-[#ded4e5] bg-[linear-gradient(135deg,#f8f5fa,#eff4f2)] px-6 text-center shadow-soft">
-              <div><span className="mx-auto grid h-[46px] w-[46px] place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><MapPin className="h-5 w-5" /></span><strong className="mt-3 block text-sm">เปิดดูตำแหน่งบน Google Maps</strong><span className="mt-1 block text-[11px] text-muted">ระบบ API ปัจจุบันส่งชื่อและที่อยู่สถานที่ โดยยังไม่มีพิกัดสาธารณะ</span></div>
-              <div className="absolute bottom-4 left-4 flex max-w-[calc(100%-32px)] items-center gap-3 rounded-xl border border-white bg-white/95 px-3 py-2.5 text-left shadow-soft"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald ring-4 ring-emerald/15" /><span><strong className="block truncate text-[11px]">{event.name}</strong><span className="block truncate text-[9px] text-muted">{address}</span></span></div>
+              <div><span className="mx-auto grid h-[46px] w-[46px] place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><MapPin className="h-5 w-5" /></span><strong className="mt-3 block text-sm">เปิดดูตำแหน่งบน Google Maps</strong><span className="mt-1 block text-sm text-muted">ระบบ API ปัจจุบันส่งชื่อและที่อยู่สถานที่ โดยยังไม่มีพิกัดสาธารณะ</span></div>
+              <div className="absolute bottom-4 left-4 flex max-w-[calc(100%-32px)] items-center gap-3 rounded-xl border border-white bg-white/95 px-3 py-2.5 text-left shadow-soft"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald ring-4 ring-emerald/15" /><span><strong className="block truncate text-sm">{event.name}</strong><span className="block truncate text-sm text-muted">{address}</span></span></div>
             </div>
           </div>
         </DetailSection>
@@ -261,7 +261,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </div>
             <div className="mt-6 grid grid-cols-[1fr_auto] gap-3 max-sm:grid-cols-1">
               <div className="rounded-xl bg-[#f4edff] px-4 py-3">
-                <span className="text-[10px] text-muted">ราคาเริ่มต้น</span>
+                <span className="text-sm text-muted">ราคาเริ่มต้น</span>
                 <strong className="mt-1 block text-base text-violet">{startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`}</strong>
               </div>
               <Link href={`/events/${event.id}/map`} className="sl-action-primary min-w-[150px]">
@@ -310,21 +310,21 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function EventStat({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) {
-  return <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><Icon className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-[11px] text-muted">{label}</span><strong className="mt-1 line-clamp-2 block text-sm leading-5">{value}</strong></span></article>;
+  return <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><Icon className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-sm text-muted">{label}</span><strong className="mt-1 line-clamp-2 block text-sm leading-5">{value}</strong></span></article>;
 }
 
 function NumberCard({ label, value }: { label: string; value: string }) {
-  return <article className="rounded-xl border border-line bg-[#fcfbfd] p-4"><span className="text-[10px] text-muted">{label}</span><strong className="mt-1 block text-xl">{value}</strong></article>;
+  return <article className="rounded-xl border border-line bg-[#fcfbfd] p-4"><span className="text-sm text-muted">{label}</span><strong className="mt-1 block text-xl">{value}</strong></article>;
 }
 
 function PolicyCard({ icon, title, value, warning = false }: { icon: ReactNode; title: string; value?: string | null; warning?: boolean }) {
-  return <article className="flex gap-3 rounded-[13px] border border-line p-4"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] ${warning ? 'bg-[#fff4e7] text-[#b5680a]' : 'bg-[#eafaf1] text-[#16834e]'}`}>{icon}</span><span><strong className="text-xs">{title}</strong><span className="mt-1.5 block whitespace-pre-line text-[11px] leading-7 text-muted">{value ?? 'ผู้จัดงานยังไม่ได้ระบุ'}</span></span></article>;
+  return <article className="flex gap-3 rounded-[13px] border border-line p-4"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] ${warning ? 'bg-[#fff4e7] text-[#b5680a]' : 'bg-[#eafaf1] text-[#16834e]'}`}>{icon}</span><span><strong className="text-xs">{title}</strong><span className="mt-1.5 block whitespace-pre-line text-sm leading-7 text-muted">{value ?? 'ผู้จัดงานยังไม่ได้ระบุ'}</span></span></article>;
 }
 
 function TravelRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return <div className="flex gap-3 border-b border-line py-3"><span className="grid h-[37px] w-[37px] shrink-0 place-items-center rounded-[10px] bg-[#eee6ff] text-violet">{icon}</span><span><span className="block text-[10px] text-muted">{label}</span><strong className="mt-1 block text-xs leading-6">{value}</strong></span></div>;
+  return <div className="flex gap-3 border-b border-line py-3"><span className="grid h-[37px] w-[37px] shrink-0 place-items-center rounded-[10px] bg-[#eee6ff] text-violet">{icon}</span><span><span className="block text-sm text-muted">{label}</span><strong className="mt-1 block text-xs leading-6">{value}</strong></span></div>;
 }
 
 function InfoItem({ label, value }: { label: string; value: string }) {
-  return <div className="flex min-h-[55px] items-center justify-between gap-4 border-b border-line"><dt className="text-[10px] text-muted">{label}</dt><dd className="max-w-[68%] text-right text-[11px] font-bold">{value}</dd></div>;
+  return <div className="flex min-h-[55px] items-center justify-between gap-4 border-b border-line"><dt className="text-sm text-muted">{label}</dt><dd className="max-w-[68%] text-right text-sm font-bold">{value}</dd></div>;
 }

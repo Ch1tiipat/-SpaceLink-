@@ -733,7 +733,7 @@ function FilterButton({
     >
       {label}
       <span
-        className={`rounded-full px-2 py-0.5 text-[11px] ${
+        className={`rounded-full px-2 py-0.5 text-sm ${
           active ? 'bg-violet-tint text-violet' : 'bg-white/70 text-muted'
         }`}
       >

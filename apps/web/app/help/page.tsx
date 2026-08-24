@@ -119,7 +119,7 @@ export default function HelpPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="เช่น จองบูธอย่างไร, ชำระเงิน, สร้างร้านค้า..."
-                className="min-h-12 w-full rounded-[14px] border border-[#e8e3ed] bg-[#fdfcff] px-4 text-sm outline-none transition placeholder:text-[#aaa4b2] focus:border-[#a887ee] focus:bg-white focus:shadow-[0_0_0_4px_rgba(124,58,237,0.08)]"
+                className="min-h-12 w-full rounded-[14px] border border-[#e8e3ed] bg-[#fdfcff] px-4 text-base outline-none transition placeholder:text-[#aaa4b2] focus:border-[#a887ee] focus:bg-white focus:shadow-[0_0_0_4px_rgba(124,58,237,0.08)]"
               />
             </span>
           </label>

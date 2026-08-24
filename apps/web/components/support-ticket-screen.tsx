@@ -28,7 +28,7 @@ type AccessState =
   | { status: 'error'; message: string };
 
 const inputClass =
-  'mt-2 h-12 w-full rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-4 text-sm text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]';
+  'mt-2 h-12 w-full rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-4 text-base text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]';
 
 export function SupportTicketScreen() {
   const router = useRouter();

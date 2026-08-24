@@ -268,7 +268,7 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
               <section className="sl-surface p-5">
                 <h2 className="font-black">ยกเลิกการจอง</h2>
                 <p className="mt-1 text-sm leading-6 text-muted">การยกเลิกจะส่งผลกับรายการจริง กรุณาระบุเหตุผลก่อนยืนยัน</p>
-                <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="เหตุผลที่ต้องการยกเลิก" className="mt-4 w-full rounded-xl border border-line px-4 py-3 text-sm outline-none focus:border-violet" />
+                <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="เหตุผลที่ต้องการยกเลิก" className="mt-4 w-full rounded-xl border border-line px-4 py-3 text-base outline-none focus:border-violet" />
                 {cancelError ? <p role="alert" className="mt-2 text-sm text-danger">{cancelError}</p> : null}
                 <button type="button" onClick={() => void handleCancel()} disabled={isCancelling} className="mt-3 w-full rounded-xl border border-danger px-4 py-2.5 text-sm font-bold text-danger disabled:opacity-50">{isCancelling ? 'กำลังยกเลิก…' : 'ยืนยันยกเลิกการจอง'}</button>
               </section>
