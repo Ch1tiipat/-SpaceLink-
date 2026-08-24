@@ -62,6 +62,26 @@ const bookingListInclude = {
   shop: { select: { id: true, name: true } },
 } satisfies Prisma.BookingInclude;
 
+const adminBookingInclude = {
+  event: {
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      organization: { select: { id: true, name: true } },
+    },
+  },
+  shop: { select: { id: true, name: true } },
+  vendor: { select: { id: true, email: true, fullName: true } },
+  booth: {
+    select: {
+      id: true,
+      code: true,
+      zone: { select: { id: true, code: true, name: true } },
+    },
+  },
+} satisfies Prisma.BookingInclude;
+
 export type BookingResponse = Omit<Booking, 'boothPrice'> & {
   boothPrice: string;
 };
@@ -72,6 +92,12 @@ type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
   boothPrice: string;
   event: { id: string; name: string };
   paymentQrDataUri: string | null;
+};
+type AdminBookingRecord = Prisma.BookingGetPayload<{
+  include: typeof adminBookingInclude;
+}>;
+export type AdminBookingResponse = Omit<AdminBookingRecord, 'boothPrice'> & {
+  boothPrice: string;
 };
 
 /**
@@ -480,6 +506,25 @@ export class BookingsService {
     return Promise.all(bookings.map((booking) => this.toListResponse(booking)));
   }
 
+  async findByOrganization(
+    organizationId: string,
+  ): Promise<AdminBookingResponse[]> {
+    const bookings = await this.prisma.booking.findMany({
+      where: { event: { organizationId } },
+      include: adminBookingInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return bookings.map((booking) => this.toAdminResponse(booking));
+  }
+
+  async findAllAcrossOrganizations(): Promise<AdminBookingResponse[]> {
+    const bookings = await this.prisma.booking.findMany({
+      include: adminBookingInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return bookings.map((booking) => this.toAdminResponse(booking));
+  }
+
   async cancel(
     bookingId: string,
     cancelBookingDto: CancelBookingDto,
@@ -775,6 +820,11 @@ export class BookingsService {
       event: { id: event.id, name: event.name },
       paymentQrDataUri,
     };
+  }
+
+  private toAdminResponse(booking: AdminBookingRecord): AdminBookingResponse {
+    const { boothPrice, ...rest } = booking;
+    return { ...rest, boothPrice: boothPrice.toString() };
   }
 
   private toSlipResponse(

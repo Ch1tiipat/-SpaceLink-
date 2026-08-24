@@ -16,6 +16,7 @@ import { RefundsService } from './refunds.service';
 
 type HandlerName =
   | 'create'
+  | 'findAllAcrossOrganizations'
   | 'findMine'
   | 'findForOrganization'
   | 'approve'
@@ -58,12 +59,14 @@ const admin = {
 describe('RefundsController', () => {
   const create = jest.fn();
   const findMine = jest.fn();
+  const findAllAcrossOrganizations = jest.fn();
   const findForOrganization = jest.fn();
   const approve = jest.fn();
   const reject = jest.fn();
   const process = jest.fn();
   const service = {
     create,
+    findAllAcrossOrganizations,
     findMine,
     findForOrganization,
     approve,
@@ -94,6 +97,15 @@ describe('RefundsController', () => {
       expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBeUndefined();
     },
   );
+
+  it('keeps the cross-organization refund queue SUPER_ADMIN-only', () => {
+    const handler = handlerOf('findAllAcrossOrganizations');
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeUndefined();
+  });
 
   it('scopes the admin queue to the guard-resolved organization', () => {
     const handler = handlerOf('findForOrganization');
@@ -137,6 +149,12 @@ describe('RefundsController', () => {
   it('passes only the guard-resolved organization to the admin queue', async () => {
     await controller.findForOrganization(ORGANIZATION_ID);
     expect(findForOrganization).toHaveBeenCalledWith(ORGANIZATION_ID);
+  });
+
+  it('lists every organization without accepting a client scope', async () => {
+    await controller.findAllAcrossOrganizations();
+
+    expect(findAllAcrossOrganizations).toHaveBeenCalledWith();
   });
 
   it('passes guarded ids and the authenticated reviewer when approving', async () => {

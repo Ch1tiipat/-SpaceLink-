@@ -45,6 +45,25 @@ describe('EventsService', () => {
     expect(service).toBeDefined();
   });
 
+  it('lists organization events newest-first with venue display data', async () => {
+    const events = [
+      {
+        id: eventId,
+        organizationId: orgId,
+        venue: { id: 'venue-1', name: 'Convention Center' },
+      },
+    ];
+    eventFindMany.mockResolvedValue(events);
+
+    await expect(service.findByOrganization(orgId)).resolves.toEqual(events);
+
+    expect(eventFindMany).toHaveBeenCalledWith({
+      where: { organizationId: orgId },
+      orderBy: { startDate: 'desc' },
+      include: { venue: { select: { id: true, name: true } } },
+    });
+  });
+
   describe('findDiscovery', () => {
     it('returns only public discovery fields with unique categories', async () => {
       eventFindMany.mockResolvedValue([

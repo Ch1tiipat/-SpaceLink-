@@ -72,6 +72,7 @@ const cancel = jest.fn();
 const confirmExempt = jest.fn();
 const create = jest.fn();
 const findAll = jest.fn();
+const findAllAcrossOrganizations = jest.fn();
 const findByCode = jest.fn();
 const findOne = jest.fn();
 const uploadSlip = jest.fn();
@@ -80,6 +81,7 @@ const mockBookingsService = {
   confirmExempt,
   create,
   findAll,
+  findAllAcrossOrganizations,
   findByCode,
   findOne,
   uploadSlip,
@@ -102,6 +104,7 @@ function controllerHandler(
     | 'confirmExempt'
     | 'create'
     | 'findAll'
+    | 'findAllAcrossOrganizations'
     | 'findByCode'
     | 'findOne'
     | 'uploadSlip',
@@ -173,6 +176,12 @@ describe('BookingsController', () => {
       Reflect.getMetadata(ROLES_KEY, controllerHandler('findAll')),
     ).toEqual([UserRole.VENDOR]);
     expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        controllerHandler('findAllAcrossOrganizations'),
+      ),
+    ).toEqual([UserRole.SUPER_ADMIN]);
+    expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('uploadSlip')),
     ).toEqual([UserRole.VENDOR]);
     expect(Reflect.getMetadata(ROLES_KEY, controllerHandler('cancel'))).toEqual(
@@ -232,6 +241,45 @@ describe('BookingsController', () => {
     await controller.findAll(CURRENT_USER);
 
     expect(findAll).toHaveBeenCalledWith(VENDOR_ID);
+  });
+
+  it('lists every organization without accepting a client scope', async () => {
+    findAllAcrossOrganizations.mockResolvedValue([]);
+
+    await controller.findAllAcrossOrganizations();
+
+    expect(findAllAcrossOrganizations).toHaveBeenCalledWith();
+  });
+
+  it('resolves /bookings/all before the :bookingId route', async () => {
+    findAllAcrossOrganizations.mockResolvedValue([{ id: 'booking-all' }]);
+    const module = await Test.createTestingModule({
+      controllers: [BookingsController],
+      providers: [
+        { provide: BookingsService, useValue: mockBookingsService },
+        { provide: PrismaService, useValue: {} },
+      ],
+    })
+      .overrideGuard(SupabaseAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(OrgScopeGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+    const app = module.createNestApplication();
+    await app.init();
+
+    try {
+      await request(app.getHttpServer() as Server)
+        .get('/bookings/all')
+        .expect(200)
+        .expect([{ id: 'booking-all' }]);
+      expect(findAllAcrossOrganizations).toHaveBeenCalledTimes(1);
+      expect(findOne).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 
   it('passes the cancellation reason and authenticated vendor id', async () => {
