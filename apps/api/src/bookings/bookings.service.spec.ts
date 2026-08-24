@@ -97,6 +97,51 @@ const CREATED_BOOKING: Booking = {
   updatedAt: NOW,
 };
 
+const ADMIN_BOOKING = {
+  ...CREATED_BOOKING,
+  event: {
+    id: EVENT_ID,
+    name: 'ตลาดนัดสร้างสรรค์',
+    organizationId: ORGANIZATION_ID,
+    organization: { id: ORGANIZATION_ID, name: 'มหาวิทยาลัยสเปซลิงก์' },
+  },
+  shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+  vendor: {
+    id: VENDOR_ID,
+    email: 'vendor@example.com',
+    fullName: 'Vendor One',
+  },
+  booth: {
+    id: BOOTH_ID,
+    code: 'A01',
+    zone: {
+      id: '88888888-8888-4888-8888-888888888888',
+      code: 'A',
+      name: 'อาหารและเครื่องดื่ม',
+    },
+  },
+};
+
+const ADMIN_BOOKING_INCLUDE = {
+  event: {
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      organization: { select: { id: true, name: true } },
+    },
+  },
+  shop: { select: { id: true, name: true } },
+  vendor: { select: { id: true, email: true, fullName: true } },
+  booth: {
+    select: {
+      id: true,
+      code: true,
+      zone: { select: { id: true, code: true, name: true } },
+    },
+  },
+};
+
 const eventFindUnique = jest.fn();
 const boothFindUnique = jest.fn();
 const shopFindFirst = jest.fn();
@@ -1029,6 +1074,33 @@ describe('BookingsService', () => {
     const [result] = await service.findAll(VENDOR_ID);
 
     expect(result.paymentQrDataUri).toBeNull();
+  });
+
+  it('lists organization bookings with admin display data and string money', async () => {
+    bookingFindMany.mockResolvedValue([ADMIN_BOOKING]);
+
+    await expect(service.findByOrganization(ORGANIZATION_ID)).resolves.toEqual([
+      { ...ADMIN_BOOKING, boothPrice: '1500' },
+    ]);
+
+    expect(bookingFindMany).toHaveBeenCalledWith({
+      where: { event: { organizationId: ORGANIZATION_ID } },
+      include: ADMIN_BOOKING_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('lists bookings across organizations without a tenant filter', async () => {
+    bookingFindMany.mockResolvedValue([ADMIN_BOOKING]);
+
+    await expect(service.findAllAcrossOrganizations()).resolves.toEqual([
+      { ...ADMIN_BOOKING, boothPrice: '1500' },
+    ]);
+
+    expect(bookingFindMany).toHaveBeenCalledWith({
+      include: ADMIN_BOOKING_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
   });
 
   describe('findOne', () => {

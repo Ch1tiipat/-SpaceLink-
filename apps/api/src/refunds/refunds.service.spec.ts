@@ -47,6 +47,31 @@ const REFUND = {
   updatedAt: NOW,
 };
 
+const REFUND_OVERVIEW = {
+  ...REFUND,
+  booking: {
+    id: BOOKING_ID,
+    bookingCode: 'BK-REFUND-001',
+    event: {
+      id: '77777777-7777-4777-8777-777777777777',
+      name: 'ตลาดนัดสร้างสรรค์',
+      organization: {
+        id: ORGANIZATION_ID,
+        name: 'มหาวิทยาลัยสเปซลิงก์',
+      },
+    },
+    shop: {
+      id: '88888888-8888-4888-8888-888888888888',
+      name: 'ร้านของปอนด์',
+    },
+  },
+  requestedBy: {
+    id: VENDOR_ID,
+    email: 'vendor@example.com',
+    fullName: 'Vendor One',
+  },
+};
+
 const bookingFindFirst = jest.fn();
 const refundRequestFindFirst = jest.fn();
 const refundRequestFindMany = jest.fn();
@@ -295,6 +320,54 @@ describe('RefundsService', () => {
     expect(refundRequestFindMany).toHaveBeenCalledWith({
       where: { booking: { event: { organizationId: ORGANIZATION_ID } } },
       select: expect.any(Object) as object,
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('lists refunds across organizations with display data and string money', async () => {
+    refundRequestFindMany.mockResolvedValue([REFUND_OVERVIEW]);
+
+    await expect(service.findAllAcrossOrganizations()).resolves.toEqual([
+      {
+        ...REFUND_OVERVIEW,
+        requestedAmount: '1200',
+        approvedAmount: null,
+      },
+    ]);
+
+    expect(refundRequestFindMany).toHaveBeenCalledWith({
+      select: {
+        id: true,
+        bookingId: true,
+        requestedByUserId: true,
+        reason: true,
+        requestedAmount: true,
+        approvedAmount: true,
+        status: true,
+        evidenceUrls: true,
+        reviewedByUserId: true,
+        reviewedAt: true,
+        processedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        booking: {
+          select: {
+            id: true,
+            bookingCode: true,
+            event: {
+              select: {
+                id: true,
+                name: true,
+                organization: { select: { id: true, name: true } },
+              },
+            },
+            shop: { select: { id: true, name: true } },
+          },
+        },
+        requestedBy: {
+          select: { id: true, email: true, fullName: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   });

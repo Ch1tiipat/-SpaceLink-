@@ -29,6 +29,14 @@ export class EventsService {
     return this.prisma.event.findMany();
   }
 
+  findByOrganization(organizationId: string) {
+    return this.prisma.event.findMany({
+      where: { organizationId },
+      orderBy: { startDate: 'desc' },
+      include: { venue: { select: { id: true, name: true } } },
+    });
+  }
+
   async findDiscovery() {
     const events = await this.prisma.event.findMany({
       where: {

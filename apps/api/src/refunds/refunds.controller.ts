@@ -44,6 +44,12 @@ export class RefundsController {
     return this.refundsService.findMine(currentUser.id);
   }
 
+  @Get('refunds/all')
+  @Roles(UserRole.SUPER_ADMIN)
+  findAllAcrossOrganizations() {
+    return this.refundsService.findAllAcrossOrganizations();
+  }
+
   @Get('organizations/:organizationId/refunds')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
   @OrgScoped('organizationId')
