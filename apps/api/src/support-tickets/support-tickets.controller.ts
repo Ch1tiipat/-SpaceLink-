@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -22,6 +23,11 @@ import { SupportTicketsService } from './support-tickets.service';
 @Roles(UserRole.SUPER_ADMIN)
 export class SupportTicketsController {
   constructor(private readonly supportTicketsService: SupportTicketsService) {}
+
+  @Get('all')
+  findAllAcrossOrganizations() {
+    return this.supportTicketsService.findAllAcrossOrganizations();
+  }
 
   @Post()
   @Roles(UserRole.VENDOR)

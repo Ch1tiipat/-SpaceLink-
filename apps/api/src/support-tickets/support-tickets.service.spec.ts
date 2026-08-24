@@ -54,6 +54,7 @@ const eventFindUnique = jest.fn();
 const supportTicketCreate = jest.fn();
 const supportTicketFindFirst = jest.fn();
 const supportTicketUpdateMany = jest.fn();
+const supportTicketFindMany = jest.fn();
 const ticketMessageCreate = jest.fn();
 const shopFindFirst = jest.fn();
 const prismaTransaction = jest.fn();
@@ -66,6 +67,7 @@ const mockPrismaService = {
     create: supportTicketCreate,
     findFirst: supportTicketFindFirst,
     updateMany: supportTicketUpdateMany,
+    findMany: supportTicketFindMany,
   },
   ticketMessage: { create: ticketMessageCreate },
   shop: { findFirst: shopFindFirst },
@@ -121,6 +123,28 @@ describe('SupportTicketsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('findAllAcrossOrganizations', () => {
+    it('lists every ticket across organizations with user and org context', async () => {
+      supportTicketFindMany.mockResolvedValue([]);
+
+      await service.findAllAcrossOrganizations();
+
+      expect(supportTicketFindMany).toHaveBeenCalledWith({
+        select: {
+          id: true,
+          type: true,
+          subject: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { id: true, email: true, fullName: true } },
+          organization: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
   });
 
   describe('create', () => {
