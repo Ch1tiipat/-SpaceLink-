@@ -73,6 +73,22 @@ export class OrganizationsService {
     });
   }
 
+  async listAllAdmins() {
+    return this.prisma.orgMembership.findMany({
+      where: { role: MembershipRole.ADMIN },
+      select: {
+        id: true,
+        joinedAt: true,
+        user: {
+          select: { id: true, email: true, fullName: true },
+        },
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  }
+
   async grantAdmin(organizationId: string, email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
