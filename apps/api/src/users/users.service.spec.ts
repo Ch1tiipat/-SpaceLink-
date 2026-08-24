@@ -273,6 +273,26 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getAuthUserId', () => {
+    it('returns the authUserId for an existing user', async () => {
+      userFindUnique.mockResolvedValue({ authUserId: 'auth-user-1' });
+
+      await expect(service.getAuthUserId(USER_ID)).resolves.toBe('auth-user-1');
+      expect(userFindUnique).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        select: { authUserId: true },
+      });
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      userFindUnique.mockResolvedValue(null);
+
+      await expect(service.getAuthUserId(USER_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('updateMe', () => {
     it('scopes the update to the authenticated user id', async () => {
       await service.updateMe({ phone: '0812345678' }, USER_ID);

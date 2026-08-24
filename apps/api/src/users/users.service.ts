@@ -140,6 +140,19 @@ export class UsersService {
     return this.toUserDetailResponse(user);
   }
 
+  async getAuthUserId(id: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { authUserId: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('ไม่พบผู้ใช้');
+    }
+
+    return user.authUserId;
+  }
+
   private toUserDetailResponse(user: UserDetailRecord): UserDetailResponse {
     const { bookingsPlaced, refundsRequested, ...rest } = user;
 

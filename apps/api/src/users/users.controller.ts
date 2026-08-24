@@ -5,13 +5,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { UserLastLoginService } from './user-last-login.service';
 import { UsersService } from './users.service';
 
 @Controller('users')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly userLastLoginService: UserLastLoginService,
+  ) {}
 
   @Get()
   findAll() {
@@ -21,6 +25,15 @@ export class UsersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
+  }
+
+  @Get(':id/last-login')
+  async getLastLogin(@Param('id') id: string) {
+    const authUserId = await this.usersService.getAuthUserId(id);
+    const lastSignInAt =
+      await this.userLastLoginService.getLastSignInAt(authUserId);
+
+    return { lastSignInAt };
   }
 
   /**
