@@ -26,6 +26,17 @@ export class AnnouncementsService {
     });
   }
 
+  findAllAcrossOrganizations() {
+    return this.prisma.announcement.findMany({
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async create(
     organizationId: string,
     createAnnouncementDto: CreateAnnouncementDto,
