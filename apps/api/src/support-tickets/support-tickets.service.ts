@@ -55,6 +55,21 @@ export interface SupportTicketResponse {
   updatedAt: Date;
 }
 
+const supportTicketOverviewSelect = {
+  id: true,
+  type: true,
+  subject: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  user: { select: { id: true, email: true, fullName: true } },
+  organization: { select: { id: true, name: true } },
+} satisfies Prisma.SupportTicketSelect;
+
+export type SupportTicketOverviewResponse = Prisma.SupportTicketGetPayload<{
+  select: typeof supportTicketOverviewSelect;
+}>;
+
 /**
  * The vendor-facing half of the booking-quota exception: a vendor who has hit
  * the per-event quota (BookingsService, invariant §6.3.6) raises a ticket, and
@@ -128,6 +143,13 @@ export class SupportTicketsService {
     });
 
     return this.toResponse(ticket);
+  }
+
+  async findAllAcrossOrganizations(): Promise<SupportTicketOverviewResponse[]> {
+    return this.prisma.supportTicket.findMany({
+      select: supportTicketOverviewSelect,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**

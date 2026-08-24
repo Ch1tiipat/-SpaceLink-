@@ -36,6 +36,7 @@ const bookingFindFirst = jest.fn();
 const penaltyCreate = jest.fn();
 const penaltyAggregate = jest.fn();
 const penaltyFindMany = jest.fn();
+const userFindMany = jest.fn();
 const userUpdate = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
@@ -54,6 +55,7 @@ const mockPrismaService = {
     findMany: penaltyFindMany,
     aggregate: penaltyAggregate,
   },
+  user: { findMany: userFindMany },
   $transaction: prismaTransaction,
 };
 
@@ -88,6 +90,38 @@ describe('PenaltiesService', () => {
     }).compile();
 
     service = module.get<PenaltiesService>(PenaltiesService);
+  });
+
+  describe('findAllAcrossOrganizations', () => {
+    it('returns penalties and blacklisted users in one call', async () => {
+      penaltyFindMany.mockResolvedValue([]);
+      userFindMany.mockResolvedValue([]);
+
+      const result = await service.findAllAcrossOrganizations();
+
+      expect(result).toEqual({ penalties: [], blacklistedUsers: [] });
+      expect(penaltyFindMany).toHaveBeenCalledWith({
+        select: {
+          id: true,
+          reason: true,
+          description: true,
+          points: true,
+          issuedAt: true,
+          user: { select: { id: true, email: true, fullName: true } },
+          organization: { select: { id: true, name: true } },
+        },
+        orderBy: { issuedAt: 'desc' },
+      });
+      expect(userFindMany).toHaveBeenCalledWith({
+        where: { isBlacklisted: true },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          blacklistReason: true,
+        },
+      });
+    });
   });
 
   it('creates a penalty below the threshold without blacklisting', async () => {

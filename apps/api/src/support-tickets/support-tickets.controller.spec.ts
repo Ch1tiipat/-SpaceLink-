@@ -43,9 +43,16 @@ const APPROVE_DTO: ApproveQuotaExceptionDto = {
 
 const create = jest.fn();
 const approveQuotaException = jest.fn();
-const mockSupportTicketsService = { create, approveQuotaException };
+const findAllAcrossOrganizations = jest.fn();
+const mockSupportTicketsService = {
+  create,
+  approveQuotaException,
+  findAllAcrossOrganizations,
+};
 
-function controllerHandler(name: 'create' | 'approveQuotaException'): object {
+function controllerHandler(
+  name: 'create' | 'approveQuotaException' | 'findAllAcrossOrganizations',
+): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     SupportTicketsController.prototype,
     name,
@@ -79,6 +86,21 @@ describe('SupportTicketsController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('leaves the cross-organization list on the class default guard', () => {
+    const handler = controllerHandler('findAllAcrossOrganizations');
+
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeUndefined();
+  });
+
+  it('delegates the cross-organization list to the service', async () => {
+    findAllAcrossOrganizations.mockResolvedValue([]);
+
+    await controller.findAllAcrossOrganizations();
+
+    expect(findAllAcrossOrganizations).toHaveBeenCalledWith();
   });
 
   it('runs authentication before role authorization', () => {
