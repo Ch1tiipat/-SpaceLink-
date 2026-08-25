@@ -58,6 +58,17 @@ select {
   font: inherit;
 }
 
+/* iOS Safari zooms the page when a native form control below 16px receives
+   focus. Keep the desktop typography flexible while guaranteeing a stable
+   mobile viewport for every keyboard-opening control rendered by AppShell. */
+@media (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 button,
 a,
 select {
@@ -232,8 +243,19 @@ select {
 }
 
 .sl-floating-chat {
-  height: min(38.75rem, calc(100vh - 10.625rem));
-  height: min(38.75rem, calc(100dvh - 10.625rem - env(safe-area-inset-bottom)));
+  height: 38.75rem;
+  max-height: calc(100vh - 10.625rem);
+  max-height: calc(100dvh - 10.625rem - env(safe-area-inset-bottom));
+}
+
+.sl-bottom-nav {
+  height: calc(68px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  scrollbar-width: none;
+}
+
+.sl-bottom-nav::-webkit-scrollbar {
+  display: none;
 }
 
 @media (min-width: 1024px) {

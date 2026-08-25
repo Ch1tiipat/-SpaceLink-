@@ -367,7 +367,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               which only exists below `lg`. */}
           <div
             className={`min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)] ${
-              hasPrivateNavigation ? 'pb-[72px] lg:pb-0' : ''
+              hasPrivateNavigation
+                ? 'pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0'
+                : ''
             }`}
           >
             {children}
@@ -607,7 +609,7 @@ function Topbar({
               aria-label="องค์กรที่กำลังจัดการ"
               value={selectedOrganizationId}
               onChange={(event) => onSelectOrganization(event.target.value)}
-              className="h-10 max-w-[130px] rounded-xl border border-[#ded5ec] bg-white px-3 text-xs font-extrabold text-[#5b21b6] outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10 sm:max-w-[240px] sm:text-sm"
+              className="h-10 max-w-[130px] rounded-xl border border-[#ded5ec] bg-white px-3 text-base font-extrabold text-[#5b21b6] outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10 sm:max-w-[240px]"
             >
               {organizations.map((organization) => (
                 <option key={organization.id} value={organization.id}>
@@ -876,22 +878,22 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
 
       {view === 'chat' ? (
         <section aria-label="คำถามที่พบบ่อย SpaceLink" className="sl-floating-chat mb-3 flex w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
-          <header className="flex min-h-[86px] shrink-0 items-center gap-3 border-b border-line px-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
+          <header className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-line px-3 sm:min-h-[86px] sm:gap-3 sm:px-4">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white sm:h-12 sm:w-12 sm:rounded-[15px]"><Sparkles className="h-5 w-5" aria-hidden /></span>
             <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-xs text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
-            <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><RotateCcw className="h-4 w-4" aria-hidden /></button>
-            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-10 w-10 place-items-center rounded-[12px] border border-line text-muted transition hover:border-violet hover:text-violet"><X className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"><RotateCcw className="h-4 w-4" aria-hidden /></button>
+            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"><X className="h-4 w-4" aria-hidden /></button>
           </header>
-          <div className="shrink-0 border-b border-[#e6ddf2] bg-[#f7f2ff] px-4 py-2 text-xs text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfbff] p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#fcfbff] p-3 sm:p-4">
+            <div className="mb-3 rounded-xl border border-[#e6ddf2] bg-[#f7f2ff] px-3 py-2 text-xs text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
             {question.trim() ? <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-sm leading-5 text-white">{question}</div> : null}
             <div aria-live="polite" className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-sm leading-5 text-ink">{answer}</div>
-          </div>
-          <div className="shrink-0 border-t border-line bg-white p-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
             </div>
-            <div className="mt-3 flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+          </div>
+          <div className="shrink-0 border-t border-line bg-white p-2 sm:p-3">
+            <div className="flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
               <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-base outline-none placeholder:text-[#978ba5]" />
               <button type="button" onClick={() => askAssistant()} aria-label="ส่งคำถาม" className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9]"><Send className="h-4 w-4" aria-hidden /></button>
             </div>
@@ -973,7 +975,7 @@ function BottomNav({
   selectedOrganizationId: string;
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-[35] flex h-[68px] justify-around border-t border-[#e9e3f2] bg-white/95 px-[5px] pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-10px_30px_rgba(54,36,91,0.06)] backdrop-blur-xl lg:hidden">
+    <nav className="sl-bottom-nav fixed inset-x-0 bottom-0 z-[35] flex items-stretch justify-start overflow-x-auto overscroll-x-contain border-t border-[#e9e3f2] bg-white/95 px-[5px] pt-1.5 shadow-[0_-10px_30px_rgba(54,36,91,0.06)] backdrop-blur-xl lg:hidden">
       {items.map((item) => {
         const Icon = item.icon;
 
@@ -983,10 +985,10 @@ function BottomNav({
               key={item.label}
               type="button"
               disabled
-              className="grid min-w-[54px] cursor-not-allowed place-items-center gap-0.5 text-sm text-[#BDB6C6]"
+              className="grid min-w-[72px] flex-1 cursor-not-allowed place-items-center gap-0.5 px-1 text-sm text-[#BDB6C6]"
             >
               <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
-              <span>{item.label}</span>
+              <span className="whitespace-nowrap leading-6">{item.label}</span>
             </button>
           );
         }
@@ -998,14 +1000,14 @@ function BottomNav({
             key={item.label}
             href={navItemHref(item, selectedOrganizationId)}
             aria-current={active ? 'page' : undefined}
-            className={`relative grid min-w-[62px] place-items-center gap-0.5 rounded-xl px-2 text-sm transition-colors ${
+            className={`relative grid min-w-[72px] flex-1 place-items-center gap-0.5 rounded-xl px-1 text-sm transition-colors ${
               active
                 ? 'bg-violet-tint font-extrabold text-[#6D28D9]'
                 : 'text-[#837B8D]'
             }`}
           >
             <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
-            <span>{item.label}</span>
+            <span className="whitespace-nowrap leading-6">{item.label}</span>
           </Link>
         );
       })}

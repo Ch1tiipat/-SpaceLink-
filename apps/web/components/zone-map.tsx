@@ -357,6 +357,8 @@ function OverviewGridMap({
 }) {
   const [selectedShop, setSelectedShop] = useState<{ booth: EventBooth; zone: EventZone } | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!selectedShop) return;
@@ -365,12 +367,41 @@ function OverviewGridMap({
     document.body.style.overflow = 'hidden';
     closeButtonRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedShop(null);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSelectedShop(null);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute('hidden'));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      openerRef.current?.focus();
     };
   }, [selectedShop]);
 
@@ -435,6 +466,7 @@ function OverviewGridMap({
                       aria-label={`ดูข้อมูลร้าน ${shopName} ที่บูธ ${booth.code}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        openerRef.current = event.currentTarget;
                         setSelectedShop({ booth, zone });
                       }}
                       className={`${shared} border-[#2a9b67] bg-white p-0 text-white hover:-translate-y-0.5 hover:border-[#168555] hover:shadow-[0_9px_20px_rgba(15,63,45,.2)] focus:outline-none focus:ring-2 focus:ring-[#168555] focus:ring-offset-2`}
@@ -503,13 +535,15 @@ function OverviewGridMap({
       {selectedShop ? (
         <div
           className="fixed inset-0 z-[95] grid place-items-center bg-[#160f23]/55 p-4 backdrop-blur-[3px]"
-          onMouseDown={() => setSelectedShop(null)}
+          onClick={() => setSelectedShop(null)}
         >
           <section
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="booked-shop-title"
-            onMouseDown={(event) => event.stopPropagation()}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
             className="w-full max-w-[460px] overflow-hidden rounded-[26px] border border-[#e4dcef] bg-white shadow-[0_28px_90px_rgba(30,18,52,.32)]"
           >
             <div className="flex items-start gap-4 border-b border-line p-5">
