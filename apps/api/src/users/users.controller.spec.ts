@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserLastLoginService } from './user-last-login.service';
@@ -31,6 +32,8 @@ const mockPrismaService = {
 };
 const getLastSignInAt = jest.fn();
 const mockUserLastLoginService = { getLastSignInAt };
+const findAllForActor = jest.fn();
+const mockAuditLogsService = { findAllForActor };
 
 function handlerOf(name: string): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -59,6 +62,7 @@ describe('UsersController', () => {
           provide: UserLastLoginService,
           useValue: mockUserLastLoginService,
         },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
       ],
     }).compile();
 
@@ -112,6 +116,12 @@ describe('UsersController', () => {
     ).toBeUndefined();
   });
 
+  it('leaves the audit-log history lookup on the class default guard', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, handlerOf('getAuditLogs')),
+    ).toBeUndefined();
+  });
+
   it('resolves the authUserId before calling Supabase, and wraps the result', async () => {
     userFindUnique.mockResolvedValue({ authUserId: 'auth-user-1' });
     getLastSignInAt.mockResolvedValue('2026-08-20T10:00:00Z');
@@ -121,6 +131,22 @@ describe('UsersController', () => {
     });
 
     expect(getLastSignInAt).toHaveBeenCalledWith('auth-user-1');
+  });
+
+  it('checks the user exists before listing their actor history', async () => {
+    userFindUnique.mockResolvedValue({ authUserId: 'auth-user-1' });
+    findAllForActor.mockResolvedValue([]);
+
+    await expect(controller.getAuditLogs(USER_ID)).resolves.toEqual([]);
+
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      select: { authUserId: true },
+    });
+    expect(findAllForActor).toHaveBeenCalledWith(USER_ID);
+    expect(userFindUnique.mock.invocationCallOrder[0]).toBeLessThan(
+      findAllForActor.mock.invocationCallOrder[0],
+    );
   });
 
   it('updates the authenticated user, never a client-supplied id', async () => {

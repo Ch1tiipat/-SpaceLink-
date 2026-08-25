@@ -1,5 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
+import {
+  AUDIT_LOG_ACTIONS,
+  AUDIT_TARGET_TYPES,
+} from '../audit-logs/audit-log-actions.constant';
+import {
+  AuditLogsService,
+  type RecordAuditLogInput,
+} from '../audit-logs/audit-logs.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,16 +24,31 @@ export const PUBLIC_ORGANIZATION_SELECT = {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
-  async create(createOrganizationDto: CreateOrganizationDto) {
-    return this.prisma.organization.create({
+  async create(
+    createOrganizationDto: CreateOrganizationDto,
+    actorUserId: string,
+  ) {
+    const organization = await this.prisma.organization.create({
       data: createOrganizationDto,
       select: {
         ...PUBLIC_ORGANIZATION_SELECT,
         promptpayId: true,
       },
     });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORGANIZATION_CREATED,
+      targetType: AUDIT_TARGET_TYPES.ORGANIZATION,
+      targetId: organization.id,
+    });
+
+    return organization;
   }
 
   async findAll() {
@@ -52,12 +75,22 @@ export class OrganizationsService {
     });
   }
 
-  async updateStatus(id: string, status: OrgStatus) {
-    return this.prisma.organization.update({
+  async updateStatus(id: string, status: OrgStatus, actorUserId: string) {
+    const organization = await this.prisma.organization.update({
       where: { id },
       data: { status },
       select: PUBLIC_ORGANIZATION_SELECT,
     });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORGANIZATION_STATUS_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.ORGANIZATION,
+      targetId: id,
+      metadata: { status },
+    });
+
+    return organization;
   }
 
   async listAdmins(organizationId: string) {
@@ -89,34 +122,52 @@ export class OrganizationsService {
     });
   }
 
-  async grantAdmin(organizationId: string, email: string) {
+  async grantAdmin(organizationId: string, email: string, actorUserId: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return this.prisma.$transaction(async (transaction) => {
-      const membership = await transaction.orgMembership.create({
-        data: {
-          organizationId,
-          userId: user.id,
-          role: MembershipRole.ADMIN,
-        },
-      });
-
-      if (user.role === UserRole.VENDOR) {
-        await transaction.user.update({
-          where: { id: user.id },
-          data: { role: UserRole.ORG_ADMIN },
+    const { membership, roleChanged } = await this.prisma.$transaction(
+      async (transaction) => {
+        const membership = await transaction.orgMembership.create({
+          data: {
+            organizationId,
+            userId: user.id,
+            role: MembershipRole.ADMIN,
+          },
         });
-      }
 
-      return membership;
+        let roleChanged = false;
+        if (user.role === UserRole.VENDOR) {
+          await transaction.user.update({
+            where: { id: user.id },
+            data: { role: UserRole.ORG_ADMIN },
+          });
+          roleChanged = true;
+        }
+
+        return { membership, roleChanged };
+      },
+    );
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORG_ADMIN_GRANTED,
+      targetType: AUDIT_TARGET_TYPES.USER,
+      targetId: user.id,
+      metadata: { organizationId, roleChanged },
     });
+
+    return membership;
   }
 
-  async revokeAdmin(organizationId: string, userId: string) {
-    return this.prisma.$transaction(async (transaction) => {
+  async revokeAdmin(
+    organizationId: string,
+    userId: string,
+    actorUserId: string,
+  ) {
+    const roleChanged = await this.prisma.$transaction(async (transaction) => {
       await transaction.orgMembership.delete({
         where: {
           organizationId_userId: { organizationId, userId },
@@ -130,13 +181,31 @@ export class OrganizationsService {
         where: { id: userId },
       });
 
+      let changed = false;
       if (remainingMemberships === 0 && user?.role === UserRole.ORG_ADMIN) {
         await transaction.user.update({
           where: { id: userId },
           data: { role: UserRole.VENDOR },
         });
+        changed = true;
       }
+
+      return changed;
     });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORG_ADMIN_REVOKED,
+      targetType: AUDIT_TARGET_TYPES.USER,
+      targetId: userId,
+      metadata: { organizationId, roleChanged },
+    });
+  }
+
+  private async recordAuditLogSafely(
+    input: RecordAuditLogInput,
+  ): Promise<void> {
+    await this.auditLogsService.record(input).catch(() => undefined);
   }
 
   remove(id: number) {

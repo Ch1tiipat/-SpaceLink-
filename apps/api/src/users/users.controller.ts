@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { UserRole, type User } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -15,6 +16,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly userLastLoginService: UserLastLoginService,
+    private readonly auditLogsService: AuditLogsService,
   ) {}
 
   @Get()
@@ -34,6 +36,12 @@ export class UsersController {
       await this.userLastLoginService.getLastSignInAt(authUserId);
 
     return { lastSignInAt };
+  }
+
+  @Get(':id/audit-logs')
+  async getAuditLogs(@Param('id') id: string) {
+    await this.usersService.getAuthUserId(id);
+    return this.auditLogsService.findAllForActor(id);
   }
 
   /**
