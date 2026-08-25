@@ -13,6 +13,35 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePenaltyDto } from './dto/create-penalty.dto';
 
+const penaltyOverviewSelect = {
+  id: true,
+  reason: true,
+  description: true,
+  points: true,
+  issuedAt: true,
+  user: { select: { id: true, email: true, fullName: true } },
+  organization: { select: { id: true, name: true } },
+} satisfies Prisma.PenaltySelect;
+
+const blacklistedUserSelect = {
+  id: true,
+  email: true,
+  fullName: true,
+  blacklistReason: true,
+} satisfies Prisma.UserSelect;
+
+type PenaltyOverviewResponse = Prisma.PenaltyGetPayload<{
+  select: typeof penaltyOverviewSelect;
+}>;
+type BlacklistedUserResponse = Prisma.UserGetPayload<{
+  select: typeof blacklistedUserSelect;
+}>;
+
+export interface PenaltiesOverviewResponse {
+  penalties: PenaltyOverviewResponse[];
+  blacklistedUsers: BlacklistedUserResponse[];
+}
+
 const BLACKLIST_THRESHOLD_POINTS = 3;
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
 const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
@@ -168,5 +197,20 @@ export class PenaltiesService {
       penalties,
       totalPointsAllOrgs: totals._sum.points ?? 0,
     };
+  }
+
+  async findAllAcrossOrganizations(): Promise<PenaltiesOverviewResponse> {
+    const [penalties, blacklistedUsers] = await Promise.all([
+      this.prisma.penalty.findMany({
+        select: penaltyOverviewSelect,
+        orderBy: { issuedAt: 'desc' },
+      }),
+      this.prisma.user.findMany({
+        where: { isBlacklisted: true },
+        select: blacklistedUserSelect,
+      }),
+    ]);
+
+    return { penalties, blacklistedUsers };
   }
 }

@@ -71,6 +71,20 @@ describe('AnnouncementsService', () => {
     });
   });
 
+  it('returns announcements across organizations with organization details', async () => {
+    findMany.mockResolvedValue([]);
+
+    await expect(service.findAllAcrossOrganizations()).resolves.toEqual([]);
+    expect(findMany).toHaveBeenCalledWith({
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
   it('creates an active announcement and notifies organization bookers', async () => {
     const dto: CreateAnnouncementDto = {
       title: 'แจ้งเปลี่ยนเวลาเปิดงาน',

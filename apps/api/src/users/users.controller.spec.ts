@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserLastLoginService } from './user-last-login.service';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -23,8 +24,13 @@ const CURRENT_USER: User = {
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
 };
 
+const userFindUnique = jest.fn();
 const userUpdate = jest.fn();
-const mockPrismaService = { user: { update: userUpdate } };
+const mockPrismaService = {
+  user: { findUnique: userFindUnique, update: userUpdate },
+};
+const getLastSignInAt = jest.fn();
+const mockUserLastLoginService = { getLastSignInAt };
 
 function handlerOf(name: string): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -49,6 +55,10 @@ describe('UsersController', () => {
       providers: [
         UsersService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: UserLastLoginService,
+          useValue: mockUserLastLoginService,
+        },
       ],
     }).compile();
 
@@ -94,6 +104,23 @@ describe('UsersController', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, handlerOf('findOne')),
     ).toBeUndefined();
+  });
+
+  it('leaves the last-login lookup on the class default guard', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, handlerOf('getLastLogin')),
+    ).toBeUndefined();
+  });
+
+  it('resolves the authUserId before calling Supabase, and wraps the result', async () => {
+    userFindUnique.mockResolvedValue({ authUserId: 'auth-user-1' });
+    getLastSignInAt.mockResolvedValue('2026-08-20T10:00:00Z');
+
+    await expect(controller.getLastLogin(USER_ID)).resolves.toEqual({
+      lastSignInAt: '2026-08-20T10:00:00Z',
+    });
+
+    expect(getLastSignInAt).toHaveBeenCalledWith('auth-user-1');
   });
 
   it('updates the authenticated user, never a client-supplied id', async () => {
