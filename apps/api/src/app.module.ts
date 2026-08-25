@@ -22,6 +22,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { PenaltiesModule } from './penalties/penalties.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RefundsModule } from './refunds/refunds.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { RefundsModule } from './refunds/refunds.module';
     PenaltiesModule,
     NotificationsModule,
     RefundsModule,
+    AuditLogsModule,
   ],
 })
 export class AppModule {}

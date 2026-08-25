@@ -192,8 +192,25 @@ model User {
   supportTickets     SupportTicket[]
   ticketMessages     TicketMessage[]
   recommendationLogs RecommendationLog[]
+  auditLogs           AuditLog[]
 
   @@map("app_user")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @map("audit_log_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String
+  targetType  String   @map("target_type")
+  targetId    String   @map("target_id") @db.Uuid
+  metadata    Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_log")
 }
 
 model OrgMembership {

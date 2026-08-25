@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   OrganizationsService,
@@ -18,6 +19,8 @@ const orgMembershipCreate = jest.fn();
 const orgMembershipDelete = jest.fn();
 const orgMembershipCount = jest.fn();
 const prismaTransaction = jest.fn();
+const record = jest.fn();
+const mockAuditLogsService = { record };
 const mockPrismaService = {
   organization: {
     findMany: organizationFindMany,
@@ -40,6 +43,7 @@ const mockPrismaService = {
 
 const ORGANIZATION_ID = '00000000-0000-4000-8000-000000000001';
 const USER_ID = '00000000-0000-4000-8000-000000000002';
+const ACTOR_USER_ID = '00000000-0000-4000-8000-000000000099';
 const MEMBERSHIP_ID = '00000000-0000-4000-8000-000000000003';
 const USER_EMAIL = 'admin@example.com';
 const JOINED_AT = new Date('2026-08-24T00:00:00.000Z');
@@ -56,6 +60,7 @@ describe('OrganizationsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    record.mockResolvedValue(undefined);
 
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
@@ -76,6 +81,7 @@ describe('OrganizationsService', () => {
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
       ],
     }).compile();
 
@@ -99,7 +105,7 @@ describe('OrganizationsService', () => {
       status: 'ACTIVE',
     });
 
-    await service.create(dto);
+    await service.create(dto, ACTOR_USER_ID);
 
     expect(organizationCreate).toHaveBeenCalledWith({
       data: dto,
@@ -107,6 +113,12 @@ describe('OrganizationsService', () => {
         ...PUBLIC_ORGANIZATION_SELECT,
         promptpayId: true,
       },
+    });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'ORGANIZATION_CREATED',
+      targetType: 'ORGANIZATION',
+      targetId: ORGANIZATION_ID,
     });
   });
 
@@ -150,12 +162,19 @@ describe('OrganizationsService', () => {
       status: OrgStatus.SUSPENDED,
     });
 
-    await service.updateStatus(id, OrgStatus.SUSPENDED);
+    await service.updateStatus(id, OrgStatus.SUSPENDED, ACTOR_USER_ID);
 
     expect(organizationUpdate).toHaveBeenCalledWith({
       where: { id },
       data: { status: OrgStatus.SUSPENDED },
       select: PUBLIC_ORGANIZATION_SELECT,
+    });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'ORGANIZATION_STATUS_UPDATED',
+      targetType: 'ORGANIZATION',
+      targetId: id,
+      metadata: { status: OrgStatus.SUSPENDED },
     });
   });
 
@@ -235,7 +254,7 @@ describe('OrganizationsService', () => {
 
   it('grants admin membership and promotes a vendor atomically', async () => {
     await expect(
-      service.grantAdmin(ORGANIZATION_ID, USER_EMAIL),
+      service.grantAdmin(ORGANIZATION_ID, USER_EMAIL, ACTOR_USER_ID),
     ).resolves.toEqual(MEMBERSHIP);
 
     expect(userFindUnique).toHaveBeenCalledWith({
@@ -253,6 +272,16 @@ describe('OrganizationsService', () => {
       where: { id: USER_ID },
       data: { role: UserRole.ORG_ADMIN },
     });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'ORG_ADMIN_GRANTED',
+      targetType: 'USER',
+      targetId: USER_ID,
+      metadata: { organizationId: ORGANIZATION_ID, roleChanged: true },
+    });
+    expect(prismaTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+      record.mock.invocationCallOrder[0],
+    );
   });
 
   it('grants SUPER_ADMIN membership without changing the platform role', async () => {
@@ -263,22 +292,28 @@ describe('OrganizationsService', () => {
     });
 
     await expect(
-      service.grantAdmin(ORGANIZATION_ID, USER_EMAIL),
+      service.grantAdmin(ORGANIZATION_ID, USER_EMAIL, ACTOR_USER_ID),
     ).resolves.toEqual(MEMBERSHIP);
 
     expect(orgMembershipCreate).toHaveBeenCalledTimes(1);
     expect(userUpdate).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { organizationId: ORGANIZATION_ID, roleChanged: false },
+      }),
+    );
   });
 
   it('rejects granting admin to an unknown email', async () => {
     userFindUnique.mockResolvedValue(null);
 
     await expect(
-      service.grantAdmin(ORGANIZATION_ID, 'missing@example.com'),
+      service.grantAdmin(ORGANIZATION_ID, 'missing@example.com', ACTOR_USER_ID),
     ).rejects.toThrow(new NotFoundException('User not found'));
 
     expect(prismaTransaction).not.toHaveBeenCalled();
     expect(orgMembershipCreate).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('revokes the last membership and resets ORG_ADMIN to VENDOR', async () => {
@@ -288,7 +323,7 @@ describe('OrganizationsService', () => {
     });
 
     await expect(
-      service.revokeAdmin(ORGANIZATION_ID, USER_ID),
+      service.revokeAdmin(ORGANIZATION_ID, USER_ID, ACTOR_USER_ID),
     ).resolves.toBeUndefined();
 
     expect(prismaTransaction).toHaveBeenCalledTimes(1);
@@ -308,6 +343,16 @@ describe('OrganizationsService', () => {
       where: { id: USER_ID },
       data: { role: UserRole.VENDOR },
     });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'ORG_ADMIN_REVOKED',
+      targetType: 'USER',
+      targetId: USER_ID,
+      metadata: { organizationId: ORGANIZATION_ID, roleChanged: true },
+    });
+    expect(prismaTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+      record.mock.invocationCallOrder[0],
+    );
   });
 
   it('keeps ORG_ADMIN when another organization membership remains', async () => {
@@ -317,9 +362,14 @@ describe('OrganizationsService', () => {
       role: UserRole.ORG_ADMIN,
     });
 
-    await service.revokeAdmin(ORGANIZATION_ID, USER_ID);
+    await service.revokeAdmin(ORGANIZATION_ID, USER_ID, ACTOR_USER_ID);
 
     expect(userUpdate).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { organizationId: ORGANIZATION_ID, roleChanged: false },
+      }),
+    );
   });
 
   it('revokes SUPER_ADMIN membership without changing the platform role', async () => {
@@ -328,9 +378,28 @@ describe('OrganizationsService', () => {
       role: UserRole.SUPER_ADMIN,
     });
 
-    await service.revokeAdmin(ORGANIZATION_ID, USER_ID);
+    await service.revokeAdmin(ORGANIZATION_ID, USER_ID, ACTOR_USER_ID);
 
     expect(orgMembershipDelete).toHaveBeenCalledTimes(1);
     expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it('still creates the organization when the audit service rejects', async () => {
+    const dto = {
+      name: 'ตลาดนัดมหาวิทยาลัย',
+      contactEmail: 'admin@example.com',
+      contactPhone: '0812345678',
+      promptpayId: '0812345678',
+    };
+    organizationCreate.mockResolvedValue({
+      id: ORGANIZATION_ID,
+      ...dto,
+      status: OrgStatus.ACTIVE,
+    });
+    record.mockRejectedValue(new Error('audit db down'));
+
+    await expect(service.create(dto, ACTOR_USER_ID)).resolves.toMatchObject({
+      id: ORGANIZATION_ID,
+    });
   });
 });

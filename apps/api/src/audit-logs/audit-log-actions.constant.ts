@@ -1,0 +1,17 @@
+/**
+ * SCRUM-98 scope: only these four actions are logged. Platform config updates
+ * remain reserved for SCRUM-86, which does not have a write endpoint yet.
+ */
+export const AUDIT_LOG_ACTIONS = {
+  ORGANIZATION_CREATED: 'ORGANIZATION_CREATED',
+  ORGANIZATION_STATUS_UPDATED: 'ORGANIZATION_STATUS_UPDATED',
+  ORG_ADMIN_GRANTED: 'ORG_ADMIN_GRANTED',
+  ORG_ADMIN_REVOKED: 'ORG_ADMIN_REVOKED',
+  PLATFORM_CONFIG_UPDATED: 'PLATFORM_CONFIG_UPDATED',
+} as const;
+
+export const AUDIT_TARGET_TYPES = {
+  ORGANIZATION: 'ORGANIZATION',
+  USER: 'USER',
+  PLATFORM_CONFIG: 'PLATFORM_CONFIG',
+} as const;
