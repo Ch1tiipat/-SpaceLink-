@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import Image from 'next/image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventBooth, EventZone } from '@/lib/api';
 
 /**
@@ -106,6 +107,30 @@ function boothText(
 function bookedLogoUrl(booth: EventBooth) {
   if (booth.availability !== 'BOOKED') return null;
   return booth.occupant?.logoUrl ?? null;
+}
+
+function BookedShopLogo({ logoUrl, shopName }: { logoUrl: string | null; shopName: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (!logoUrl || imageFailed) {
+    return (
+      <span className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,#31a66f,#0f3f2d)] text-lg font-black text-white" aria-hidden>
+        {shopName.trim().charAt(0) || 'ร'}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      src={logoUrl}
+      alt={`โลโก้ร้าน ${shopName}`}
+      fill
+      unoptimized
+      sizes="(max-width: 768px) 33vw, 140px"
+      className="object-cover"
+      onError={() => setImageFailed(true)}
+    />
+  );
 }
 
 const tierColor = {
@@ -330,16 +355,67 @@ function OverviewGridMap({
   onFocusZone: (zoneId: string) => void;
   onSelectBooth: (booth: EventBooth) => void;
 }) {
+  const [selectedShop, setSelectedShop] = useState<{ booth: EventBooth; zone: EventZone } | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!selectedShop) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSelectedShop(null);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute('hidden'));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      openerRef.current?.focus();
+    };
+  }, [selectedShop]);
+
   return (
-    <div
-      className="grid grid-cols-1 items-start gap-3 overflow-hidden bg-[#fcfbff] p-4 md:grid-cols-2 xl:grid-cols-3"
-      style={{
-        backgroundImage:
-          'linear-gradient(#e9e4ef 1px,transparent 1px),linear-gradient(90deg,#e9e4ef 1px,transparent 1px)',
-        backgroundSize: '38px 38px',
-      }}
-    >
-      {zones.map((zone, zoneIndex) => {
+    <>
+      <div
+        className="grid grid-cols-1 items-start gap-3 overflow-hidden bg-[#fcfbff] p-4 md:grid-cols-2 xl:grid-cols-3"
+        style={{
+          backgroundImage:
+            'linear-gradient(#e9e4ef 1px,transparent 1px),linear-gradient(90deg,#e9e4ef 1px,transparent 1px)',
+          backgroundSize: '38px 38px',
+        }}
+      >
+        {zones.map((zone, zoneIndex) => {
         const tone = overviewPalette[zoneIndex % overviewPalette.length];
         const available = zone.booths.filter(
           (booth) => booth.availability === 'AVAILABLE',
@@ -361,14 +437,14 @@ function OverviewGridMap({
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h2 className="text-sm font-black text-ink">Zone {zone.code}</h2>
-                <p className="mt-0.5 line-clamp-1 text-[9px] text-muted">
+                <p className="mt-0.5 line-clamp-1 text-sm text-muted">
                   {zone.name ??
                     (zone.categories
                       .map((category) => category.name)
                       .join(' · ') || 'ยังไม่ระบุชื่อโซน')}
                 </p>
               </div>
-              <span className="rounded-full bg-[#e9f9f1] px-2 py-1 text-[8px] font-extrabold text-[#128252]">
+              <span className="rounded-full bg-[#e9f9f1] px-2 py-1 text-xs font-extrabold text-[#128252]">
                 {available} ว่าง
               </span>
             </div>
@@ -384,32 +460,27 @@ function OverviewGridMap({
 
                 if (booth.availability === 'BOOKED') {
                   return (
-                    <div
+                    <button
                       key={booth.id}
-                      aria-label={`บูธ ${booth.code} จองแล้ว`}
-                      className={`${shared} border-[#2a9b67] bg-[linear-gradient(135deg,#31a66f,#0f3f2d)] text-white`}
-                      style={
-                        booth.occupant?.logoUrl
-                          ? {
-                              backgroundImage: `linear-gradient(180deg,rgba(15,63,45,.08),rgba(8,35,25,.86)),url("${booth.occupant.logoUrl}")`,
-                              backgroundPosition: 'center',
-                              backgroundSize: 'cover',
-                            }
-                          : undefined
-                      }
+                      type="button"
+                      aria-label={`ดูข้อมูลร้าน ${shopName} ที่บูธ ${booth.code}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openerRef.current = event.currentTarget;
+                        setSelectedShop({ booth, zone });
+                      }}
+                      className={`${shared} border-[#2a9b67] bg-white p-0 text-white hover:-translate-y-0.5 hover:border-[#168555] hover:shadow-[0_9px_20px_rgba(15,63,45,.2)] focus:outline-none focus:ring-2 focus:ring-[#168555] focus:ring-offset-2`}
                     >
-                      <span className="absolute left-1 top-1 rounded-full bg-white/18 px-1.5 py-0.5 text-[5px] font-extrabold backdrop-blur">✓ ยืนยัน</span>
-                      <strong className="mt-2 max-w-full truncate text-[8px]">{shopName}</strong>
-                      <span className="text-[6px] text-white/80">{booth.code}</span>
-                    </div>
+                      <BookedShopLogo logoUrl={booth.occupant?.logoUrl ?? null} shopName={shopName} />
+                    </button>
                   );
                 }
 
                 if (booth.availability === 'HELD') {
                   return (
                     <div key={booth.id} aria-label={`บูธ ${booth.code} กำลังถูกจอง`} className={`${shared} cursor-not-allowed border-[#e7a339] bg-[#fff8ec] text-[#9d620c]`}>
-                      <strong className="text-[9px]">{booth.code}</strong>
-                      <span className="text-[6px]">กำลังจอง</span>
+                      <strong className="text-sm">{booth.code}</strong>
+                      <span className="text-xs">กำลังจอง</span>
                     </div>
                   );
                 }
@@ -417,8 +488,8 @@ function OverviewGridMap({
                 if (booth.availability === 'UNAVAILABLE') {
                   return (
                     <div key={booth.id} aria-label={`บูธ ${booth.code} ปิดใช้งาน`} className={`${shared} cursor-not-allowed border-dashed border-[#d3ccd6] bg-[#efedef] text-[#918996]`}>
-                      <strong className="text-[9px]">{booth.code}</strong>
-                      <span className="text-[6px]">ปิดใช้งาน</span>
+                      <strong className="text-sm">{booth.code}</strong>
+                      <span className="text-xs">ปิดใช้งาน</span>
                     </div>
                   );
                 }
@@ -432,9 +503,8 @@ function OverviewGridMap({
                       onClick={(event) => event.stopPropagation()}
                       className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
                     >
-                      {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-[5px] font-black text-white">AI</span> : null}
-                      <strong className="text-[9px]">{booth.code}</strong>
-                      <span className="text-[6px] text-muted">{Number(booth.boothPrice).toLocaleString('th-TH')} บ.</span>
+                      {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">AI</span> : null}
+                      <strong className="text-sm">{booth.code}</strong>
                     </a>
                   );
                 }
@@ -451,17 +521,74 @@ function OverviewGridMap({
                     }}
                     className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
                   >
-                    {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-[5px] font-black text-white">AI</span> : null}
-                    <strong className="text-[9px]">{booth.code}</strong>
-                    <span className="text-[6px] text-muted">{Number(booth.boothPrice).toLocaleString('th-TH')} บ.</span>
+                    {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">AI</span> : null}
+                    <strong className="text-sm">{booth.code}</strong>
                   </button>
                 );
               })}
             </div>
           </section>
         );
-      })}
-    </div>
+        })}
+      </div>
+
+      {selectedShop ? (
+        <div
+          className="fixed inset-0 z-[95] grid place-items-center bg-[#160f23]/55 p-4 backdrop-blur-[3px]"
+          onClick={() => setSelectedShop(null)}
+        >
+          <section
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="booked-shop-title"
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[460px] overflow-hidden rounded-[26px] border border-[#e4dcef] bg-white shadow-[0_28px_90px_rgba(30,18,52,.32)]"
+          >
+            <div className="flex items-start gap-4 border-b border-line p-5">
+              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[18px] border border-[#d9cfeb] bg-[#f7f2ff]">
+                <BookedShopLogo logoUrl={selectedShop.booth.occupant?.logoUrl ?? null} shopName={selectedShop.booth.occupant?.name ?? 'ร้านค้า'} />
+              </div>
+              <div className="min-w-0 flex-1 pt-1">
+                <span className="sl-kicker">SHOP INFORMATION</span>
+                <h2 id="booked-shop-title" className="mt-1 truncate text-xl font-black text-ink">
+                  {selectedShop.booth.occupant?.name ?? 'ร้านค้าที่จองพื้นที่'}
+                </h2>
+                <p className="mt-1 text-sm text-muted">Zone {selectedShop.zone.code} · Booth {selectedShop.booth.code}</p>
+              </div>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                aria-label="ปิดข้อมูลร้านค้า"
+                onClick={() => setSelectedShop(null)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-xl text-muted transition hover:border-violet hover:text-violet"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5">
+              <h3 className="text-base font-black text-ink">ร้านนี้จำหน่ายอะไร?</h3>
+              {selectedShop.zone.categories.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedShop.zone.categories.map((category) => (
+                    <span key={category.id} className="rounded-full border border-[#d9c9f2] bg-[#f8f3ff] px-3 py-2 text-sm font-bold text-violet">
+                      {category.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted">ร้านค้ายังไม่ได้ระบุหมวดสินค้าในข้อมูลสาธารณะ</p>
+              )}
+              <p className="mt-4 rounded-[14px] bg-[#f7f5fa] p-3 text-sm leading-6 text-muted">
+                หมวดสินค้านี้อ้างอิงจากประเภทสินค้าที่ผู้จัดงานกำหนดให้ Zone {selectedShop.zone.code}
+              </p>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -872,7 +999,7 @@ function FocusedZone({
             {!logoUrl && (
               <text
                 x={x + boothWidth / 2}
-                y={y + 29}
+                y={booth.availability === 'AVAILABLE' ? y + boothHeight / 2 + 6 : y + 29}
                 textAnchor="middle"
                 fill={boothText(booth, selectedBoothId, recommendedBoothId)}
                 fontSize="17"
@@ -881,22 +1008,22 @@ function FocusedZone({
                 {booth.code}
               </text>
             )}
-            <text
-              x={x + boothWidth / 2}
-              y={y + 50}
-              textAnchor="middle"
-              fill={boothText(booth, selectedBoothId, recommendedBoothId)}
-              fontSize="11"
-              opacity="0.86"
-            >
-              {booth.availability === 'AVAILABLE'
-                ? `${Number(booth.boothPrice).toLocaleString('th-TH')} บาท`
-                : booth.availability === 'HELD'
+            {booth.availability !== 'AVAILABLE' ? (
+              <text
+                x={x + boothWidth / 2}
+                y={y + 50}
+                textAnchor="middle"
+                fill={boothText(booth, selectedBoothId, recommendedBoothId)}
+                fontSize="12"
+                opacity="0.86"
+              >
+                {booth.availability === 'HELD'
                   ? 'กำลังถูกจอง'
                   : booth.availability === 'BOOKED'
                     ? 'ไม่ว่าง'
                     : 'ปิดใช้งาน'}
-            </text>
+              </text>
+            ) : null}
           </g>
         );
       })}

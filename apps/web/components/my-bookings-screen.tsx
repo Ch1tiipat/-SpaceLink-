@@ -302,7 +302,7 @@ export function MyBookingsScreen() {
                 <strong className={`mt-3 grid h-11 w-11 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
                   {value}
                 </strong>
-                <p className="mt-2 text-[10px] font-extrabold tracking-[.1em] text-muted">
+                <p className="mt-2 text-sm font-extrabold tracking-[.1em] text-muted">
                   {label === 'การจองทั้งหมด' ? 'ALL BOOKINGS' : label === 'รอชำระเงิน' ? 'PENDING' : label === 'ยืนยันแล้ว' ? 'CONFIRMED' : 'COMPLETED'}
                 </p>
               </div>
@@ -321,7 +321,7 @@ export function MyBookingsScreen() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="ค้นหา Event, รหัสจอง, บูธ หรือร้านค้า"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+                  className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted"
                 />
               </label>
               <label>
@@ -329,7 +329,7 @@ export function MyBookingsScreen() {
                 <select
                   value={sortOrder}
                   onChange={(event) => setSortOrder(event.target.value as SortOrder)}
-                  className="min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm font-bold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+                  className="min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base font-bold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
                 >
                   <option value="newest">ล่าสุดก่อน</option>
                   <option value="oldest">เก่าก่อน</option>
@@ -363,7 +363,7 @@ export function MyBookingsScreen() {
                     }`}
                   >
                     {filter.label}
-                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}>
+                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-sm ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}>
                       {count}
                     </span>
                   </button>

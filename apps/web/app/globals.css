@@ -53,8 +53,20 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
+}
+
+/* iOS Safari zooms the page when a native form control below 16px receives
+   focus. Keep the desktop typography flexible while guaranteeing a stable
+   mobile viewport for every keyboard-opening control rendered by AppShell. */
+@media (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 button,
@@ -216,6 +228,42 @@ select {
   cursor: not-allowed;
   opacity: 0.55;
   transform: none;
+}
+
+/* Keep the support controls clear of mobile browser chrome, notches, and the
+   signed-in bottom navigation. Dynamic viewport units let the chat shrink
+   with the visible viewport when the on-screen keyboard opens. */
+.sl-floating-support {
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+.sl-floating-support--with-bottom-nav {
+  bottom: calc(5.125rem + env(safe-area-inset-bottom));
+}
+
+.sl-floating-chat {
+  height: 38.75rem;
+  max-height: calc(100vh - 10.625rem);
+  max-height: calc(100dvh - 10.625rem - env(safe-area-inset-bottom));
+}
+
+.sl-bottom-nav {
+  height: calc(68px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  scrollbar-width: none;
+}
+
+.sl-bottom-nav::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .sl-floating-support,
+  .sl-floating-support--with-bottom-nav {
+    right: 1.25rem;
+    bottom: 1.25rem;
+  }
 }
 
 .skeleton {

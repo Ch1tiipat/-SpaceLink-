@@ -156,7 +156,7 @@ export default function DiscoveryPage() {
       <section className="shell pt-8">
         <section className="relative flex min-h-[350px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] p-[44px] text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[390px] max-sm:items-end max-sm:rounded-[24px] max-sm:px-[22px] max-sm:py-7">
           <div className="relative z-[5] w-[57%] max-w-[600px] max-md:w-[68%] max-sm:w-full">
-            <span className="inline-flex min-h-[30px] items-center rounded-full border border-white/25 bg-white/[0.13] px-[13px] py-1.5 text-[11px] font-bold">
+            <span className="inline-flex min-h-[30px] items-center rounded-full border border-white/25 bg-white/[0.13] px-[13px] py-1.5 text-sm font-bold">
               พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
             </span>
             <h1 className="my-[14px] text-[clamp(36px,4vw,48px)] font-black leading-[1.12] tracking-[-0.045em] text-white max-sm:text-[34px]">
@@ -195,7 +195,7 @@ export default function DiscoveryPage() {
           }}
         >
           <label className="min-w-0">
-            <span className="mb-1.5 ml-1 block text-[10px] font-bold text-[#807787]">
+            <span className="mb-1.5 ml-1 block text-sm font-bold text-[#807787]">
               ค้นหางานหรือสถานที่
             </span>
             <input
@@ -205,7 +205,7 @@ export default function DiscoveryPage() {
                 setQuery(event.target.value);
                 setSearchApplied(false);
               }}
-              className="min-h-[45px] w-full rounded-[13px] border border-[#e8e3ed] bg-[#fdfcff] px-4 text-sm outline-none transition placeholder:text-[#aaa4b2] focus:border-[#a887ee] focus:bg-white focus:shadow-[0_0_0_4px_rgba(124,58,237,0.08)]"
+              className="min-h-[45px] w-full rounded-[13px] border border-[#e8e3ed] bg-[#fdfcff] px-4 text-base outline-none transition placeholder:text-[#aaa4b2] focus:border-[#a887ee] focus:bg-white focus:shadow-[0_0_0_4px_rgba(124,58,237,0.08)]"
               placeholder="เช่น งานเกษตร มทส."
             />
             <datalist id="event-suggestions">
@@ -286,11 +286,11 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
     return (
       <article className="sl-surface relative overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
         <div className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}><strong className="text-[23px]">ประกาศ</strong></div>
-        <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-[9px] font-bold text-[#6d28d9]">ข่าวงาน</span>
+        <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-sm font-bold text-[#6d28d9]">ข่าวงาน</span>
         <div className="p-[17px]">
           <h3 className="text-[15px] font-extrabold">{update.announcement.title}</h3>
-          <p className="mt-1.5 min-h-[38px] line-clamp-2 text-[11px] leading-[1.65] text-muted">{update.announcement.body}</p>
-          <span className="mt-3 inline-block text-[11px] font-bold text-[#6d28d9]">อ่านประกาศ →</span>
+          <p className="mt-1.5 min-h-[38px] line-clamp-2 text-sm leading-[1.65] text-muted">{update.announcement.body}</p>
+          <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">อ่านประกาศ →</span>
         </div>
       </article>
     );
@@ -301,13 +301,13 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
   return (
     <Link href={`/events/${event.id}`} className="sl-surface relative overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft">
       <div className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}><strong className="text-[23px]">{formatDateRange(event)}</strong></div>
-      <span className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-[9px] font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}>
+      <span className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}>
         {bookable ? 'เปิดจอง' : 'ปิดรับจอง'}
       </span>
       <div className="p-[17px]">
         <h3 className="text-[15px] font-extrabold">{event.name}</h3>
-        <p className="mt-1.5 min-h-[38px] text-[11px] leading-[1.65] text-muted">{event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}</p>
-        <span className="mt-3 inline-block text-[11px] font-bold text-[#6d28d9]">ดูรายละเอียด →</span>
+        <p className="mt-1.5 min-h-[38px] text-sm leading-[1.65] text-muted">{event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}</p>
+        <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">ดูรายละเอียด →</span>
       </div>
     </Link>
   );
@@ -350,8 +350,8 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
               <span className="grid h-[43px] w-[43px] shrink-0 place-items-center rounded-[13px] bg-[#f3edff] font-extrabold text-[#6d28d9]">{zone.code}</span>
               <span>
                 <strong className="block text-sm">โซน {zone.code} · {zone.name ?? `โซน ${zone.code}`}</strong>
-                <span className="mt-1.5 block text-[11px] leading-[1.7] text-muted">มี {available} บูธว่าง ตรวจสอบตำแหน่งและราคาจากแผนผังจริง</span>
-                <span className="mt-2.5 inline-block text-[11px] font-bold text-[#6d28d9]">ดูตำแหน่งบูธ →</span>
+                <span className="mt-1.5 block text-sm leading-[1.7] text-muted">มี {available} บูธว่าง ตรวจสอบตำแหน่งและราคาจากแผนผังจริง</span>
+                <span className="mt-2.5 inline-block text-sm font-bold text-[#6d28d9]">ดูตำแหน่งบูธ →</span>
               </span>
             </Link>
           );
@@ -463,7 +463,7 @@ function PlatformBenefits() {
         <span aria-hidden className="absolute -right-20 -top-24 h-72 w-72 rounded-full border-[50px] border-white/[0.035]" />
         <div className="relative grid items-center gap-8 lg:grid-cols-[.72fr_1.28fr]">
           <div>
-            <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#c8a9ff]">Why SpaceLink</span>
+            <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-[#c8a9ff]">Why SpaceLink</span>
             <h2 id="benefit-heading" className="mt-3 text-[clamp(28px,3vw,38px)] font-black leading-[1.25] tracking-[-0.04em]">
               เตรียมร้านให้พร้อม<br className="max-lg:hidden" /> ก่อนออกงาน
             </h2>
@@ -482,7 +482,7 @@ function PlatformBenefits() {
                 <article key={benefit.title} className="rounded-[18px] border border-white/10 bg-white/[0.075] p-5 backdrop-blur-sm">
                   <Icon aria-hidden className="h-5 w-5 text-[#cdb3ff]" />
                   <h3 className="mt-4 text-sm font-extrabold text-white">{benefit.title}</h3>
-                  <p className="mt-1.5 text-[11px] leading-6 text-white/65">{benefit.description}</p>
+                  <p className="mt-1.5 text-sm leading-6 text-white/65">{benefit.description}</p>
                 </article>
               );
             })}

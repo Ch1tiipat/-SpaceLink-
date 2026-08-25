@@ -171,7 +171,7 @@ export function SelectMenu({
         className={
           hideLabel
             ? 'sr-only'
-            : 'mb-1.5 block text-[10px] font-bold uppercase tracking-[.12em] text-muted'
+            : 'mb-1.5 block text-sm font-bold uppercase tracking-[.12em] text-muted'
         }
       >
         {label}
@@ -194,7 +194,7 @@ export function SelectMenu({
             {selected ? selected.label : placeholder}
           </span>
           {selected?.hint && (
-            <span className="block truncate text-[11px] font-medium text-muted">
+            <span className="block truncate text-sm font-medium text-muted">
               {selected.hint}
             </span>
           )}
@@ -244,7 +244,7 @@ export function SelectMenu({
                 <span className="min-w-0">
                   <span className="block truncate">{option.label}</span>
                   {option.hint && (
-                    <span className="block truncate text-[11px] text-muted">
+                    <span className="block truncate text-sm text-muted">
                       {option.hint}
                     </span>
                   )}
