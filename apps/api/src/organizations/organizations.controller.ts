@@ -9,10 +9,11 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GrantAdminDto } from './dto/grant-admin.dto';
@@ -27,8 +28,14 @@ export class OrganizationsController {
   @Post()
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
-  create(@Body() createOrganizationDto: CreateOrganizationDto) {
-    return this.organizationsService.create(createOrganizationDto);
+  create(
+    @Body() createOrganizationDto: CreateOrganizationDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.organizationsService.create(
+      createOrganizationDto,
+      currentUser.id,
+    );
   }
 
   @Get()
@@ -56,10 +63,12 @@ export class OrganizationsController {
   grantAdmin(
     @Param('organizationId') organizationId: string,
     @Body() grantAdminDto: GrantAdminDto,
+    @CurrentUser() currentUser: User,
   ) {
     return this.organizationsService.grantAdmin(
       organizationId,
       grantAdminDto.email,
+      currentUser.id,
     );
   }
 
@@ -71,8 +80,13 @@ export class OrganizationsController {
   revokeAdmin(
     @Param('organizationId') organizationId: string,
     @Param('userId') userId: string,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.organizationsService.revokeAdmin(organizationId, userId);
+    return this.organizationsService.revokeAdmin(
+      organizationId,
+      userId,
+      currentUser.id,
+    );
   }
 
   @Patch(':organizationId')
@@ -96,10 +110,12 @@ export class OrganizationsController {
   updateStatus(
     @Param('organizationId') organizationId: string,
     @Body() updateStatusDto: UpdateOrganizationStatusDto,
+    @CurrentUser() currentUser: User,
   ) {
     return this.organizationsService.updateStatus(
       organizationId,
       updateStatusDto.status,
+      currentUser.id,
     );
   }
 }
