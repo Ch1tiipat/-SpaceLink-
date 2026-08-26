@@ -1,14 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
   AlertTriangle,
-  ArrowRight,
+  BarChart3,
   Building2,
   CalendarCheck2,
+  ChartNoAxesCombined,
+  Check,
+  Circle,
   CircleDollarSign,
+  Minus,
   RefreshCw,
   ShieldAlert,
   TicketCheck,
@@ -16,36 +19,23 @@ import {
 import {
   getSuperAdminAuditLogs,
   getSuperAdminBookings,
+  getSuperAdminCompanyAdmins,
   getSuperAdminOrganizations,
   getSuperAdminPenalties,
   getSuperAdminRefunds,
   getSuperAdminSupportTickets,
   type SuperAdminAuditLog,
   type SuperAdminBooking,
+  type SuperAdminCompanyAdmin,
   type SuperAdminOrganization,
+  type SuperAdminOrganizationStatus,
   type SuperAdminPenaltiesOverview,
   type SuperAdminRefund,
   type SuperAdminSupportTicket,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
-type DashboardData = {
-  organizations: SuperAdminOrganization[];
-  bookings: SuperAdminBooking[];
-  refunds: SuperAdminRefund[];
-  tickets: SuperAdminSupportTicket[];
-  penalties: SuperAdminPenaltiesOverview;
-  auditLogs: SuperAdminAuditLog[];
-};
-
-const EMPTY_DATA: DashboardData = {
-  organizations: [],
-  bookings: [],
-  refunds: [],
-  tickets: [],
-  penalties: { penalties: [], blacklistedUsers: [] },
-  auditLogs: [],
-};
+type ChartMode = 'donut' | 'bar' | 'line';
 
 const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
   dateStyle: 'medium',
@@ -54,12 +44,20 @@ const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
 });
 
 export function SuperAdminDashboard() {
-  const [data, setData] = useState<DashboardData>(EMPTY_DATA);
+  const [organizations, setOrganizations] = useState<SuperAdminOrganization[]>([]);
+  const [admins, setAdmins] = useState<SuperAdminCompanyAdmin[]>([]);
+  const [bookings, setBookings] = useState<SuperAdminBooking[]>([]);
+  const [refunds, setRefunds] = useState<SuperAdminRefund[]>([]);
+  const [tickets, setTickets] = useState<SuperAdminSupportTicket[]>([]);
+  const [penalties, setPenalties] = useState<SuperAdminPenaltiesOverview>({
+    penalties: [],
+    blacklistedUsers: [],
+  });
+  const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [failedSections, setFailedSections] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
-
-  const load = useCallback(() => setReloadKey((value) => value + 1), []);
+  const [chartMode, setChartMode] = useState<ChartMode>('line');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,12 +68,13 @@ export function SuperAdminDashboard() {
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
         if (!token) throw new Error('ไม่พบเซสชันผู้ดูแลระบบ');
 
         const results = await Promise.allSettled([
           getSuperAdminOrganizations(token, controller.signal),
+          getSuperAdminCompanyAdmins(token, controller.signal),
           getSuperAdminBookings(token, controller.signal),
           getSuperAdminRefunds(token, controller.signal),
           getSuperAdminSupportTickets(token, controller.signal),
@@ -85,32 +84,58 @@ export function SuperAdminDashboard() {
         if (!active) return;
 
         const failed: string[] = [];
-        const read = <T,>(
-          result: PromiseSettledResult<T>,
-          fallback: T,
-          label: string,
-        ): T => {
-          if (result.status === 'fulfilled') return result.value;
-          failed.push(label);
-          return fallback;
-        };
-
-        setData({
-          organizations: read(results[0], [], 'องค์กร'),
-          bookings: read(results[1], [], 'การจอง'),
-          refunds: read(results[2], [], 'คืนเงิน'),
-          tickets: read(results[3], [], 'คำร้องช่วยเหลือ'),
-          penalties: read(
-            results[4],
-            { penalties: [], blacklistedUsers: [] },
-            'บทลงโทษ',
-          ),
-          auditLogs: read(results[5], [], 'กิจกรรมระบบ'),
-        });
+        if (results[0].status === 'fulfilled') {
+          setOrganizations(results[0].value);
+        } else {
+          setOrganizations([]);
+          failed.push('องค์กร');
+        }
+        if (results[1].status === 'fulfilled') {
+          setAdmins(results[1].value);
+        } else {
+          setAdmins([]);
+          failed.push('แอดมินบริษัท');
+        }
+        if (results[2].status === 'fulfilled') {
+          setBookings(results[2].value);
+        } else {
+          setBookings([]);
+          failed.push('การจอง');
+        }
+        if (results[3].status === 'fulfilled') {
+          setRefunds(results[3].value);
+        } else {
+          setRefunds([]);
+          failed.push('คืนเงิน');
+        }
+        if (results[4].status === 'fulfilled') {
+          setTickets(results[4].value);
+        } else {
+          setTickets([]);
+          failed.push('คำร้องช่วยเหลือ');
+        }
+        if (results[5].status === 'fulfilled') {
+          setPenalties(results[5].value);
+        } else {
+          setPenalties({ penalties: [], blacklistedUsers: [] });
+          failed.push('บทลงโทษ');
+        }
+        if (results[6].status === 'fulfilled') {
+          setAuditLogs(results[6].value);
+        } else {
+          setAuditLogs([]);
+          failed.push('กิจกรรมล่าสุด');
+        }
         setFailedSections(failed);
       } catch {
         if (active) {
-          setData(EMPTY_DATA);
+          setOrganizations([]);
+          setAdmins([]);
+          setBookings([]);
+          setRefunds([]);
+          setTickets([]);
+          setPenalties({ penalties: [], blacklistedUsers: [] });
+          setAuditLogs([]);
           setFailedSections(['ข้อมูลทั้งหมด']);
         }
       } finally {
@@ -124,207 +149,260 @@ export function SuperAdminDashboard() {
     };
   }, [reloadKey]);
 
-  const activeOrganizations = data.organizations.filter(
-    (organization) => organization.status === 'ACTIVE',
-  ).length;
-  const activeBookings = data.bookings.filter(
-    (booking) =>
-      booking.status === 'CONFIRMED' ||
-      booking.status === 'PENDING_PAYMENT',
-  ).length;
-  const pendingRefunds = data.refunds.filter(
-    (refund) => refund.status === 'PENDING',
-  ).length;
-  const openTickets = data.tickets.filter(
-    (ticket) => ticket.status !== 'CLOSED',
-  ).length;
+  const counts = useMemo(() => countStatuses(organizations), [organizations]);
+  const activeBookings = useMemo(
+    () =>
+      bookings.filter(
+        (booking) =>
+          booking.status === 'CONFIRMED' ||
+          booking.status === 'PENDING_PAYMENT',
+      ).length,
+    [bookings],
+  );
+  const pendingRefunds = useMemo(
+    () => refunds.filter((refund) => refund.status === 'PENDING').length,
+    [refunds],
+  );
+  const openTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status !== 'CLOSED').length,
+    [tickets],
+  );
+  const adminCounts = useMemo(() => {
+    const result = new Map<string, number>();
+    admins.forEach((admin) => {
+      result.set(
+        admin.organization.id,
+        (result.get(admin.organization.id) ?? 0) + 1,
+      );
+    });
+    return result;
+  }, [admins]);
+  const watchlist = useMemo(
+    () =>
+      [...organizations]
+        .sort((left, right) => statusPriority(left.status) - statusPriority(right.status))
+        .slice(0, 4),
+    [organizations],
+  );
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div className="mx-auto w-full max-w-[1440px] px-[15px] pb-11 pt-[23px] sm:px-[34px] sm:pt-[31px]">
+      <section className="flex flex-col items-start justify-between gap-[18px] sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
-            Super Admin Dashboard
-          </p>
-          <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">
-            ภาพรวมแพลตฟอร์ม
+          <span className="text-[11px] font-extrabold tracking-[1.1px] text-[#7c3aed]">
+            ORGANIZATION OVERVIEW
+          </span>
+          <h1 className="mb-[5px] mt-[7px] text-[27px] font-black tracking-[-.8px] text-[#242032]">
+            ภาพรวมระบบ
           </h1>
-          <p className="mt-2 text-sm text-muted">
-            สถานะทุกองค์กร การจอง และรายการที่ต้องติดตามจากข้อมูลจริง
+          <p className="m-0 text-[15px] text-[#82788b]">
+            สรุปสถานะองค์กรจากข้อมูลจริงที่ Backend รองรับ
           </p>
         </div>
         <button
           type="button"
-          onClick={load}
+          onClick={() => setReloadKey((value) => value + 1)}
           disabled={loading}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#e3dced] bg-white px-4 text-sm font-bold text-[#655d70] shadow-sm transition hover:border-violet-200 hover:text-violet disabled:opacity-60"
+          className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] transition hover:border-[#d5c3e8] hover:text-[#6d28d9] disabled:opacity-55"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           โหลดข้อมูลใหม่
         </button>
-      </div>
-
-      {failedSections.length > 0 && (
-        <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>
-              โหลดส่วนต่อไปนี้ไม่สำเร็จ: {failedSections.join(', ')} — ส่วนอื่นยังแสดงผลได้ตามปกติ
-            </p>
-          </div>
-          <button type="button" onClick={load} className="shrink-0 font-extrabold underline">
-            ลองอีกครั้ง
-          </button>
-        </div>
-      )}
-
-      <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="ตัวชี้วัดหลัก">
-        <MetricCard
-          title="องค์กรที่ใช้งาน"
-          value={activeOrganizations}
-          detail={`จากทั้งหมด ${data.organizations.length} องค์กร`}
-          icon={Building2}
-          tone="violet"
-          loading={loading}
-        />
-        <MetricCard
-          title="การจองที่กำลังดำเนินการ"
-          value={activeBookings}
-          detail={`จากทั้งหมด ${data.bookings.length} รายการ`}
-          icon={CalendarCheck2}
-          tone="blue"
-          loading={loading}
-        />
-        <MetricCard
-          title="คำร้องคืนเงินรอตรวจ"
-          value={pendingRefunds}
-          detail={`จากทั้งหมด ${data.refunds.length} คำร้อง`}
-          icon={CircleDollarSign}
-          tone="amber"
-          loading={loading}
-        />
-        <MetricCard
-          title="Support ที่ยังไม่ปิด"
-          value={openTickets}
-          detail={`จากทั้งหมด ${data.tickets.length} คำร้อง`}
-          icon={TicketCheck}
-          tone="red"
-          loading={loading}
-        />
       </section>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
-        <section className="overflow-hidden rounded-[22px] border border-[#e9e4ef] bg-white shadow-[0_12px_32px_rgba(53,39,76,0.055)]">
-          <div className="flex items-center justify-between border-b border-[#eeeaf3] px-5 py-4 sm:px-6">
-            <div>
-              <h2 className="text-lg font-black text-ink">กิจกรรมล่าสุด</h2>
-              <p className="text-xs text-muted">Audit log จากการจัดการระดับแพลตฟอร์ม</p>
-            </div>
-            <Activity className="h-5 w-5 text-violet" />
+      <section className="mt-6 flex flex-col gap-3 rounded-[11px] border border-[#e1d5ef] bg-[#fbf8ff] px-3.5 py-3 text-xs text-[#675d70] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eee5fb] text-[11px] font-extrabold text-[#6d28d9]">
+            i
+          </span>
+          <div>
+            <strong className="block text-[13px] text-[#242032]">
+              Dashboard ใช้ข้อมูลจริงครบทั้งองค์กร การดำเนินงาน และการกำกับดูแล
+            </strong>
+            <span className="mt-1 block leading-relaxed">
+              GET /organizations, /admins, /bookings, /refunds, /support-tickets, /penalties และ /audit-logs
+            </span>
           </div>
-          {loading ? (
-            <TableSkeleton />
-          ) : data.auditLogs.length === 0 ? (
-            <EmptyState message="ยังไม่มีกิจกรรมในระบบ" />
-          ) : (
-            <div className="divide-y divide-[#f0edf4]">
-              {data.auditLogs.slice(0, 6).map((log) => (
-                <div key={log.id} className="grid gap-1 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-6">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-ink">{humanizeAction(log.action)}</p>
-                    <p className="truncate text-xs text-muted">
-                      {log.actor.fullName || log.actor.email} · {log.targetType}
-                    </p>
+        </div>
+        <Link href="/super-admin/organizations" className="shrink-0 font-extrabold text-[#6d28d9]">
+          ดูองค์กรทั้งหมด →
+        </Link>
+      </section>
+
+      {failedSections.length > 0 ? (
+        <div className="mt-3 flex items-start gap-2 rounded-[11px] border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-900">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          โหลด {failedSections.join(', ')} ไม่สำเร็จ ส่วนอื่นยังใช้งานได้ตามปกติ
+        </div>
+      ) : null}
+
+      <section className="mt-[18px] grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-label="ตัวเลขสำคัญ">
+        <MetricCard label="องค์กรทั้งหมด" value={organizations.length} detail="GET /organizations" tone="purple" icon={Building2} loading={loading} />
+        <MetricCard label="ACTIVE" value={counts.ACTIVE} detail={percentage(counts.ACTIVE, organizations.length)} tone="green" icon={Check} loading={loading} />
+        <MetricCard label="INACTIVE" value={counts.INACTIVE} detail={percentage(counts.INACTIVE, organizations.length)} tone="orange" icon={Minus} loading={loading} />
+        <MetricCard label="SUSPENDED" value={counts.SUSPENDED} detail={percentage(counts.SUSPENDED, organizations.length)} tone="red" icon={AlertTriangle} loading={loading} />
+      </section>
+
+      <div className="mt-6">
+        <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">
+          PLATFORM OPERATIONS
+        </span>
+        <h2 className="mt-1 text-[17px] font-black text-[#242032]">
+          ภาพรวมการดำเนินงาน
+        </h2>
+      </div>
+      <section className="mt-3 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-label="ตัวเลขการดำเนินงาน">
+        <MetricCard label="องค์กรที่ใช้งาน" value={counts.ACTIVE} detail={`จากทั้งหมด ${organizations.length} องค์กร`} tone="green" icon={Building2} loading={loading} />
+        <MetricCard label="การจองที่กำลังดำเนินการ" value={activeBookings} detail={`จากทั้งหมด ${bookings.length} รายการ`} tone="blue" icon={CalendarCheck2} loading={loading} />
+        <MetricCard label="คำร้องคืนเงินรอตรวจ" value={pendingRefunds} detail={`จากทั้งหมด ${refunds.length} คำร้อง`} tone="orange" icon={CircleDollarSign} loading={loading} />
+        <MetricCard label="Support ที่ยังไม่ปิด" value={openTickets} detail={`จากทั้งหมด ${tickets.length} คำร้อง`} tone="red" icon={TicketCheck} loading={loading} />
+      </section>
+
+      <section className="mt-[18px] grid gap-[18px] xl:grid-cols-[minmax(0,1.55fr)_minmax(310px,.85fr)]">
+        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+          <header className="flex flex-col gap-3 border-b border-[#eee8f4] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">ORGANIZATION STATUS</span>
+              <h2 className="mt-1 text-[17px] font-black text-[#242032]">สถานะองค์กร</h2>
+            </div>
+            <div className="flex rounded-lg border border-[#e7dfea] bg-[#fbf8ff] p-1" aria-label="เลือกรูปแบบกราฟ">
+              <ChartButton active={chartMode === 'donut'} onClick={() => setChartMode('donut')} icon={Circle} label="วงกลม" />
+              <ChartButton active={chartMode === 'bar'} onClick={() => setChartMode('bar')} icon={BarChart3} label="แท่ง" />
+              <ChartButton active={chartMode === 'line'} onClick={() => setChartMode('line')} icon={ChartNoAxesCombined} label="เส้น" />
+            </div>
+          </header>
+          <div className="flex flex-wrap gap-4 px-5 pt-4 text-[11px] text-[#82788b]">
+            <Legend color="#7c3aed" label="ACTIVE" />
+            <Legend color="#e29c36" label="INACTIVE" />
+            <Legend color="#d14343" label="SUSPENDED" />
+          </div>
+          <div className="grid min-h-[270px] place-items-center p-5">
+            {loading ? <ChartSkeleton /> : <StatusChart mode={chartMode} counts={counts} total={organizations.length} />}
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+          <header className="flex items-center justify-between border-b border-[#eee8f4] px-5 py-4">
+            <div>
+              <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">NEEDS ATTENTION</span>
+              <h2 className="mt-1 text-[17px] font-black text-[#242032]">องค์กรที่ต้องติดตาม</h2>
+            </div>
+            <Link href="/super-admin/organizations" className="text-xs font-extrabold text-[#6d28d9]">ทั้งหมด →</Link>
+          </header>
+          <div className="divide-y divide-[#f0ecf3] px-5">
+            <AttentionRow label="SUSPENDED" description="ตรวจสอบผลกระทบก่อนเปิดกลับ" value={counts.SUSPENDED} tone="red" />
+            <AttentionRow label="INACTIVE" description="องค์กรที่ปิดใช้งานอยู่" value={counts.INACTIVE} tone="orange" />
+            <AttentionRow label="บทลงโทษ" description="รายการกำกับดูแลข้ามองค์กร" value={penalties.penalties.length} tone="red" icon={ShieldAlert} />
+            <AttentionRow label="ผู้ใช้ Blacklist" description="ผู้ใช้ที่ถูกระงับทั่วทั้งระบบ" value={penalties.blacklistedUsers.length} tone="red" icon={ShieldAlert} />
+            <AttentionRow label="แอดมินบริษัท" description="ข้อมูลข้ามทุกองค์กร" value={admins.length} tone="purple" />
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)] xl:col-span-1">
+          <header className="flex items-center justify-between border-b border-[#eee8f4] px-5 py-4">
+            <div>
+              <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">ORGANIZATION WATCHLIST</span>
+              <h2 className="mt-1 text-[17px] font-black text-[#242032]">องค์กรที่ควรติดตาม</h2>
+            </div>
+            <Link href="/super-admin/organizations" className="text-xs font-extrabold text-[#6d28d9]">ดูทั้งหมด →</Link>
+          </header>
+          {loading ? <RowsSkeleton /> : watchlist.length === 0 ? <EmptyPanel text="ยังไม่มีองค์กรในระบบ" /> : (
+            <div className="overflow-x-auto px-4 pb-3">
+              <table className="w-full min-w-[620px] border-collapse text-left">
+                <thead className="text-[11px] text-[#948a98]"><tr><th className="px-2 py-3">Organization</th><th className="px-2 py-3">Contact</th><th className="px-2 py-3">สถานะ</th><th className="px-2 py-3 text-right">Admins</th></tr></thead>
+                <tbody className="divide-y divide-[#f0ecf3]">
+                  {watchlist.map((organization) => (
+                    <tr key={organization.id} className="text-xs text-[#423b4c]">
+                      <td className="px-2 py-3"><div className="flex items-center gap-2.5"><OrganizationMark name={organization.name} /><div className="min-w-0"><strong className="block max-w-[180px] truncate">{organization.name}</strong><small className="mt-0.5 block max-w-[180px] truncate text-[10px] text-[#82788b]">{organization.id}</small></div></div></td>
+                      <td className="px-2 py-3">{organization.contactEmail}</td>
+                      <td className="px-2 py-3"><StatusPill status={organization.status} /></td>
+                      <td className="px-2 py-3 text-right font-extrabold">{adminCounts.get(organization.id) ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
+
+        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+          <header className="border-b border-[#eee8f4] px-5 py-4">
+            <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">RECENT ACTIVITY</span>
+            <h2 className="mt-1 text-[17px] font-black text-[#242032]">กิจกรรมล่าสุด</h2>
+          </header>
+          {loading ? <RowsSkeleton /> : auditLogs.length === 0 ? <EmptyPanel text="ยังไม่มีกิจกรรมในระบบ" /> : (
+            <div className="divide-y divide-[#f0ecf3] px-5">
+              {auditLogs.slice(0, 5).map((log) => (
+                <div key={log.id} className="py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <strong className="text-xs text-[#423b4c]">{humanizeAction(log.action)}</strong>
+                    <time dateTime={log.createdAt} className="shrink-0 text-[10px] text-[#948a98]">{THAI_DATE_TIME.format(new Date(log.createdAt))}</time>
                   </div>
-                  <time className="text-xs font-medium text-[#918a9b]" dateTime={log.createdAt}>
-                    {THAI_DATE_TIME.format(new Date(log.createdAt))}
-                  </time>
+                  <p className="mt-1 truncate text-[11px] text-[#82788b]">{log.actor.fullName || log.actor.email} · {log.targetType}</p>
                 </div>
               ))}
             </div>
           )}
-        </section>
-
-        <div className="grid content-start gap-6">
-          <section className="rounded-[22px] border border-[#e9e4ef] bg-white p-5 shadow-[0_12px_32px_rgba(53,39,76,0.055)] sm:p-6">
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-red-50 text-red-700">
-                <ShieldAlert className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="font-black text-ink">การกำกับดูแล</h2>
-                <p className="text-xs text-muted">ข้อมูลบทลงโทษข้ามองค์กร</p>
-              </div>
-            </div>
-            <dl className="mt-5 grid grid-cols-2 gap-3">
-              <SummaryCell label="บทลงโทษทั้งหมด" value={data.penalties.penalties.length} loading={loading} />
-              <SummaryCell label="ผู้ใช้ Blacklist" value={data.penalties.blacklistedUsers.length} loading={loading} />
-            </dl>
-          </section>
-
-          <Link
-            href="/super-admin/organizations"
-            className="group flex items-center justify-between rounded-[22px] bg-gradient-to-br from-[#6d28d9] to-[#8b5cf6] p-5 text-white shadow-[0_16px_34px_rgba(109,40,217,0.22)] transition hover:-translate-y-0.5 sm:p-6"
-          >
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-violet-100">Quick action</p>
-              <p className="mt-1 text-lg font-black">จัดการองค์กร</p>
-              <p className="mt-1 text-sm text-violet-100">สร้าง ค้นหา และเปลี่ยนสถานะองค์กร</p>
-            </div>
-            <ArrowRight className="h-6 w-6 transition group-hover:translate-x-1" />
-          </Link>
-        </div>
-      </div>
+        </article>
+      </section>
     </div>
   );
 }
 
 const TONES = {
-  violet: 'bg-violet-tint text-violet',
-  blue: 'bg-blue-50 text-blue-700',
-  amber: 'bg-amber-50 text-amber-700',
-  red: 'bg-red-50 text-red-700',
+  purple: { icon: 'bg-[#f1eaff] text-[#6d28d9]', detail: 'text-[#13996a]' },
+  green: { icon: 'bg-[#e9f8f1] text-[#13996a]', detail: 'text-[#13996a]' },
+  blue: { icon: 'bg-[#eef4ff] text-[#2563eb]', detail: 'text-[#2563eb]' },
+  orange: { icon: 'bg-[#fff3e3] text-[#d97812]', detail: 'text-[#d97812]' },
+  red: { icon: 'bg-[#fff0f0] text-[#d14343]', detail: 'text-[#d14343]' },
 };
 
-function MetricCard({ title, value, detail, icon: Icon, tone, loading }: {
-  title: string;
-  value: number;
-  detail: string;
-  icon: typeof Building2;
-  tone: keyof typeof TONES;
-  loading: boolean;
-}) {
+function MetricCard({ label, value, detail, tone, icon: Icon, loading }: { label: string; value: number; detail: string; tone: keyof typeof TONES; icon: typeof Building2; loading: boolean }) {
   return (
-    <article className="rounded-[22px] border border-[#e9e4ef] bg-white p-5 shadow-[0_10px_28px_rgba(53,39,76,0.05)]">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-bold text-[#756e7f]">{title}</p>
-        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${TONES[tone]}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-      {loading ? <div className="mt-5 h-9 w-20 animate-pulse rounded-lg bg-[#eeeaf3]" /> : <p className="mt-4 text-3xl font-black tracking-[-0.04em] text-ink">{value.toLocaleString('th-TH')}</p>}
-      <p className="mt-1 text-xs text-muted">{detail}</p>
+    <article className="flex items-center gap-3.5 overflow-hidden rounded-[14px] border border-[#e7def4] bg-[linear-gradient(145deg,#fff,#fbf8ff)] p-[17px] shadow-[0_10px_26px_rgba(74,48,112,.05)] transition hover:-translate-y-0.5 hover:border-[#d9c7ef] hover:shadow-[0_17px_35px_rgba(74,48,112,.1)]">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${TONES[tone].icon}`}><Icon className="h-5 w-5" /></span>
+      <div><span className="text-[13px] text-[#82788b]">{label}</span>{loading ? <div className="mt-1 h-7 w-14 animate-pulse rounded bg-[#eee8f4]" /> : <strong className="mt-0.5 block text-[24px] leading-tight text-[#242032]">{value.toLocaleString('th-TH')}</strong>}<small className={`text-[11px] font-bold ${TONES[tone].detail}`}>{detail}</small></div>
     </article>
   );
 }
 
-function SummaryCell({ label, value, loading }: { label: string; value: number; loading: boolean }) {
-  return (
-    <div className="rounded-2xl bg-[#faf8fc] p-3">
-      <dt className="text-xs font-semibold text-muted">{label}</dt>
-      <dd className="mt-1 text-2xl font-black text-ink">{loading ? '—' : value.toLocaleString('th-TH')}</dd>
-    </div>
-  );
+function ChartButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof Circle; label: string }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-bold transition ${active ? 'bg-white text-[#6d28d9] shadow-sm' : 'text-[#82788b]'}`}><Icon className="h-3.5 w-3.5" />{label}</button>;
 }
 
-function TableSkeleton() {
-  return <div className="grid gap-4 p-6">{[1, 2, 3, 4].map((item) => <div key={item} className="h-10 animate-pulse rounded-xl bg-[#f2eff5]" />)}</div>;
+function StatusChart({ mode, counts, total }: { mode: ChartMode; counts: Record<SuperAdminOrganizationStatus, number>; total: number }) {
+  if (total === 0) return <EmptyPanel text="ยังไม่มีข้อมูลสำหรับแสดงกราฟ" />;
+  const activeEnd = (counts.ACTIVE / total) * 100;
+  const inactiveEnd = activeEnd + (counts.INACTIVE / total) * 100;
+
+  if (mode === 'donut') {
+    return <div className="grid w-full gap-6 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-center"><div className="relative mx-auto grid h-[190px] w-[190px] place-items-center rounded-full shadow-[0_14px_30px_rgba(124,58,237,.16)]" style={{ background: `conic-gradient(#7c3aed 0 ${activeEnd}%,#e29c36 ${activeEnd}% ${inactiveEnd}%,#d14343 ${inactiveEnd}% 100%)` }}><div className="grid h-[120px] w-[120px] place-items-center rounded-full bg-white text-center"><div><strong className="block text-[25px]">{total}</strong><span className="text-[11px] text-[#82788b]">องค์กรทั้งหมด</span></div></div></div><div className="grid grid-cols-2 gap-2.5"><ChartSummary label="ACTIVE" value={counts.ACTIVE} /><ChartSummary label="INACTIVE" value={counts.INACTIVE} /><ChartSummary label="SUSPENDED" value={counts.SUSPENDED} /><ChartSummary label="TOTAL" value={total} /></div></div>;
+  }
+
+  const values = [
+    { label: 'ACTIVE', value: counts.ACTIVE, color: '#7c3aed' },
+    { label: 'INACTIVE', value: counts.INACTIVE, color: '#e29c36' },
+    { label: 'SUSPENDED', value: counts.SUSPENDED, color: '#d14343' },
+  ];
+  const max = Math.max(...values.map((item) => item.value), 1);
+
+  if (mode === 'bar') {
+    return <div className="flex h-[220px] w-full items-end justify-around gap-5 border-b border-[#ebe6f0] px-4">{values.map((item) => <div key={item.label} className="grid h-full flex-1 grid-rows-[28px_1fr_28px] items-end text-center"><strong className="text-xs text-[#62576c]">{item.value}</strong><div className="relative mx-auto h-full w-[min(58px,72%)] overflow-hidden rounded-t-[9px] bg-[#f2edf8]"><span className="absolute inset-x-0 bottom-0 rounded-t-[9px]" style={{ height: `${(item.value / max) * 100}%`, background: item.color }} /></div><small className="self-center text-[10px] text-[#82788b]">{item.label}</small></div>)}</div>;
+  }
+
+  const points = values.map((item, index) => `${80 + index * 250},${220 - (item.value / max) * 160}`).join(' ');
+  return <svg viewBox="0 0 660 250" className="h-[240px] w-full" role="img" aria-label="กราฟเส้นจำนวนองค์กรตามสถานะ"><g stroke="#eee8f4" strokeWidth="1"><path d="M55 40H630M55 95H630M55 150H630M55 205H630" /></g><polyline points={points} fill="none" stroke="#7c3aed" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />{values.map((item, index) => { const [x, y] = points.split(' ')[index].split(','); return <g key={item.label}><circle cx={x} cy={y} r="6" fill={item.color} /><text x={x} y="238" textAnchor="middle" fontSize="11" fill="#82788b">{item.label}</text><text x={x} y={Number(y) - 13} textAnchor="middle" fontSize="12" fontWeight="700" fill="#62576c">{item.value}</text></g>; })}</svg>;
 }
 
-function EmptyState({ message }: { message: string }) {
-  return <div className="px-6 py-14 text-center text-sm font-semibold text-muted">{message}</div>;
-}
-
-function humanizeAction(action: string) {
-  return action.toLowerCase().replaceAll('_', ' ');
-}
+function ChartSummary({ label, value }: { label: string; value: number }) { return <div className="rounded-[10px] border border-[#eee8f4] bg-white p-3"><span className="block text-[11px] text-[#82788b]">{label}</span><strong className="mt-1 block text-[17px]">{value}</strong></div>; }
+function Legend({ color, label }: { color: string; label: string }) { return <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: color }} />{label}</span>; }
+function AttentionRow({ label, description, value, tone, icon: Icon = AlertTriangle }: { label: string; description: string; value: number; tone: keyof typeof TONES; icon?: typeof AlertTriangle }) { return <div className="flex items-center gap-3 py-4"><span className={`grid h-8 w-8 place-items-center rounded-[9px] ${TONES[tone].icon}`}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block text-xs text-[#423b4c]">{label}</strong><small className="mt-1 block truncate text-[11px] text-[#82788b]">{description}</small></div><b className="text-sm text-[#242032]">{value}</b><span className="text-[#948a98]">›</span></div>; }
+function OrganizationMark({ name }: { name: string }) { return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f1eaff] text-xs font-extrabold text-[#6d28d9]">{name.trim().charAt(0).toUpperCase() || 'O'}</span>; }
+function StatusPill({ status }: { status: SuperAdminOrganizationStatus }) { const styles = { ACTIVE: 'bg-[#ecfdf3] text-[#166534]', INACTIVE: 'bg-[#fff7ed] text-[#92400e]', SUSPENDED: 'bg-[#fff1f2] text-[#b91c1c]' }; return <span className={`inline-block rounded-md px-2 py-1 text-[10px] font-extrabold ${styles[status]}`}>{status}</span>; }
+function RowsSkeleton() { return <div className="grid gap-3 p-5">{[1, 2, 3].map((item) => <div key={item} className="h-10 animate-pulse rounded-lg bg-[#f2edf8]" />)}</div>; }
+function ChartSkeleton() { return <div className="h-[190px] w-[190px] animate-pulse rounded-full bg-[#f2edf8]" />; }
+function EmptyPanel({ text }: { text: string }) { return <div className="grid min-h-[150px] place-items-center p-6 text-center text-xs text-[#82788b]">{text}</div>; }
+function countStatuses(organizations: SuperAdminOrganization[]) { return organizations.reduce<Record<SuperAdminOrganizationStatus, number>>((result, organization) => { result[organization.status] += 1; return result; }, { ACTIVE: 0, INACTIVE: 0, SUSPENDED: 0 }); }
+function statusPriority(status: SuperAdminOrganizationStatus) { return status === 'SUSPENDED' ? 0 : status === 'INACTIVE' ? 1 : 2; }
+function percentage(value: number, total: number) { return total === 0 ? '0% ของทั้งหมด' : `${((value / total) * 100).toFixed(1)}% ของทั้งหมด`; }
+function humanizeAction(action: string) { return action.toLowerCase().replaceAll('_', ' '); }
