@@ -7,11 +7,13 @@ import { ZoneRecommendationService } from './zone-recommendation.service';
 import { ZONE_RECOMMENDER } from './zone-recommender.interface';
 import type { ZoneRecommender } from './zone-recommender.interface';
 import { RecommendationsController } from './recommendations.controller';
+import { SupportAssistantController } from './support-assistant.controller';
+import { SupportAssistantService } from './support-assistant.service';
 
 type ZoneRecommenderName = 'rule' | 'gemini';
 
 @Module({
-  controllers: [RecommendationsController],
+  controllers: [RecommendationsController, SupportAssistantController],
   providers: [
     RuleBasedZoneRecommender,
     {
@@ -39,6 +41,7 @@ type ZoneRecommenderName = 'rule' | 'gemini';
       },
     },
     ZoneRecommendationService,
+    SupportAssistantService,
   ],
   exports: [ZoneRecommendationService],
 })
