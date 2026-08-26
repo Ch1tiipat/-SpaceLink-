@@ -215,11 +215,12 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
           </span>
           <button
             type="button"
-            className="relative grid h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675]"
-            aria-label="การแจ้งเตือน"
+            disabled
+            className="grid h-9 w-9 cursor-not-allowed place-items-center rounded-[9px] border border-[#ebe4ef] bg-[#faf8fc] text-[#aaa3b2]"
+            aria-label="การแจ้งเตือน (เร็วๆ นี้)"
+            title="การแจ้งเตือน — เร็วๆ นี้"
           >
             <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full border-2 border-white bg-red-500" />
           </button>
           <div className="flex min-h-11 items-center gap-2 rounded-xl border border-[#e6daf8] bg-[linear-gradient(135deg,#fff,#f6f0ff)] py-1 pl-1.5 pr-2.5 shadow-[0_6px_18px_rgba(124,58,237,.08)]">
             <span className="grid h-8 w-8 place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white shadow-[0_5px_13px_rgba(124,58,237,.23)]">
@@ -388,9 +389,16 @@ function NavigationLink({
 
   if (!item.href) {
     return (
-      <span className={`${className} cursor-default`} title="เตรียมเชื่อมใน Phase ถัดไป">
+      <span
+        aria-disabled="true"
+        className="flex min-h-9 cursor-not-allowed items-center gap-[11px] whitespace-nowrap rounded-[9px] px-[11px] py-[7px] text-sm text-[#aaa3b2]"
+        title="เตรียมเชื่อมใน Phase ถัดไป"
+      >
         <Icon className="h-[17px] w-[17px] shrink-0" />
-        {item.label}
+        <span>{item.label}</span>
+        <span className="ml-auto rounded bg-[#f1edf5] px-1.5 py-0.5 text-[9px] font-bold text-[#92899a]">
+          เร็วๆ นี้
+        </span>
       </span>
     );
   }
