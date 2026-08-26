@@ -221,9 +221,11 @@ export function useEmailOtp({
       // `pending` stays true so the button remains disabled while the router
       // navigates away.
       router.replace(
-        me.role === 'ORG_ADMIN' || me.role === 'SUPER_ADMIN'
-          ? '/admin/bookings'
-          : '/',
+        me.role === 'SUPER_ADMIN'
+          ? '/super-admin'
+          : me.role === 'ORG_ADMIN'
+            ? '/admin/bookings'
+            : '/',
       );
     } catch (cause) {
       setError(describeProfileError(cause));
