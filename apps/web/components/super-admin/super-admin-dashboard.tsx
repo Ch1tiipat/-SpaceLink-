@@ -6,20 +6,32 @@ import {
   AlertTriangle,
   BarChart3,
   Building2,
+  CalendarCheck2,
   ChartNoAxesCombined,
   Check,
   Circle,
+  CircleDollarSign,
   Minus,
   RefreshCw,
+  ShieldAlert,
+  TicketCheck,
 } from 'lucide-react';
 import {
   getSuperAdminAuditLogs,
+  getSuperAdminBookings,
   getSuperAdminCompanyAdmins,
   getSuperAdminOrganizations,
+  getSuperAdminPenalties,
+  getSuperAdminRefunds,
+  getSuperAdminSupportTickets,
   type SuperAdminAuditLog,
+  type SuperAdminBooking,
   type SuperAdminCompanyAdmin,
   type SuperAdminOrganization,
   type SuperAdminOrganizationStatus,
+  type SuperAdminPenaltiesOverview,
+  type SuperAdminRefund,
+  type SuperAdminSupportTicket,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -34,6 +46,13 @@ const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
 export function SuperAdminDashboard() {
   const [organizations, setOrganizations] = useState<SuperAdminOrganization[]>([]);
   const [admins, setAdmins] = useState<SuperAdminCompanyAdmin[]>([]);
+  const [bookings, setBookings] = useState<SuperAdminBooking[]>([]);
+  const [refunds, setRefunds] = useState<SuperAdminRefund[]>([]);
+  const [tickets, setTickets] = useState<SuperAdminSupportTicket[]>([]);
+  const [penalties, setPenalties] = useState<SuperAdminPenaltiesOverview>({
+    penalties: [],
+    blacklistedUsers: [],
+  });
   const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [failedSections, setFailedSections] = useState<string[]>([]);
@@ -56,6 +75,10 @@ export function SuperAdminDashboard() {
         const results = await Promise.allSettled([
           getSuperAdminOrganizations(token, controller.signal),
           getSuperAdminCompanyAdmins(token, controller.signal),
+          getSuperAdminBookings(token, controller.signal),
+          getSuperAdminRefunds(token, controller.signal),
+          getSuperAdminSupportTickets(token, controller.signal),
+          getSuperAdminPenalties(token, controller.signal),
           getSuperAdminAuditLogs(token, controller.signal),
         ] as const);
         if (!active) return;
@@ -74,7 +97,31 @@ export function SuperAdminDashboard() {
           failed.push('แอดมินบริษัท');
         }
         if (results[2].status === 'fulfilled') {
-          setAuditLogs(results[2].value);
+          setBookings(results[2].value);
+        } else {
+          setBookings([]);
+          failed.push('การจอง');
+        }
+        if (results[3].status === 'fulfilled') {
+          setRefunds(results[3].value);
+        } else {
+          setRefunds([]);
+          failed.push('คืนเงิน');
+        }
+        if (results[4].status === 'fulfilled') {
+          setTickets(results[4].value);
+        } else {
+          setTickets([]);
+          failed.push('คำร้องช่วยเหลือ');
+        }
+        if (results[5].status === 'fulfilled') {
+          setPenalties(results[5].value);
+        } else {
+          setPenalties({ penalties: [], blacklistedUsers: [] });
+          failed.push('บทลงโทษ');
+        }
+        if (results[6].status === 'fulfilled') {
+          setAuditLogs(results[6].value);
         } else {
           setAuditLogs([]);
           failed.push('กิจกรรมล่าสุด');
@@ -84,6 +131,10 @@ export function SuperAdminDashboard() {
         if (active) {
           setOrganizations([]);
           setAdmins([]);
+          setBookings([]);
+          setRefunds([]);
+          setTickets([]);
+          setPenalties({ penalties: [], blacklistedUsers: [] });
           setAuditLogs([]);
           setFailedSections(['ข้อมูลทั้งหมด']);
         }
@@ -99,6 +150,23 @@ export function SuperAdminDashboard() {
   }, [reloadKey]);
 
   const counts = useMemo(() => countStatuses(organizations), [organizations]);
+  const activeBookings = useMemo(
+    () =>
+      bookings.filter(
+        (booking) =>
+          booking.status === 'CONFIRMED' ||
+          booking.status === 'PENDING_PAYMENT',
+      ).length,
+    [bookings],
+  );
+  const pendingRefunds = useMemo(
+    () => refunds.filter((refund) => refund.status === 'PENDING').length,
+    [refunds],
+  );
+  const openTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status !== 'CLOSED').length,
+    [tickets],
+  );
   const adminCounts = useMemo(() => {
     const result = new Map<string, number>();
     admins.forEach((admin) => {
@@ -149,10 +217,10 @@ export function SuperAdminDashboard() {
           </span>
           <div>
             <strong className="block text-[13px] text-[#242032]">
-              Dashboard ใช้ข้อมูลจาก GET /organizations, GET /admins และ GET /audit-logs
+              Dashboard ใช้ข้อมูลจริงครบทั้งองค์กร การดำเนินงาน และการกำกับดูแล
             </strong>
             <span className="mt-1 block leading-relaxed">
-              ทุกตัวเลขบนหน้านี้คำนวณจาก response จริง ไม่มีข้อมูล Mock
+              GET /organizations, /admins, /bookings, /refunds, /support-tickets, /penalties และ /audit-logs
             </span>
           </div>
         </div>
@@ -173,6 +241,21 @@ export function SuperAdminDashboard() {
         <MetricCard label="ACTIVE" value={counts.ACTIVE} detail={percentage(counts.ACTIVE, organizations.length)} tone="green" icon={Check} loading={loading} />
         <MetricCard label="INACTIVE" value={counts.INACTIVE} detail={percentage(counts.INACTIVE, organizations.length)} tone="orange" icon={Minus} loading={loading} />
         <MetricCard label="SUSPENDED" value={counts.SUSPENDED} detail={percentage(counts.SUSPENDED, organizations.length)} tone="red" icon={AlertTriangle} loading={loading} />
+      </section>
+
+      <div className="mt-6">
+        <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">
+          PLATFORM OPERATIONS
+        </span>
+        <h2 className="mt-1 text-[17px] font-black text-[#242032]">
+          ภาพรวมการดำเนินงาน
+        </h2>
+      </div>
+      <section className="mt-3 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-label="ตัวเลขการดำเนินงาน">
+        <MetricCard label="องค์กรที่ใช้งาน" value={counts.ACTIVE} detail={`จากทั้งหมด ${organizations.length} องค์กร`} tone="green" icon={Building2} loading={loading} />
+        <MetricCard label="การจองที่กำลังดำเนินการ" value={activeBookings} detail={`จากทั้งหมด ${bookings.length} รายการ`} tone="blue" icon={CalendarCheck2} loading={loading} />
+        <MetricCard label="คำร้องคืนเงินรอตรวจ" value={pendingRefunds} detail={`จากทั้งหมด ${refunds.length} คำร้อง`} tone="orange" icon={CircleDollarSign} loading={loading} />
+        <MetricCard label="Support ที่ยังไม่ปิด" value={openTickets} detail={`จากทั้งหมด ${tickets.length} คำร้อง`} tone="red" icon={TicketCheck} loading={loading} />
       </section>
 
       <section className="mt-[18px] grid gap-[18px] xl:grid-cols-[minmax(0,1.55fr)_minmax(310px,.85fr)]">
@@ -209,6 +292,8 @@ export function SuperAdminDashboard() {
           <div className="divide-y divide-[#f0ecf3] px-5">
             <AttentionRow label="SUSPENDED" description="ตรวจสอบผลกระทบก่อนเปิดกลับ" value={counts.SUSPENDED} tone="red" />
             <AttentionRow label="INACTIVE" description="องค์กรที่ปิดใช้งานอยู่" value={counts.INACTIVE} tone="orange" />
+            <AttentionRow label="บทลงโทษ" description="รายการกำกับดูแลข้ามองค์กร" value={penalties.penalties.length} tone="red" icon={ShieldAlert} />
+            <AttentionRow label="ผู้ใช้ Blacklist" description="ผู้ใช้ที่ถูกระงับทั่วทั้งระบบ" value={penalties.blacklistedUsers.length} tone="red" icon={ShieldAlert} />
             <AttentionRow label="แอดมินบริษัท" description="ข้อมูลข้ามทุกองค์กร" value={admins.length} tone="purple" />
           </div>
         </article>
@@ -267,6 +352,7 @@ export function SuperAdminDashboard() {
 const TONES = {
   purple: { icon: 'bg-[#f1eaff] text-[#6d28d9]', detail: 'text-[#13996a]' },
   green: { icon: 'bg-[#e9f8f1] text-[#13996a]', detail: 'text-[#13996a]' },
+  blue: { icon: 'bg-[#eef4ff] text-[#2563eb]', detail: 'text-[#2563eb]' },
   orange: { icon: 'bg-[#fff3e3] text-[#d97812]', detail: 'text-[#d97812]' },
   red: { icon: 'bg-[#fff0f0] text-[#d14343]', detail: 'text-[#d14343]' },
 };
@@ -310,7 +396,7 @@ function StatusChart({ mode, counts, total }: { mode: ChartMode; counts: Record<
 
 function ChartSummary({ label, value }: { label: string; value: number }) { return <div className="rounded-[10px] border border-[#eee8f4] bg-white p-3"><span className="block text-[11px] text-[#82788b]">{label}</span><strong className="mt-1 block text-[17px]">{value}</strong></div>; }
 function Legend({ color, label }: { color: string; label: string }) { return <span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{ background: color }} />{label}</span>; }
-function AttentionRow({ label, description, value, tone }: { label: string; description: string; value: number; tone: keyof typeof TONES }) { return <div className="flex items-center gap-3 py-4"><span className={`grid h-8 w-8 place-items-center rounded-[9px] ${TONES[tone].icon}`}><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block text-xs text-[#423b4c]">{label}</strong><small className="mt-1 block truncate text-[11px] text-[#82788b]">{description}</small></div><b className="text-sm text-[#242032]">{value}</b><span className="text-[#948a98]">›</span></div>; }
+function AttentionRow({ label, description, value, tone, icon: Icon = AlertTriangle }: { label: string; description: string; value: number; tone: keyof typeof TONES; icon?: typeof AlertTriangle }) { return <div className="flex items-center gap-3 py-4"><span className={`grid h-8 w-8 place-items-center rounded-[9px] ${TONES[tone].icon}`}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block text-xs text-[#423b4c]">{label}</strong><small className="mt-1 block truncate text-[11px] text-[#82788b]">{description}</small></div><b className="text-sm text-[#242032]">{value}</b><span className="text-[#948a98]">›</span></div>; }
 function OrganizationMark({ name }: { name: string }) { return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f1eaff] text-xs font-extrabold text-[#6d28d9]">{name.trim().charAt(0).toUpperCase() || 'O'}</span>; }
 function StatusPill({ status }: { status: SuperAdminOrganizationStatus }) { const styles = { ACTIVE: 'bg-[#ecfdf3] text-[#166534]', INACTIVE: 'bg-[#fff7ed] text-[#92400e]', SUSPENDED: 'bg-[#fff1f2] text-[#b91c1c]' }; return <span className={`inline-block rounded-md px-2 py-1 text-[10px] font-extrabold ${styles[status]}`}>{status}</span>; }
 function RowsSkeleton() { return <div className="grid gap-3 p-5">{[1, 2, 3].map((item) => <div key={item} className="h-10 animate-pulse rounded-lg bg-[#f2edf8]" />)}</div>; }
