@@ -309,6 +309,98 @@ export type OrganizationSettings = {
   promptpayId: string | null;
 };
 
+export type SuperAdminOrganizationStatus =
+  | 'ACTIVE'
+  | 'INACTIVE'
+  | 'SUSPENDED';
+
+export type SuperAdminOrganization = {
+  id: string;
+  name: string;
+  description: string | null;
+  contactEmail: string;
+  contactPhone: string | null;
+  logoUrl: string | null;
+  status: SuperAdminOrganizationStatus;
+};
+
+export type CreateSuperAdminOrganizationInput = {
+  name: string;
+  contactEmail: string;
+  contactPhone?: string;
+  promptpayId?: string;
+};
+
+export type SuperAdminCompanyAdmin = {
+  id: string;
+  joinedAt: string;
+  user: { id: string; email: string; fullName: string };
+  organization: { id: string; name: string };
+};
+
+export type SuperAdminBooking = BookingRecord & {
+  event: {
+    id: string;
+    name: string;
+    organizationId: string;
+    organization: { id: string; name: string };
+  };
+  shop: { id: string; name: string };
+  vendor: { id: string; email: string; fullName: string };
+  booth: {
+    id: string;
+    code: string;
+    zone: { id: string; code: string; name: string | null };
+  };
+};
+
+export type SuperAdminRefund = {
+  id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+  requestedAmount: string;
+  approvedAmount: string | null;
+  createdAt: string;
+};
+
+export type SuperAdminSupportTicket = {
+  id: string;
+  type: string;
+  subject: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; email: string; fullName: string };
+  organization: { id: string; name: string } | null;
+};
+
+export type SuperAdminPenaltiesOverview = {
+  penalties: {
+    id: string;
+    reason: PenaltyReason;
+    description: string | null;
+    points: number;
+    issuedAt: string;
+    user: { id: string; email: string; fullName: string };
+    organization: { id: string; name: string };
+  }[];
+  blacklistedUsers: {
+    id: string;
+    email: string;
+    fullName: string;
+    blacklistReason: string | null;
+  }[];
+};
+
+export type SuperAdminAuditLog = {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: unknown;
+  createdAt: string;
+  actor: { id: string; email: string; fullName: string };
+};
+
 export type AdminDashboardSummary = {
   organizationId: string;
   bookings: {
@@ -881,6 +973,89 @@ export function getAdminDashboardSummary(
     `/organizations/${encodeURIComponent(organizationId)}/dashboard-summary`,
     { signal, token },
   );
+}
+
+export function getSuperAdminOrganizations(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminOrganization[]> {
+  return getJson<SuperAdminOrganization[]>('/organizations', {
+    signal,
+    token,
+  });
+}
+
+export function createSuperAdminOrganization(
+  input: CreateSuperAdminOrganizationInput,
+  token: string,
+): Promise<SuperAdminOrganization> {
+  return postJson<SuperAdminOrganization>(
+    '/organizations',
+    input,
+    { token },
+    'สร้างองค์กรไม่สำเร็จ',
+  );
+}
+
+export function updateSuperAdminOrganizationStatus(
+  organizationId: string,
+  status: SuperAdminOrganizationStatus,
+  token: string,
+): Promise<SuperAdminOrganization> {
+  return patchJson<SuperAdminOrganization>(
+    `/organizations/${encodeURIComponent(organizationId)}/status`,
+    { status },
+    { token },
+    'เปลี่ยนสถานะองค์กรไม่สำเร็จ',
+  );
+}
+
+export function getSuperAdminCompanyAdmins(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminCompanyAdmin[]> {
+  return getJson<SuperAdminCompanyAdmin[]>('/admins', { signal, token });
+}
+
+export function getSuperAdminBookings(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminBooking[]> {
+  return getJson<SuperAdminBooking[]>('/bookings/all', { signal, token });
+}
+
+export function getSuperAdminRefunds(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminRefund[]> {
+  return getJson<SuperAdminRefund[]>('/refunds/all', { signal, token });
+}
+
+export function getSuperAdminSupportTickets(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminSupportTicket[]> {
+  return getJson<SuperAdminSupportTicket[]>('/support-tickets/all', {
+    signal,
+    token,
+  });
+}
+
+export function getSuperAdminPenalties(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminPenaltiesOverview> {
+  return getJson<SuperAdminPenaltiesOverview>('/penalties/all', {
+    signal,
+    token,
+  });
+}
+
+export function getSuperAdminAuditLogs(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminAuditLog[]> {
+  return getJson<SuperAdminAuditLog[]>('/audit-logs', { signal, token });
 }
 
 /**
