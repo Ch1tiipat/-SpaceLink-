@@ -224,6 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
   const organizations = isAdmin ? auth.organizations : NO_ADMIN_ORGANIZATIONS;
   const isAdminRoute = pathname.startsWith('/admin');
+  const isSuperAdminRoute = pathname.startsWith('/super-admin');
 
   useEffect(() => {
     if (!isAdmin || organizations.length === 0) {
@@ -293,6 +294,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     const query = new URLSearchParams(window.location.search);
     query.set('organization', organizationId);
     router.replace(`${pathname}?${query.toString()}`);
+  }
+
+  if (isSuperAdminRoute) {
+    return <>{children}</>;
   }
 
   if (BARE_ROUTES.has(pathname)) {
