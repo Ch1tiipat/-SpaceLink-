@@ -3,6 +3,7 @@ import {
   BookingStatus,
   BoothStatus,
   EventStatus,
+  OrgStatus,
   Prisma,
 } from '@prisma/client';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -41,6 +42,7 @@ export class EventsService {
     const events = await this.prisma.event.findMany({
       where: {
         status: { in: [EventStatus.PUBLISHED, EventStatus.ONGOING] },
+        organization: { status: OrgStatus.ACTIVE },
       },
       orderBy: [{ startDate: 'asc' }, { name: 'asc' }],
       select: {
@@ -114,6 +116,7 @@ export class EventsService {
       where: {
         id,
         status: { in: [EventStatus.PUBLISHED, EventStatus.ONGOING] },
+        organization: { status: OrgStatus.ACTIVE },
       },
       include: {
         organization: {
