@@ -60,6 +60,7 @@ export default function DiscoveryPage() {
   const [updateFilter, setUpdateFilter] = useState<UpdateFilter>("all");
   const [searchApplied, setSearchApplied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const updatesScrollerRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +82,13 @@ export default function DiscoveryPage() {
   useEffect(() => {
     const controller = new AbortController();
     const organizations = uniqueOrganizations(events);
-    if (organizations.length === 0) return () => controller.abort();
+    if (organizations.length === 0) {
+      setAnnouncements([]);
+      setAnnouncementsLoading(false);
+      return () => controller.abort();
+    }
+
+    setAnnouncementsLoading(true);
 
     Promise.allSettled(
       organizations.map(async (organization) => {
@@ -94,19 +101,23 @@ export default function DiscoveryPage() {
           organizationName: organization.name,
         }));
       }),
-    ).then((results) => {
-      if (controller.signal.aborted) return;
-      setAnnouncements(
-        results
-          .flatMap((result) =>
-            result.status === "fulfilled" ? result.value : [],
-          )
-          .sort(
-            (left, right) =>
-              announcementTimestamp(right) - announcementTimestamp(left),
-          ),
-      );
-    });
+    )
+      .then((results) => {
+        if (controller.signal.aborted) return;
+        setAnnouncements(
+          results
+            .flatMap((result) =>
+              result.status === "fulfilled" ? result.value : [],
+            )
+            .sort(
+              (left, right) =>
+                announcementTimestamp(right) - announcementTimestamp(left),
+            ),
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAnnouncementsLoading(false);
+      });
 
     return () => controller.abort();
   }, [events]);
@@ -293,7 +304,7 @@ export default function DiscoveryPage() {
             <p className="mt-1 text-xs text-muted">
               {searchApplied
                 ? `พบ ${visibleEvents.length} Event จากข้อมูล SpaceLink`
-                : "รายการ Event และข่าวสารล่าสุดของ SpaceLink"}
+                : `แสดงทั้งหมด ${updates.length} รายการจากข้อมูล Event และประกาศที่เปิดใช้งาน`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -350,7 +361,7 @@ export default function DiscoveryPage() {
           </div>
         </div>
 
-        {loading ? (
+        {loading || announcementsLoading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <span
