@@ -186,6 +186,8 @@ model User {
   bookingsCancelled  Booking[]           @relation("BookingCanceller")
   reviews            Review[]
   notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
+  systemBroadcastsCreated SystemBroadcast[] @relation("SystemBroadcastCreator")
   penalties          Penalty[]
   refundsRequested   RefundRequest[]     @relation("RefundRequester")
   refundsReviewed    RefundRequest[]     @relation("RefundReviewer")
@@ -195,6 +197,35 @@ model User {
   auditLogs           AuditLog[]
 
   @@map("app_user")
+}
+
+model PushSubscription {
+  id         String    @id @default(uuid()) @map("push_subscription_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  endpoint   String    @unique @db.Text
+  p256dhKey  String    @map("p256dh_key")
+  authKey    String    @map("auth_key")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscription")
+}
+
+model SystemBroadcast {
+  id        String    @id @default(uuid()) @map("system_broadcast_id") @db.Uuid
+  title     String
+  body      String    @db.Text
+  createdBy String    @map("created_by_user_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+
+  creator User @relation("SystemBroadcastCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@map("system_broadcast")
 }
 
 model AuditLog {

@@ -5,6 +5,7 @@ import {
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
   type: NotificationType;
@@ -25,16 +26,26 @@ const bangkokDateFormatter = new Intl.DateTimeFormat('en-US', {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushSender: PushSenderService,
+  ) {}
 
   async createForUser(
     userId: string,
     input: CreateNotificationInput,
   ): Promise<Notification | null> {
     try {
-      return await this.prisma.notification.create({
+      const notification = await this.prisma.notification.create({
         data: { userId, ...input },
       });
+      void this.pushSender
+        .sendToUser(userId, {
+          title: input.title,
+          body: input.body ?? '',
+        })
+        .catch(() => undefined);
+      return notification;
     } catch {
       // Notification delivery is best-effort. Never include the title or body
       // here: they can contain user-visible details that do not belong in logs.
@@ -76,6 +87,39 @@ export class NotificationsService {
       return created.count;
     } catch {
       this.logger.error('Failed to fan out an announcement notification');
+      return 0;
+    }
+  }
+
+  /**
+   * Persists one in-app notification per current user with a single bulk
+   * write. Web push starts only after that write succeeds and remains
+   * best-effort so it cannot change the result of the broadcast request.
+   */
+  async broadcastToAllUsers(input: {
+    title: string;
+    body: string;
+  }): Promise<number> {
+    try {
+      const users = await this.prisma.user.findMany({ select: { id: true } });
+
+      if (users.length === 0) return 0;
+
+      const userIds = users.map(({ id }) => id);
+      await this.prisma.notification.createMany({
+        data: userIds.map((userId) => ({
+          userId,
+          type: NotificationType.SYSTEM,
+          title: input.title,
+          body: input.body,
+        })),
+      });
+
+      void this.pushSender.sendToUsers(userIds, input).catch(() => undefined);
+
+      return users.length;
+    } catch {
+      this.logger.error('Failed to fan out a system broadcast notification');
       return 0;
     }
   }
