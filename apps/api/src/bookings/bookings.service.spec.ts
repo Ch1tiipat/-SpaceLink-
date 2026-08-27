@@ -10,6 +10,7 @@ import {
   CancelledByRole,
   EventStatus,
   NotificationType,
+  OrgStatus,
   Prisma,
   SlipStatus,
   UserRole,
@@ -217,6 +218,7 @@ describe('BookingsService', () => {
       startDate: EVENT_START,
       endDate: EVENT_END,
       organization: {
+        status: OrgStatus.ACTIVE,
         orgConfig: { bookingQuotaPerVendor: 3 },
       },
     });
@@ -319,6 +321,26 @@ describe('BookingsService', () => {
     expect(bookingCreate).not.toHaveBeenCalled();
   });
 
+  it('rejects booking creation when the organization is not active', async () => {
+    eventFindUnique.mockResolvedValue({
+      id: EVENT_ID,
+      status: EventStatus.PUBLISHED,
+      organizationId: ORGANIZATION_ID,
+      venueId: VENUE_ID,
+      startDate: EVENT_START,
+      endDate: EVENT_END,
+      organization: {
+        status: OrgStatus.SUSPENDED,
+        orgConfig: { bookingQuotaPerVendor: 3 },
+      },
+    });
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+      'องค์กรนี้ถูกระงับการใช้งานชั่วคราว',
+    );
+    expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
   it.each([EventStatus.DRAFT, EventStatus.COMPLETED, EventStatus.CANCELLED])(
     'rejects an event in %s status',
     async (status) => {
@@ -329,7 +351,10 @@ describe('BookingsService', () => {
         venueId: VENUE_ID,
         startDate: EVENT_START,
         endDate: EVENT_END,
-        organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+        organization: {
+          status: OrgStatus.ACTIVE,
+          orgConfig: { bookingQuotaPerVendor: 3 },
+        },
       });
 
       await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
@@ -347,7 +372,10 @@ describe('BookingsService', () => {
       venueId: VENUE_ID,
       startDate: new Date('2026-08-01T00:00:00.000Z'),
       endDate: new Date('2026-08-01T00:00:00.000Z'),
-      organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+      organization: {
+        status: OrgStatus.ACTIVE,
+        orgConfig: { bookingQuotaPerVendor: 3 },
+      },
     });
 
     await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
@@ -365,7 +393,10 @@ describe('BookingsService', () => {
       venueId: VENUE_ID,
       startDate: EVENT_START,
       endDate: EVENT_END,
-      organization: { orgConfig: { bookingQuotaPerVendor: 3 } },
+      organization: {
+        status: OrgStatus.ACTIVE,
+        orgConfig: { bookingQuotaPerVendor: 3 },
+      },
     });
 
     await expect(service.create(CREATE_DTO, VENDOR_ID)).resolves.toEqual({
@@ -470,6 +501,7 @@ describe('BookingsService', () => {
       startDate: EVENT_START,
       endDate: EVENT_END,
       organization: {
+        status: OrgStatus.ACTIVE,
         orgConfig: { bookingQuotaPerVendor: 2 },
       },
     });
@@ -499,7 +531,7 @@ describe('BookingsService', () => {
       venueId: VENUE_ID,
       startDate: EVENT_START,
       endDate: EVENT_END,
-      organization: { orgConfig: null },
+      organization: { status: OrgStatus.ACTIVE, orgConfig: null },
     });
     platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 1 });
     bookingCount.mockResolvedValue(1);

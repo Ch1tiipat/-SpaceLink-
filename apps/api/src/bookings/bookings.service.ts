@@ -12,6 +12,7 @@ import {
   CancelledByRole,
   EventStatus,
   NotificationType,
+  OrgStatus,
   Prisma,
   SlipStatus,
   UserRole,
@@ -238,6 +239,7 @@ export class BookingsService {
           endDate: true,
           organization: {
             select: {
+              status: true,
               orgConfig: {
                 select: { bookingQuotaPerVendor: true },
               },
@@ -272,6 +274,9 @@ export class BookingsService {
 
     if (!event) {
       throw new NotFoundException('ไม่พบอีเวนต์');
+    }
+    if (event.organization.status !== OrgStatus.ACTIVE) {
+      throw new ForbiddenException('องค์กรนี้ถูกระงับการใช้งานชั่วคราว');
     }
     if (!BOOKABLE_EVENT_STATUSES.includes(event.status)) {
       throw new ConflictException('อีเวนต์นี้ยังไม่เปิดให้จอง');

@@ -129,6 +129,22 @@ describe('EventsService', () => {
         expect.objectContaining({
           where: {
             status: { in: ['PUBLISHED', 'ONGOING'] },
+            organization: { status: 'ACTIVE' },
+          },
+        }),
+      );
+    });
+
+    it('filters discovery to active organizations', async () => {
+      eventFindMany.mockResolvedValue([]);
+
+      await service.findDiscovery();
+
+      expect(eventFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: { in: ['PUBLISHED', 'ONGOING'] },
+            organization: { status: 'ACTIVE' },
           },
         }),
       );
@@ -290,6 +306,24 @@ describe('EventsService', () => {
 
       await expect(service.findMap('missing')).rejects.toBeInstanceOf(
         NotFoundException,
+      );
+      expect(zoneFindMany).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the organization is not active', async () => {
+      findFirst.mockResolvedValue(null);
+
+      await expect(service.findMap('suspended-event')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'suspended-event',
+            status: { in: ['PUBLISHED', 'ONGOING'] },
+            organization: { status: 'ACTIVE' },
+          },
+        }),
       );
       expect(zoneFindMany).not.toHaveBeenCalled();
     });

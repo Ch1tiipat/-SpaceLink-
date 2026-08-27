@@ -64,10 +64,20 @@ export const validationSchema = Joi.object({
     .valid('rule', 'gemini')
     .empty('')
     .default('rule'),
-  GEMINI_API_KEY: Joi.string().empty('').when('ZONE_RECOMMENDER', {
-    is: 'gemini',
-    then: Joi.string().required(),
-  }),
+  SUPPORT_ASSISTANT: Joi.string()
+    .valid('rule', 'gemini')
+    .empty('')
+    .default('rule'),
+  GEMINI_API_KEY: Joi.string()
+    .empty('')
+    .when('SUPPORT_ASSISTANT', {
+      is: 'gemini',
+      then: Joi.string().required(),
+      otherwise: Joi.when('ZONE_RECOMMENDER', {
+        is: 'gemini',
+        then: Joi.string().required(),
+      }),
+    }),
   GEMINI_MODEL: Joi.string()
     .empty('')
     .pattern(/^gemini-[a-z0-9.-]*flash(?:-lite)?(?:-[a-z0-9.-]+)?$/i)
@@ -75,6 +85,14 @@ export const validationSchema = Joi.object({
     .messages({
       'string.pattern.base':
         'GEMINI_MODEL must be a Gemini Flash or Flash-Lite model. Pro models are forbidden.',
+    }),
+  GEMINI_SUPPORT_MODEL: Joi.string()
+    .empty('')
+    .pattern(/^gemini-[a-z0-9.-]*flash(?:-lite)?(?:-[a-z0-9.-]+)?$/i)
+    .default('gemini-3.6-flash')
+    .messages({
+      'string.pattern.base':
+        'GEMINI_SUPPORT_MODEL must be a Gemini Flash or Flash-Lite model. Pro models are forbidden.',
     }),
 })
   .xor('SUPABASE_JWT_SECRET', 'SUPABASE_JWKS_URL')
