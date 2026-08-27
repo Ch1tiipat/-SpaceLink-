@@ -1,11 +1,15 @@
 import {
+  ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsInt,
   IsOptional,
+  IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export class CreateRecommendationDto {
@@ -22,6 +26,21 @@ export class CreateRecommendationDto {
   @ArrayUnique()
   @IsUUID(undefined, { each: true })
   productCategoryIds?: string[];
+
+  /** Optional zone selected by the vendor in the assistant flow. */
+  @IsOptional()
+  @IsUUID()
+  preferredZoneId?: string;
+
+  /** Public booth facilities the vendor would like the recommender to match. */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(8)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(80, { each: true })
+  requiredFacilities?: string[];
 
   @IsOptional()
   @IsInt()

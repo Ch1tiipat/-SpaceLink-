@@ -26,8 +26,10 @@ function candidateRows() {
       id: 'booth-a1',
       code: 'A01',
       boothPrice: new Prisma.Decimal('1500'),
+      facilities: ['power', 'table'],
       status: BoothStatus.AVAILABLE,
       zone: {
+        id: 'zone-a',
         code: 'A',
         name: 'โซนอาหาร',
         categories: [{ category: { id: 'food-category', name: 'อาหาร' } }],
@@ -74,6 +76,8 @@ describe('GeminiZoneRecommender', () => {
       eventId: 'event-1',
       vendorUserId: 'private-user-id',
       productCategoryIds: ['food-category'],
+      preferredZoneId: 'zone-a',
+      requiredFacilities: ['ปลั๊กไฟ'],
       limit: 3,
     });
 
@@ -99,6 +103,9 @@ describe('GeminiZoneRecommender', () => {
     };
     expect(body).toContain('booth-a1');
     expect(body).toContain('food-category');
+    expect(body).toContain('zone-a');
+    expect(body).toContain('ปลั๊กไฟ');
+    expect(body).toContain('power');
     expect(body).not.toContain('private-user-id');
     expect(request.generationConfig).not.toHaveProperty('temperature');
   });

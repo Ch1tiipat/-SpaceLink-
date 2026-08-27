@@ -61,7 +61,17 @@ export class RecommendationsController {
       eventId,
       vendorUserId: vendor.id,
       productCategoryIds: requestedCategoryIds ?? shopCategoryIds,
+      preferredZoneId: input.preferredZoneId,
+      requiredFacilities: normalizeFacilities(input.requiredFacilities),
       limit: input.limit,
     });
   }
+}
+
+function normalizeFacilities(facilities: string[] | undefined) {
+  if (!facilities) return undefined;
+
+  return [
+    ...new Set(facilities.map((facility) => facility.trim()).filter(Boolean)),
+  ];
 }

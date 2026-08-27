@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { CalendarCheck2, MapPinned, ShieldCheck } from 'lucide-react';
-import Link from 'next/link';
+import type { ReactNode } from "react";
+import { CalendarCheck2, MapPinned, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 
 type AuthLayoutProps = {
   /** Small pill above the headline. */
@@ -31,26 +31,26 @@ export function AuthLayout({
   return (
     <div className="flex min-h-screen flex-col bg-[#f8f6ff] lg:grid lg:grid-cols-[minmax(440px,0.92fr)_minmax(540px,1.08fr)]">
       {/* Compact brand header — the panel's stand-in below `lg`. */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-violet via-[#6330d9] to-[#4e21bd] px-5 pb-16 pt-4 text-white lg:hidden">
+      <div className="relative overflow-hidden bg-gradient-to-br from-violet via-[#6330d9] to-[#4e21bd] px-5 pb-11 pt-4 text-white lg:hidden">
         <div className="absolute -right-16 -top-12 h-48 w-48 rounded-full border-[34px] border-white/[0.07]" />
         <div className="absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-[#a442e8]/25 blur-2xl" />
 
         <div className="relative">
           <BrandMark />
 
-          <div className="mt-10">
+          <div className="mt-6 sm:mt-8">
             <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
               {eyebrow}
             </span>
-            <h2 className="sl-thai-heading mt-4 max-w-[20ch] text-[28px] font-black leading-[1.3] tracking-[-0.025em]">
+            <h2 className="sl-thai-heading mt-3 max-w-[20ch] text-[25px] font-black leading-[1.22] tracking-[-0.025em] sm:text-[28px]">
               {headline}
             </h2>
-            <p className="mt-3 max-w-[42ch] text-sm leading-6 text-white/75">
+            <p className="mt-2.5 max-w-[42ch] text-[13px] leading-5 text-white/78 sm:text-sm sm:leading-6">
               {description}
             </p>
           </div>
 
-          <div className="mt-7">
+          <div className="mt-5">
             <MobileBoothStrip />
           </div>
         </div>
@@ -82,7 +82,7 @@ export function AuthLayout({
         </div>
       </aside>
 
-      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 pb-12 lg:items-center lg:bg-[radial-gradient(circle_at_85%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_15%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
+      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 pb-8 lg:items-center lg:bg-[radial-gradient(circle_at_85%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_15%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
         <span className="pointer-events-none absolute -bottom-40 -right-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
         <Link
           href="/"
@@ -90,14 +90,15 @@ export function AuthLayout({
         >
           ← กลับหน้าแรก
         </Link>
-        <div className="relative -mt-9 w-full max-w-[460px] rounded-[28px] border border-white/80 bg-white p-6 shadow-[0_20px_60px_rgba(67,34,139,0.14)] sm:p-8 lg:mt-0 lg:max-w-[480px] lg:rounded-[32px] lg:border lg:border-[#eee8f7] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
+        <div className="relative -mt-6 w-full max-w-[460px] rounded-[26px] border border-white/80 bg-white p-5 shadow-[0_20px_60px_rgba(67,34,139,0.14)] sm:-mt-8 sm:rounded-[28px] sm:p-8 lg:mt-0 lg:max-w-[480px] lg:rounded-[32px] lg:border lg:border-[#eee8f7] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
           {children}
           <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
               <ShieldCheck className="h-4 w-4" aria-hidden />
             </span>
             <p>
-              เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
+              เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink
+              ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
             </p>
           </div>
         </div>
@@ -108,9 +109,9 @@ export function AuthLayout({
 
 function AuthBenefits() {
   const benefits = [
-    { icon: MapPinned, label: 'เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง' },
-    { icon: CalendarCheck2, label: 'ติดตามการจองและกำหนดชำระเงินในที่เดียว' },
-    { icon: ShieldCheck, label: 'เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน' },
+    { icon: MapPinned, label: "เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง" },
+    { icon: CalendarCheck2, label: "ติดตามการจองและกำหนดชำระเงินในที่เดียว" },
+    { icon: ShieldCheck, label: "เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน" },
   ];
 
   return (
@@ -137,11 +138,11 @@ function MobileBoothStrip() {
         <span
           key={index}
           className={[
-            'h-3 flex-1 rounded-full',
+            "h-3 flex-1 rounded-full",
             BOOKED_BOOTHS.has(index)
-              ? 'bg-white shadow-sm'
-              : 'border border-white/30 bg-white/10',
-          ].join(' ')}
+              ? "bg-white shadow-sm"
+              : "border border-white/30 bg-white/10",
+          ].join(" ")}
         />
       ))}
     </div>

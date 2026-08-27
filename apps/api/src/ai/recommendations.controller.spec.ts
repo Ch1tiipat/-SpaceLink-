@@ -18,6 +18,7 @@ const EVENT_ID = '00000000-0000-4000-8000-000000000003';
 const CATEGORY_A = '00000000-0000-4000-8000-000000000004';
 const CATEGORY_B = '00000000-0000-4000-8000-000000000005';
 const OTHER_CATEGORY = '00000000-0000-4000-8000-000000000006';
+const ZONE_ID = '00000000-0000-4000-8000-000000000008';
 
 const vendor = {
   id: VENDOR_ID,
@@ -81,6 +82,8 @@ describe('RecommendationsController', () => {
       eventId: EVENT_ID,
       vendorUserId: VENDOR_ID,
       productCategoryIds: [CATEGORY_A, CATEGORY_B],
+      preferredZoneId: undefined,
+      requiredFacilities: undefined,
       limit: undefined,
     });
   });
@@ -95,12 +98,16 @@ describe('RecommendationsController', () => {
       shopId: SHOP_ID,
       productCategoryIds: [CATEGORY_B],
       limit: 3,
+      preferredZoneId: ZONE_ID,
+      requiredFacilities: [' ปลั๊กไฟ ', 'โต๊ะ', 'ปลั๊กไฟ'],
     });
 
     expect(recommend).toHaveBeenCalledWith({
       eventId: EVENT_ID,
       vendorUserId: VENDOR_ID,
       productCategoryIds: [CATEGORY_B],
+      preferredZoneId: ZONE_ID,
+      requiredFacilities: ['ปลั๊กไฟ', 'โต๊ะ'],
       limit: 3,
     });
   });

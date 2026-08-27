@@ -127,6 +127,8 @@ export type ZoneRecommendation = {
 export type ZoneRecommendationInput = {
   shopId: string;
   productCategoryIds?: string[];
+  preferredZoneId?: string;
+  requiredFacilities?: string[];
   limit?: number;
 };
 
@@ -303,10 +305,7 @@ export type OrganizationSettings = {
   promptpayId: string | null;
 };
 
-export type SuperAdminOrganizationStatus =
-  | 'ACTIVE'
-  | 'INACTIVE'
-  | 'SUSPENDED';
+export type SuperAdminOrganizationStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
 
 export type SuperAdminOrganization = {
   id: string;
@@ -350,7 +349,7 @@ export type SuperAdminBooking = BookingRecord & {
 
 export type SuperAdminRefund = {
   id: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+  status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
   requestedAmount: string;
   approvedAmount: string | null;
   createdAt: string;
@@ -964,7 +963,7 @@ export function getSuperAdminOrganizations(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminOrganization[]> {
-  return getJson<SuperAdminOrganization[]>('/organizations', {
+  return getJson<SuperAdminOrganization[]>("/organizations", {
     signal,
     token,
   });
@@ -975,10 +974,10 @@ export function createSuperAdminOrganization(
   token: string,
 ): Promise<SuperAdminOrganization> {
   return postJson<SuperAdminOrganization>(
-    '/organizations',
+    "/organizations",
     input,
     { token },
-    'สร้างองค์กรไม่สำเร็จ',
+    "สร้างองค์กรไม่สำเร็จ",
   );
 }
 
@@ -991,7 +990,7 @@ export function updateSuperAdminOrganizationStatus(
     `/organizations/${encodeURIComponent(organizationId)}/status`,
     { status },
     { token },
-    'เปลี่ยนสถานะองค์กรไม่สำเร็จ',
+    "เปลี่ยนสถานะองค์กรไม่สำเร็จ",
   );
 }
 
@@ -999,28 +998,28 @@ export function getSuperAdminCompanyAdmins(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminCompanyAdmin[]> {
-  return getJson<SuperAdminCompanyAdmin[]>('/admins', { signal, token });
+  return getJson<SuperAdminCompanyAdmin[]>("/admins", { signal, token });
 }
 
 export function getSuperAdminBookings(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminBooking[]> {
-  return getJson<SuperAdminBooking[]>('/bookings/all', { signal, token });
+  return getJson<SuperAdminBooking[]>("/bookings/all", { signal, token });
 }
 
 export function getSuperAdminRefunds(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminRefund[]> {
-  return getJson<SuperAdminRefund[]>('/refunds/all', { signal, token });
+  return getJson<SuperAdminRefund[]>("/refunds/all", { signal, token });
 }
 
 export function getSuperAdminSupportTickets(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminSupportTicket[]> {
-  return getJson<SuperAdminSupportTicket[]>('/support-tickets/all', {
+  return getJson<SuperAdminSupportTicket[]>("/support-tickets/all", {
     signal,
     token,
   });
@@ -1030,7 +1029,7 @@ export function getSuperAdminPenalties(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminPenaltiesOverview> {
-  return getJson<SuperAdminPenaltiesOverview>('/penalties/all', {
+  return getJson<SuperAdminPenaltiesOverview>("/penalties/all", {
     signal,
     token,
   });
@@ -1040,7 +1039,7 @@ export function getSuperAdminAuditLogs(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminAuditLog[]> {
-  return getJson<SuperAdminAuditLog[]>('/audit-logs', { signal, token });
+  return getJson<SuperAdminAuditLog[]>("/audit-logs", { signal, token });
 }
 
 /**

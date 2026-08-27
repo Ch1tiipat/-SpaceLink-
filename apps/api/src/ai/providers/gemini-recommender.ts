@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   BookingStatus,
   BoothStatus,
+  Prisma,
   RecommendationSource,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -25,6 +26,8 @@ type Candidate = {
   boothId: string;
   boothCode: string;
   price: string;
+  facilities: Prisma.JsonValue | null;
+  zoneId: string;
   zoneCode: string;
   zoneName: string | null;
   categories: { id: string; name: string }[];
@@ -88,9 +91,7 @@ export class GeminiZoneRecommender implements ZoneRecommender {
             'Content-Type': 'application/json',
             'x-goog-api-key': this.apiKey,
           },
-          body: JSON.stringify(
-            requestBody(candidates, input.productCategoryIds, limit),
-          ),
+          body: JSON.stringify(requestBody(candidates, input, limit)),
           signal: controller.signal,
         },
       );
@@ -145,8 +146,10 @@ export class GeminiZoneRecommender implements ZoneRecommender {
         id: true,
         code: true,
         boothPrice: true,
+        facilities: true,
         zone: {
           select: {
+            id: true,
             code: true,
             name: true,
             categories: {
@@ -163,6 +166,8 @@ export class GeminiZoneRecommender implements ZoneRecommender {
       boothId: booth.id,
       boothCode: booth.code,
       price: booth.boothPrice.toString(),
+      facilities: booth.facilities,
+      zoneId: booth.zone.id,
       zoneCode: booth.zone.code,
       zoneName: booth.zone.name,
       categories: booth.zone.categories.map(({ category }) => category),
@@ -172,12 +177,14 @@ export class GeminiZoneRecommender implements ZoneRecommender {
 
 function requestBody(
   candidates: Candidate[],
-  productCategoryIds: string[],
+  input: ZoneRecommendationInput,
   limit: number,
 ) {
   const prompt = {
-    task: 'จัดอันดับบูธที่เหมาะกับร้านค้า คืนเฉพาะบูธจาก candidates และเขียนเหตุผลภาษาไทยที่อ้างอิงโซน หมวดสินค้า ราคา หรือการมองเห็น ห้ามสร้างข้อมูลใหม่',
-    vendorCategoryIds: [...new Set(productCategoryIds)],
+    task: 'จัดอันดับบูธที่เหมาะกับร้านค้า คืนเฉพาะบูธจาก candidates และเขียนเหตุผลภาษาไทยที่อ้างอิงโซน หมวดสินค้า ราคา หรืออุปกรณ์ตามข้อมูลที่มีจริง ห้ามสร้างข้อมูลใหม่ หาก facilities เป็น null ให้บอกว่าไม่มีข้อมูล ห้ามอ้างว่ามีอุปกรณ์นั้น',
+    vendorCategoryIds: [...new Set(input.productCategoryIds)],
+    preferredZoneId: input.preferredZoneId ?? null,
+    requiredFacilities: [...new Set(input.requiredFacilities ?? [])],
     limit,
     candidates,
   };

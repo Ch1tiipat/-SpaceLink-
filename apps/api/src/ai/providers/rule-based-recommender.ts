@@ -32,6 +32,8 @@ const ACTIVE_BOOKING_STATUSES = [
  */
 const CATEGORY_WEIGHT = 70;
 const PRICE_WEIGHT = 30;
+const ZONE_PREFERENCE_WEIGHT = 25;
+const FACILITY_WEIGHT = 25;
 
 /** Below this ratio of the median a booth reads as "cheap", above it as "pricey". */
 const CHEAP_RATIO = 0.95;
@@ -45,8 +47,10 @@ export type CandidateBooth = {
   id: string;
   code: string;
   boothPrice: Prisma.Decimal;
+  facilities: Prisma.JsonValue | null;
   status: BoothStatus;
   zone: {
+    id: string;
     code: string;
     name: string | null;
     categories: { categoryId: string; category: { name: string } }[];
@@ -138,9 +142,11 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
         id: true,
         code: true,
         boothPrice: true,
+        facilities: true,
         status: true,
         zone: {
           select: {
+            id: true,
             code: true,
             name: true,
             categories: {
@@ -180,10 +186,8 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
     const matchedIds = requestedIds.filter((id) => zoneCategoryIds.has(id));
     const matchedNames = matchedIds.map((id) => categoryName(booth, id));
 
-    const categoryScore =
-      requestedIds.length === 0
-        ? 0
-        : (CATEGORY_WEIGHT * matchedIds.length) / requestedIds.length;
+    const categoryRatio =
+      requestedIds.length === 0 ? 0 : matchedIds.length / requestedIds.length;
 
     // `ratio` is dimensionless — a price divided by a price — so it is a plain
     // number by the time it leaves this line. The division itself is done in
@@ -195,7 +199,40 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
 
     // Cheaper is better, linearly: half the median scores 22.5, the median
     // scores 15, twice the median scores 0.
-    const priceScore = clamp((PRICE_WEIGHT * (2 - ratio)) / 2, 0, PRICE_WEIGHT);
+    const priceRatio = clamp((2 - ratio) / 2, 0, 1);
+    const requestedFacilities = normalizeRequestedFacilities(
+      input.requiredFacilities,
+    );
+    const boothFacilities = collectFacilityTokens(booth.facilities);
+    const matchedFacilities = requestedFacilities.filter((facility) =>
+      boothFacilities.has(facility.canonical),
+    );
+
+    const signals = [
+      { weight: CATEGORY_WEIGHT, score: categoryRatio },
+      { weight: PRICE_WEIGHT, score: priceRatio },
+      ...(input.preferredZoneId
+        ? [
+            {
+              weight: ZONE_PREFERENCE_WEIGHT,
+              score: booth.zone.id === input.preferredZoneId ? 1 : 0,
+            },
+          ]
+        : []),
+      ...(requestedFacilities.length > 0
+        ? [
+            {
+              weight: FACILITY_WEIGHT,
+              score: matchedFacilities.length / requestedFacilities.length,
+            },
+          ]
+        : []),
+    ];
+    const totalWeight = signals.reduce((sum, signal) => sum + signal.weight, 0);
+    const score =
+      (signals.reduce((sum, signal) => sum + signal.weight * signal.score, 0) /
+        totalWeight) *
+      100;
 
     return {
       boothId: booth.id,
@@ -203,8 +240,17 @@ export class RuleBasedZoneRecommender implements ZoneRecommender {
       // Two decimals: it keeps the score exactly representable in
       // `Decimal(5,2)`, and it makes genuine ties compare as ties rather than
       // as a float difference in the fifteenth decimal place.
-      score: roundToTwo(categoryScore + priceScore),
-      reason: buildReason(booth, requestedIds, matchedNames, median, ratio),
+      score: roundToTwo(score),
+      reason: buildReason(
+        booth,
+        input,
+        requestedIds,
+        matchedNames,
+        requestedFacilities,
+        matchedFacilities,
+        median,
+        ratio,
+      ),
       source: RecommendationSource.RULE_BASED,
     };
   }
@@ -304,8 +350,11 @@ function compareStrings(a: string, b: string): number {
  */
 function buildReason(
   booth: CandidateBooth,
+  input: ZoneRecommendationInput,
   requestedIds: string[],
   matchedNames: string[],
+  requestedFacilities: NormalizedFacility[],
+  matchedFacilities: NormalizedFacility[],
   median: Prisma.Decimal | null,
   ratio: number,
 ): string {
@@ -315,11 +364,137 @@ function buildReason(
 
   const parts = [zoneLabel, categoryReason(requestedIds, matchedNames)];
 
+  if (input.preferredZoneId) {
+    parts.push(
+      booth.zone.id === input.preferredZoneId
+        ? 'ตรงกับโซนที่เลือก'
+        : 'อยู่นอกโซนที่เลือก',
+    );
+  }
+
+  if (requestedFacilities.length > 0) {
+    parts.push(
+      facilityReason(booth.facilities, requestedFacilities, matchedFacilities),
+    );
+  }
+
   if (median !== null) {
     parts.push(priceReason(booth.boothPrice, median, ratio));
   }
 
   return parts.join(' · ');
+}
+
+type NormalizedFacility = { canonical: string; label: string };
+
+function normalizeRequestedFacilities(
+  facilities: string[] | undefined,
+): NormalizedFacility[] {
+  const seen = new Set<string>();
+
+  return (facilities ?? []).flatMap((facility) => {
+    const normalized = normalizeFacility(facility);
+    if (!normalized || seen.has(normalized.canonical)) return [];
+    seen.add(normalized.canonical);
+    return [normalized];
+  });
+}
+
+function collectFacilityTokens(value: Prisma.JsonValue | null): Set<string> {
+  const tokens = new Set<string>();
+
+  function visit(current: Prisma.JsonValue | null) {
+    if (typeof current === 'string') {
+      const normalized = normalizeFacility(current);
+      if (normalized) tokens.add(normalized.canonical);
+      return;
+    }
+
+    if (Array.isArray(current)) {
+      current.forEach(visit);
+      return;
+    }
+
+    if (typeof current === 'object' && current !== null) {
+      const record = current as Record<string, Prisma.JsonValue>;
+      if (record.available === false || record.enabled === false) return;
+
+      Object.entries(current).forEach(([key, nested]) => {
+        if (nested === true) {
+          const normalized = normalizeFacility(key);
+          if (normalized) tokens.add(normalized.canonical);
+        } else if (nested !== false && nested !== null) {
+          visit(nested as Prisma.JsonValue);
+        }
+      });
+    }
+  }
+
+  visit(value);
+  return tokens;
+}
+
+function normalizeFacility(value: string): NormalizedFacility | null {
+  const normalized = value
+    .trim()
+    .toLocaleLowerCase('th')
+    .replace(/[-_\s]+/g, '');
+  if (!normalized) return null;
+
+  const aliases: { canonical: string; label: string; values: string[] }[] = [
+    {
+      canonical: 'power',
+      label: 'ปลั๊กไฟ',
+      values: [
+        'ปลั๊ก',
+        'ปลั๊กไฟ',
+        'ไฟฟ้า',
+        'electricity',
+        'power',
+        'socket',
+        'outlet',
+      ],
+    },
+    { canonical: 'table', label: 'โต๊ะ', values: ['โต๊ะ', 'table'] },
+    {
+      canonical: 'water',
+      label: 'น้ำประปา',
+      values: ['น้ำ', 'น้ำประปา', 'water'],
+    },
+    {
+      canonical: 'wifi',
+      label: 'Wi-Fi',
+      values: ['wifi', 'wi-fi', 'ไวไฟ', 'internet', 'อินเทอร์เน็ต'],
+    },
+  ];
+  const alias = aliases.find((candidate) =>
+    candidate.values.some(
+      (item) =>
+        item.toLocaleLowerCase('th').replace(/[-_\s]+/g, '') === normalized,
+    ),
+  );
+
+  return alias
+    ? { canonical: alias.canonical, label: alias.label }
+    : { canonical: normalized, label: value.trim() };
+}
+
+function facilityReason(
+  rawFacilities: Prisma.JsonValue | null,
+  requested: NormalizedFacility[],
+  matched: NormalizedFacility[],
+): string {
+  if (rawFacilities === null) {
+    return `ผู้จัดยังไม่ระบุข้อมูลอุปกรณ์ (${requested.map((item) => item.label).join(', ')})`;
+  }
+
+  if (matched.length === 0) {
+    return `ไม่พบอุปกรณ์ที่ต้องการ (${requested.map((item) => item.label).join(', ')})`;
+  }
+
+  return matched.length === requested.length
+    ? `มีอุปกรณ์ที่ต้องการครบ (${matched.map((item) => item.label).join(', ')})`
+    : `มีอุปกรณ์บางส่วน (${matched.map((item) => item.label).join(', ')})`;
 }
 
 function categoryReason(
