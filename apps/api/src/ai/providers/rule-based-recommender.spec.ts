@@ -22,10 +22,12 @@ type BoothRow = {
   boothPrice: Prisma.Decimal;
   status: BoothStatus;
   zone: {
+    id: string;
     code: string;
     name: string | null;
     categories: { categoryId: string; category: { name: string } }[];
   };
+  facilities: Prisma.JsonValue | null;
   bookings: { status: BookingStatus }[];
 };
 
@@ -39,7 +41,9 @@ function makeBooth(params: {
   code: string;
   price: string;
   zoneCode?: string;
+  zoneId?: string;
   categories?: { id: string; name: string }[];
+  facilities?: Prisma.JsonValue | null;
   bookings?: BookingStatus[];
   status?: BoothStatus;
 }): BoothRow {
@@ -47,8 +51,10 @@ function makeBooth(params: {
     id: `booth-${params.code}`,
     code: params.code,
     boothPrice: new Prisma.Decimal(params.price),
+    facilities: params.facilities ?? null,
     status: params.status ?? BoothStatus.AVAILABLE,
     zone: {
+      id: params.zoneId ?? `zone-${params.zoneCode ?? 'Z1'}`,
       code: params.zoneCode ?? 'Z1',
       name: null,
       categories: (params.categories ?? []).map((category) => ({
@@ -274,5 +280,39 @@ describe('RuleBasedZoneRecommender', () => {
     ]);
     expect(result[0].reason).toContain('ตรงกับหมวดสินค้าที่เลือกทั้งหมด');
     expect(result[1].reason).toContain('ตรงกับหมวดสินค้าที่เลือกบางส่วน');
+  });
+
+  it('uses the preferred zone and requested facilities as ranking signals', async () => {
+    prisma.booth.findMany.mockResolvedValue([
+      makeBooth({
+        code: 'A01',
+        price: '1000.00',
+        zoneId: 'zone-a',
+        categories: [FOOD],
+      }),
+      makeBooth({
+        code: 'B01',
+        price: '1000.00',
+        zoneCode: 'B',
+        zoneId: 'zone-b',
+        categories: [FOOD],
+        facilities: ['power', 'table'],
+      }),
+    ]);
+
+    const result = await recommender.recommend(
+      makeInput({
+        preferredZoneId: 'zone-b',
+        requiredFacilities: ['ปลั๊กไฟ', 'โต๊ะ'],
+      }),
+    );
+
+    expect(result.map((booth) => booth.boothId)).toEqual([
+      'booth-B01',
+      'booth-A01',
+    ]);
+    expect(result[0].reason).toContain('ตรงกับโซนที่เลือก');
+    expect(result[0].reason).toContain('มีอุปกรณ์ที่ต้องการครบ');
+    expect(result[1].reason).toContain('ผู้จัดยังไม่ระบุข้อมูลอุปกรณ์');
   });
 });

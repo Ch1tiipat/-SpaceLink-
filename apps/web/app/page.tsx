@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BellRing,
   CalendarSearch,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Headphones,
   MapPinned,
@@ -59,6 +61,7 @@ export default function DiscoveryPage() {
   const [searchApplied, setSearchApplied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const updatesScrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -155,25 +158,28 @@ export default function DiscoveryPage() {
 
   const updates = useMemo<Update[]>(() => {
     if (searchApplied) {
-      return visibleEvents
-        .slice(0, 3)
-        .map((event) => ({ kind: "event", event }));
+      return visibleEvents.map((event) => ({ kind: "event", event }));
     }
 
     return [
-      ...events.slice(0, 3).map((event): Update => ({ kind: "event", event })),
-      ...announcements
-        .slice(0, 3)
-        .map((announcement): Update => ({
-          kind: "announcement",
-          announcement,
-        })),
-    ]
-      .filter(
-        (update) => updateFilter === "all" || update.kind === updateFilter,
-      )
-      .slice(0, 3);
+      ...events.map((event): Update => ({ kind: "event", event })),
+      ...announcements.map((announcement): Update => ({
+        kind: "announcement",
+        announcement,
+      })),
+    ].filter(
+      (update) => updateFilter === "all" || update.kind === updateFilter,
+    );
   }, [announcements, events, searchApplied, updateFilter, visibleEvents]);
+
+  function scrollUpdates(direction: -1 | 1) {
+    const scroller = updatesScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: direction * Math.max(scroller.clientWidth * 0.82, 280),
+      behavior: "smooth",
+    });
+  }
 
   function runSearch() {
     setSearchApplied(true);
@@ -290,31 +296,57 @@ export default function DiscoveryPage() {
                 : "รายการ Event และข่าวสารล่าสุดของ SpaceLink"}
             </p>
           </div>
-          <div
-            className="flex flex-wrap gap-[7px]"
-            role="group"
-            aria-label="กรองข่าวสารล่าสุด"
-          >
-            {(
-              [
-                ["all", "ทั้งหมด"],
-                ["event", "Event"],
-                ["announcement", "ประกาศ"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={updateFilter === value}
-                onClick={() => {
-                  setSearchApplied(false);
-                  setUpdateFilter(value);
-                }}
-                className={`sl-chip min-h-9 px-4 ${updateFilter === value ? "!border-violet !bg-violet !text-white" : ""}`}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex flex-wrap gap-[7px]"
+              role="group"
+              aria-label="กรองข่าวสารล่าสุด"
+            >
+              {(
+                [
+                  ["all", "ทั้งหมด"],
+                  ["event", "Event"],
+                  ["announcement", "ประกาศ"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={updateFilter === value}
+                  onClick={() => {
+                    setSearchApplied(false);
+                    setUpdateFilter(value);
+                  }}
+                  className={`sl-chip min-h-9 px-4 ${updateFilter === value ? "!border-violet !bg-violet !text-white" : ""}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {updates.length > 1 ? (
+              <div
+                className="flex gap-1"
+                role="group"
+                aria-label="เลื่อนดูรายการ Event และข่าวสาร"
               >
-                {label}
-              </button>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => scrollUpdates(-1)}
+                  aria-label="ดูรายการก่อนหน้า"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollUpdates(1)}
+                  aria-label="ดูรายการถัดไป"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -336,17 +368,22 @@ export default function DiscoveryPage() {
             ยังไม่พบรายการที่ตรงกับตัวกรอง
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div
+            ref={updatesScrollerRef}
+            className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
+            aria-label="รายการ Event และข่าวสารล่าสุด เลื่อนซ้ายหรือขวาเพื่อดูเพิ่มเติม"
+          >
             {updates.map((update, index) => (
-              <LatestCard
+              <div
                 key={
                   update.kind === "event"
                     ? update.event.id
                     : update.announcement.id
                 }
-                update={update}
-                index={index}
-              />
+                className="min-w-[86%] snap-start sm:min-w-[calc(50%-8px)] lg:min-w-[calc((100%-32px)/3)]"
+              >
+                <LatestCard update={update} index={index} />
+              </div>
             ))}
           </div>
         )}
@@ -371,7 +408,7 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
 
   if (update.kind === "announcement") {
     return (
-      <article className="sl-surface relative overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
+      <article className="sl-surface relative h-full overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
         <div
           className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}
         >
@@ -400,7 +437,7 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
   return (
     <Link
       href={`/events/${event.id}`}
-      className="sl-surface relative overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
+      className="sl-surface relative block h-full overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
     >
       <div
         className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}

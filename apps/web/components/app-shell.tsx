@@ -35,11 +35,20 @@ import {
 import { useAuthState, type AuthState } from "@/lib/use-auth-state";
 import {
   askSupportAssistant,
+  getEventMap,
+  getEvents,
+  getMe,
   getUnreadNotificationCount,
+  getZoneRecommendations,
   type CurrentUser,
+  type DiscoveryEvent,
+  type EventMap,
   type SupportAssistantResponse,
+  type VendorShop,
+  type ZoneRecommendation,
 } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { isEventBookable } from "@/lib/event-booking-rules";
 import {
   canUseUxPreview,
   getUxPreviewMode,
@@ -387,7 +396,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           selectedOrganizationId={selectedOrganizationId}
         />
       )}
-      <FloatingSupport hasBottomNav={hasPrivateNavigation} />
+      <FloatingSupport auth={auth} hasBottomNav={hasPrivateNavigation} />
       <UxReviewPanel auth={auth} pathname={pathname} />
     </AdminOrganizationContext.Provider>
   );
@@ -812,7 +821,28 @@ function UxReviewPanel({
   );
 }
 
-function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
+type ZoneAssistantStep =
+  | "idle"
+  | "loading"
+  | "select-event"
+  | "select-zone"
+  | "select-facilities"
+  | "result";
+
+const ASSISTANT_FACILITIES = [
+  { value: "ปลั๊กไฟ", label: "ปลั๊กไฟ" },
+  { value: "โต๊ะ", label: "โต๊ะ" },
+  { value: "น้ำประปา", label: "น้ำประปา" },
+  { value: "Wi-Fi", label: "Wi-Fi" },
+] as const;
+
+function FloatingSupport({
+  auth,
+  hasBottomNav,
+}: {
+  auth: AuthState;
+  hasBottomNav: boolean;
+}) {
   const initialAnswer =
     "สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ";
   const [view, setView] = useState<"closed" | "menu" | "chat">("closed");
@@ -822,12 +852,24 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
     SupportAssistantResponse["source"] | null
   >(null);
   const [isAsking, setIsAsking] = useState(false);
+  const [zoneStep, setZoneStep] = useState<ZoneAssistantStep>("idle");
+  const [assistantEvents, setAssistantEvents] = useState<DiscoveryEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<DiscoveryEvent | null>(
+    null,
+  );
+  const [selectedMap, setSelectedMap] = useState<EventMap | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [selectedShop, setSelectedShop] = useState<VendorShop | null>(null);
+  const [recommendations, setRecommendations] = useState<ZoneRecommendation[]>(
+    [],
+  );
   const requestController = useRef<AbortController | null>(null);
 
   const quickQuestions = [
     "เริ่มจองบูธอย่างไร",
     "อัปโหลดสลิปที่ไหน",
-    "AI แนะนำโซนทำงานอย่างไร",
+    "แนะนำโซนและบูธให้ร้านฉัน",
   ];
 
   useEffect(
@@ -840,6 +882,11 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
   async function askAssistant(nextQuestion = question) {
     const normalized = nextQuestion.trim();
     if (!normalized || isAsking) return;
+
+    if (isZoneRecommendationQuestion(normalized)) {
+      await startZoneAssistant(normalized);
+      return;
+    }
 
     requestController.current?.abort();
     const controller = new AbortController();
@@ -870,6 +917,189 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
     }
   }
 
+  async function startZoneAssistant(nextQuestion: string) {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    setQuestion(nextQuestion);
+    setAnswerSource(null);
+    setRecommendations([]);
+    setSelectedEvent(null);
+    setSelectedMap(null);
+    setSelectedZoneId("");
+    setSelectedFacilities([]);
+
+    if (auth.status !== "signed-in") {
+      setZoneStep("idle");
+      setAnswer(
+        "กรุณาเข้าสู่ระบบก่อนครับ เพื่อให้ผมอ่านเฉพาะข้อมูลร้านของคุณและแนะนำบูธที่ยังว่างได้อย่างปลอดภัย",
+      );
+      return;
+    }
+
+    setZoneStep("loading");
+    setAnswer("กำลังตรวจสอบร้านของคุณและโหลด Event ที่เปิดให้เลือก…");
+    setIsAsking(true);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ");
+      }
+
+      const [profile, events] = await Promise.all([
+        getMe(token, controller.signal),
+        getEvents(controller.signal),
+      ]);
+      if (controller.signal.aborted) return;
+
+      const shop = profile.shops[0];
+      if (!shop) {
+        setZoneStep("idle");
+        setAnswer(
+          "ยังไม่พบข้อมูลร้านของคุณครับ กรุณาสร้างโปรไฟล์ร้านและเลือกหมวดสินค้าก่อน แล้วกลับมาขอคำแนะนำอีกครั้ง",
+        );
+        return;
+      }
+      const bookableEvents = events.filter((event) => isEventBookable(event));
+      if (bookableEvents.length === 0) {
+        setZoneStep("idle");
+        setAnswer("ตอนนี้ยังไม่มี Event ที่เปิดให้เลือกบูธครับ");
+        return;
+      }
+
+      setSelectedShop(shop);
+      setAssistantEvents(bookableEvents);
+      setZoneStep("select-event");
+      setAnswer(
+        `ผมพบร้าน “${shop.name}” และจะใช้หมวดสินค้า ${shop.categories.map((category) => category.name).join(", ") || "ที่บันทึกไว้"} เพื่อวิเคราะห์ครับ เลือก Event ที่สนใจก่อน`,
+      );
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setZoneStep("idle");
+      setAnswer(
+        assistantErrorMessage(
+          cause,
+          "ไม่สามารถโหลดข้อมูลร้านเพื่อแนะนำโซนได้ กรุณาลองใหม่ครับ",
+        ),
+      );
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setIsAsking(false);
+      }
+    }
+  }
+
+  async function chooseEvent(event: DiscoveryEvent) {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    setSelectedEvent(event);
+    setSelectedZoneId("");
+    setSelectedFacilities([]);
+    setZoneStep("loading");
+    setAnswer(`กำลังโหลดแผนผังของ ${event.name}…`);
+    setIsAsking(true);
+
+    try {
+      const eventMap = await getEventMap(event.id, controller.signal);
+      if (controller.signal.aborted) return;
+      setSelectedMap(eventMap);
+      setZoneStep("select-zone");
+      setAnswer(
+        "สนใจโซนไหนเป็นพิเศษครับ? เลือกโซนได้เลย หรือให้ AI เปรียบเทียบทุกโซนก็ได้",
+      );
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setZoneStep("select-event");
+      setAnswer(
+        cause instanceof Error
+          ? cause.message
+          : "โหลดแผนผังไม่สำเร็จ กรุณาเลือก Event อีกครั้งครับ",
+      );
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setIsAsking(false);
+      }
+    }
+  }
+
+  function chooseZone(zoneId: string) {
+    setSelectedZoneId(zoneId);
+    setSelectedFacilities([]);
+    setZoneStep("select-facilities");
+    setAnswer(
+      "ต้องการอุปกรณ์อะไรที่บูธบ้างครับ? เลือกได้หลายรายการ หรือกดประมวลผลได้เลยถ้าไม่จำเป็น",
+    );
+  }
+
+  function toggleFacility(facility: string) {
+    setSelectedFacilities((current) =>
+      current.includes(facility)
+        ? current.filter((item) => item !== facility)
+        : [...current, facility],
+    );
+  }
+
+  async function requestZoneRecommendations() {
+    if (!selectedEvent || !selectedShop || isAsking) return;
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    setZoneStep("loading");
+    setAnswer("กำลังวิเคราะห์หมวดร้าน โซนที่สนใจ อุปกรณ์ และบูธว่างจริง…");
+    setIsAsking(true);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ");
+      }
+
+      const result = await getZoneRecommendations(
+        selectedEvent.id,
+        {
+          shopId: selectedShop.id,
+          preferredZoneId: selectedZoneId || undefined,
+          requiredFacilities:
+            selectedFacilities.length > 0 ? selectedFacilities : undefined,
+          limit: 3,
+        },
+        token,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+
+      setRecommendations(result);
+      setZoneStep("result");
+      setAnswer(
+        result.length > 0
+          ? `พบ ${result.length} บูธที่เหมาะกับร้าน “${selectedShop.name}” จากบูธที่ยังว่างครับ`
+          : "ยังไม่พบบูธว่างที่ตรงกับเงื่อนไขนี้ ลองเลือกทุกโซนหรือลดเงื่อนไขอุปกรณ์ครับ",
+      );
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setZoneStep("select-facilities");
+      setAnswer(
+        assistantErrorMessage(
+          cause,
+          "ประมวลผลคำแนะนำไม่สำเร็จ กรุณาลองใหม่ครับ",
+        ),
+      );
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setIsAsking(false);
+      }
+    }
+  }
+
   function resetAssistant() {
     requestController.current?.abort();
     requestController.current = null;
@@ -877,6 +1107,14 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
     setAnswer(initialAnswer);
     setAnswerSource(null);
     setIsAsking(false);
+    setZoneStep("idle");
+    setAssistantEvents([]);
+    setSelectedEvent(null);
+    setSelectedMap(null);
+    setSelectedZoneId("");
+    setSelectedFacilities([]);
+    setSelectedShop(null);
+    setRecommendations([]);
   }
 
   const expanded = view !== "closed";
@@ -1013,19 +1251,142 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
                 </small>
               ) : null}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {quickQuestions.map((quickQuestion) => (
+            {zoneStep === "select-event" ? (
+              <div className="mt-3 grid gap-2" aria-label="เลือก Event">
+                {assistantEvents.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => void chooseEvent(event)}
+                    className="rounded-xl border border-[#d9cbed] bg-white px-3 py-2.5 text-left text-sm font-bold text-ink transition hover:border-violet hover:bg-[#faf7ff]"
+                  >
+                    <span className="block">{event.name}</span>
+                    <small className="mt-1 block font-normal text-muted">
+                      {event.venue.name}
+                    </small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {zoneStep === "select-zone" && selectedMap ? (
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="เลือกโซน">
                 <button
-                  key={quickQuestion}
                   type="button"
-                  disabled={isAsking}
-                  onClick={() => void askAssistant(quickQuestion)}
-                  className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet disabled:cursor-wait disabled:opacity-55"
+                  onClick={() => chooseZone("")}
+                  className="rounded-full border border-violet bg-violet px-3 py-2 text-xs font-bold text-white"
                 >
-                  {quickQuestion}
+                  ให้ AI เลือกทุกโซน
                 </button>
-              ))}
-            </div>
+                {selectedMap.zones.map((zone) => (
+                  <button
+                    key={zone.id}
+                    type="button"
+                    onClick={() => chooseZone(zone.id)}
+                    className="rounded-full border border-[#d9cbed] bg-white px-3 py-2 text-xs font-bold text-violet transition hover:border-violet"
+                  >
+                    โซน {zone.code}
+                    {zone.name ? ` · ${zone.name}` : ""}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {zoneStep === "select-facilities" ? (
+              <div className="mt-3 rounded-2xl border border-[#e5dcf0] bg-white p-3">
+                <div
+                  className="flex flex-wrap gap-2"
+                  aria-label="เลือกอุปกรณ์บูธ"
+                >
+                  {ASSISTANT_FACILITIES.map((facility) => {
+                    const selected = selectedFacilities.includes(
+                      facility.value,
+                    );
+                    return (
+                      <button
+                        key={facility.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => toggleFacility(facility.value)}
+                        className={`rounded-full border px-3 py-2 text-xs font-bold transition ${selected ? "border-violet bg-violet text-white" : "border-[#d9cbed] text-violet hover:border-violet"}`}
+                      >
+                        {facility.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void requestZoneRecommendations()}
+                  className="mt-3 w-full rounded-xl bg-violet px-4 py-3 text-sm font-bold text-white transition hover:bg-[#6d28d9]"
+                >
+                  วิเคราะห์บูธที่เหมาะกับร้านฉัน
+                </button>
+              </div>
+            ) : null}
+
+            {zoneStep === "result" && selectedEvent ? (
+              <div className="mt-3 grid gap-2" aria-label="บูธที่ AI แนะนำ">
+                {recommendations.map((recommendation, index) => {
+                  const matched = findRecommendedBooth(
+                    selectedMap,
+                    recommendation.boothId,
+                  );
+                  return (
+                    <Link
+                      key={recommendation.boothId}
+                      href={`/events/${selectedEvent.id}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ""}`}
+                      className="rounded-xl border border-[#d9cbed] bg-white p-3 text-ink transition hover:border-violet hover:bg-[#faf7ff]"
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <strong className="text-sm">
+                          {index + 1}. บูธ {matched?.booth.code ?? "ที่แนะนำ"}
+                          {matched ? ` · โซน ${matched.zone.code}` : ""}
+                        </strong>
+                        <small className="shrink-0 rounded-full bg-[#f1ebff] px-2 py-1 text-[10px] font-bold text-violet">
+                          {recommendation.source === "AI_GEMINI"
+                            ? "Gemini Flash"
+                            : "Rule-based"}
+                        </small>
+                      </span>
+                      <span className="mt-1.5 block text-xs leading-5 text-muted">
+                        {recommendation.reason}
+                      </span>
+                      <span className="mt-2 block text-xs font-bold text-violet">
+                        เปิดแผนผังและเลือกบูธ →
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {zoneStep === "idle" &&
+            auth.status !== "signed-in" &&
+            isZoneRecommendationQuestion(question) ? (
+              <Link
+                href="/login"
+                className="mt-3 inline-flex rounded-full bg-violet px-4 py-2 text-xs font-bold text-white"
+              >
+                เข้าสู่ระบบเพื่อรับคำแนะนำ
+              </Link>
+            ) : null}
+
+            {zoneStep === "idle" ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {quickQuestions.map((quickQuestion) => (
+                  <button
+                    key={quickQuestion}
+                    type="button"
+                    disabled={isAsking}
+                    onClick={() => void askAssistant(quickQuestion)}
+                    className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet disabled:cursor-wait disabled:opacity-55"
+                  >
+                    {quickQuestion}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="shrink-0 border-t border-line bg-white p-2 sm:p-3">
             <div className="flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
@@ -1079,6 +1440,31 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
       </button>
     </div>
   );
+}
+
+function isZoneRecommendationQuestion(question: string) {
+  return /(แนะนำ|เลือก|หา).*(โซน|บูธ)|(โซน|บูธ).*(เหมาะ|แนะนำ|เลือก)/i.test(
+    question,
+  );
+}
+
+function assistantErrorMessage(cause: unknown, fallback: string) {
+  if (
+    cause instanceof Error &&
+    cause.message.includes("NEXT_PUBLIC_SUPABASE")
+  ) {
+    return "การแนะนำจากข้อมูลร้านจริงต้องเปิดผ่านระบบที่เชื่อม Supabase และเข้าสู่ระบบด้วยบัญชีจริงครับ";
+  }
+
+  return cause instanceof Error ? cause.message : fallback;
+}
+
+function findRecommendedBooth(eventMap: EventMap | null, boothId: string) {
+  for (const zone of eventMap?.zones ?? []) {
+    const booth = zone.booths.find((candidate) => candidate.id === boothId);
+    if (booth) return { booth, zone };
+  }
+  return null;
 }
 
 function UserFooter() {

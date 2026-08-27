@@ -32,6 +32,12 @@ export interface ZoneRecommendationInput {
    */
   productCategoryIds: string[];
 
+  /** Preferred zone from the vendor's interactive assistant flow. */
+  preferredZoneId?: string;
+
+  /** Optional public booth facilities, for example power, table, or water. */
+  requiredFacilities?: string[];
+
   /**
    * How many booths to return. Defaults to `DEFAULT_RECOMMENDATION_LIMIT` when
    * omitted. Zero or negative means zero booths, never "all of them".
