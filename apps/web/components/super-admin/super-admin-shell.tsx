@@ -135,7 +135,6 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
 
   const sidebar = (
     <SidebarContent
-      authName={auth.fullName}
       pathname={pathname}
       platformOpen={platformOpen}
       onTogglePlatform={() => setPlatformOpen((value) => !value)}
@@ -180,7 +179,6 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
               <X className="h-4 w-4" />
             </button>
             <SidebarContent
-              authName={auth.fullName}
               pathname={pathname}
               platformOpen={platformOpen}
               onTogglePlatform={() => setPlatformOpen((value) => !value)}
@@ -204,7 +202,7 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
               }
             }}
             className={`h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] ${
-              collapsed ? 'lg:grid' : 'lg:hidden'
+              collapsed ? 'lg:absolute lg:left-5 lg:grid' : 'lg:hidden'
             } grid`}
             aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
           >
@@ -222,21 +220,14 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
           >
             <Bell className="h-[18px] w-[18px]" />
           </button>
-          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-[#e6daf8] bg-[linear-gradient(135deg,#fff,#f6f0ff)] py-1 pl-1.5 pr-2.5 shadow-[0_6px_18px_rgba(124,58,237,.08)]">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white shadow-[0_5px_13px_rgba(124,58,237,.23)]">
+          <span className="flex items-center gap-2 rounded-xl bg-[#f2eaff] px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4]">
+            <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white">
               {initials(auth.fullName)}
             </span>
-            <span className="hidden min-w-[105px] text-left sm:block">
-              <strong className="block truncate text-xs text-[#242032]">
-                {auth.fullName}
-              </strong>
-              <small className="mt-0.5 block text-[11px] text-[#82788b]">
-                <i className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-[#22a06b]" />
-                Super Admin
-              </small>
+            <span className="hidden max-w-[180px] truncate sm:inline">
+              {auth.fullName}
             </span>
-            <ChevronDown className="hidden h-3.5 w-3.5 text-[#8b5cf6] sm:block" />
-          </div>
+          </span>
         </header>
         <main className="min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-72px)]">
           {children}
@@ -247,7 +238,6 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
 }
 
 function SidebarContent({
-  authName,
   pathname,
   platformOpen,
   onTogglePlatform,
@@ -255,7 +245,6 @@ function SidebarContent({
   onSignOut,
   mobile = false,
 }: {
-  authName: string;
   pathname: string;
   platformOpen: boolean;
   onTogglePlatform: () => void;
@@ -299,20 +288,7 @@ function SidebarContent({
         ))}
       </div>
 
-      <div className="mt-auto pt-5">
-        <div className="flex items-center gap-2.5 border-t border-[#ebe4ef] px-2.5 py-3">
-          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#e4d8ff] text-[11px] font-extrabold text-[#523ab9]">
-            {initials(authName)}
-          </span>
-          <div className="min-w-0">
-            <strong className="block truncate text-xs text-[#242032]">
-              {authName}
-            </strong>
-            <span className="mt-0.5 block text-[11px] text-[#948a98]">
-              Platform owner
-            </span>
-          </div>
-        </div>
+      <div className="mt-auto border-t border-[#ebe4ef] pt-4">
         <button
           type="button"
           onClick={onSignOut}
