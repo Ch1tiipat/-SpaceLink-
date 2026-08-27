@@ -240,10 +240,10 @@ export function AdminAnnouncementsScreen() {
   if (!selectedOrganizationId) return <PageState label="ไม่พบองค์กรที่คุณดูแล" />;
 
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[radial-gradient(circle_at_top_left,#f2ecff_0,transparent_32%),#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
+    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <header>
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#eee7ff] px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+          <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-violet">
             <Megaphone className="h-4 w-4" aria-hidden /> Organization Admin
           </span>
           <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl">

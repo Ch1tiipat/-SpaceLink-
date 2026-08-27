@@ -347,6 +347,34 @@ export type SuperAdminBooking = BookingRecord & {
   };
 };
 
+/** Organization-scoped event row returned to ORG_ADMIN/SUPER_ADMIN. */
+export type AdminOrganizationEvent = EventSummary & {
+  organizationId: string;
+  venueId: string;
+  mapImageUrl: string | null;
+  venue: { id: string; name: string };
+};
+
+/** The organization booking endpoint intentionally returns the same safe
+ * admin projection as the platform overview, already filtered by membership. */
+export type AdminOrganizationBooking = SuperAdminBooking;
+
+export type AdminOrganizationRefund = {
+  id: string;
+  bookingId: string;
+  requestedByUserId: string;
+  reason: string;
+  requestedAmount: string;
+  approvedAmount: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
+  evidenceUrls: string[];
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SuperAdminRefund = {
   id: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
@@ -955,6 +983,39 @@ export function getAdminDashboardSummary(
 ): Promise<AdminDashboardSummary> {
   return getJson<AdminDashboardSummary>(
     `/organizations/${encodeURIComponent(organizationId)}/dashboard-summary`,
+    { signal, token },
+  );
+}
+
+export function getAdminOrganizationEvents(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationEvent[]> {
+  return getJson<AdminOrganizationEvent[]>(
+    `/organizations/${encodeURIComponent(organizationId)}/events`,
+    { signal, token },
+  );
+}
+
+export function getAdminOrganizationBookings(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationBooking[]> {
+  return getJson<AdminOrganizationBooking[]>(
+    `/organizations/${encodeURIComponent(organizationId)}/bookings`,
+    { signal, token },
+  );
+}
+
+export function getAdminOrganizationRefunds(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationRefund[]> {
+  return getJson<AdminOrganizationRefund[]>(
+    `/organizations/${encodeURIComponent(organizationId)}/refunds`,
     { signal, token },
   );
 }

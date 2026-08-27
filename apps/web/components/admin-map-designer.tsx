@@ -318,22 +318,22 @@ export function AdminMapDesigner() {
   const hasChanges = dirtyZones.size > 0 || dirtyBooths.size > 0;
 
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[radial-gradient(circle_at_90%_4%,rgba(124,58,237,0.09),transparent_28%),#f8f6fb] px-4 py-7 sm:px-6 lg:px-8">
+    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-7 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1320px]">
-        <section className="rounded-[30px] bg-gradient-to-br from-[#35156e] via-[#7430e8] to-[#267978] px-6 py-8 text-white shadow-soft sm:px-9 lg:px-11">
+        <section className="rounded-[24px] border border-[#e8e1ee] bg-white px-6 py-8 shadow-[0_12px_34px_rgba(54,36,91,0.045)] sm:px-9 lg:px-11">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[1.1px]">
+              <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-violet">
                 <Map className="h-4 w-4" aria-hidden /> Admin map designer
               </span>
               <h1 className="mt-4 text-3xl font-black tracking-[-1px] sm:text-4xl">
                 ออกแบบโซนและบูธด้วยการลากวาง
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
+              <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
                 จัดตำแหน่งจากข้อมูลจริงขององค์กร แล้วบันทึกเฉพาะพิกัดที่เปลี่ยนแปลง
               </p>
             </div>
-            <Link href="/admin/zones" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 font-extrabold text-violet shadow-lg transition hover:-translate-y-0.5">
+            <Link href="/admin/zones" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-5 font-extrabold text-violet transition hover:bg-[#f5f0ff]">
               <Settings2 className="h-5 w-5" aria-hidden /> จัดการข้อมูลโซนและบูธ
             </Link>
           </div>

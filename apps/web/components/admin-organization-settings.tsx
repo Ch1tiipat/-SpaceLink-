@@ -144,15 +144,15 @@ export function AdminOrganizationSettings() {
   return (
     <main className="sl-page pb-16">
       <div className="shell py-8 sm:py-10">
-        <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#321465] via-[#7132e8] to-[#267b79] p-7 text-white shadow-xl sm:p-10">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.16em]">
+        <section className="rounded-[24px] border border-[#e8e1ee] bg-white p-7 shadow-[0_12px_34px_rgba(54,36,91,0.045)] sm:p-9">
+          <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-violet">
             <ShieldCheck className="h-4 w-4" aria-hidden />
             Organization settings
           </span>
           <h1 className="mt-5 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
             ตั้งค่ารับชำระเงิน PromptPay
           </h1>
-          <p className="mt-3 max-w-2xl text-white/80">
+          <p className="mt-3 max-w-2xl text-muted">
             QR ของรายการจองจะสร้างจากหมายเลขขององค์กรนี้และยอดค่าบูธจริง โดยข้อมูลส่วนนี้เปิดให้เฉพาะผู้ดูแลองค์กร
           </p>
         </section>

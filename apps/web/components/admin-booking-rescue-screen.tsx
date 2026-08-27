@@ -171,11 +171,11 @@ export function AdminBookingRescueScreen() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[radial-gradient(circle_at_top_left,#f2ecff_0,transparent_34%),#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
+    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <header className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#eee7ff] px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em] text-[#6d28d9]">
+            <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#6d28d9]">
               <ShieldCheck className="h-4 w-4" aria-hidden />
               Organization Admin
             </span>

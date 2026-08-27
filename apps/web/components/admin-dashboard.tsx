@@ -160,8 +160,8 @@ export function AdminDashboard() {
   return (
     <main className="sl-page pb-16">
       <div className="shell py-8 sm:py-10">
-        <section className="overflow-hidden rounded-[30px] bg-gradient-to-br from-[#321465] via-[#7132e8] to-[#267b79] p-7 text-white shadow-xl sm:p-10">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.16em]">
+        <section className="rounded-[24px] border border-[#e8e1ee] bg-white p-7 shadow-[0_12px_34px_rgba(54,36,91,0.045)] sm:p-9">
+          <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-violet">
             <LayoutDashboard className="h-4 w-4" aria-hidden />
             Organization dashboard
           </span>
@@ -170,7 +170,7 @@ export function AdminDashboard() {
               <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
                 ภาพรวมองค์กร
               </h1>
-              <p className="mt-3 text-white/80">
+               <p className="mt-3 text-muted">
                 ติดตามการจอง พื้นที่ และ Event ขององค์กรที่เลือก
               </p>
             </div>
@@ -179,7 +179,7 @@ export function AdminDashboard() {
               <select
                 value={organizationId}
                 onChange={(event) => selectOrganization(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-white/25 bg-white px-4 py-3 text-ink outline-none focus:ring-4 focus:ring-white/20"
+                className="mt-2 w-full rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-4 py-3 text-ink outline-none focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]"
               >
                 {organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
