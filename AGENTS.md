@@ -141,7 +141,7 @@ Budget ceiling is ~1,000–1,500 THB/month. Do not introduce paid services.
 **Roles.** `UserRole` on `app_user` is `SUPER_ADMIN | ORG_ADMIN | VENDOR` (platform-level).
 `OrgMembership.role` is `OWNER | ADMIN` and defines **which organizations** an ORG_ADMIN may act on. Both live in our database, **never in the JWT**.
 
-**Schema size:** 27 models, 18 enums. The annotated source and the rationale for every design
+**Schema size:** 28 models, 18 enums. The annotated source and the rationale for every design
 decision are held outside this repository by the team. `apps/api/prisma/schema.prisma` is the only
 in-repo source of truth for structure.
 
