@@ -44,6 +44,7 @@ import {
   getMe,
   getUnreadNotificationCount,
   getZoneRecommendations,
+  markAllNotificationsRead,
   type CurrentUser,
   type DiscoveryEvent,
   type EventMap,
@@ -266,6 +267,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { auth, signOut } = useAuthState();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
   >(null);
@@ -319,10 +321,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         const token = data.session?.access_token;
         if (!active || !token) return;
 
-        const result = await getUnreadNotificationCount(
-          token,
-          controller.signal,
-        );
+        if (pathname.startsWith("/notifications")) {
+          setUnreadNotificationCount(0);
+          await markAllNotificationsRead(token);
+          return;
+        }
+
+        const result = await getUnreadNotificationCount(token, controller.signal);
         if (active) setUnreadNotificationCount(result.count);
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError")
@@ -348,6 +353,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     const query = new URLSearchParams(window.location.search);
     query.set("organization", organizationId);
     router.replace(`${pathname}?${query.toString()}`);
+  }
+
+  function confirmSignOut() {
+    setSignOutConfirmOpen(false);
+    signOut();
+    router.replace("/");
   }
 
   if (isSuperAdminRoute) {
@@ -391,7 +402,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             navGroups={navGroups}
             selectedOrganizationId={selectedOrganizationId}
             collapsed={sidebarCollapsed}
-            onSignOut={signOut}
+            onSignOut={() => setSignOutConfirmOpen(true)}
             onToggle={() => setSidebarCollapsed((current) => !current)}
           />
         )}
@@ -409,6 +420,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             showUnreadNotificationDot={
               unreadNotificationCount !== null && unreadNotificationCount > 0
             }
+            onRequestSignOut={() => setSignOutConfirmOpen(true)}
           />
           {/* The viewport minus the topbar, so a short page still fills the
               screen without overflowing it — the pages themselves no longer
@@ -433,8 +445,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           pathname={pathname}
           items={bottomNavItems}
           selectedOrganizationId={selectedOrganizationId}
+          showUnreadNotificationDot={
+            unreadNotificationCount !== null && unreadNotificationCount > 0
+          }
         />
       )}
+      <SignOutConfirmDialog
+        open={signOutConfirmOpen}
+        onCancel={() => setSignOutConfirmOpen(false)}
+        onConfirm={confirmSignOut}
+      />
       <FloatingSupport auth={auth} hasBottomNav={hasPrivateNavigation} />
       <UxReviewPanel auth={auth} pathname={pathname} />
     </AdminOrganizationContext.Provider>
@@ -617,6 +637,7 @@ function Topbar({
   selectedOrganizationId,
   onSelectOrganization,
   showUnreadNotificationDot,
+  onRequestSignOut,
 }: {
   auth: AuthState;
   hasSidebar: boolean;
@@ -627,6 +648,7 @@ function Topbar({
   selectedOrganizationId: string;
   onSelectOrganization: (organizationId: string) => void;
   showUnreadNotificationDot: boolean;
+  onRequestSignOut: () => void;
 }) {
   return (
     <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ebe5ef] bg-white/95 px-[18px] shadow-[0_5px_20px_rgba(61,43,88,0.025)] backdrop-blur-xl lg:h-[72px] lg:px-[26px]">
@@ -716,22 +738,102 @@ function Topbar({
         )}
 
         {auth.status === "signed-in" && (
-          <span className="flex items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4]">
-            <Avatar
-              name={auth.fullName}
-              className="h-[26px] w-[26px] text-sm"
-            />
-            <span
-              className={`max-w-[84px] truncate sm:max-w-[180px] ${
-                showTenantSwitcher ? "hidden md:inline" : ""
-              }`}
-            >
-              {auth.fullName}
-            </span>
-          </span>
+          <AccountMenu
+            fullName={auth.fullName}
+            compact={showTenantSwitcher}
+            onRequestSignOut={onRequestSignOut}
+          />
         )}
       </div>
     </header>
+  );
+}
+
+function AccountMenu({
+  fullName,
+  compact,
+  onRequestSignOut,
+}: {
+  fullName: string;
+  compact: boolean;
+  onRequestSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function closeOnOutsidePress(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="เปิดเมนูโปรไฟล์"
+        className="flex min-h-10 items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4] transition hover:bg-[#eee4ff] focus-visible:outline-offset-2"
+      >
+        <Avatar name={fullName} className="h-[28px] w-[28px] text-sm" />
+        <span
+          className={`max-w-[84px] truncate sm:max-w-[180px] ${
+            compact ? "hidden md:inline" : ""
+          }`}
+        >
+          {fullName}
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          aria-label="เมนูบัญชี"
+          className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] overflow-hidden rounded-2xl border border-[#e7def2] bg-white p-2 shadow-[0_20px_55px_rgba(39,24,63,.18)]"
+        >
+          <div className="border-b border-line px-3 pb-2.5 pt-1.5">
+            <p className="truncate text-sm font-extrabold text-ink">{fullName}</p>
+            <p className="mt-0.5 text-xs text-muted">บัญชีผู้ขาย SpaceLink</p>
+          </div>
+          <Link
+            href="/profile"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="mt-1.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold text-[#554b5e] transition hover:bg-violet-tint hover:text-violet"
+          >
+            <UserRound className="h-[18px] w-[18px]" aria-hidden />
+            โปรไฟล์ของฉัน
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onRequestSignOut();
+            }}
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-extrabold text-[#b42318] transition hover:bg-[#fff0ee]"
+          >
+            <LogOut className="h-[18px] w-[18px]" aria-hidden />
+            ออกจากระบบ
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1567,6 +1669,119 @@ function UserFooter() {
   );
 }
 
+function SignOutConfirmDialog({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    cancelRef.current?.focus();
+
+    function handleDialogKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+      if (!firstElement || !lastElement) return;
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleDialogKeyboard);
+    return () => {
+      document.removeEventListener("keydown", handleDialogKeyboard);
+      const previousFocus = previousFocusRef.current;
+      if (previousFocus?.isConnected && previousFocus !== document.body) {
+        previousFocus.focus();
+      } else {
+        document
+          .querySelector<HTMLElement>('[aria-label="เปิดเมนูโปรไฟล์"]')
+          ?.focus();
+      }
+    };
+  }, [onCancel, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-[rgba(24,16,38,.5)] p-5 backdrop-blur-[3px]">
+      <button
+        type="button"
+        className="absolute inset-0"
+        aria-label="ปิดหน้าต่างยืนยันออกจากระบบ"
+        onClick={onCancel}
+      />
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sign-out-dialog-title"
+        aria-describedby="sign-out-dialog-description"
+        className="relative w-full max-w-[390px] rounded-[24px] border border-[#e7def2] bg-white p-6 text-center shadow-[0_28px_80px_rgba(28,14,47,.3)]"
+      >
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-[20px] bg-[#fff0ee] text-[#b42318]">
+          <LogOut className="h-6 w-6" aria-hidden />
+        </span>
+        <h2 id="sign-out-dialog-title" className="mt-4 text-xl font-black text-ink">
+          ยืนยันออกจากระบบไหม?
+        </h2>
+        <p
+          id="sign-out-dialog-description"
+          className="mx-auto mt-2 max-w-[30ch] text-sm leading-6 text-muted"
+        >
+          คุณจะต้องเข้าสู่ระบบด้วย Email OTP อีกครั้งเมื่อต้องการใช้งานบัญชี
+        </p>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            ref={cancelRef}
+            type="button"
+            onClick={onCancel}
+            className="min-h-11 rounded-xl border border-line bg-white px-4 text-sm font-extrabold text-[#655d70] transition hover:border-[#d4c7e7]"
+          >
+            อยู่ในระบบต่อ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="min-h-11 rounded-xl bg-[#b42318] px-4 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(180,35,24,.2)] transition hover:bg-[#951f16]"
+          >
+            ออกจากระบบ
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function FooterColumn({
   title,
   children,
@@ -1588,10 +1803,12 @@ function BottomNav({
   pathname,
   items,
   selectedOrganizationId,
+  showUnreadNotificationDot,
 }: {
   pathname: string;
   items: NavItem[];
   selectedOrganizationId: string;
+  showUnreadNotificationDot: boolean;
 }) {
   return (
     <nav className="sl-bottom-nav fixed inset-x-0 bottom-0 z-[35] flex items-stretch justify-start overflow-x-auto overscroll-x-contain border-t border-[#e9e3f2] bg-white/95 px-[5px] pt-1.5 shadow-[0_-10px_30px_rgba(54,36,91,0.06)] backdrop-blur-xl lg:hidden">
@@ -1626,6 +1843,12 @@ function BottomNav({
             }`}
           >
             <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
+            {item.href === "/notifications" && showUnreadNotificationDot ? (
+              <span
+                aria-label="มีการแจ้งเตือนใหม่"
+                className="absolute left-[calc(50%+7px)] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#ef4444]"
+              />
+            ) : null}
             <span className="whitespace-nowrap leading-6">{item.label}</span>
           </Link>
         );

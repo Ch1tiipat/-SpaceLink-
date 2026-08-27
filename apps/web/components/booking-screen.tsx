@@ -309,7 +309,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           <div>
             <span className="sl-kicker">BOOTH RESERVATION</span>
             <h1 className="mt-1 text-[30px] font-black tracking-[-0.045em] max-sm:text-2xl">เลือก Booth และตรวจสอบการจอง</h1>
-            <p className="mt-1 text-sm text-muted"><strong className="text-[#5c5061]">{data.event.name}</strong> · {data.event.id}</p>
+            <p className="mt-1 text-sm text-muted">
+              <strong className="text-[#5c5061]">{data.event.name}</strong>
+            </p>
           </div>
           <span className={`rounded-full px-3 py-2 text-sm font-extrabold ${eventBookable ? 'bg-[#e5f7ed] text-[#15794a]' : 'bg-[#ffe9ec] text-[#ae3949]'}`}>
             {eventBookable ? 'เปิดให้จอง' : 'ปิดรับจอง'}
