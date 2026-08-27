@@ -43,7 +43,24 @@ Violating any of these breaks work that has already been reviewed and signed off
 - **Do NOT add, remove, or rename any model, field, enum, relation, `@map`, or `@@map`.**
 - **Do NOT regenerate or rewrite the schema from scratch**, even if asked to "set up Prisma".
 - If a task appears to require a schema change: **stop, explain what is missing and why, and wait for approval.** Schema changes go through the team, not through you.
-- The **only** approved edit is adding `directUrl` to the datasource block (see §6.2). Nothing else.
+- The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
+  ticket-specific additive changes in §2.1.1. Nothing else.
+
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO)
+
+The Prisma schema remains frozen except for these two additive changes:
+
+- SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
+- SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
+
+These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
+enum, relation, `@map`, or `@@map`.
+
+Before implementing either ticket, generate and submit a `prisma migrate diff` for review. Do not
+run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the generated SQL.
+
+Applying migrations to the shared Supabase database is Book-only and must never be delegated to
+Codex.
 
 ### 2.2 Do not run destructive or state-changing database commands
 Never run without an explicit, task-specific instruction:
@@ -124,7 +141,7 @@ Budget ceiling is ~1,000–1,500 THB/month. Do not introduce paid services.
 **Roles.** `UserRole` on `app_user` is `SUPER_ADMIN | ORG_ADMIN | VENDOR` (platform-level).
 `OrgMembership.role` is `OWNER | ADMIN` and defines **which organizations** an ORG_ADMIN may act on. Both live in our database, **never in the JWT**.
 
-**Schema size:** 26 models, 18 enums. The annotated source and the rationale for every design
+**Schema size:** 27 models, 18 enums. The annotated source and the rationale for every design
 decision are held outside this repository by the team. `apps/api/prisma/schema.prisma` is the only
 in-repo source of truth for structure.
 
@@ -139,7 +156,7 @@ in-repo source of truth for structure.
 - PK is `uuid`, timestamps are `timestamptz`
 - **Money is `Decimal(10,2)`. Never use `Float` or `number` for money.** Convert with `.toString()` at the API boundary, never with `parseFloat`.
 
-### 6.2 The one approved schema edit
+### 6.2 The approved datasource edit
 Supabase requires a pooled URL for the app and a direct URL for migrations. Add **only** this to the existing `datasource` block:
 
 ```prisma
