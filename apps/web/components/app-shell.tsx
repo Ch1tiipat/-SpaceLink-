@@ -322,8 +322,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         if (!active || !token) return;
 
         if (pathname.startsWith("/notifications")) {
-          setUnreadNotificationCount(0);
           await markAllNotificationsRead(token);
+          if (active) setUnreadNotificationCount(0);
           return;
         }
 
