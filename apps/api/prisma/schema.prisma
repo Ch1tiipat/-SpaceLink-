@@ -187,6 +187,7 @@ model User {
   reviews            Review[]
   notifications      Notification[]
   pushSubscriptions  PushSubscription[]
+  systemBroadcastsCreated SystemBroadcast[] @relation("SystemBroadcastCreator")
   penalties          Penalty[]
   refundsRequested   RefundRequest[]     @relation("RefundRequester")
   refundsReviewed    RefundRequest[]     @relation("RefundReviewer")
@@ -212,6 +213,19 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscription")
+}
+
+model SystemBroadcast {
+  id        String    @id @default(uuid()) @map("system_broadcast_id") @db.Uuid
+  title     String
+  body      String    @db.Text
+  createdBy String    @map("created_by_user_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+
+  creator User @relation("SystemBroadcastCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@map("system_broadcast")
 }
 
 model AuditLog {

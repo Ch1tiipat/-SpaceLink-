@@ -91,6 +91,39 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Persists one in-app notification per current user with a single bulk
+   * write. Web push starts only after that write succeeds and remains
+   * best-effort so it cannot change the result of the broadcast request.
+   */
+  async broadcastToAllUsers(input: {
+    title: string;
+    body: string;
+  }): Promise<number> {
+    try {
+      const users = await this.prisma.user.findMany({ select: { id: true } });
+
+      if (users.length === 0) return 0;
+
+      const userIds = users.map(({ id }) => id);
+      await this.prisma.notification.createMany({
+        data: userIds.map((userId) => ({
+          userId,
+          type: NotificationType.SYSTEM,
+          title: input.title,
+          body: input.body,
+        })),
+      });
+
+      void this.pushSender.sendToUsers(userIds, input).catch(() => undefined);
+
+      return users.length;
+    } catch {
+      this.logger.error('Failed to fan out a system broadcast notification');
+      return 0;
+    }
+  }
+
   findMine(userId: string, unreadOnly = false) {
     return this.prisma.notification.findMany({
       where: { userId, ...(unreadOnly ? { isRead: false } : {}) },
