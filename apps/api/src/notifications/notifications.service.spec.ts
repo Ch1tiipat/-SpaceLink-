@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
+import { PushSenderService } from './push-sender.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -39,6 +40,7 @@ const notificationCreateMany = jest.fn();
 const notificationFindMany = jest.fn();
 const notificationCount = jest.fn();
 const notificationUpdateMany = jest.fn();
+const sendToUser = jest.fn();
 const mockPrismaService = {
   booking: { findMany: bookingFindMany },
   notification: {
@@ -49,6 +51,7 @@ const mockPrismaService = {
     updateMany: notificationUpdateMany,
   },
 };
+const mockPushSenderService = { sendToUser };
 
 type BookingFixture = {
   vendorUserId: string;
@@ -78,11 +81,13 @@ describe('NotificationsService', () => {
     notificationFindMany.mockResolvedValue([NOTIFICATION]);
     notificationCount.mockResolvedValue(1);
     notificationUpdateMany.mockResolvedValue({ count: 1 });
+    sendToUser.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: PushSenderService, useValue: mockPushSenderService },
       ],
     }).compile();
 
@@ -100,6 +105,18 @@ describe('NotificationsService', () => {
     expect(notificationCreate).toHaveBeenCalledWith({
       data: { userId: USER_ID, ...INPUT },
     });
+    expect(sendToUser).toHaveBeenCalledWith(USER_ID, {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
+  it('keeps the saved notification result when web push fails', async () => {
+    sendToUser.mockRejectedValue(new Error('push unavailable'));
+
+    await expect(service.createForUser(USER_ID, INPUT)).resolves.toEqual(
+      NOTIFICATION,
+    );
   });
 
   it('logs and resolves null when a notification cannot be created', async () => {
@@ -112,6 +129,7 @@ describe('NotificationsService', () => {
     expect(error).toHaveBeenCalledWith(
       'Failed to create an in-app notification',
     );
+    expect(sendToUser).not.toHaveBeenCalled();
 
     error.mockRestore();
   });

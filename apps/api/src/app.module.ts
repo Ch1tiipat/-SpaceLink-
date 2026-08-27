@@ -23,6 +23,7 @@ import { PenaltiesModule } from './penalties/penalties.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RefundsModule } from './refunds/refunds.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     NotificationsModule,
     RefundsModule,
     AuditLogsModule,
+    PushSubscriptionsModule,
   ],
 })
 export class AppModule {}

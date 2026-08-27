@@ -5,6 +5,7 @@ import {
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
   type: NotificationType;
@@ -25,16 +26,26 @@ const bangkokDateFormatter = new Intl.DateTimeFormat('en-US', {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushSender: PushSenderService,
+  ) {}
 
   async createForUser(
     userId: string,
     input: CreateNotificationInput,
   ): Promise<Notification | null> {
     try {
-      return await this.prisma.notification.create({
+      const notification = await this.prisma.notification.create({
         data: { userId, ...input },
       });
+      void this.pushSender
+        .sendToUser(userId, {
+          title: input.title,
+          body: input.body ?? '',
+        })
+        .catch(() => undefined);
+      return notification;
     } catch {
       // Notification delivery is best-effort. Never include the title or body
       // here: they can contain user-visible details that do not belong in logs.

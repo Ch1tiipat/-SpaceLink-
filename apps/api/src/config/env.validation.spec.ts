@@ -130,4 +130,18 @@ describe('env validation', () => {
       'Set exactly one',
     );
   });
+
+  it('accepts VAPID only when the complete key set is present', () => {
+    expect(validate({}).error).toBeUndefined();
+    expect(
+      validate({
+        VAPID_SUBJECT: 'mailto:admin@example.com',
+        VAPID_PUBLIC_KEY: 'public-key',
+        VAPID_PRIVATE_KEY: 'private-key',
+      }).error,
+    ).toBeUndefined();
+    expect(
+      validate({ VAPID_PRIVATE_KEY: 'private-key' }).error?.message,
+    ).toContain('VAPID_PRIVATE_KEY');
+  });
 });

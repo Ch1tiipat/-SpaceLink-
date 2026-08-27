@@ -186,6 +186,7 @@ model User {
   bookingsCancelled  Booking[]           @relation("BookingCanceller")
   reviews            Review[]
   notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
   penalties          Penalty[]
   refundsRequested   RefundRequest[]     @relation("RefundRequester")
   refundsReviewed    RefundRequest[]     @relation("RefundReviewer")
@@ -195,6 +196,22 @@ model User {
   auditLogs           AuditLog[]
 
   @@map("app_user")
+}
+
+model PushSubscription {
+  id         String    @id @default(uuid()) @map("push_subscription_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  endpoint   String    @unique @db.Text
+  p256dhKey  String    @map("p256dh_key")
+  authKey    String    @map("auth_key")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscription")
 }
 
 model AuditLog {
