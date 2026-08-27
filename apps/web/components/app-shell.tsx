@@ -1,14 +1,15 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
-} from 'react';
+} from "react";
 import {
   Bell,
   House,
@@ -30,13 +31,15 @@ import {
   UserRound,
   X,
   type LucideIcon,
-} from 'lucide-react';
-import { useAuthState, type AuthState } from '@/lib/use-auth-state';
+} from "lucide-react";
+import { useAuthState, type AuthState } from "@/lib/use-auth-state";
 import {
+  askSupportAssistant,
   getUnreadNotificationCount,
   type CurrentUser,
-} from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
+  type SupportAssistantResponse,
+} from "@/lib/api";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
   canUseUxPreview,
   getUxPreviewMode,
@@ -47,7 +50,7 @@ import {
   subscribeToUxPreviewShop,
   type UxPreviewMode,
   type UxPreviewShopMode,
-} from '@/lib/ux-preview';
+} from "@/lib/ux-preview";
 
 /**
  * A destination that exists, or one the design calls for that has no route
@@ -57,16 +60,16 @@ import {
  */
 type NavItem =
   | {
-      kind: 'link';
+      kind: "link";
       label: string;
       href: string;
       icon: LucideIcon;
       matches: (pathname: string) => boolean;
     }
-  | { kind: 'soon'; label: string; icon: LucideIcon };
+  | { kind: "soon"; label: string; icon: LucideIcon };
 
 type NavGroup = { label: string; items: NavItem[] };
-type AdminOrganization = CurrentUser['organizations'][number];
+type AdminOrganization = CurrentUser["organizations"][number];
 
 type AdminOrganizationContextValue = {
   organizations: AdminOrganization[];
@@ -76,7 +79,7 @@ type AdminOrganizationContextValue = {
 
 const AdminOrganizationContext = createContext<AdminOrganizationContextValue>({
   organizations: [],
-  selectedOrganizationId: '',
+  selectedOrganizationId: "",
   selectOrganization: () => undefined,
 });
 const NO_ADMIN_ORGANIZATIONS: AdminOrganization[] = [];
@@ -92,104 +95,104 @@ export function useAdminOrganizationSelection() {
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Explore',
+    label: "Explore",
     items: [
       {
-        kind: 'link',
-        label: 'หน้าหลัก',
-        href: '/',
+        kind: "link",
+        label: "หน้าหลัก",
+        href: "/",
         icon: House,
         // Event pages are reached from discovery and have no nav item of their
         // own, so they keep the section they were entered from highlighted.
-        matches: (pathname) => pathname === '/' || pathname.startsWith('/events'),
+        matches: (pathname) =>
+          pathname === "/" || pathname.startsWith("/events"),
       },
     ],
   },
   {
-    label: 'My Space',
+    label: "My Space",
     items: [
       {
-        kind: 'link',
-        label: 'การจองของฉัน',
-        href: '/bookings',
+        kind: "link",
+        label: "การจองของฉัน",
+        href: "/bookings",
         icon: Ticket,
-        matches: (pathname) => pathname.startsWith('/bookings'),
+        matches: (pathname) => pathname.startsWith("/bookings"),
       },
       {
-        kind: 'link',
-        label: 'การแจ้งเตือน',
-        href: '/notifications',
+        kind: "link",
+        label: "การแจ้งเตือน",
+        href: "/notifications",
         icon: Bell,
-        matches: (pathname) => pathname.startsWith('/notifications'),
+        matches: (pathname) => pathname.startsWith("/notifications"),
       },
       {
-        kind: 'link',
-        label: 'ช่วยเหลือ',
-        href: '/help',
+        kind: "link",
+        label: "ช่วยเหลือ",
+        href: "/help",
         icon: MessageCircle,
-        matches: (pathname) => pathname.startsWith('/help'),
+        matches: (pathname) => pathname.startsWith("/help"),
       },
     ],
   },
   {
-    label: 'Account',
+    label: "Account",
     items: [
       {
-        kind: 'link',
-        label: 'โปรไฟล์',
-        href: '/profile',
+        kind: "link",
+        label: "โปรไฟล์",
+        href: "/profile",
         icon: UserRound,
-        matches: (pathname) => pathname.startsWith('/profile'),
+        matches: (pathname) => pathname.startsWith("/profile"),
       },
     ],
   },
 ];
 
-
 const ADMIN_NAV_GROUP: NavGroup = {
-  label: 'Admin',
+  label: "Admin",
   items: [
     {
-      kind: 'link',
-      label: 'Dashboard',
-      href: '/admin/dashboard',
+      kind: "link",
+      label: "Dashboard",
+      href: "/admin/dashboard",
       icon: LayoutDashboard,
-      matches: (pathname) => pathname.startsWith('/admin/dashboard'),
+      matches: (pathname) => pathname.startsWith("/admin/dashboard"),
     },
     {
-      kind: 'link',
-      label: 'ยืนยันการจอง',
-      href: '/admin/bookings',
+      kind: "link",
+      label: "ยืนยันการจอง",
+      href: "/admin/bookings",
       icon: ShieldCheck,
-      matches: (pathname) => pathname.startsWith('/admin/bookings'),
+      matches: (pathname) => pathname.startsWith("/admin/bookings"),
     },
     {
-      kind: 'link',
-      label: 'โซนและบูธ',
-      href: '/admin/zones',
+      kind: "link",
+      label: "โซนและบูธ",
+      href: "/admin/zones",
       icon: MapPinned,
-      matches: (pathname) => pathname.startsWith('/admin/zones'),
+      matches: (pathname) => pathname.startsWith("/admin/zones"),
     },
     {
-      kind: 'link',
-      label: 'ออกแบบแผนผัง',
-      href: '/admin/map-designer',
+      kind: "link",
+      label: "ออกแบบแผนผัง",
+      href: "/admin/map-designer",
       icon: Map,
-      matches: (pathname) => pathname.startsWith('/admin/map-designer'),
+      matches: (pathname) => pathname.startsWith("/admin/map-designer"),
     },
     {
-      kind: 'link',
-      label: 'ประกาศ',
-      href: '/admin/announcements',
+      kind: "link",
+      label: "ประกาศ",
+      href: "/admin/announcements",
       icon: Megaphone,
-      matches: (pathname) => pathname.startsWith('/admin/announcements'),
+      matches: (pathname) => pathname.startsWith("/admin/announcements"),
     },
     {
-      kind: 'link',
-      label: 'ตั้งค่า PromptPay',
-      href: '/admin/organization',
+      kind: "link",
+      label: "ตั้งค่า PromptPay",
+      href: "/admin/organization",
       icon: Landmark,
-      matches: (pathname) => pathname.startsWith('/admin/organization'),
+      matches: (pathname) => pathname.startsWith("/admin/organization"),
     },
   ],
 };
@@ -207,34 +210,34 @@ const BOTTOM_NAV: NavItem[] = [
  * while signed out, where a sidebar offering การจองของฉัน would be pointing at
  * a page the visitor cannot open yet.
  */
-const BARE_ROUTES = new Set(['/login', '/register']);
+const BARE_ROUTES = new Set(["/login", "/register"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { auth, signOut } = useAuthState();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState('');
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
   >(null);
 
   const isAdmin =
-    auth.status === 'signed-in' &&
-    (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
+    auth.status === "signed-in" &&
+    (auth.role === "ORG_ADMIN" || auth.role === "SUPER_ADMIN");
   const organizations = isAdmin ? auth.organizations : NO_ADMIN_ORGANIZATIONS;
-  const isAdminRoute = pathname.startsWith('/admin');
-  const isSuperAdminRoute = pathname.startsWith('/super-admin');
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isSuperAdminRoute = pathname.startsWith("/super-admin");
 
   useEffect(() => {
     if (!isAdmin || organizations.length === 0) {
-      setSelectedOrganizationId('');
+      setSelectedOrganizationId("");
       return;
     }
 
     const syncFromUrl = () => {
       const query = new URLSearchParams(window.location.search);
-      const requestedId = query.get('organization');
+      const requestedId = query.get("organization");
       const nextId = organizations.some(
         (organization) => organization.id === requestedId,
       )
@@ -244,19 +247,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       setSelectedOrganizationId(nextId);
 
       if (isAdminRoute && requestedId !== nextId) {
-        query.set('organization', nextId);
+        query.set("organization", nextId);
         router.replace(`${pathname}?${query.toString()}`);
       }
     };
 
     syncFromUrl();
-    window.addEventListener('popstate', syncFromUrl);
-    return () => window.removeEventListener('popstate', syncFromUrl);
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
   }, [isAdmin, isAdminRoute, organizations, pathname, router]);
 
   useEffect(() => {
     setUnreadNotificationCount(null);
-    if (auth.status !== 'signed-in') return;
+    if (auth.status !== "signed-in") return;
 
     const controller = new AbortController();
     let active = true;
@@ -274,7 +277,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         );
         if (active) setUnreadNotificationCount(result.count);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === "AbortError")
+          return;
         if (active) setUnreadNotificationCount(null);
       }
     })();
@@ -286,13 +290,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [auth.status, pathname]);
 
   function selectOrganization(organizationId: string) {
-    if (!organizations.some((organization) => organization.id === organizationId)) {
+    if (
+      !organizations.some((organization) => organization.id === organizationId)
+    ) {
       return;
     }
 
     setSelectedOrganizationId(organizationId);
     const query = new URLSearchParams(window.location.search);
-    query.set('organization', organizationId);
+    query.set("organization", organizationId);
     router.replace(`${pathname}?${query.toString()}`);
   }
 
@@ -301,24 +307,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   if (BARE_ROUTES.has(pathname)) {
-    return (
-      <>
-        {children}
-        <FloatingSupport hasBottomNav={false} />
-      </>
-    );
+    return <>{children}</>;
   }
 
-  const hasPrivateNavigation = auth.status === 'signed-in';
+  const hasPrivateNavigation = auth.status === "signed-in";
   const navGroups = isAdmin
     ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, NAV_GROUPS[1]]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
-    ? [
-        NAV_GROUPS[0].items[0],
-        ...ADMIN_NAV_GROUP.items,
-        BOTTOM_NAV[2],
-      ]
+    ? [NAV_GROUPS[0].items[0], ...ADMIN_NAV_GROUP.items, BOTTOM_NAV[2]]
     : BOTTOM_NAV;
 
   return (
@@ -334,10 +331,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           hasPrivateNavigation
             ? `grid min-h-screen transition-[grid-template-columns] duration-300 ${
                 sidebarCollapsed
-                  ? 'lg:grid-cols-[minmax(0,1fr)]'
-                  : 'lg:grid-cols-[280px_minmax(0,1fr)]'
+                  ? "lg:grid-cols-[minmax(0,1fr)]"
+                  : "lg:grid-cols-[280px_minmax(0,1fr)]"
               }`
-            : 'min-h-screen'
+            : "min-h-screen"
         }
       >
         {hasPrivateNavigation && !sidebarCollapsed && (
@@ -373,8 +370,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div
             className={`min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)] ${
               hasPrivateNavigation
-                ? 'pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0'
-                : ''
+                ? "pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0"
+                : ""
             }`}
           >
             {children}
@@ -432,14 +429,14 @@ function Sidebar({
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#ebe5ef] bg-white px-4 py-6 shadow-[8px_0_30px_rgba(69,49,99,0.025)] lg:flex">
       <div
         className={`flex pb-7 ${
-          collapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
+          collapsed ? "flex-col items-center gap-3" : "items-center gap-2"
         }`}
       >
         <Link
           href="/"
-          aria-label={collapsed ? 'SpaceLink หน้าแรก' : undefined}
+          aria-label={collapsed ? "SpaceLink หน้าแรก" : undefined}
           className={`flex min-w-0 items-center text-xl font-black tracking-[-0.7px] text-ink ${
-            collapsed ? 'justify-center' : 'flex-1 gap-3 px-2'
+            collapsed ? "justify-center" : "flex-1 gap-3 px-2"
           }`}
         >
           <BrandMark />
@@ -448,9 +445,9 @@ function Sidebar({
         <button
           type="button"
           onClick={onToggle}
-          aria-label={collapsed ? 'เปิดแถบเมนู' : 'ย่อแถบเมนู'}
+          aria-label={collapsed ? "เปิดแถบเมนู" : "ย่อแถบเมนู"}
           aria-expanded={!collapsed}
-          title={collapsed ? 'เปิดแถบเมนู' : 'ย่อแถบเมนู'}
+          title={collapsed ? "เปิดแถบเมนู" : "ย่อแถบเมนู"}
           className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#ece7f3] bg-white text-[#655D70] shadow-[0_6px_18px_rgba(54,36,91,0.05)] transition hover:border-[#d9cdf3] hover:bg-violet-tint hover:text-violet"
         >
           <Menu className="h-5 w-5" aria-hidden />
@@ -461,7 +458,10 @@ function Sidebar({
         {navGroups.map((group) => (
           <div key={group.label}>
             {collapsed ? (
-              <span aria-hidden className="mx-auto my-3 block h-px w-7 bg-[#ece7f3]" />
+              <span
+                aria-hidden
+                className="mx-auto my-3 block h-px w-7 bg-[#ece7f3]"
+              />
             ) : (
               <span className="block px-3 pb-[7px] pt-[13px] text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC]">
                 {group.label}
@@ -486,14 +486,14 @@ function Sidebar({
         <button
           type="button"
           onClick={onSignOut}
-          aria-label={collapsed ? 'ออกจากระบบ' : undefined}
-          title={collapsed ? 'ออกจากระบบ' : undefined}
+          aria-label={collapsed ? "ออกจากระบบ" : undefined}
+          title={collapsed ? "ออกจากระบบ" : undefined}
           className={`flex min-h-11 w-full items-center rounded-2xl border border-[#eadff7] bg-[#faf7ff] py-3 text-left text-sm font-extrabold text-[#6331c4] transition hover:border-[#d7c4ef] hover:bg-violet-tint ${
-            collapsed ? 'justify-center px-2' : 'gap-3 px-4'
+            collapsed ? "justify-center px-2" : "gap-3 px-4"
           }`}
         >
           <LogOut aria-hidden className="h-[18px] w-[18px]" strokeWidth={2} />
-          {!collapsed && 'ออกจากระบบ'}
+          {!collapsed && "ออกจากระบบ"}
         </button>
       </div>
     </aside>
@@ -513,10 +513,10 @@ function SidebarItem({
 }) {
   const Icon = item.icon;
   const shared = `flex min-h-12 w-full items-center rounded-[13px] py-2.5 text-left text-[14px] font-medium transition-colors ${
-    collapsed ? 'justify-center px-2' : 'gap-[11px] px-3.5'
+    collapsed ? "justify-center px-2" : "gap-[11px] px-3.5"
   }`;
 
-  if (item.kind === 'soon') {
+  if (item.kind === "soon") {
     return (
       <button
         type="button"
@@ -536,13 +536,13 @@ function SidebarItem({
   return (
     <Link
       href={navItemHref(item, selectedOrganizationId)}
-      aria-current={active ? 'page' : undefined}
+      aria-current={active ? "page" : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
       className={`${shared} ${
         active
-          ? 'bg-[#f4edfc] font-semibold text-[#6d28d9]'
-          : 'text-[#817884] hover:bg-[#faf7ff] hover:text-[#6d28d9]'
+          ? "bg-[#f4edfc] font-semibold text-[#6d28d9]"
+          : "text-[#817884] hover:bg-[#faf7ff] hover:text-[#6d28d9]"
       }`}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
@@ -586,7 +586,7 @@ function Topbar({
           thing identifying the page, so it appears here instead. */}
       <Link
         href="/"
-        className={`flex items-center gap-2.5 ${hasSidebar ? 'lg:hidden' : ''}`}
+        className={`flex items-center gap-2.5 ${hasSidebar ? "lg:hidden" : ""}`}
       >
         <BrandMark />
         <span className="text-lg font-bold tracking-[-0.5px]">SpaceLink</span>
@@ -625,7 +625,7 @@ function Topbar({
           </label>
         )}
 
-        {auth.status === 'signed-in' && (
+        {auth.status === "signed-in" && (
           <Link
             href="/notifications"
             aria-label="เปิดการแจ้งเตือน"
@@ -641,7 +641,7 @@ function Topbar({
           </Link>
         )}
 
-        {auth.status === 'loading' && (
+        {auth.status === "loading" && (
           // Holds the footprint the resolved state will take, so the topbar
           // does not jump when it arrives.
           <span
@@ -650,7 +650,7 @@ function Topbar({
           />
         )}
 
-        {auth.status === 'signed-out' && (
+        {auth.status === "signed-out" && (
           <>
             <Link
               href="/login"
@@ -667,12 +667,15 @@ function Topbar({
           </>
         )}
 
-        {auth.status === 'signed-in' && (
+        {auth.status === "signed-in" && (
           <span className="flex items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4]">
-            <Avatar name={auth.fullName} className="h-[26px] w-[26px] text-sm" />
+            <Avatar
+              name={auth.fullName}
+              className="h-[26px] w-[26px] text-sm"
+            />
             <span
               className={`max-w-[84px] truncate sm:max-w-[180px] ${
-                showTenantSwitcher ? 'hidden md:inline' : ''
+                showTenantSwitcher ? "hidden md:inline" : ""
               }`}
             >
               {auth.fullName}
@@ -685,30 +688,36 @@ function Topbar({
 }
 
 const UX_REVIEW_ROUTES = [
-  ['หน้าแรก', '/'],
-  ['รายละเอียดงาน', '/events/demo-event'],
-  ['แผนผังโซน', '/events/demo-event/map'],
-  ['เลือกบูธ', '/events/demo-event/book'],
-  ['การจอง', '/bookings'],
-  ['รายละเอียดจอง', '/bookings/local-preview-confirmed-booking'],
-  ['ชำระเงิน', '/bookings/local-preview-booking/payment'],
-  ['รีวิว', '/bookings/local-preview-completed-booking/review'],
-  ['แจ้งเตือน', '/notifications'],
-  ['ช่วยเหลือ', '/help'],
-  ['โปรไฟล์', '/profile'],
-  ['เข้าสู่ระบบ', '/login'],
-  ['สมัครสมาชิก', '/register'],
+  ["หน้าแรก", "/"],
+  ["รายละเอียดงาน", "/events/demo-event"],
+  ["แผนผังโซน", "/events/demo-event/map"],
+  ["เลือกบูธ", "/events/demo-event/book"],
+  ["การจอง", "/bookings"],
+  ["รายละเอียดจอง", "/bookings/local-preview-confirmed-booking"],
+  ["ชำระเงิน", "/bookings/local-preview-booking/payment"],
+  ["รีวิว", "/bookings/local-preview-completed-booking/review"],
+  ["แจ้งเตือน", "/notifications"],
+  ["ช่วยเหลือ", "/help"],
+  ["โปรไฟล์", "/profile"],
+  ["เข้าสู่ระบบ", "/login"],
+  ["สมัครสมาชิก", "/register"],
 ] as const;
 
-function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }) {
+function UxReviewPanel({
+  auth,
+  pathname,
+}: {
+  auth: AuthState;
+  pathname: string;
+}) {
   const [available, setAvailable] = useState(false);
-  const [mode, setMode] = useState<UxPreviewMode>('signed-out');
-  const [shopMode, setShopMode] = useState<UxPreviewShopMode>('with-shop');
+  const [mode, setMode] = useState<UxPreviewMode>("signed-out");
+  const [shopMode, setShopMode] = useState<UxPreviewShopMode>("with-shop");
 
   useEffect(() => {
     if (!canUseUxPreview()) return;
     setAvailable(true);
-    setMode(getUxPreviewMode() ?? 'signed-out');
+    setMode(getUxPreviewMode() ?? "signed-out");
     setShopMode(getUxPreviewShopMode());
     const unsubscribeAuth = subscribeToUxPreview(setMode);
     const unsubscribeShop = subscribeToUxPreviewShop(setShopMode);
@@ -723,17 +732,20 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
   return (
     <details className="fixed bottom-[84px] left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl lg:bottom-4">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-extrabold text-violet">
-        ตรวจ UX/UI · {auth.status === 'signed-in' ? 'เข้าสู่ระบบแล้ว' : 'ผู้เยี่ยมชม'}
+        ตรวจ UX/UI ·{" "}
+        {auth.status === "signed-in" ? "เข้าสู่ระบบแล้ว" : "ผู้เยี่ยมชม"}
       </summary>
       <div className="border-t border-line p-3">
         <p className="text-xs leading-5 text-muted">
           เครื่องมือนี้แสดงเฉพาะ Local และไม่ส่งข้อมูลเข้า API
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          {([
-            ['signed-out', 'ยังไม่เข้าสู่ระบบ'],
-            ['signed-in', 'เข้าสู่ระบบแล้ว'],
-          ] as const).map(([value, label]) => (
+          {(
+            [
+              ["signed-out", "ยังไม่เข้าสู่ระบบ"],
+              ["signed-in", "เข้าสู่ระบบแล้ว"],
+            ] as const
+          ).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -743,20 +755,22 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
               }}
               className={`rounded-xl px-3 py-2 text-xs font-bold ${
                 mode === value
-                  ? 'bg-violet text-white'
-                  : 'border border-line bg-white text-ink'
+                  ? "bg-violet text-white"
+                  : "border border-line bg-white text-ink"
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-        {mode === 'signed-in' && (
+        {mode === "signed-in" && (
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {([
-              ['with-shop', 'มีโปรไฟล์ร้าน'],
-              ['no-shop', 'ยังไม่มีร้าน'],
-            ] as const).map(([value, label]) => (
+            {(
+              [
+                ["with-shop", "มีโปรไฟล์ร้าน"],
+                ["no-shop", "ยังไม่มีร้าน"],
+              ] as const
+            ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -766,8 +780,8 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
                 }}
                 className={`rounded-xl px-3 py-2 text-xs font-bold ${
                   shopMode === value
-                    ? 'bg-[#201b2e] text-white'
-                    : 'border border-line bg-white text-ink'
+                    ? "bg-[#201b2e] text-white"
+                    : "border border-line bg-white text-ink"
                 }`}
               >
                 {label}
@@ -775,15 +789,18 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
             ))}
           </div>
         )}
-        <nav className="mt-3 flex flex-wrap gap-2" aria-label="หน้าสำหรับตรวจ UX/UI">
+        <nav
+          className="mt-3 flex flex-wrap gap-2"
+          aria-label="หน้าสำหรับตรวจ UX/UI"
+        >
           {UX_REVIEW_ROUTES.map(([label, href]) => (
             <Link
               key={href}
               href={href}
               className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                 pathname === href
-                  ? 'bg-violet-tint text-violet'
-                  : 'bg-[#f7f5fa] text-[#625b6d]'
+                  ? "bg-violet-tint text-violet"
+                  : "bg-[#f7f5fa] text-[#625b6d]"
               }`}
             >
               {label}
@@ -797,110 +814,244 @@ function UxReviewPanel({ auth, pathname }: { auth: AuthState; pathname: string }
 
 function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
   const initialAnswer =
-    'สวัสดีครับ 👋 นี่คือคำถามที่พบบ่อยของ SpaceLink เลือกดูเรื่อง Event, การจองบูธ, การชำระเงิน หรือช่องทางติดต่อได้เลยครับ';
-  const [view, setView] = useState<'closed' | 'menu' | 'chat'>('closed');
-  const [question, setQuestion] = useState('');
+    "สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ";
+  const [view, setView] = useState<"closed" | "menu" | "chat">("closed");
+  const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(initialAnswer);
+  const [answerSource, setAnswerSource] = useState<
+    SupportAssistantResponse["source"] | null
+  >(null);
+  const [isAsking, setIsAsking] = useState(false);
+  const requestController = useRef<AbortController | null>(null);
 
   const quickQuestions = [
-    'แนะนำบูธสำหรับร้านอาหาร',
-    'ร้านผ้าไหมเหมาะกับโซนไหน',
-    'เริ่มจองบูธอย่างไร',
+    "เริ่มจองบูธอย่างไร",
+    "อัปโหลดสลิปที่ไหน",
+    "AI แนะนำโซนทำงานอย่างไร",
   ];
 
-  function askAssistant(nextQuestion = question) {
+  useEffect(
+    () => () => {
+      requestController.current?.abort();
+    },
+    [],
+  );
+
+  async function askAssistant(nextQuestion = question) {
     const normalized = nextQuestion.trim();
-    if (!normalized) return;
-    setQuestion(nextQuestion);
+    if (!normalized || isAsking) return;
 
-    if (!/(โซน|บูธ|ร้าน|จอง|event|งาน|พื้นที่)/i.test(normalized)) {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    setQuestion(normalized);
+    setAnswer("กำลังค้นหาคำตอบจากข้อมูล SpaceLink…");
+    setAnswerSource(null);
+    setIsAsking(true);
+
+    try {
+      const result = await askSupportAssistant(normalized, controller.signal);
+      if (controller.signal.aborted) return;
+      setAnswer(result.answer);
+      setAnswerSource(result.source);
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
       setAnswer(
-        'ผู้ช่วยนี้ตอบเฉพาะเรื่องการเลือกโซน บูธ และขั้นตอนจองพื้นที่ครับ ลองเลือกคำถามพบบ่อยด้านล่างได้เลย',
+        cause instanceof Error
+          ? cause.message
+          : "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งครับ",
       );
-      return;
+      setAnswerSource(null);
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setIsAsking(false);
+      }
     }
-
-    if (/ผ้า|ไหม|otop/i.test(normalized)) {
-      setAnswer(
-        'ร้านผ้าไหมและ OTOP ควรเริ่มดูโซน D ซึ่งรวมสินค้าประเภทเดียวกันไว้ด้วยกัน จากนั้นเลือก Event เพื่อให้ระบบเทียบข้อมูลร้านและบูธว่างจริงอีกครั้ง',
-      );
-      return;
-    }
-
-    if (/อาหาร|กาแฟ|คาเฟ่|เครื่องดื่ม|ขนม/i.test(normalized)) {
-      setAnswer(
-        'ร้านอาหารหรือเครื่องดื่มควรเริ่มดูโซน A และบูธใกล้ทางเข้าหรือทางเดินหลัก จากนั้นเลือก Event เพื่อให้ระบบจัดอันดับจากบูธว่างจริงและข้อมูลร้านของคุณ',
-      );
-      return;
-    }
-
-    if (/จอง|เริ่ม|ขั้นตอน/i.test(normalized)) {
-      setAnswer(
-        'เลือก Event ที่สนใจ เปิดแผนผัง เลือกโซนและบูธ ตรวจสอบรายละเอียดราคา แล้วจึงยืนยันเพื่อไปหน้าชำระเงินครับ',
-      );
-      return;
-    }
-
-    setAnswer(
-      'เลือก Event ที่สนใจก่อน แล้วเปิดแผนผังเพื่อดูคำแนะนำจากข้อมูลร้านและสถานะบูธจริง ระบบจะช่วยเปรียบเทียบโซนที่เหมาะที่สุดให้ครับ',
-    );
   }
 
   function resetAssistant() {
-    setQuestion('');
+    requestController.current?.abort();
+    requestController.current = null;
+    setQuestion("");
     setAnswer(initialAnswer);
+    setAnswerSource(null);
+    setIsAsking(false);
   }
 
-  const expanded = view !== 'closed';
+  const expanded = view !== "closed";
 
   return (
     <div
-      className={`sl-floating-support fixed z-[75] ${hasBottomNav ? 'sl-floating-support--with-bottom-nav' : ''}`}
+      className={`sl-floating-support fixed z-[75] ${hasBottomNav ? "sl-floating-support--with-bottom-nav" : ""}`}
     >
-      {view === 'menu' ? (
+      {view === "menu" ? (
         <section
           aria-label="ช่องทางติดต่อ SpaceLink"
           className="mb-3 grid w-[min(305px,calc(100vw-32px))] gap-2"
         >
-          <button type="button" onClick={() => setView('chat')} className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]">
-            <span><strong className="block text-sm text-ink">คำถามที่พบบ่อย</strong><small className="mt-1 block text-xs text-muted">ดูคำตอบและวิธีใช้งาน</small></span>
-            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><Sparkles className="h-5 w-5" aria-hidden /></span>
+          <button
+            type="button"
+            onClick={() => setView("chat")}
+            className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]"
+          >
+            <span>
+              <strong className="block text-sm text-ink">AI ช่วยคุณได้</strong>
+              <small className="mt-1 block text-xs text-muted">
+                ถามข้อมูลและวิธีใช้งาน
+              </small>
+            </span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">
+              <Sparkles className="h-5 w-5" aria-hidden />
+            </span>
           </button>
-          <a href="https://line.me/R/ti/p/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน LINE" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]">
-            <span><strong className="block text-sm text-ink">LINE</strong><small className="mt-1 block text-xs text-muted">@spacelink</small></span>
-            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#20b955] text-white"><MessageCircle className="h-5 w-5" aria-hidden /></span>
+          <a
+            href="https://line.me/R/ti/p/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="ติดต่อผ่าน LINE"
+            className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]"
+          >
+            <span>
+              <strong className="block text-sm text-ink">LINE</strong>
+              <small className="mt-1 block text-xs text-muted">
+                @spacelink
+              </small>
+            </span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#20b955] text-white">
+              <MessageCircle className="h-5 w-5" aria-hidden />
+            </span>
           </a>
-          <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" aria-label="ติดต่อผ่าน Facebook" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c9dcfb]">
-            <span><strong className="block text-sm text-ink">Facebook</strong><small className="mt-1 block text-xs text-muted">SpaceLink</small></span>
-            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#1877f2] text-lg font-black text-white">f</span>
+          <a
+            href="https://www.facebook.com/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="ติดต่อผ่าน Facebook"
+            className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c9dcfb]"
+          >
+            <span>
+              <strong className="block text-sm text-ink">Facebook</strong>
+              <small className="mt-1 block text-xs text-muted">SpaceLink</small>
+            </span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#1877f2] text-lg font-black text-white">
+              f
+            </span>
           </a>
-          <a href="tel:+6644223000" aria-label="โทรหาเจ้าหน้าที่ SpaceLink" className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#bfe3d4]">
-            <span><strong className="block text-sm text-ink">โทรหาเรา</strong><small className="mt-1 block text-xs text-muted">044-223-000</small></span>
-            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#278b68] text-white"><Phone className="h-5 w-5" aria-hidden /></span>
+          <a
+            href="tel:+6644223000"
+            aria-label="โทรหาเจ้าหน้าที่ SpaceLink"
+            className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#bfe3d4]"
+          >
+            <span>
+              <strong className="block text-sm text-ink">โทรหาเรา</strong>
+              <small className="mt-1 block text-xs text-muted">
+                044-223-000
+              </small>
+            </span>
+            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#278b68] text-white">
+              <Phone className="h-5 w-5" aria-hidden />
+            </span>
           </a>
         </section>
       ) : null}
 
-      {view === 'chat' ? (
-        <section aria-label="คำถามที่พบบ่อย SpaceLink" className="sl-floating-chat mb-3 flex w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]">
+      {view === "chat" ? (
+        <section
+          aria-label="AI ช่วยคุณได้ SpaceLink"
+          aria-busy={isAsking}
+          className="sl-floating-chat mb-3 flex w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]"
+        >
           <header className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-line px-3 sm:min-h-[86px] sm:gap-3 sm:px-4">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white sm:h-12 sm:w-12 sm:rounded-[15px]"><Sparkles className="h-5 w-5" aria-hidden /></span>
-            <div className="min-w-0 flex-1"><strong className="block text-sm font-black">คำถามที่พบบ่อย</strong><small className="mt-1 block text-xs text-muted">คำตอบและวิธีใช้งาน SpaceLink</small></div>
-            <button type="button" onClick={resetAssistant} aria-label="เริ่มบทสนทนาใหม่" title="เริ่มบทสนทนาใหม่" className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"><RotateCcw className="h-4 w-4" aria-hidden /></button>
-            <button type="button" onClick={() => setView('closed')} aria-label="ปิดหน้าต่างคำถามที่พบบ่อย" className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"><X className="h-4 w-4" aria-hidden /></button>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white sm:h-12 sm:w-12 sm:rounded-[15px]">
+              <Sparkles className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <strong className="block text-sm font-black">
+                AI ช่วยคุณได้
+              </strong>
+              <small className="mt-1 block text-xs text-muted">
+                ถามข้อมูลการใช้งาน SpaceLink
+              </small>
+            </div>
+            <button
+              type="button"
+              onClick={resetAssistant}
+              aria-label="เริ่มบทสนทนาใหม่"
+              title="เริ่มบทสนทนาใหม่"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("closed")}
+              aria-label="ปิดหน้าต่าง AI ช่วยคุณได้"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#fcfbff] p-3 sm:p-4">
-            <div className="mb-3 rounded-xl border border-[#e6ddf2] bg-[#f7f2ff] px-3 py-2 text-xs text-muted">ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด</div>
-            {question.trim() ? <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-sm leading-5 text-white">{question}</div> : null}
-            <div aria-live="polite" className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-sm leading-5 text-ink">{answer}</div>
+            <div className="mb-3 rounded-xl border border-[#e6ddf2] bg-[#f7f2ff] px-3 py-2 text-xs text-muted">
+              ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด
+            </div>
+            {question.trim() ? (
+              <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-sm leading-5 text-white">
+                {question}
+              </div>
+            ) : null}
+            <div
+              aria-live="polite"
+              className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-sm leading-5 text-ink"
+            >
+              <p>{answer}</p>
+              {answerSource ? (
+                <small className="mt-2 block text-[11px] font-bold text-muted">
+                  {answerSource === "AI_GEMINI"
+                    ? "ตอบโดย Gemini 3.6 Flash"
+                    : "คำตอบสำรองจากข้อมูล SpaceLink"}
+                </small>
+              ) : null}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {quickQuestions.map((quickQuestion) => <button key={quickQuestion} type="button" onClick={() => askAssistant(quickQuestion)} className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet">{quickQuestion}</button>)}
+              {quickQuestions.map((quickQuestion) => (
+                <button
+                  key={quickQuestion}
+                  type="button"
+                  disabled={isAsking}
+                  onClick={() => void askAssistant(quickQuestion)}
+                  className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet disabled:cursor-wait disabled:opacity-55"
+                >
+                  {quickQuestion}
+                </button>
+              ))}
             </div>
           </div>
           <div className="shrink-0 border-t border-line bg-white p-2 sm:p-3">
             <div className="flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
-              <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') askAssistant(); }} placeholder="พิมพ์คำถาม เช่น แนะนำโซนไว้?" aria-label="พิมพ์คำถามในคำถามที่พบบ่อย" className="min-w-0 flex-1 border-0 bg-transparent px-2 text-base outline-none placeholder:text-[#978ba5]" />
-              <button type="button" onClick={() => askAssistant()} aria-label="ส่งคำถาม" className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9]"><Send className="h-4 w-4" aria-hidden /></button>
+              <input
+                value={question}
+                disabled={isAsking}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void askAssistant();
+                  }
+                }}
+                placeholder="พิมพ์คำถามเกี่ยวกับ SpaceLink"
+                aria-label="พิมพ์คำถามให้ AI ช่วยคุณได้"
+                className="min-w-0 flex-1 border-0 bg-transparent px-2 text-base outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
+              />
+              <button
+                type="button"
+                disabled={isAsking || !question.trim()}
+                onClick={() => void askAssistant()}
+                aria-label="ส่งคำถามให้ AI"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <Send className="h-4 w-4" aria-hidden />
+              </button>
             </div>
           </div>
         </section>
@@ -909,12 +1060,22 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={expanded ? 'ปิดเมนูช่วยเหลือ SpaceLink' : 'เปิดคำถามที่พบบ่อยและช่องทางติดต่อ SpaceLink'}
-        title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'คำถามที่พบบ่อย · ติดต่อเรา'}
-        onClick={() => setView((current) => current === 'closed' ? 'menu' : 'closed')}
+        aria-label={
+          expanded
+            ? "ปิดเมนูช่วยเหลือ SpaceLink"
+            : "เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink"
+        }
+        title={expanded ? "ปิดเมนูช่วยเหลือ" : "AI ช่วยคุณได้ · ติดต่อเรา"}
+        onClick={() =>
+          setView((current) => (current === "closed" ? "menu" : "closed"))
+        }
         className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
       >
-        {expanded ? <X className="h-5 w-5" aria-hidden /> : <Sparkles className="h-5 w-5" aria-hidden />}
+        {expanded ? (
+          <X className="h-5 w-5" aria-hidden />
+        ) : (
+          <Sparkles className="h-5 w-5" aria-hidden />
+        )}
       </button>
     </div>
   );
@@ -922,15 +1083,29 @@ function FloatingSupport({ hasBottomNav }: { hasBottomNav: boolean }) {
 
 function UserFooter() {
   return (
-    <footer className="border-t border-white/10 bg-[#211b2f] text-white" aria-label="ข้อมูลส่วนท้าย SpaceLink">
+    <footer
+      className="border-t border-white/10 bg-[#211b2f] text-white"
+      aria-label="ข้อมูลส่วนท้าย SpaceLink"
+    >
       <div className="mx-auto max-w-[1180px] px-5 py-10 sm:px-7 lg:py-12">
         <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-12">
           <section>
-            <Link href="/" className="inline-flex items-center gap-3" aria-label="SpaceLink หน้าแรก">
-              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-sm font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">SL</span>
-              <strong className="text-lg font-black tracking-[-.02em]">SpaceLink</strong>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-3"
+              aria-label="SpaceLink หน้าแรก"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-sm font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">
+                SL
+              </span>
+              <strong className="text-lg font-black tracking-[-.02em]">
+                SpaceLink
+              </strong>
             </Link>
-            <p className="mt-4 max-w-[320px] text-sm leading-6 text-white/70">แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว</p>
+            <p className="mt-4 max-w-[320px] text-sm leading-6 text-white/70">
+              แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ
+              และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว
+            </p>
           </section>
 
           <FooterColumn title="สำรวจแพลตฟอร์ม">
@@ -954,18 +1129,32 @@ function UserFooter() {
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-sm text-white/45">
           <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
-          <div className="flex flex-wrap gap-x-2 gap-y-1"><span>ความเป็นส่วนตัว</span><span>·</span><span>เงื่อนไขการใช้งาน</span><span>·</span><span>การเข้าถึงสำหรับทุกคน</span></div>
+          <div className="flex flex-wrap gap-x-2 gap-y-1">
+            <span>ความเป็นส่วนตัว</span>
+            <span>·</span>
+            <span>เงื่อนไขการใช้งาน</span>
+            <span>·</span>
+            <span>การเข้าถึงสำหรับทุกคน</span>
+          </div>
         </div>
       </div>
     </footer>
   );
 }
 
-function FooterColumn({ title, children }: { title: string; children: ReactNode }) {
+function FooterColumn({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section>
       <h2 className="text-sm font-extrabold text-white">{title}</h2>
-      <div className="mt-4 grid gap-3 text-sm text-white/58 [&_a]:transition [&_a:hover]:text-white">{children}</div>
+      <div className="mt-4 grid gap-3 text-sm text-white/58 [&_a]:transition [&_a:hover]:text-white">
+        {children}
+      </div>
     </section>
   );
 }
@@ -984,7 +1173,7 @@ function BottomNav({
       {items.map((item) => {
         const Icon = item.icon;
 
-        if (item.kind === 'soon') {
+        if (item.kind === "soon") {
           return (
             <button
               key={item.label}
@@ -1004,11 +1193,11 @@ function BottomNav({
           <Link
             key={item.label}
             href={navItemHref(item, selectedOrganizationId)}
-            aria-current={active ? 'page' : undefined}
+            aria-current={active ? "page" : undefined}
             className={`relative grid min-w-[72px] flex-1 place-items-center gap-0.5 rounded-xl px-1 text-sm transition-colors ${
               active
-                ? 'bg-violet-tint font-extrabold text-[#6D28D9]'
-                : 'text-[#837B8D]'
+                ? "bg-violet-tint font-extrabold text-[#6D28D9]"
+                : "text-[#837B8D]"
             }`}
           >
             <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
@@ -1021,10 +1210,10 @@ function BottomNav({
 }
 
 function navItemHref(
-  item: Extract<NavItem, { kind: 'link' }>,
+  item: Extract<NavItem, { kind: "link" }>,
   organizationId: string,
 ) {
-  if (!organizationId || !item.href.startsWith('/admin')) {
+  if (!organizationId || !item.href.startsWith("/admin")) {
     return item.href;
   }
 
@@ -1039,13 +1228,19 @@ function BrandMark() {
   );
 }
 
-function Avatar({ name, className = '' }: { name: string; className?: string }) {
+function Avatar({
+  name,
+  className = "",
+}: {
+  name: string;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
       className={`grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] font-bold text-white ${className}`}
     >
-      {[...name.trim()][0] ?? '?'}
+      {[...name.trim()][0] ?? "?"}
     </span>
   );
 }

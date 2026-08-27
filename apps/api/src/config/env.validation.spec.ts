@@ -31,7 +31,9 @@ describe('env validation', () => {
       SLIP_VERIFIER: 'mock',
       SLIP_VERIFIER_MODE: 'always-verified',
       ZONE_RECOMMENDER: 'rule',
+      SUPPORT_ASSISTANT: 'rule',
       GEMINI_MODEL: 'gemini-3.5-flash-lite',
+      GEMINI_SUPPORT_MODEL: 'gemini-3.6-flash',
     });
   });
 
@@ -85,6 +87,15 @@ describe('env validation', () => {
         GEMINI_API_KEY: 'key',
       }).error,
     ).toBeUndefined();
+    expect(validate({ SUPPORT_ASSISTANT: 'gemini' }).error?.message).toContain(
+      'GEMINI_API_KEY',
+    );
+    expect(
+      validate({
+        SUPPORT_ASSISTANT: 'gemini',
+        GEMINI_API_KEY: 'key',
+      }).error,
+    ).toBeUndefined();
   });
 
   it('rejects Pro models and accepts Flash models', () => {
@@ -93,6 +104,12 @@ describe('env validation', () => {
     ).toContain('Flash or Flash-Lite');
     expect(
       validate({ GEMINI_MODEL: 'gemini-2.5-flash' }).error,
+    ).toBeUndefined();
+    expect(
+      validate({ GEMINI_SUPPORT_MODEL: 'gemini-3.1-pro' }).error?.message,
+    ).toContain('Flash or Flash-Lite');
+    expect(
+      validate({ GEMINI_SUPPORT_MODEL: 'gemini-3.6-flash' }).error,
     ).toBeUndefined();
   });
 
