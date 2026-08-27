@@ -17,6 +17,7 @@ import {
   Megaphone,
   Menu,
   Orbit,
+  PanelLeftClose,
   ScrollText,
   Settings2,
   ShieldAlert,
@@ -270,7 +271,7 @@ function SidebarContent({
             className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675]"
             aria-label="พับเมนู"
           >
-            <Menu className="h-[18px] w-[18px]" />
+            <PanelLeftClose className="h-[18px] w-[18px]" />
           </button>
         ) : null}
       </div>
