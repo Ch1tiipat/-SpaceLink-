@@ -21,6 +21,10 @@ export const validationSchema = Joi.object({
   CORS_ORIGIN: Joi.string().empty(''),
   PORT: Joi.number().empty('').default(3000),
 
+  VAPID_SUBJECT: Joi.string().empty(''),
+  VAPID_PUBLIC_KEY: Joi.string().empty(''),
+  VAPID_PRIVATE_KEY: Joi.string().empty(''),
+
   SLIP_VERIFIER: Joi.string()
     .valid('mock', 'manual', 'slipok')
     .empty('')
@@ -95,6 +99,7 @@ export const validationSchema = Joi.object({
         'GEMINI_SUPPORT_MODEL must be a Gemini Flash or Flash-Lite model. Pro models are forbidden.',
     }),
 })
+  .and('VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY')
   .xor('SUPABASE_JWT_SECRET', 'SUPABASE_JWKS_URL')
   .messages({
     'object.missing':

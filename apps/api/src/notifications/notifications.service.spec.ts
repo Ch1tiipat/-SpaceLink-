@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
+import { PushSenderService } from './push-sender.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -34,13 +35,17 @@ const NOTIFICATION: Notification = {
 };
 
 const bookingFindMany = jest.fn();
+const userFindMany = jest.fn();
 const notificationCreate = jest.fn();
 const notificationCreateMany = jest.fn();
 const notificationFindMany = jest.fn();
 const notificationCount = jest.fn();
 const notificationUpdateMany = jest.fn();
+const sendToUser = jest.fn();
+const sendToUsers = jest.fn();
 const mockPrismaService = {
   booking: { findMany: bookingFindMany },
+  user: { findMany: userFindMany },
   notification: {
     create: notificationCreate,
     createMany: notificationCreateMany,
@@ -49,6 +54,7 @@ const mockPrismaService = {
     updateMany: notificationUpdateMany,
   },
 };
+const mockPushSenderService = { sendToUser, sendToUsers };
 
 type BookingFixture = {
   vendorUserId: string;
@@ -78,11 +84,15 @@ describe('NotificationsService', () => {
     notificationFindMany.mockResolvedValue([NOTIFICATION]);
     notificationCount.mockResolvedValue(1);
     notificationUpdateMany.mockResolvedValue({ count: 1 });
+    sendToUser.mockResolvedValue(undefined);
+    sendToUsers.mockResolvedValue(undefined);
+    userFindMany.mockResolvedValue([{ id: USER_ID }, { id: OTHER_USER_ID }]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: PushSenderService, useValue: mockPushSenderService },
       ],
     }).compile();
 
@@ -100,6 +110,18 @@ describe('NotificationsService', () => {
     expect(notificationCreate).toHaveBeenCalledWith({
       data: { userId: USER_ID, ...INPUT },
     });
+    expect(sendToUser).toHaveBeenCalledWith(USER_ID, {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
+  it('keeps the saved notification result when web push fails', async () => {
+    sendToUser.mockRejectedValue(new Error('push unavailable'));
+
+    await expect(service.createForUser(USER_ID, INPUT)).resolves.toEqual(
+      NOTIFICATION,
+    );
   });
 
   it('logs and resolves null when a notification cannot be created', async () => {
@@ -112,6 +134,7 @@ describe('NotificationsService', () => {
     expect(error).toHaveBeenCalledWith(
       'Failed to create an in-app notification',
     );
+    expect(sendToUser).not.toHaveBeenCalled();
 
     error.mockRestore();
   });
@@ -221,6 +244,73 @@ describe('NotificationsService', () => {
     expect(notificationCreateMany).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith(
       'Failed to fan out an announcement notification',
+    );
+
+    error.mockRestore();
+  });
+
+  it('bulk-creates system notifications before starting web push', async () => {
+    await expect(
+      service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
+    ).resolves.toBe(2);
+    expect(userFindMany).toHaveBeenCalledWith({ select: { id: true } });
+    expect(notificationCreateMany).toHaveBeenCalledTimes(1);
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          userId: USER_ID,
+          type: NotificationType.SYSTEM,
+          title: INPUT.title,
+          body: INPUT.body,
+        },
+        {
+          userId: OTHER_USER_ID,
+          type: NotificationType.SYSTEM,
+          title: INPUT.title,
+          body: INPUT.body,
+        },
+      ],
+    });
+    expect(notificationCreate).not.toHaveBeenCalled();
+    expect(sendToUsers).toHaveBeenCalledWith([USER_ID, OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+    expect(notificationCreateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      sendToUsers.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not write or push when there are no broadcast recipients', async () => {
+    userFindMany.mockResolvedValue([]);
+
+    await expect(
+      service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
+    ).resolves.toBe(0);
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+    expect(sendToUsers).not.toHaveBeenCalled();
+  });
+
+  it('keeps the broadcast recipient result when web push fails', async () => {
+    sendToUsers.mockRejectedValue(new Error('push unavailable'));
+
+    await expect(
+      service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
+    ).resolves.toBe(2);
+  });
+
+  it('logs and returns zero when system broadcast fan-out fails', async () => {
+    const error = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    notificationCreateMany.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
+    ).resolves.toBe(0);
+    expect(sendToUsers).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      'Failed to fan out a system broadcast notification',
     );
 
     error.mockRestore();
