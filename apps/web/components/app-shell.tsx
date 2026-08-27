@@ -12,6 +12,8 @@ import {
 } from "react";
 import {
   Bell,
+  CalendarDays,
+  CircleDollarSign,
   House,
   Landmark,
   LayoutDashboard,
@@ -27,6 +29,8 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  Star,
+  Store,
   Ticket,
   UserRound,
   X,
@@ -163,17 +167,31 @@ const ADMIN_NAV_GROUP: NavGroup = {
   items: [
     {
       kind: "link",
-      label: "Dashboard",
+      label: "ภาพรวม",
       href: "/admin/dashboard",
       icon: LayoutDashboard,
       matches: (pathname) => pathname.startsWith("/admin/dashboard"),
     },
     {
       kind: "link",
-      label: "ยืนยันการจอง",
+      label: "อีเวนต์",
+      href: "/admin/events",
+      icon: CalendarDays,
+      matches: (pathname) => pathname.startsWith("/admin/events"),
+    },
+    {
+      kind: "link",
+      label: "การจอง",
       href: "/admin/bookings",
-      icon: ShieldCheck,
+      icon: Ticket,
       matches: (pathname) => pathname.startsWith("/admin/bookings"),
+    },
+    {
+      kind: "link",
+      label: "ยืนยันพิเศษ",
+      href: "/admin/booking-rescue",
+      icon: ShieldCheck,
+      matches: (pathname) => pathname.startsWith("/admin/booking-rescue"),
     },
     {
       kind: "link",
@@ -198,10 +216,31 @@ const ADMIN_NAV_GROUP: NavGroup = {
     },
     {
       kind: "link",
-      label: "ตั้งค่า PromptPay",
+      label: "รีวิว",
+      href: "/admin/reviews",
+      icon: Star,
+      matches: (pathname) => pathname.startsWith("/admin/reviews"),
+    },
+    {
+      kind: "link",
+      label: "ข้อมูลองค์กร",
       href: "/admin/organization",
       icon: Landmark,
       matches: (pathname) => pathname.startsWith("/admin/organization"),
+    },
+    {
+      kind: "link",
+      label: "ผู้ขาย",
+      href: "/admin/vendors",
+      icon: Store,
+      matches: (pathname) => pathname.startsWith("/admin/vendors"),
+    },
+    {
+      kind: "link",
+      label: "การชำระเงิน",
+      href: "/admin/payments",
+      icon: CircleDollarSign,
+      matches: (pathname) => pathname.startsWith("/admin/payments"),
     },
   ],
 };
