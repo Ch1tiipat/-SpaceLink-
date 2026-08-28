@@ -549,6 +549,19 @@ export type NotificationRecord = {
 
 export type NotificationCount = { count: number };
 
+export type PushSubscriptionInput = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+};
+
+export type PushSubscriptionRecord = {
+  id: string;
+  endpoint: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -713,6 +726,56 @@ async function deleteJson<T>(
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError")
       throw cause;
+    throw new ApiError(
+      "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง",
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(", ")
+      : payload?.message;
+    throw new ApiError(detail || fallbackMessage, response.status);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function deleteJsonWithBody<T>(
+  path: string,
+  body: unknown,
+  { signal, token }: RequestOptions = {},
+  fallbackMessage = "ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง",
+): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      0,
+    );
+  }
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+  if (token) headers.Authorization = "Bearer " + token;
+
+  let response: Response;
+  try {
+    response = await fetch(API_BASE_URL + path, {
+      method: "DELETE",
+      signal,
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
     throw new ApiError(
       "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง",
       0,
@@ -945,6 +1008,30 @@ export function markAllNotificationsRead(
     {},
     { token },
     "ไม่สามารถอัปเดตการแจ้งเตือนทั้งหมดได้",
+  );
+}
+
+export function createPushSubscription(
+  input: PushSubscriptionInput,
+  token: string,
+): Promise<PushSubscriptionRecord> {
+  return postJson<PushSubscriptionRecord>(
+    "/push-subscriptions",
+    input,
+    { token },
+    "เปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ",
+  );
+}
+
+export function deletePushSubscription(
+  endpoint: string,
+  token: string,
+): Promise<NotificationCount> {
+  return deleteJsonWithBody<NotificationCount>(
+    "/push-subscriptions",
+    { endpoint },
+    { token },
+    "ปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ",
   );
 }
 
