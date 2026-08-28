@@ -677,6 +677,10 @@ export type AdminAnnouncement = {
   updatedAt: string;
 };
 
+export type SuperAdminAnnouncement = AdminAnnouncement & {
+  organization: { id: string; name: string };
+};
+
 export type SaveAnnouncementInput = {
   title: string;
   body: string;
@@ -1441,6 +1445,16 @@ export function getSuperAdminPenalties(
   signal?: AbortSignal,
 ): Promise<SuperAdminPenaltiesOverview> {
   return getJson<SuperAdminPenaltiesOverview>("/penalties/all", {
+    signal,
+    token,
+  });
+}
+
+export function getSuperAdminAnnouncements(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminAnnouncement[]> {
+  return getJson<SuperAdminAnnouncement[]>("/announcements/all", {
     signal,
     token,
   });
