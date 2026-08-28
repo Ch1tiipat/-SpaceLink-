@@ -25,6 +25,7 @@ import { RefundsModule } from './refunds/refunds.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
 import { SystemBroadcastsModule } from './system-broadcasts/system-broadcasts.module';
+import { PlatformConfigModule } from './platform-config/platform-config.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { SystemBroadcastsModule } from './system-broadcasts/system-broadcasts.mo
     AuditLogsModule,
     PushSubscriptionsModule,
     SystemBroadcastsModule,
+    PlatformConfigModule,
   ],
 })
 export class AppModule {}

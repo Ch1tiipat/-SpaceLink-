@@ -78,7 +78,11 @@ const NAVIGATION: NavigationGroup[] = [
       { label: 'Package และ Billing', icon: BadgeDollarSign },
       { label: 'สถานะระบบ', icon: Activity },
       { label: 'บทบาทและสิทธิ์', icon: KeyRound },
-      { label: 'ตั้งค่าระบบ', icon: Settings2 },
+      {
+        label: 'ตั้งค่าระบบ',
+        icon: Settings2,
+        href: '/super-admin/settings',
+      },
     ],
   },
 ];
