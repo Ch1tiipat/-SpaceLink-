@@ -1,5 +1,6 @@
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { UserRole } from '@prisma/client';
+import type { User } from '@prisma/client';
 
 jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn(),
@@ -13,6 +14,7 @@ import { PlatformConfigController } from './platform-config.controller';
 import { PlatformConfigService } from './platform-config.service';
 
 describe('PlatformConfigController', () => {
+  const currentUser = { id: 'super-admin-1' } as User;
   const findBillingConfig = jest.fn();
   const updateBillingConfig = jest.fn();
   const service = {
@@ -38,7 +40,11 @@ describe('PlatformConfigController', () => {
 
     await expect(controller.findBillingConfig()).resolves.toEqual({ id: null });
     await expect(
-      controller.updateBillingConfig({ baseFee: '500' }),
+      controller.updateBillingConfig({ baseFee: '500' }, currentUser),
     ).resolves.toEqual({ id: 'config-1' });
+    expect(updateBillingConfig).toHaveBeenCalledWith(
+      { baseFee: '500' },
+      'super-admin-1',
+    );
   });
 });

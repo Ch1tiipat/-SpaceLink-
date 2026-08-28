@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePlatformConfigDto } from './dto/update-platform-config.dto';
 
@@ -33,7 +34,10 @@ export type BillingConfigResponse = {
 
 @Injectable()
 export class PlatformConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async findBillingConfig(): Promise<BillingConfigResponse> {
     const config = await this.prisma.platformConfig.findFirst({
@@ -46,6 +50,7 @@ export class PlatformConfigService {
 
   async updateBillingConfig(
     input: UpdatePlatformConfigDto,
+    actorUserId: string,
   ): Promise<BillingConfigResponse> {
     const current = await this.prisma.platformConfig.findFirst({
       orderBy: { createdAt: 'asc' },
@@ -76,6 +81,15 @@ export class PlatformConfigService {
           data,
           select: BILLING_CONFIG_SELECT,
         });
+
+    await this.auditLogsService
+      .record({
+        actorUserId,
+        action: 'PLATFORM_CONFIG_UPDATED',
+        targetType: 'PLATFORM_CONFIG',
+        targetId: saved.id,
+      })
+      .catch(() => undefined);
 
     return serializeConfig(saved);
   }

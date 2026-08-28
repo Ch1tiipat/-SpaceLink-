@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformConfigService } from './platform-config.service';
 
@@ -9,9 +10,11 @@ const create = jest.fn();
 const prisma = {
   platformConfig: { findFirst, update, create },
 } as unknown as PrismaService;
+const record = jest.fn().mockResolvedValue(undefined);
+const auditLogsService = { record } as unknown as AuditLogsService;
 
 describe('PlatformConfigService', () => {
-  const service = new PlatformConfigService(prisma);
+  const service = new PlatformConfigService(prisma, auditLogsService);
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -39,10 +42,13 @@ describe('PlatformConfigService', () => {
       }),
     );
 
-    const result = await service.updateBillingConfig({
-      baseFee: '650.50',
-      priceMax: '20000',
-    });
+    const result = await service.updateBillingConfig(
+      {
+        baseFee: '650.50',
+        priceMax: '20000',
+      },
+      'super-admin-1',
+    );
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -55,6 +61,12 @@ describe('PlatformConfigService', () => {
         },
       }),
     );
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: 'super-admin-1',
+      action: 'PLATFORM_CONFIG_UPDATED',
+      targetType: 'PLATFORM_CONFIG',
+      targetId: 'config-1',
+    });
     expect(result.baseFee).toBe('650.5');
   });
 
@@ -62,9 +74,13 @@ describe('PlatformConfigService', () => {
     findFirst.mockResolvedValue(null);
 
     await expect(
-      service.updateBillingConfig({ priceMin: '2000', priceMax: '1000' }),
+      service.updateBillingConfig(
+        { priceMin: '2000', priceMax: '1000' },
+        'super-admin-1',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(create).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
   });
 });
