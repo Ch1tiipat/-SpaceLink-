@@ -135,6 +135,15 @@ export type ZoneRecommendationInput = {
 export type SupportAssistantResponse = {
   answer: string;
   source: "AI_GEMINI" | "RULE_BASED";
+  actions: SupportAssistantAction[];
+};
+
+export type SupportAssistantAction =
+  "OPEN_EVENTS" | "OPEN_BOOKINGS" | "OPEN_PROFILE";
+
+export type SupportAssistantHistoryMessage = {
+  role: "user" | "assistant";
+  text: string;
 };
 
 export type BookingStatus =
@@ -1372,17 +1381,21 @@ export function getZoneRecommendations(
 }
 
 /**
- * Public help endpoint. The browser sends only the typed question; Gemini and
- * its API key stay inside the API process and never enter this bundle.
+ * Protected conversational help endpoint. The browser forwards the Supabase
+ * access token and at most five recent Q/A pairs. The API verifies the token,
+ * loads only that user's permitted context, and keeps Gemini credentials in
+ * the backend process.
  */
 export function askSupportAssistant(
   question: string,
+  history: SupportAssistantHistoryMessage[],
+  token: string,
   signal?: AbortSignal,
 ): Promise<SupportAssistantResponse> {
   return postJson<SupportAssistantResponse>(
     "/ai/support",
-    { question: question.trim() },
-    { signal },
+    { question: question.trim(), history: history.slice(-10) },
+    { signal, token },
     "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง",
   );
 }

@@ -51,6 +51,8 @@ import {
   type CurrentUser,
   type DiscoveryEvent,
   type EventMap,
+  type SupportAssistantAction,
+  type SupportAssistantHistoryMessage,
   type SupportAssistantResponse,
   type SystemBroadcast,
   type VendorShop,
@@ -334,7 +336,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           return;
         }
 
-        const result = await getUnreadNotificationCount(token, controller.signal);
+        const result = await getUnreadNotificationCount(
+          token,
+          controller.signal,
+        );
         if (active) setUnreadNotificationCount(result.count);
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError")
@@ -903,7 +908,9 @@ function AccountMenu({
           className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] overflow-hidden rounded-2xl border border-[#e7def2] bg-white p-2 shadow-[0_20px_55px_rgba(39,24,63,.18)]"
         >
           <div className="border-b border-line px-3 pb-2.5 pt-1.5">
-            <p className="truncate text-sm font-extrabold text-ink">{fullName}</p>
+            <p className="truncate text-sm font-extrabold text-ink">
+              {fullName}
+            </p>
             <p className="mt-0.5 text-xs text-muted">บัญชีผู้ขาย SpaceLink</p>
           </div>
           <Link
@@ -1071,6 +1078,7 @@ type SupportConversationEntry = {
   question: string;
   answer: string;
   source: SupportAssistantResponse["source"] | null;
+  actions: SupportAssistantAction[];
 };
 
 const ASSISTANT_FACILITIES = [
@@ -1097,6 +1105,9 @@ function FloatingSupport({
   const [answerSource, setAnswerSource] = useState<
     SupportAssistantResponse["source"] | null
   >(null);
+  const [answerActions, setAnswerActions] = useState<SupportAssistantAction[]>(
+    [],
+  );
   const [conversationHistory, setConversationHistory] = useState<
     SupportConversationEntry[]
   >([]);
@@ -1142,16 +1153,18 @@ function FloatingSupport({
     return () => cancelAnimationFrame(animationFrame);
   }, [answer, askedQuestion, conversationHistory.length, view, zoneStep]);
 
-  function archiveCurrentExchange() {
-    if (!answer.trim()) return;
+  function archiveCurrentExchange(): SupportConversationEntry | null {
+    if (!answer.trim()) return null;
     const entry: SupportConversationEntry = {
       id: nextMessageId.current,
       question: askedQuestion,
       answer,
       source: answerSource,
+      actions: answerActions,
     };
     nextMessageId.current += 1;
     setConversationHistory((current) => [...current, entry].slice(-30));
+    return entry;
   }
 
   async function askAssistant(nextQuestion = question) {
@@ -1164,30 +1177,51 @@ function FloatingSupport({
       return;
     }
 
-    archiveCurrentExchange();
+    const archivedEntry = archiveCurrentExchange();
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
     setAskedQuestion(normalized);
     setQuestion("");
-    setAnswer("กำลังค้นหาคำตอบจากข้อมูล SpaceLink…");
+    setAnswer("AI กำลังคิด…");
     setAnswerSource(null);
+    setAnswerActions([]);
     setFeedback(null);
     setIsAsking(true);
 
     try {
-      const result = await askSupportAssistant(normalized, controller.signal);
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (error || !accessToken) {
+        throw new Error(
+          "กรุณาเข้าสู่ระบบอีกครั้ง เพื่อให้ AI อ่านเฉพาะข้อมูล SpaceLink ของคุณได้อย่างปลอดภัย",
+        );
+      }
+      const history = supportAssistantHistory([
+        ...conversationHistory,
+        ...(archivedEntry ? [archivedEntry] : []),
+      ]);
+      const result = await askSupportAssistant(
+        normalized,
+        history,
+        accessToken,
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
       setAnswer(result.answer);
       setAnswerSource(result.source);
+      setAnswerActions(result.actions ?? []);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setAnswer(
-        cause instanceof Error
-          ? cause.message
-          : "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งครับ",
+        assistantErrorMessage(
+          cause,
+          "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งครับ",
+        ),
       );
       setAnswerSource(null);
+      setAnswerActions([]);
     } finally {
       if (requestController.current === controller) {
         requestController.current = null;
@@ -1207,6 +1241,7 @@ function FloatingSupport({
     setAskedQuestion(nextQuestion);
     setQuestion("");
     setAnswerSource(null);
+    setAnswerActions([]);
     setFeedback(null);
     setRecommendations([]);
     setSelectedEvent(null);
@@ -1392,6 +1427,7 @@ function FloatingSupport({
     setAskedQuestion("");
     setAnswer(initialAnswer);
     setAnswerSource(null);
+    setAnswerActions([]);
     setConversationHistory([]);
     nextMessageId.current = 1;
     setIsAsking(false);
@@ -1547,10 +1583,12 @@ function FloatingSupport({
               role="tablist"
               aria-label="โหมดของ AI ช่วยคุณได้"
             >
-              {([
-                ["help", "ถามข้อมูล"],
-                ["zone", "แนะนำโซน"],
-              ] as const).map(([mode, label]) => (
+              {(
+                [
+                  ["help", "ถามข้อมูล"],
+                  ["zone", "แนะนำโซน"],
+                ] as const
+              ).map(([mode, label]) => (
                 <button
                   key={mode}
                   type="button"
@@ -1570,7 +1608,8 @@ function FloatingSupport({
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-line bg-[#fbf9fd] p-3 sm:p-4"
           >
             <div className="mb-4 text-center text-[11px] leading-5 text-muted">
-              AI อาจตอบคลาดเคลื่อนได้ โปรดตรวจสอบรายละเอียด Event และ Booth ก่อนจอง
+              AI อาจตอบคลาดเคลื่อนได้ โปรดตรวจสอบรายละเอียด Event และ Booth
+              ก่อนจอง
             </div>
             {conversationHistory.map((entry) => (
               <div key={entry.id} className="mb-5 grid gap-3">
@@ -1605,6 +1644,22 @@ function FloatingSupport({
                             ? "ประมวลผลโดย AI จากข้อมูล SpaceLink"
                             : "คำตอบสำรองจากข้อมูล SpaceLink"}
                         </small>
+                      ) : null}
+                      {entry.actions.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-2 border-t border-[#eeeaf4] pt-2">
+                          {entry.actions.map((action) => {
+                            const details = supportActionDetails(action);
+                            return (
+                              <Link
+                                key={action}
+                                href={details.href}
+                                className="rounded-full border border-[#d8c9ef] bg-[#faf7ff] px-3 py-1.5 text-xs font-extrabold text-violet transition hover:border-violet hover:bg-violet-tint"
+                              >
+                                {details.label} →
+                              </Link>
+                            );
+                          })}
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -1645,23 +1700,39 @@ function FloatingSupport({
                         : "คำตอบสำรองจากข้อมูล SpaceLink"}
                     </small>
                   ) : null}
+                  {!isAsking && answerActions.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2 border-t border-[#eeeaf4] pt-2">
+                      {answerActions.map((action) => {
+                        const details = supportActionDetails(action);
+                        return (
+                          <Link
+                            key={action}
+                            href={details.href}
+                            className="rounded-full border border-[#d8c9ef] bg-[#faf7ff] px-3 py-1.5 text-xs font-extrabold text-violet transition hover:border-violet hover:bg-violet-tint"
+                          >
+                            {details.label} →
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
-            {!isAsking && answer !== initialAnswer ? (
+            {!isAsking && answerSource ? (
               <div
                 className="mt-2 flex items-center justify-end gap-1"
                 aria-label="ให้คะแนนคำตอบ"
               >
-                <span className="mr-1 text-[11px] text-muted">คำตอบนี้ช่วยไหม?</span>
+                <span className="mr-1 text-[11px] text-muted">
+                  คำตอบนี้ช่วยไหม?
+                </span>
                 <button
                   type="button"
                   aria-label="คำตอบมีประโยชน์"
                   aria-pressed={feedback === "up"}
                   onClick={() =>
-                    setFeedback((current) =>
-                      current === "up" ? null : "up",
-                    )
+                    setFeedback((current) => (current === "up" ? null : "up"))
                   }
                   className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === "up" ? "border-violet bg-violet text-white" : "border-line bg-white text-muted hover:border-violet hover:text-violet"}`}
                 >
@@ -1882,9 +1953,7 @@ function FloatingSupport({
           }
           title={expanded ? "ปิดเมนูช่วยเหลือ" : "AI ช่วยคุณได้ · ติดต่อเรา"}
           onClick={() =>
-            setView((current) =>
-              current === "closed" ? "menu" : "closed",
-            )
+            setView((current) => (current === "closed" ? "menu" : "closed"))
           }
           className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
         >
@@ -1905,12 +1974,39 @@ function isZoneRecommendationQuestion(question: string) {
   );
 }
 
+function supportAssistantHistory(
+  entries: SupportConversationEntry[],
+): SupportAssistantHistoryMessage[] {
+  return entries
+    .filter(
+      (entry) =>
+        entry.source !== null && entry.question.trim() && entry.answer.trim(),
+    )
+    .flatMap<SupportAssistantHistoryMessage>((entry) => [
+      { role: "user", text: entry.question.slice(0, 500) },
+      { role: "assistant", text: entry.answer.slice(0, 1000) },
+    ])
+    .slice(-10);
+}
+
+function supportActionDetails(action: SupportAssistantAction) {
+  const allowedActions: Record<
+    SupportAssistantAction,
+    { href: string; label: string }
+  > = {
+    OPEN_EVENTS: { href: "/#eventSearch", label: "ดู Event" },
+    OPEN_BOOKINGS: { href: "/bookings", label: "การจองของฉัน" },
+    OPEN_PROFILE: { href: "/profile", label: "เปิดโปรไฟล์" },
+  };
+  return allowedActions[action];
+}
+
 function assistantErrorMessage(cause: unknown, fallback: string) {
   if (
     cause instanceof Error &&
     cause.message.includes("NEXT_PUBLIC_SUPABASE")
   ) {
-    return "การแนะนำจากข้อมูลร้านจริงต้องเปิดผ่านระบบที่เชื่อม Supabase และเข้าสู่ระบบด้วยบัญชีจริงครับ";
+    return "AI ที่ใช้ข้อมูล SpaceLink ของคุณต้องเปิดผ่านระบบที่เชื่อม Supabase และเข้าสู่ระบบด้วยบัญชีจริงครับ";
   }
 
   return cause instanceof Error ? cause.message : fallback;
@@ -2067,7 +2163,10 @@ function SignOutConfirmDialog({
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-[20px] bg-[#fff0ee] text-[#b42318]">
           <LogOut className="h-6 w-6" aria-hidden />
         </span>
-        <h2 id="sign-out-dialog-title" className="mt-4 text-xl font-black text-ink">
+        <h2
+          id="sign-out-dialog-title"
+          className="mt-4 text-xl font-black text-ink"
+        >
           ยืนยันออกจากระบบไหม?
         </h2>
         <p
