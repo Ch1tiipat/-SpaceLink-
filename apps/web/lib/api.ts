@@ -534,10 +534,27 @@ export type SuperAdminPenaltiesOverview = {
   }[];
 };
 
+export type SuperAdminAuditAction =
+  | "ORGANIZATION_CREATED"
+  | "ORGANIZATION_STATUS_UPDATED"
+  | "ORG_ADMIN_GRANTED"
+  | "ORG_ADMIN_REVOKED"
+  | "PLATFORM_CONFIG_UPDATED";
+
+export type SuperAdminAuditTargetType =
+  | "ORGANIZATION"
+  | "USER"
+  | "PLATFORM_CONFIG";
+
+export type SuperAdminAuditLogFilter = {
+  action?: SuperAdminAuditAction;
+  actorUserId?: string;
+};
+
 export type SuperAdminAuditLog = {
   id: string;
-  action: string;
-  targetType: string;
+  action: SuperAdminAuditAction;
+  targetType: SuperAdminAuditTargetType;
   targetId: string;
   metadata: unknown;
   createdAt: string;
@@ -1413,8 +1430,16 @@ export function getSuperAdminPenalties(
 export function getSuperAdminAuditLogs(
   token: string,
   signal?: AbortSignal,
+  filter: SuperAdminAuditLogFilter = {},
 ): Promise<SuperAdminAuditLog[]> {
-  return getJson<SuperAdminAuditLog[]>("/audit-logs", { signal, token });
+  const search = new URLSearchParams();
+  if (filter.action) search.set("action", filter.action);
+  if (filter.actorUserId) search.set("actorUserId", filter.actorUserId);
+  const query = search.toString();
+  return getJson<SuperAdminAuditLog[]>(
+    query ? `/audit-logs?${query}` : "/audit-logs",
+    { signal, token },
+  );
 }
 
 /**
