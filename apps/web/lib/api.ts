@@ -499,10 +499,29 @@ export type AdminOrganizationRefund = {
 
 export type SuperAdminRefund = {
   id: string;
+  bookingId: string;
+  requestedByUserId: string;
+  reason: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
   requestedAmount: string;
   approvedAmount: string | null;
+  evidenceUrls: string[];
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  processedAt: string | null;
   createdAt: string;
+  updatedAt: string;
+  booking: {
+    id: string;
+    bookingCode: string;
+    event: {
+      id: string;
+      name: string;
+      organization: { id: string; name: string };
+    };
+    shop: { id: string; name: string };
+  };
+  requestedBy: { id: string; email: string; fullName: string };
 };
 
 export type SuperAdminSupportTicket = {
