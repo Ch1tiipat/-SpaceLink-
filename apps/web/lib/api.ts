@@ -362,7 +362,59 @@ export type AdminOrganizationEvent = EventSummary & {
   venueId: string;
   mapImageUrl: string | null;
   venue: { id: string; name: string };
+  subscription: EventSubscription | null;
 };
+
+export type EventSubscriptionQuote = {
+  baseFee: string;
+  zoneCount: number;
+  perZoneRate: string;
+  eventDays: number;
+  perDayRate: string;
+  calculatedPrice: string;
+  priceMin: string;
+  priceMax: string;
+  finalPrice: string;
+  isOverMax: boolean;
+};
+
+export type EventSubscription = EventSubscriptionQuote & {
+  id: string;
+  organizationId: string;
+  eventId: string;
+  status: "DRAFT" | "PENDING_PAYMENT" | "ACTIVE" | "EXPIRED" | "CANCELLED";
+  platformPaidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateAdminEventInput = {
+  venueId: string;
+  name: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  startTime?: string;
+  endTime?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  expectedFinalPrice?: string;
+};
+
+export type PlatformBillingConfig = {
+  id: string | null;
+  baseFee: string;
+  perZoneRate: string;
+  perDayRate: string;
+  priceMin: string;
+  priceMax: string;
+  updatedAt: string | null;
+};
+
+export type UpdatePlatformBillingConfigInput = Omit<
+  PlatformBillingConfig,
+  "id" | "updatedAt"
+>;
 
 /** The organization booking endpoint intentionally returns the same safe
  * admin projection as the platform overview, already filtered by membership. */
@@ -1125,6 +1177,32 @@ export function getAdminOrganizationEvents(
   );
 }
 
+export function quoteAdminEventSubscription(
+  organizationId: string,
+  input: CreateAdminEventInput,
+  token: string,
+): Promise<EventSubscriptionQuote> {
+  return postJson<EventSubscriptionQuote>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/quote`,
+    input,
+    { token },
+    "คำนวณค่าบริการอีเวนต์ไม่สำเร็จ",
+  );
+}
+
+export function createAdminEvent(
+  organizationId: string,
+  input: CreateAdminEventInput,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return postJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events`,
+    input,
+    { token },
+    "สร้างอีเวนต์ไม่สำเร็จ",
+  );
+}
+
 export function getAdminOrganizationBookings(
   organizationId: string,
   token: string,
@@ -1155,6 +1233,25 @@ export function getSuperAdminOrganizations(
     signal,
     token,
   });
+}
+
+export function getPlatformBillingConfig(
+  token: string,
+  signal?: AbortSignal,
+): Promise<PlatformBillingConfig> {
+  return getJson<PlatformBillingConfig>("/platform-config", { signal, token });
+}
+
+export function updatePlatformBillingConfig(
+  input: UpdatePlatformBillingConfigInput,
+  token: string,
+): Promise<PlatformBillingConfig> {
+  return patchJson<PlatformBillingConfig>(
+    "/platform-config",
+    input,
+    { token },
+    "บันทึกค่าบริการแพลตฟอร์มไม่สำเร็จ",
+  );
 }
 
 export function createSuperAdminOrganization(

@@ -1,15 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   BookingStatus,
   BoothStatus,
   EventStatus,
   OrgStatus,
   Prisma,
+  type Subscription,
+  SubscriptionStatus,
 } from '@prisma/client';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { decimalString } from '../common/decimal';
 import { PrismaService } from '../prisma/prisma.service';
+import { DEFAULT_BILLING_CONFIG } from '../platform-config/platform-config.service';
 
 const ACTIVE_BOOKING_STATUSES = [
   BookingStatus.PENDING_PAYMENT,
@@ -20,9 +27,70 @@ const ACTIVE_BOOKING_STATUSES = [
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createEventDto: CreateEventDto) {
-    return this.prisma.event.create({
-      data: createEventDto as Prisma.EventUncheckedCreateInput,
+  create(createEventDto: CreateEventDto, organizationId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const quote = await this.buildSubscriptionQuote(
+        transaction,
+        createEventDto,
+        organizationId,
+      );
+      if (
+        createEventDto.expectedFinalPrice !== undefined &&
+        !quote.finalPrice.equals(createEventDto.expectedFinalPrice)
+      ) {
+        throw new BadRequestException(
+          'Subscription price changed; calculate a new quote before creating the event',
+        );
+      }
+      const event = await transaction.event.create({
+        data: {
+          organizationId,
+          venueId: createEventDto.venueId,
+          name: createEventDto.name,
+          description: createEventDto.description,
+          startDate: dateValue(createEventDto.startDate),
+          endDate: dateValue(createEventDto.endDate),
+          startTime: createEventDto.startTime,
+          endTime: createEventDto.endTime,
+          contactPhone: createEventDto.contactPhone,
+          contactEmail: createEventDto.contactEmail,
+          status: EventStatus.DRAFT,
+        },
+      });
+      const subscription = await transaction.subscription.create({
+        data: {
+          organizationId,
+          eventId: event.id,
+          status: SubscriptionStatus.DRAFT,
+          baseFee: quote.values.baseFee,
+          zoneCount: quote.zoneCount,
+          perZoneRate: quote.values.perZoneRate,
+          eventDays: quote.eventDays,
+          perDayRate: quote.values.perDayRate,
+          calculatedPrice: quote.calculatedPrice,
+          priceMin: quote.values.priceMin,
+          priceMax: quote.values.priceMax,
+          finalPrice: quote.finalPrice,
+          isOverMax: quote.isOverMax,
+        },
+      });
+
+      return {
+        ...event,
+        venue: quote.venue,
+        subscription: serializeSubscription(subscription),
+      };
+    });
+  }
+
+  quoteSubscription(createEventDto: CreateEventDto, organizationId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const quote = await this.buildSubscriptionQuote(
+        transaction,
+        createEventDto,
+        organizationId,
+      );
+      return serializeQuote(quote);
     });
   }
 
@@ -30,12 +98,83 @@ export class EventsService {
     return this.prisma.event.findMany();
   }
 
-  findByOrganization(organizationId: string) {
-    return this.prisma.event.findMany({
+  async findByOrganization(organizationId: string) {
+    const events = await this.prisma.event.findMany({
       where: { organizationId },
       orderBy: { startDate: 'desc' },
-      include: { venue: { select: { id: true, name: true } } },
+      include: {
+        venue: { select: { id: true, name: true } },
+        subscription: true,
+      },
     });
+
+    return events.map((event) => ({
+      ...event,
+      subscription: event.subscription
+        ? serializeSubscription(event.subscription)
+        : null,
+    }));
+  }
+
+  private async buildSubscriptionQuote(
+    transaction: Prisma.TransactionClient,
+    input: CreateEventDto,
+    organizationId: string,
+  ) {
+    const eventDays = inclusiveDays(input.startDate, input.endDate);
+    const venue = await transaction.venue.findFirst({
+      where: { id: input.venueId, organizationId },
+      select: { id: true, name: true },
+    });
+    if (!venue) {
+      throw new NotFoundException('Venue not found');
+    }
+
+    const [zoneCount, storedConfig] = await Promise.all([
+      transaction.zone.count({ where: { venueId: input.venueId } }),
+      transaction.platformConfig.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: {
+          baseFee: true,
+          perZoneRate: true,
+          perDayRate: true,
+          priceMin: true,
+          priceMax: true,
+        },
+      }),
+    ]);
+    const values = {
+      baseFee: decimal(storedConfig?.baseFee ?? DEFAULT_BILLING_CONFIG.baseFee),
+      perZoneRate: decimal(
+        storedConfig?.perZoneRate ?? DEFAULT_BILLING_CONFIG.perZoneRate,
+      ),
+      perDayRate: decimal(
+        storedConfig?.perDayRate ?? DEFAULT_BILLING_CONFIG.perDayRate,
+      ),
+      priceMin: decimal(
+        storedConfig?.priceMin ?? DEFAULT_BILLING_CONFIG.priceMin,
+      ),
+      priceMax: decimal(
+        storedConfig?.priceMax ?? DEFAULT_BILLING_CONFIG.priceMax,
+      ),
+    };
+    const calculatedPrice = values.baseFee
+      .plus(values.perZoneRate.times(zoneCount))
+      .plus(values.perDayRate.times(eventDays));
+    const finalPrice = Prisma.Decimal.max(
+      values.priceMin,
+      Prisma.Decimal.min(calculatedPrice, values.priceMax),
+    );
+
+    return {
+      venue,
+      zoneCount,
+      eventDays,
+      values,
+      calculatedPrice,
+      finalPrice,
+      isOverMax: calculatedPrice.greaterThan(values.priceMax),
+    };
   }
 
   async findDiscovery() {
@@ -270,6 +409,75 @@ export class EventsService {
       where: { id, organizationId: orgId },
     });
   }
+}
+
+type SubscriptionQuoteCalculation = {
+  venue: { id: string; name: string };
+  zoneCount: number;
+  eventDays: number;
+  values: {
+    baseFee: Prisma.Decimal;
+    perZoneRate: Prisma.Decimal;
+    perDayRate: Prisma.Decimal;
+    priceMin: Prisma.Decimal;
+    priceMax: Prisma.Decimal;
+  };
+  calculatedPrice: Prisma.Decimal;
+  finalPrice: Prisma.Decimal;
+  isOverMax: boolean;
+};
+
+function inclusiveDays(startValue: string, endValue: string): number {
+  const start = dateValue(startValue);
+  const end = dateValue(endValue);
+  const difference = end.getTime() - start.getTime();
+  if (difference < 0) {
+    throw new BadRequestException('endDate must be on or after startDate');
+  }
+  return Math.floor(difference / 86_400_000) + 1;
+}
+
+function dateValue(value: string): Date {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    throw new BadRequestException('Invalid event date');
+  }
+  return date;
+}
+
+function decimal(value: string | Prisma.Decimal): Prisma.Decimal {
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function serializeQuote(quote: SubscriptionQuoteCalculation) {
+  return {
+    baseFee: quote.values.baseFee.toString(),
+    zoneCount: quote.zoneCount,
+    perZoneRate: quote.values.perZoneRate.toString(),
+    eventDays: quote.eventDays,
+    perDayRate: quote.values.perDayRate.toString(),
+    calculatedPrice: quote.calculatedPrice.toString(),
+    priceMin: quote.values.priceMin.toString(),
+    priceMax: quote.values.priceMax.toString(),
+    finalPrice: quote.finalPrice.toString(),
+    isOverMax: quote.isOverMax,
+  };
+}
+
+function serializeSubscription(subscription: Subscription) {
+  return {
+    ...subscription,
+    baseFee: subscription.baseFee.toString(),
+    perZoneRate: subscription.perZoneRate.toString(),
+    perDayRate: subscription.perDayRate.toString(),
+    calculatedPrice: subscription.calculatedPrice.toString(),
+    priceMin: subscription.priceMin.toString(),
+    priceMax: subscription.priceMax.toString(),
+    finalPrice: subscription.finalPrice.toString(),
+  };
 }
 
 function boothAvailability(
