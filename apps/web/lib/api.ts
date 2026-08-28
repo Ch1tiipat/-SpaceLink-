@@ -562,6 +562,15 @@ export type PushSubscriptionRecord = {
   lastUsedAt: string | null;
 };
 
+export type SystemBroadcast = {
+  id: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  expiresAt: string | null;
+  createdAt: string;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -1032,6 +1041,28 @@ export function deletePushSubscription(
     { endpoint },
     { token },
     "ปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ",
+  );
+}
+
+export function getActiveSystemBroadcast(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SystemBroadcast | null> {
+  return getJson<SystemBroadcast | null>("/system-broadcasts/active", {
+    signal,
+    token,
+  });
+}
+
+export function createSystemBroadcast(
+  input: { title: string; body: string },
+  token: string,
+): Promise<SystemBroadcast> {
+  return postJson<SystemBroadcast>(
+    "/system-broadcasts",
+    input,
+    { token },
+    "ส่งประกาศระบบไม่สำเร็จ",
   );
 }
 

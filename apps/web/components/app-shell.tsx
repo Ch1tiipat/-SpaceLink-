@@ -41,6 +41,7 @@ import {
   askSupportAssistant,
   getEventMap,
   getEvents,
+  getActiveSystemBroadcast,
   getMe,
   getUnreadNotificationCount,
   getZoneRecommendations,
@@ -49,6 +50,7 @@ import {
   type DiscoveryEvent,
   type EventMap,
   type SupportAssistantResponse,
+  type SystemBroadcast,
   type VendorShop,
   type ZoneRecommendation,
 } from "@/lib/api";
@@ -260,6 +262,7 @@ const BOTTOM_NAV: NavItem[] = [
  * a page the visitor cannot open yet.
  */
 const BARE_ROUTES = new Set(["/login", "/register"]);
+const DISMISSED_BROADCAST_KEY = "spacelink:dismissed-system-broadcast-id";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -271,6 +274,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
   >(null);
+  const [activeBroadcast, setActiveBroadcast] =
+    useState<SystemBroadcast | null>(null);
 
   const isAdmin =
     auth.status === "signed-in" &&
@@ -342,6 +347,44 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [auth.status, pathname]);
 
+  useEffect(() => {
+    setActiveBroadcast(null);
+    if (auth.status !== "signed-in") return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!active || !token) return;
+
+        const broadcast = await getActiveSystemBroadcast(
+          token,
+          controller.signal,
+        );
+        if (!active || !broadcast) return;
+        if (sessionStorage.getItem(DISMISSED_BROADCAST_KEY) === broadcast.id) {
+          return;
+        }
+        setActiveBroadcast(broadcast);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") {
+          return;
+        }
+        // A broadcast is supplemental. A temporary failure must not block the
+        // authenticated application or replace its page-level error handling.
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [auth.status]);
+
   function selectOrganization(organizationId: string) {
     if (
       !organizations.some((organization) => organization.id === organizationId)
@@ -361,8 +404,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace("/");
   }
 
+  function dismissBroadcast() {
+    if (!activeBroadcast) return;
+    sessionStorage.setItem(DISMISSED_BROADCAST_KEY, activeBroadcast.id);
+    setActiveBroadcast(null);
+  }
+
   if (isSuperAdminRoute) {
-    return <>{children}</>;
+    return (
+      <>
+        {activeBroadcast ? (
+          <SystemBroadcastBanner
+            broadcast={activeBroadcast}
+            onDismiss={dismissBroadcast}
+          />
+        ) : null}
+        {children}
+      </>
+    );
   }
 
   if (BARE_ROUTES.has(pathname)) {
@@ -408,6 +467,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <div className="min-w-0">
+          {activeBroadcast ? (
+            <SystemBroadcastBanner
+              broadcast={activeBroadcast}
+              onDismiss={dismissBroadcast}
+            />
+          ) : null}
           <Topbar
             auth={auth}
             hasSidebar={hasPrivateNavigation}
@@ -458,6 +523,35 @@ export function AppShell({ children }: { children: ReactNode }) {
       <FloatingSupport auth={auth} hasBottomNav={hasPrivateNavigation} />
       <UxReviewPanel auth={auth} pathname={pathname} />
     </AdminOrganizationContext.Provider>
+  );
+}
+
+function SystemBroadcastBanner({
+  broadcast,
+  onDismiss,
+}: {
+  broadcast: SystemBroadcast;
+  onDismiss: () => void;
+}) {
+  return (
+    <aside
+      aria-label="ประกาศจาก SpaceLink"
+      className="flex items-start gap-3 bg-[linear-gradient(100deg,#5b21b6,#7c3aed)] px-4 py-3 text-white shadow-[0_8px_22px_rgba(91,33,182,.18)] sm:px-6"
+    >
+      <Megaphone className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <strong className="block text-sm font-extrabold">{broadcast.title}</strong>
+        <p className="mt-0.5 text-sm leading-5 text-white/90">{broadcast.body}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="ปิดประกาศนี้สำหรับเซสชันปัจจุบัน"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/85 transition hover:bg-white/15 hover:text-white"
+      >
+        <X className="h-4 w-4" aria-hidden />
+      </button>
+    </aside>
   );
 }
 
