@@ -340,6 +340,67 @@ export type SuperAdminCompanyAdmin = {
   organization: { id: string; name: string };
 };
 
+export type SuperAdminUserListItem = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  isBlacklisted: boolean;
+};
+
+export type SuperAdminUserDetail = SuperAdminUserListItem & {
+  phone: string | null;
+  blacklistReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  shops: {
+    id: string;
+    name: string;
+    description: string | null;
+    logoUrl: string | null;
+    createdAt: string;
+  }[];
+  bookings: {
+    id: string;
+    bookingCode: string;
+    status: BookingStatus;
+    boothPrice: string;
+    bookingStartDate: string;
+    bookingEndDate: string;
+    createdAt: string;
+    event: { id: string; name: string };
+    shop: { id: string; name: string };
+  }[];
+  refunds: {
+    id: string;
+    reason: string;
+    requestedAmount: string;
+    approvedAmount: string | null;
+    status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
+    createdAt: string;
+    booking: { id: string; bookingCode: string };
+  }[];
+  penalties: {
+    id: string;
+    reason: PenaltyReason;
+    description: string | null;
+    points: number;
+    issuedAt: string;
+    organization: { id: string; name: string };
+  }[];
+  supportTickets: {
+    id: string;
+    type: string;
+    subject: string;
+    status: SupportTicketStatus;
+    createdAt: string;
+  }[];
+};
+
+export type SuperAdminUserLastLogin = {
+  lastSignInAt: string | null;
+};
+
 export type SuperAdminBooking = BookingRecord & {
   event: {
     id: string;
@@ -1284,6 +1345,35 @@ export function getSuperAdminCompanyAdmins(
   signal?: AbortSignal,
 ): Promise<SuperAdminCompanyAdmin[]> {
   return getJson<SuperAdminCompanyAdmin[]>("/admins", { signal, token });
+}
+
+export function getSuperAdminUsers(
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminUserListItem[]> {
+  return getJson<SuperAdminUserListItem[]>("/users", { signal, token });
+}
+
+export function getSuperAdminUserDetail(
+  userId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminUserDetail> {
+  return getJson<SuperAdminUserDetail>(`/users/${encodeURIComponent(userId)}`, {
+    signal,
+    token,
+  });
+}
+
+export function getSuperAdminUserLastLogin(
+  userId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminUserLastLogin> {
+  return getJson<SuperAdminUserLastLogin>(
+    `/users/${encodeURIComponent(userId)}/last-login`,
+    { signal, token },
+  );
 }
 
 export function getSuperAdminBookings(
