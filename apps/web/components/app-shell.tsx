@@ -31,6 +31,8 @@ import {
   Sparkles,
   Star,
   Store,
+  ThumbsDown,
+  ThumbsUp,
   Ticket,
   UserRound,
   X,
@@ -1064,6 +1066,13 @@ type ZoneAssistantStep =
   | "select-facilities"
   | "result";
 
+type SupportConversationEntry = {
+  id: number;
+  question: string;
+  answer: string;
+  source: SupportAssistantResponse["source"] | null;
+};
+
 const ASSISTANT_FACILITIES = [
   { value: "ปลั๊กไฟ", label: "ปลั๊กไฟ" },
   { value: "โต๊ะ", label: "โต๊ะ" },
@@ -1081,11 +1090,16 @@ function FloatingSupport({
   const initialAnswer =
     "สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ";
   const [view, setView] = useState<"closed" | "menu" | "chat">("closed");
+  const [assistantMode, setAssistantMode] = useState<"help" | "zone">("help");
   const [question, setQuestion] = useState("");
+  const [askedQuestion, setAskedQuestion] = useState("");
   const [answer, setAnswer] = useState(initialAnswer);
   const [answerSource, setAnswerSource] = useState<
     SupportAssistantResponse["source"] | null
   >(null);
+  const [conversationHistory, setConversationHistory] = useState<
+    SupportConversationEntry[]
+  >([]);
   const [isAsking, setIsAsking] = useState(false);
   const [zoneStep, setZoneStep] = useState<ZoneAssistantStep>("idle");
   const [assistantEvents, setAssistantEvents] = useState<DiscoveryEvent[]>([]);
@@ -1099,12 +1113,15 @@ function FloatingSupport({
   const [recommendations, setRecommendations] = useState<ZoneRecommendation[]>(
     [],
   );
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const requestController = useRef<AbortController | null>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const nextMessageId = useRef(1);
 
   const quickQuestions = [
     "เริ่มจองบูธอย่างไร",
     "อัปโหลดสลิปที่ไหน",
-    "แนะนำโซนและบูธให้ร้านฉัน",
+    "ติดตามสถานะการจองที่ไหน",
   ];
 
   useEffect(
@@ -1114,21 +1131,48 @@ function FloatingSupport({
     [],
   );
 
+  useEffect(() => {
+    if (view !== "chat") return;
+    const animationFrame = requestAnimationFrame(() => {
+      transcriptRef.current?.scrollTo({
+        top: transcriptRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(animationFrame);
+  }, [answer, askedQuestion, conversationHistory.length, view, zoneStep]);
+
+  function archiveCurrentExchange() {
+    if (!answer.trim()) return;
+    const entry: SupportConversationEntry = {
+      id: nextMessageId.current,
+      question: askedQuestion,
+      answer,
+      source: answerSource,
+    };
+    nextMessageId.current += 1;
+    setConversationHistory((current) => [...current, entry].slice(-30));
+  }
+
   async function askAssistant(nextQuestion = question) {
     const normalized = nextQuestion.trim();
     if (!normalized || isAsking) return;
 
     if (isZoneRecommendationQuestion(normalized)) {
+      setAssistantMode("zone");
       await startZoneAssistant(normalized);
       return;
     }
 
+    archiveCurrentExchange();
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
-    setQuestion(normalized);
+    setAskedQuestion(normalized);
+    setQuestion("");
     setAnswer("กำลังค้นหาคำตอบจากข้อมูล SpaceLink…");
     setAnswerSource(null);
+    setFeedback(null);
     setIsAsking(true);
 
     try {
@@ -1152,12 +1196,18 @@ function FloatingSupport({
     }
   }
 
-  async function startZoneAssistant(nextQuestion: string) {
+  async function startZoneAssistant(
+    nextQuestion: string,
+    archiveCurrent = true,
+  ) {
+    if (archiveCurrent) archiveCurrentExchange();
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
-    setQuestion(nextQuestion);
+    setAskedQuestion(nextQuestion);
+    setQuestion("");
     setAnswerSource(null);
+    setFeedback(null);
     setRecommendations([]);
     setSelectedEvent(null);
     setSelectedMap(null);
@@ -1339,8 +1389,11 @@ function FloatingSupport({
     requestController.current?.abort();
     requestController.current = null;
     setQuestion("");
+    setAskedQuestion("");
     setAnswer(initialAnswer);
     setAnswerSource(null);
+    setConversationHistory([]);
+    nextMessageId.current = 1;
     setIsAsking(false);
     setZoneStep("idle");
     setAssistantEvents([]);
@@ -1350,6 +1403,16 @@ function FloatingSupport({
     setSelectedFacilities([]);
     setSelectedShop(null);
     setRecommendations([]);
+    setFeedback(null);
+  }
+
+  function changeAssistantMode(nextMode: "help" | "zone") {
+    if (assistantMode === nextMode && zoneStep !== "result") return;
+    resetAssistant();
+    setAssistantMode(nextMode);
+    if (nextMode === "zone") {
+      void startZoneAssistant("ช่วยแนะนำโซนและบูธให้ร้านฉัน", false);
+    }
   }
 
   const expanded = view !== "closed";
@@ -1432,60 +1495,193 @@ function FloatingSupport({
         <section
           aria-label="AI ช่วยคุณได้ SpaceLink"
           aria-busy={isAsking}
-          className="sl-floating-chat mb-3 flex w-[min(445px,calc(100vw-32px))] flex-col overflow-hidden rounded-[22px] border border-[#ded5f1] bg-white shadow-[0_24px_70px_rgba(45,27,82,.24)]"
+          className="sl-floating-chat mb-3 flex w-[min(470px,calc(100vw-16px))] flex-col overflow-hidden rounded-[28px] border border-[#ded5f1] bg-[#fbf9fd] shadow-[0_24px_70px_rgba(45,27,82,.24)] sm:w-[min(470px,calc(100vw-32px))]"
         >
-          <header className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-line px-3 sm:min-h-[86px] sm:gap-3 sm:px-4">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white sm:h-12 sm:w-12 sm:rounded-[15px]">
-              <Sparkles className="h-5 w-5" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <strong className="block text-sm font-black">
-                AI ช่วยคุณได้
-              </strong>
-              <small className="mt-1 block text-xs text-muted">
-                ถามข้อมูลการใช้งาน SpaceLink
-              </small>
+          <header className="shrink-0 bg-white px-3 pb-3 pt-2 sm:px-4 sm:pb-4">
+            <span
+              aria-hidden="true"
+              className="mx-auto mb-2 block h-1 w-12 rounded-full bg-[#d7ccdc] sm:hidden"
+            />
+            <div className="flex min-h-[58px] items-center gap-2 sm:min-h-[68px] sm:gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#9b66f4,#6d28d9)] text-white shadow-[0_8px_22px_rgba(109,40,217,.22)] sm:h-12 sm:w-12">
+                <Sparkles className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <strong className="block text-base font-black tracking-[-0.02em] text-ink">
+                  AI ช่วยคุณได้
+                </strong>
+                <small className="mt-0.5 block text-xs text-muted">
+                  ผู้ช่วยค้นหาข้อมูลและแนะนำพื้นที่ของ SpaceLink
+                </small>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (assistantMode === "zone") {
+                    resetAssistant();
+                    void startZoneAssistant(
+                      "ช่วยแนะนำโซนและบูธให้ร้านฉัน",
+                      false,
+                    );
+                  } else {
+                    resetAssistant();
+                  }
+                }}
+                aria-label="เริ่มบทสนทนาใหม่"
+                title="เริ่มบทสนทนาใหม่"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-line text-muted transition hover:border-violet hover:bg-violet-tint hover:text-violet"
+              >
+                <RotateCcw className="h-[18px] w-[18px]" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("closed")}
+                aria-label="ปิดหน้าต่าง AI ช่วยคุณได้"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-line text-muted transition hover:border-violet hover:bg-violet-tint hover:text-violet"
+              >
+                <X className="h-[18px] w-[18px]" aria-hidden />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={resetAssistant}
-              aria-label="เริ่มบทสนทนาใหม่"
-              title="เริ่มบทสนทนาใหม่"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"
+            <div
+              className="mt-2 grid grid-cols-2 rounded-[16px] bg-[#f0ebf3] p-1"
+              role="tablist"
+              aria-label="โหมดของ AI ช่วยคุณได้"
             >
-              <RotateCcw className="h-4 w-4" aria-hidden />
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("closed")}
-              aria-label="ปิดหน้าต่าง AI ช่วยคุณได้"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-line text-muted transition hover:border-violet hover:text-violet sm:h-10 sm:w-10 sm:rounded-[12px]"
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </button>
+              {([
+                ["help", "ถามข้อมูล"],
+                ["zone", "แนะนำโซน"],
+              ] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={assistantMode === mode}
+                  disabled={isAsking}
+                  onClick={() => changeAssistantMode(mode)}
+                  className={`min-h-10 rounded-[12px] px-3 text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60 ${assistantMode === mode ? "bg-violet text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]" : "text-[#675d70] hover:text-violet"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#fcfbff] p-3 sm:p-4">
-            <div className="mb-3 rounded-xl border border-[#e6ddf2] bg-[#f7f2ff] px-3 py-2 text-xs text-muted">
-              ถามเรื่อง Event · การจองบูธ · การชำระเงิน · ติดต่อผู้จัด
+          <div
+            ref={transcriptRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-line bg-[#fbf9fd] p-3 sm:p-4"
+          >
+            <div className="mb-4 text-center text-[11px] leading-5 text-muted">
+              AI อาจตอบคลาดเคลื่อนได้ โปรดตรวจสอบรายละเอียด Event และ Booth ก่อนจอง
             </div>
-            {question.trim() ? (
-              <div className="ml-auto max-w-[82%] rounded-[14px_14px_3px_14px] bg-violet px-3 py-2.5 text-sm leading-5 text-white">
-                {question}
+            {conversationHistory.map((entry) => (
+              <div key={entry.id} className="mb-5 grid gap-3">
+                {entry.question ? (
+                  <div className="flex items-end justify-end gap-2 pl-10">
+                    <div className="max-w-[82%]">
+                      <span className="mb-1 block text-right text-[11px] font-bold text-muted">
+                        คุณ
+                      </span>
+                      <div className="rounded-[20px_20px_6px_20px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-4 py-3 text-sm leading-6 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
+                        {entry.question}
+                      </div>
+                    </div>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#ded6e4] text-[#65596d]">
+                      <UserRound className="h-4 w-4" aria-hidden />
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex items-end gap-2 pr-8">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]">
+                    <Sparkles className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="max-w-[84%]">
+                    <strong className="mb-1 block text-[11px] font-extrabold text-violet">
+                      SpaceLink AI
+                    </strong>
+                    <div className="rounded-[20px_20px_20px_6px] border border-[#dfe3f3] bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)]">
+                      <p className="whitespace-pre-line">{entry.answer}</p>
+                      {entry.source ? (
+                        <small className="mt-2 block border-t border-[#eeeaf4] pt-2 text-[10px] font-bold text-muted">
+                          {entry.source === "AI_GEMINI"
+                            ? "ประมวลผลโดย AI จากข้อมูล SpaceLink"
+                            : "คำตอบสำรองจากข้อมูล SpaceLink"}
+                        </small>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {askedQuestion ? (
+              <div className="mb-3 flex items-end justify-end gap-2 pl-10">
+                <div className="max-w-[82%]">
+                  <span className="mb-1 block text-right text-[11px] font-bold text-muted">
+                    คุณ
+                  </span>
+                  <div className="rounded-[20px_20px_6px_20px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-4 py-3 text-sm leading-6 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
+                    {askedQuestion}
+                  </div>
+                </div>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#ded6e4] text-[#65596d]">
+                  <UserRound className="h-4 w-4" aria-hidden />
+                </span>
               </div>
             ) : null}
-            <div
-              aria-live="polite"
-              className="mt-3 max-w-[84%] rounded-[14px_14px_14px_3px] border border-[#e5dcf0] bg-white px-3 py-2.5 text-sm leading-5 text-ink"
-            >
-              <p>{answer}</p>
-              {answerSource ? (
-                <small className="mt-2 block text-[11px] font-bold text-muted">
-                  {answerSource === "AI_GEMINI"
-                    ? "ตอบโดย Gemini 3.6 Flash"
-                    : "คำตอบสำรองจากข้อมูล SpaceLink"}
-                </small>
-              ) : null}
+            <div className="flex items-end gap-2 pr-8" aria-live="polite">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]">
+                <Sparkles className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="max-w-[84%]">
+                <strong className="mb-1 block text-[11px] font-extrabold text-violet">
+                  {isAsking ? "SpaceLink AI · กำลังตอบ…" : "SpaceLink AI"}
+                </strong>
+                <div
+                  className={`rounded-[20px_20px_20px_6px] border bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)] ${isAsking ? "border-[#8b5cf6] shadow-[0_0_0_1px_rgba(139,92,246,.12)]" : "border-[#dfe3f3]"}`}
+                >
+                  <p className="whitespace-pre-line">{answer}</p>
+                  {answerSource ? (
+                    <small className="mt-2 block border-t border-[#eeeaf4] pt-2 text-[10px] font-bold text-muted">
+                      {answerSource === "AI_GEMINI"
+                        ? "ประมวลผลโดย AI จากข้อมูล SpaceLink"
+                        : "คำตอบสำรองจากข้อมูล SpaceLink"}
+                    </small>
+                  ) : null}
+                </div>
+              </div>
             </div>
+            {!isAsking && answer !== initialAnswer ? (
+              <div
+                className="mt-2 flex items-center justify-end gap-1"
+                aria-label="ให้คะแนนคำตอบ"
+              >
+                <span className="mr-1 text-[11px] text-muted">คำตอบนี้ช่วยไหม?</span>
+                <button
+                  type="button"
+                  aria-label="คำตอบมีประโยชน์"
+                  aria-pressed={feedback === "up"}
+                  onClick={() =>
+                    setFeedback((current) =>
+                      current === "up" ? null : "up",
+                    )
+                  }
+                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === "up" ? "border-violet bg-violet text-white" : "border-line bg-white text-muted hover:border-violet hover:text-violet"}`}
+                >
+                  <ThumbsUp className="h-4 w-4" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  aria-label="คำตอบควรปรับปรุง"
+                  aria-pressed={feedback === "down"}
+                  onClick={() =>
+                    setFeedback((current) =>
+                      current === "down" ? null : "down",
+                    )
+                  }
+                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === "down" ? "border-violet bg-violet text-white" : "border-line bg-white text-muted hover:border-violet hover:text-violet"}`}
+                >
+                  <ThumbsDown className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
             {zoneStep === "select-event" ? (
               <div className="mt-3 grid gap-2" aria-label="เลือก Event">
                 {assistantEvents.map((event) => (
@@ -1598,7 +1794,7 @@ function FloatingSupport({
 
             {zoneStep === "idle" &&
             auth.status !== "signed-in" &&
-            isZoneRecommendationQuestion(question) ? (
+            isZoneRecommendationQuestion(askedQuestion) ? (
               <Link
                 href="/login"
                 className="mt-3 inline-flex rounded-full bg-violet px-4 py-2 text-xs font-bold text-white"
@@ -1607,72 +1803,98 @@ function FloatingSupport({
               </Link>
             ) : null}
 
-            {zoneStep === "idle" ? (
-              <div className="mt-3 flex flex-wrap gap-2">
+            {assistantMode === "help" &&
+            zoneStep === "idle" &&
+            conversationHistory.length === 0 &&
+            !askedQuestion &&
+            answer === initialAnswer ? (
+              <div className="mt-4 grid gap-2.5" aria-label="คำถามแนะนำ">
                 {quickQuestions.map((quickQuestion) => (
                   <button
                     key={quickQuestion}
                     type="button"
                     disabled={isAsking}
                     onClick={() => void askAssistant(quickQuestion)}
-                    className="rounded-full border border-[#d9cbed] bg-[#faf7ff] px-3 py-2 text-xs font-bold text-violet transition hover:border-violet disabled:cursor-wait disabled:opacity-55"
+                    className="min-h-12 rounded-[17px] border border-[#cfc2d7] bg-white px-4 py-3 text-left text-sm font-bold leading-5 text-[#4c3d55] transition hover:border-violet hover:bg-violet-tint hover:text-violet disabled:cursor-wait disabled:opacity-55"
                   >
                     {quickQuestion}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={resetAssistant}
+                  className="ml-auto mt-1 inline-flex min-h-10 items-center gap-2 rounded-full bg-[#eee8f2] px-4 text-xs font-extrabold text-[#66566d] transition hover:bg-violet-tint hover:text-violet"
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden />
+                  เริ่มคำถามใหม่
+                </button>
               </div>
             ) : null}
           </div>
-          <div className="shrink-0 border-t border-line bg-white p-2 sm:p-3">
-            <div className="flex gap-2 rounded-[14px] border border-line bg-white p-2 focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
-              <input
+          <div className="shrink-0 bg-white p-3 sm:p-4">
+            <div className="rounded-[20px] border border-[#cfc4d6] bg-white p-2.5 shadow-[0_8px_24px_rgba(62,40,90,.06)] focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+              <textarea
                 value={question}
+                rows={2}
                 disabled={isAsking}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     void askAssistant();
                   }
                 }}
-                placeholder="พิมพ์คำถามเกี่ยวกับ SpaceLink"
+                placeholder={
+                  assistantMode === "zone"
+                    ? "บอก Event โซน หรืออุปกรณ์ที่ต้องการ"
+                    : "พิมพ์คำถามเกี่ยวกับ SpaceLink"
+                }
                 aria-label="พิมพ์คำถามให้ AI ช่วยคุณได้"
-                className="min-w-0 flex-1 border-0 bg-transparent px-2 text-base outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
+                className="max-h-24 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
               />
-              <button
-                type="button"
-                disabled={isAsking || !question.trim()}
-                onClick={() => void askAssistant()}
-                aria-label="ส่งคำถามให้ AI"
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <Send className="h-4 w-4" aria-hidden />
-              </button>
+              <div className="mt-1 flex items-center justify-between gap-3 border-t border-[#eee9f1] px-1 pt-2">
+                <small className="min-w-0 truncate text-[11px] font-semibold text-muted">
+                  ขับเคลื่อนโดย SpaceLink AI
+                </small>
+                <button
+                  type="button"
+                  disabled={isAsking || !question.trim()}
+                  onClick={() => void askAssistant()}
+                  aria-label="ส่งคำถามให้ AI"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Send className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
             </div>
           </div>
         </section>
       ) : null}
 
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-label={
-          expanded
-            ? "ปิดเมนูช่วยเหลือ SpaceLink"
-            : "เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink"
-        }
-        title={expanded ? "ปิดเมนูช่วยเหลือ" : "AI ช่วยคุณได้ · ติดต่อเรา"}
-        onClick={() =>
-          setView((current) => (current === "closed" ? "menu" : "closed"))
-        }
-        className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
-      >
-        {expanded ? (
-          <X className="h-5 w-5" aria-hidden />
-        ) : (
-          <Sparkles className="h-5 w-5" aria-hidden />
-        )}
-      </button>
+      {view !== "chat" ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? "ปิดเมนูช่วยเหลือ SpaceLink"
+              : "เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink"
+          }
+          title={expanded ? "ปิดเมนูช่วยเหลือ" : "AI ช่วยคุณได้ · ติดต่อเรา"}
+          onClick={() =>
+            setView((current) =>
+              current === "closed" ? "menu" : "closed",
+            )
+          }
+          className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
+        >
+          {expanded ? (
+            <X className="h-5 w-5" aria-hidden />
+          ) : (
+            <Sparkles className="h-5 w-5" aria-hidden />
+          )}
+        </button>
+      ) : null}
     </div>
   );
 }
