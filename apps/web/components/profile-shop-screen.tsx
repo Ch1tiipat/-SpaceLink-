@@ -4,9 +4,12 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BadgeCheck,
+  Bell,
+  BellOff,
   CircleAlert,
   ImageUp,
   Layers3,
+  LoaderCircle,
   Mail,
   Package,
   Phone,
@@ -19,7 +22,9 @@ import { MultiSelectMenu } from '@/components/multi-select-menu';
 import type { SelectMenuOption } from '@/components/select-menu';
 import {
   ApiError,
+  createPushSubscription,
   createShop,
+  deletePushSubscription,
   getAverageRating,
   getCategories,
   updateMe,
@@ -285,6 +290,8 @@ export function ProfileShopScreen() {
               </p>
             )}
 
+            <PushNotificationCard token={ready.token} />
+
             <section
               className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
               aria-label="สรุปโปรไฟล์ร้านค้า"
@@ -399,6 +406,230 @@ export function ProfileShopScreen() {
         )}
       </div>
     </main>
+  );
+}
+
+type PushAvailability =
+  | 'checking'
+  | 'ready'
+  | 'denied'
+  | 'unsupported'
+  | 'unconfigured';
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const bytes = window.atob(base64);
+  return Uint8Array.from(bytes, (character) => character.charCodeAt(0));
+}
+
+function subscriptionKeyToBase64(subscription: PushSubscription, name: PushEncryptionKeyName) {
+  const key = subscription.getKey(name);
+  if (!key) return '';
+  const bytes = new Uint8Array(key);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return window.btoa(binary);
+}
+
+function PushNotificationCard({ token }: { token: string }) {
+  const [availability, setAvailability] = useState<PushAvailability>('checking');
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      if (
+        !('Notification' in window) ||
+        !('serviceWorker' in navigator) ||
+        !('PushManager' in window)
+      ) {
+        if (active) setAvailability('unsupported');
+        return;
+      }
+
+      if (Notification.permission === 'denied') {
+        if (active) setAvailability('denied');
+        return;
+      }
+
+      if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+        if (active) setAvailability('unconfigured');
+        return;
+      }
+
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration && process.env.NODE_ENV === 'production') {
+        registration = await navigator.serviceWorker.ready;
+      }
+      if (!active) return;
+      if (!registration) {
+        setAvailability('unsupported');
+        return;
+      }
+
+      const subscription = await registration.pushManager.getSubscription();
+      if (!active) return;
+      setSubscribed(Boolean(subscription));
+      setAvailability('ready');
+    })().catch(() => {
+      if (active) setAvailability('unsupported');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleToggle() {
+    if (availability !== 'ready' || busy) return;
+    setBusy(true);
+    setMessage(null);
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+
+      if (subscribed) {
+        if (existing) {
+          const endpoint = existing.endpoint;
+          await existing.unsubscribe();
+          setSubscribed(false);
+          await deletePushSubscription(endpoint, token);
+        }
+        setSubscribed(false);
+        setMessage('ปิดการแจ้งเตือนบนอุปกรณ์นี้แล้ว');
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === 'denied') {
+        setAvailability('denied');
+        return;
+      }
+      if (permission !== 'granted') {
+        setMessage('ยังไม่ได้อนุญาตการแจ้งเตือน');
+        return;
+      }
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        setAvailability('unconfigured');
+        return;
+      }
+
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        }));
+
+      const p256dh = subscriptionKeyToBase64(subscription, 'p256dh');
+      const auth = subscriptionKeyToBase64(subscription, 'auth');
+      if (!p256dh || !auth) {
+        if (!existing) await subscription.unsubscribe();
+        throw new Error('เบราว์เซอร์ไม่สามารถสร้างกุญแจสำหรับการแจ้งเตือนได้');
+      }
+
+      try {
+        await createPushSubscription(
+          {
+            endpoint: subscription.endpoint,
+            expirationTime: subscription.expirationTime,
+            keys: { p256dh, auth },
+          },
+          token,
+        );
+      } catch (cause) {
+        if (!existing) await subscription.unsubscribe();
+        throw cause;
+      }
+
+      setSubscribed(true);
+      setMessage('เปิดการแจ้งเตือนบนอุปกรณ์นี้แล้ว');
+    } catch (cause) {
+      setMessage(
+        cause instanceof ApiError || cause instanceof Error
+          ? cause.message
+          : 'เปลี่ยนการตั้งค่าการแจ้งเตือนไม่สำเร็จ',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="sl-surface mt-4 p-5 sm:p-6" aria-labelledby="push-notification-title">
+      <div className="flex items-start gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
+          {availability === 'denied' ? (
+            <BellOff className="h-5 w-5" aria-hidden />
+          ) : (
+            <Bell className="h-5 w-5" aria-hidden />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 id="push-notification-title" className="font-bold text-ink">
+            เปิดการแจ้งเตือนบนอุปกรณ์นี้
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            รับข่าวการจอง การชำระเงิน และประกาศสำคัญ แม้ไม่ได้เปิดหน้า SpaceLink อยู่
+          </p>
+        </div>
+
+        {availability === 'ready' || availability === 'denied' || availability === 'unconfigured' ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={subscribed}
+            aria-label="เปิดการแจ้งเตือนบนอุปกรณ์นี้"
+            onClick={handleToggle}
+            disabled={busy || availability !== 'ready'}
+            className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition disabled:cursor-wait disabled:opacity-60 ${
+              subscribed ? 'bg-violet' : 'bg-[#d8d2df]'
+            }`}
+          >
+            <span
+              className={`absolute top-1 grid h-5 w-5 place-items-center rounded-full bg-white shadow-sm transition ${
+                subscribed ? 'left-6' : 'left-1'
+              }`}
+            >
+              {busy ? <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden /> : null}
+            </span>
+          </button>
+        ) : null}
+      </div>
+
+      {availability === 'checking' ? (
+        <p className="mt-3 text-xs text-muted">กำลังตรวจสอบอุปกรณ์…</p>
+      ) : null}
+      {availability === 'denied' ? (
+        <p role="alert" className="mt-3 text-sm text-[#b42318]">
+          เบราว์เซอร์ปิดสิทธิ์แจ้งเตือนไว้ กรุณาเปิดสิทธิ์ของเว็บไซต์นี้ในการตั้งค่าเบราว์เซอร์
+        </p>
+      ) : null}
+      {availability === 'unsupported' ? (
+        <p className="mt-3 text-sm text-muted">
+          เบราว์เซอร์หรือโหมดที่ใช้อยู่ยังไม่รองรับการแจ้งเตือนแบบ Push
+        </p>
+      ) : null}
+      {availability === 'unconfigured' ? (
+        <p role="alert" className="mt-3 text-sm text-[#b42318]">
+          ระบบยังไม่ได้ตั้งค่ากุญแจ Web Push กรุณาแจ้งผู้ดูแลระบบ
+        </p>
+      ) : null}
+      {message ? (
+        <p role="status" className="mt-3 text-sm font-bold text-violet">
+          {message}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
