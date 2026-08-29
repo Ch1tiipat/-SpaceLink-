@@ -1,0 +1,36 @@
+name: Keep Render API Awake
+
+# Stopgap for Render Free tier's 15-minute idle sleep (SCRUM-39, upgrading to
+# Starter deferred due to budget). Pings /api/health often enough that
+# spacelink-api never idles long enough to sleep.
+#
+# Known limitation: GitHub's scheduled-workflow cron is best-effort, not
+# guaranteed to the minute — under load it can slip by several minutes.
+# Less reliable than a dedicated uptime pinger, but free and needs no
+# third-party account. Revisit once Render moves to a paid tier.
+#
+# Also: GitHub auto-disables scheduled workflows after 60 days with no
+# repo activity. If pings silently stop, check Actions tab → re-enable.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {} # manual "wake it up now" button — use right before a demo
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint (retry for slow cold starts)
+        run: |
+          url="https://spacelink-api-obwy.onrender.com/api/health"
+          for attempt in 1 2 3; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 "$url" || echo "000")
+            echo "Attempt $attempt: HTTP $status"
+            if [ "$status" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::spacelink-api did not respond with 200 after 3 attempts"
+          exit 1
