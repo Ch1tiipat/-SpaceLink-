@@ -255,6 +255,7 @@ model OrgMembership {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
+  @@index([userId])
   @@map("org_membership")
 }
 
@@ -276,6 +277,7 @@ model Venue {
   events       Event[]
   points       VenuePoint[]
 
+  @@index([organizationId])
   @@map("venue")
 }
 
@@ -373,6 +375,8 @@ model Event {
   bookings           Booking[]
   recommendationLogs RecommendationLog[]
 
+  @@index([organizationId])
+  @@index([venueId])
   @@map("event")
 }
 
@@ -429,6 +433,7 @@ model Shop {
   bookings   Booking[]
   categories ShopCategory[]
 
+  @@index([ownerUserId])
   @@map("shop")
 }
 
@@ -477,6 +482,8 @@ model Booking {
 
   @@unique([eventId, boothId])
   @@index([vendorUserId])
+  @@index([boothId])
+  @@index([shopId])
   @@map("booking")
 }
 
@@ -496,6 +503,7 @@ model VerifiedSlip {
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  @@index([bookingId])
   @@map("verified_slip")
 }
 
@@ -603,6 +611,7 @@ model Announcement {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("announcement")
 }
 
