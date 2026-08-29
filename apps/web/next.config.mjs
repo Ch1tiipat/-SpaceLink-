@@ -13,9 +13,25 @@ const runtimeCaching = [
 ];
 
 const withPWA = withPWAInit({
+  // Admin-only route chunks are loaded and cached when an admin opens them;
+  // vendors should not download every admin screen during first install.
+  buildExcludes: [
+    // Next.js does not serve this internal manifest through `next start`; if
+    // Workbox precaches it, the 404 makes the service-worker install fail.
+    /app-build-manifest\.json$/,
+    /static\/chunks\/app\/(?:admin|super-admin)\/.*\.js$/,
+  ],
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   importScripts: ['/push-sw.js'],
+  // These large reference images are not used by the current UI. Keep them
+  // deployable, but do not make every PWA installation download them upfront.
+  publicExcludes: [
+    '!event-atmosphere-sut-2569.png',
+    '!event-plan-sut-2569.png',
+    '!event-travel-map-sut-2569.png',
+    '!hero-spacelink.png',
+  ],
   register: true,
   runtimeCaching,
   skipWaiting: true,
