@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import {
   Activity,
   BadgeDollarSign,
@@ -51,30 +51,58 @@ const NAVIGATION: NavigationGroup[] = [
         icon: Building2,
         href: '/super-admin/organizations',
       },
-      { label: 'แอดมินบริษัท', icon: ShieldCheck },
+      {
+        label: 'แอดมินบริษัท',
+        icon: ShieldCheck,
+        href: '/super-admin/admins',
+      },
     ],
   },
   {
     label: 'USERS & TRANSACTIONS',
     items: [
-      { label: 'ผู้ใช้ทั้งหมด', icon: UsersRound },
-      { label: 'การจองทั้งหมด', icon: CalendarCheck2 },
-      { label: 'การเงินและคืนเงิน', icon: WalletCards },
+      { label: 'ผู้ใช้ทั้งหมด', icon: UsersRound, href: '/super-admin/users' },
+      {
+        label: 'การจองทั้งหมด',
+        icon: CalendarCheck2,
+        href: '/super-admin/events-bookings?tab=bookings',
+      },
+      {
+        label: 'การเงินและคืนเงิน',
+        icon: WalletCards,
+        href: '/super-admin/events-bookings?tab=payments',
+      },
     ],
   },
   {
     label: 'CONTROL CENTER',
     items: [
-      { label: 'เคสช่วยเหลือ', icon: LifeBuoy },
-      { label: 'รายงานและความปลอดภัย', icon: ShieldAlert },
-      { label: 'Audit logs', icon: ScrollText },
+      {
+        label: 'เคสช่วยเหลือ',
+        icon: LifeBuoy,
+        href: '/super-admin/support?tab=tickets',
+      },
+      {
+        label: 'รายงานและความปลอดภัย',
+        icon: ShieldAlert,
+        href: '/super-admin/support?tab=moderation',
+      },
+      {
+        label: 'Audit logs',
+        icon: ScrollText,
+        href: '/super-admin/audit-logs',
+      },
     ],
   },
   {
     label: 'PLATFORM',
     collapsible: true,
     items: [
-      { label: 'ประกาศกลาง', icon: Megaphone },
+      {
+        label: 'ประกาศกลาง',
+        icon: Megaphone,
+        href: '/super-admin/announcements',
+      },
       { label: 'Package และ Billing', icon: BadgeDollarSign },
       { label: 'สถานะระบบ', icon: Activity },
       { label: 'บทบาทและสิทธิ์', icon: KeyRound },
@@ -95,14 +123,24 @@ const THAI_DATE = new Intl.DateTimeFormat('th-TH', {
 });
 
 export function SuperAdminShell({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<ShellFallback />}>
+      <SuperAdminShellContent>{children}</SuperAdminShellContent>
+    </Suspense>
+  );
+}
+
+function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryString = searchParams.toString();
   const { auth, signOut } = useAuthState();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
 
-  useEffect(() => setDrawerOpen(false), [pathname]);
+  useEffect(() => setDrawerOpen(false), [pathname, queryString]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -140,6 +178,7 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
   const sidebar = (
     <SidebarContent
       pathname={pathname}
+      queryString={queryString}
       platformOpen={platformOpen}
       onTogglePlatform={() => setPlatformOpen((value) => !value)}
       onCollapse={() => setCollapsed(true)}
@@ -184,6 +223,7 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
             </button>
             <SidebarContent
               pathname={pathname}
+              queryString={queryString}
               platformOpen={platformOpen}
               onTogglePlatform={() => setPlatformOpen((value) => !value)}
               onCollapse={() => setDrawerOpen(false)}
@@ -241,8 +281,22 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
   );
 }
 
+function ShellFallback() {
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#fbfaff] px-6">
+      <div className="text-center">
+        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#e9ddfa] border-t-[#7c3aed]" />
+        <p className="text-sm font-semibold text-[#82788b]">
+          กำลังเตรียมเมนูผู้ดูแลระบบ
+        </p>
+      </div>
+    </main>
+  );
+}
+
 function SidebarContent({
   pathname,
+  queryString,
   platformOpen,
   onTogglePlatform,
   onCollapse,
@@ -250,6 +304,7 @@ function SidebarContent({
   mobile = false,
 }: {
   pathname: string;
+  queryString: string;
   platformOpen: boolean;
   onTogglePlatform: () => void;
   onCollapse: () => void;
@@ -286,6 +341,7 @@ function SidebarContent({
             key={group.label}
             group={group}
             pathname={pathname}
+            queryString={queryString}
             expanded={!group.collapsible || platformOpen}
             onToggle={group.collapsible ? onTogglePlatform : undefined}
           />
@@ -309,11 +365,13 @@ function SidebarContent({
 function NavigationSection({
   group,
   pathname,
+  queryString,
   expanded,
   onToggle,
 }: {
   group: NavigationGroup;
   pathname: string;
+  queryString: string;
   expanded: boolean;
   onToggle?: () => void;
 }) {
@@ -340,7 +398,12 @@ function NavigationSection({
       {expanded ? (
         <nav className="grid gap-[3px]">
           {group.items.map((item) => (
-            <NavigationLink key={item.label} item={item} pathname={pathname} />
+            <NavigationLink
+              key={item.label}
+              item={item}
+              pathname={pathname}
+              queryString={queryString}
+            />
           ))}
         </nav>
       ) : null}
@@ -351,15 +414,15 @@ function NavigationSection({
 function NavigationLink({
   item,
   pathname,
+  queryString,
 }: {
   item: NavigationItem;
   pathname: string;
+  queryString: string;
 }) {
   const Icon = item.icon;
   const active = item.href
-    ? item.href === '/super-admin'
-      ? pathname === item.href
-      : pathname.startsWith(item.href)
+    ? isNavigationActive(item.href, pathname, queryString)
     : false;
   const className = `flex min-h-9 items-center gap-[11px] rounded-[9px] px-[11px] py-[7px] text-sm whitespace-nowrap transition ${
     active
@@ -388,6 +451,25 @@ function NavigationLink({
       <Icon className="h-[17px] w-[17px] shrink-0" />
       {item.label}
     </Link>
+  );
+}
+
+function isNavigationActive(
+  href: string,
+  pathname: string,
+  queryString: string,
+) {
+  const [targetPath, targetQuery = ''] = href.split('?');
+  if (targetPath === '/super-admin') return pathname === targetPath;
+  if (pathname !== targetPath && !pathname.startsWith(`${targetPath}/`)) {
+    return false;
+  }
+  if (!targetQuery) return true;
+
+  const currentParams = new URLSearchParams(queryString);
+  const targetParams = new URLSearchParams(targetQuery);
+  return [...targetParams].every(
+    ([key, value]) => currentParams.get(key) === value,
   );
 }
 
