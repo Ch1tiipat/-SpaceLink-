@@ -1,7 +1,6 @@
 import {
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -85,8 +84,6 @@ export type SupportTicketOverviewResponse = Prisma.SupportTicketGetPayload<{
  */
 @Injectable()
 export class SupportTicketsService {
-  private readonly logger = new Logger(SupportTicketsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
@@ -166,9 +163,9 @@ export class SupportTicketsService {
    * **This is deliberately not one transaction.** `createForAdmin` opens its
    * own serializable transaction and retries it on a write conflict; running
    * that inside an outer interactive transaction would mean two connections
-   * held at once per approval, which is how a small pool deadlocks. The booking
-   * is therefore committed before the ticket is updated; the `closed.count === 0`
-   * branch below says what that costs.
+   * held at once per approval, which is how a small pool deadlocks. Instead,
+   * an atomic status update claims the ticket before the booking is created.
+   * A failed booking restores the ticket's previous actionable status.
    */
   async approveQuotaException(
     ticketId: string,
@@ -187,53 +184,53 @@ export class SupportTicketsService {
       throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
     }
 
-    const shop = await this.prisma.shop.findFirst({
-      where: { ownerUserId: ticket.userId },
-      select: { id: true },
-    });
-    if (!shop) {
-      throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
-    }
-
-    // Everything a booking must satisfy is still checked in here — booth
-    // availability, the venue match, the date range, no second active booking
-    // on this (event, booth). Only the quota is waived, and anything this
-    // throws is the caller's answer unchanged.
-    const booking = await this.bookingsService.createForAdmin(
-      {
-        eventId: approveQuotaExceptionDto.eventId,
-        boothId: approveQuotaExceptionDto.boothId,
-        shopId: shop.id,
-      },
-      ticket.userId,
-      orgId,
-    );
-
-    const closed = await this.prisma.supportTicket.updateMany({
+    const claimed = await this.prisma.supportTicket.updateMany({
       where: {
         id: ticketId,
+        organizationId: orgId,
         status: { in: ACTIONABLE_TICKET_STATUSES },
       },
-      data: {
-        status: TicketStatus.CLOSED,
-        bookingId: booking.id,
-      },
+      data: { status: TicketStatus.CLOSED },
     });
-
-    if (closed.count === 0) {
-      // Two admins approved the same ticket at once and the other one closed it
-      // first. The booking above is already committed and is a real, valid
-      // booking — it just is not the one the ticket points at. Deleting it is
-      // not an option this codebase has a precedent for, and refusing here
-      // would hide a booking that exists from the admin who made it, so the
-      // booking is returned and the divergence is left where a human can see
-      // it. The booth-level unique check means the two approvals cannot both
-      // have taken the same booth.
-      this.logger.warn(
-        `Quota exception ${ticketId} was already closed by a concurrent ` +
-          `approval; booking ${booking.id} is not linked to it`,
-      );
+    if (claimed.count === 0) {
+      throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
     }
+
+    let booking: BookingResponse;
+    try {
+      const shop = await this.prisma.shop.findFirst({
+        where: { ownerUserId: ticket.userId },
+        select: { id: true },
+      });
+      if (!shop) {
+        throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
+      }
+
+      // Everything a booking must satisfy is still checked in here — booth
+      // availability, the venue match, the date range, no second active booking
+      // on this (event, booth). Only the quota is waived, and anything this
+      // throws is the caller's answer unchanged.
+      booking = await this.bookingsService.createForAdmin(
+        {
+          eventId: approveQuotaExceptionDto.eventId,
+          boothId: approveQuotaExceptionDto.boothId,
+          shopId: shop.id,
+        },
+        ticket.userId,
+        orgId,
+      );
+    } catch (error) {
+      await this.prisma.supportTicket.update({
+        where: { id: ticketId, organizationId: orgId },
+        data: { status: ticket.status },
+      });
+      throw error;
+    }
+
+    await this.prisma.supportTicket.update({
+      where: { id: ticketId, organizationId: orgId },
+      data: { bookingId: booking.id },
+    });
 
     await this.notifications.createForUser(ticket.userId, {
       type: NotificationType.SUPPORT_TICKET,
