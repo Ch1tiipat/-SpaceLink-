@@ -102,12 +102,12 @@ export type AdminBookingResponse = Omit<AdminBookingRecord, 'boothPrice'> & {
 };
 
 /**
- * The only thing the admin create path is allowed to differ by. Deliberately
- * one flag rather than a general "skip checks" switch: every other invariant in
- * `createWithinTransaction` protects a booth or an event, not a vendor's
- * allowance, and none of them are an admin's to waive.
+ * The admin create path may waive only the quota. Its required organization
+ * scope is carried into the same transaction so the event cannot be swapped
+ * for one owned by another organization between authorization and creation.
  */
 interface CreateBookingOptions {
+  requiredOrganizationId?: string;
   skipQuotaCheck?: boolean;
 }
 
@@ -155,14 +155,17 @@ export class BookingsService {
    * The shop is still checked against that vendor inside the transaction, so an
    * admin cannot attach someone else's shop to it.
    *
-   * The caller is responsible for authorization: this method takes no orgId and
-   * checks no membership. Only route it from behind `@OrgScoped`.
+   * `organizationId` must come from the authenticated admin's resolved
+   * organization scope. The event is bound to it again inside the booking
+   * transaction; a missing or foreign event is deliberately indistinguishable.
    */
   createForAdmin(
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
+    organizationId: string,
   ): Promise<BookingResponse> {
     return this.createWithRetry(createBookingDto, vendorUserId, {
+      requiredOrganizationId: organizationId,
       skipQuotaCheck: true,
     });
   }
@@ -273,6 +276,12 @@ export class BookingsService {
     }
 
     if (!event) {
+      throw new NotFoundException('ไม่พบอีเวนต์');
+    }
+    if (
+      options.requiredOrganizationId &&
+      event.organizationId !== options.requiredOrganizationId
+    ) {
       throw new NotFoundException('ไม่พบอีเวนต์');
     }
     if (event.organization.status !== OrgStatus.ACTIVE) {

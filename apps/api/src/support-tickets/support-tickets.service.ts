@@ -206,6 +206,7 @@ export class SupportTicketsService {
         shopId: shop.id,
       },
       ticket.userId,
+      orgId,
     );
 
     const closed = await this.prisma.supportTicket.updateMany({
