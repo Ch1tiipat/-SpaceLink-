@@ -559,7 +559,7 @@ describe('BookingsService', () => {
       userFindUnique.mockResolvedValue({ isBlacklisted: true });
 
       await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(bookingFindFirst).not.toHaveBeenCalled();
       expect(bookingCreate).not.toHaveBeenCalled();
@@ -573,7 +573,7 @@ describe('BookingsService', () => {
       bookingCount.mockResolvedValue(5);
 
       await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
       ).resolves.toEqual({ ...CREATED_BOOKING, boothPrice: '1500' });
 
       expect(bookingCreate).toHaveBeenCalledTimes(1);
@@ -586,6 +586,29 @@ describe('BookingsService', () => {
       expect(data.isPaymentExempt).toBe(false);
     });
 
+    it('returns 404 without writing when the event belongs to another organization', async () => {
+      eventFindUnique.mockResolvedValue({
+        id: EVENT_ID,
+        status: EventStatus.PUBLISHED,
+        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        venueId: VENUE_ID,
+        startDate: EVENT_START,
+        endDate: EVENT_END,
+        organization: {
+          status: OrgStatus.ACTIVE,
+          orgConfig: { bookingQuotaPerVendor: 3 },
+        },
+      });
+
+      await expect(
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
+      ).rejects.toThrow(new NotFoundException('ไม่พบอีเวนต์'));
+
+      expect(bookingFindFirst).not.toHaveBeenCalled();
+      expect(bookingCount).not.toHaveBeenCalled();
+      expect(bookingCreate).not.toHaveBeenCalled();
+    });
+
     // Quota is the only invariant waived. The rest of createWithinTransaction
     // still runs, so an admin cannot double-book a booth by approving a ticket.
     it('still refuses a booth with an active booking', async () => {
@@ -593,7 +616,7 @@ describe('BookingsService', () => {
       bookingFindFirst.mockResolvedValue({ id: 'existing-booking' });
 
       await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
       ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
       expect(bookingCreate).not.toHaveBeenCalled();
     });
@@ -608,7 +631,7 @@ describe('BookingsService', () => {
       });
 
       await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(bookingCreate).not.toHaveBeenCalled();
     });
@@ -626,7 +649,7 @@ describe('BookingsService', () => {
         );
 
       await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID),
+        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
       ).resolves.toMatchObject({ id: BOOKING_ID });
       expect(prismaTransaction).toHaveBeenCalledTimes(2);
       expect(bookingCreate).toHaveBeenCalledTimes(1);

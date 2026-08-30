@@ -237,6 +237,7 @@ describe('SupportTicketsService', () => {
       expect(createForAdmin).toHaveBeenCalledWith(
         { eventId: EVENT_ID, boothId: BOOTH_ID, shopId: SHOP_ID },
         VENDOR_ID,
+        ORGANIZATION_ID,
       );
       expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
         type: NotificationType.SUPPORT_TICKET,
