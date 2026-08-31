@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -31,6 +39,17 @@ export class OrganizationEventsController {
     @Body() input: CreateEventDto,
   ) {
     return this.eventsService.create(input, organizationId);
+  }
+
+  @Patch(':eventId/publish')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  publish(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId') eventId: string,
+  ) {
+    return this.eventsService.publish(eventId, organizationId);
   }
 
   @Get()
