@@ -405,25 +405,36 @@ export class EventsService {
   }
 
   async publish(id: string, orgId: string) {
-    const existing = await this.prisma.event.findFirst({
-      where: { id, organizationId: orgId },
-      select: { status: true },
+    const result = await this.prisma.event.updateMany({
+      where: {
+        id,
+        organizationId: orgId,
+        status: EventStatus.DRAFT,
+      },
+      data: { status: EventStatus.PUBLISHED },
     });
-    if (!existing) {
-      throw new NotFoundException('Event not found');
-    }
-    if (existing.status !== EventStatus.DRAFT) {
+
+    if (result.count === 0) {
+      const existing = await this.prisma.event.findFirst({
+        where: { id, organizationId: orgId },
+        select: { status: true },
+      });
+      if (!existing) {
+        throw new NotFoundException('Event not found');
+      }
       throw new BadRequestException('Only draft events can be published');
     }
 
-    const event = await this.prisma.event.update({
+    const event = await this.prisma.event.findFirst({
       where: { id, organizationId: orgId },
-      data: { status: EventStatus.PUBLISHED },
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
       },
     });
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
 
     return {
       ...event,

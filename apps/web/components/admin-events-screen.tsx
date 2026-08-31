@@ -154,7 +154,14 @@ export function AdminEventsScreen() {
     setError('');
     setNotice('');
     try {
-      await publishAdminEvent(organizationId, event.id, token);
+      const published = await publishAdminEvent(
+        organizationId,
+        event.id,
+        token,
+      );
+      setEvents((current) =>
+        current.map((item) => (item.id === published.id ? published : item)),
+      );
       setNotice(`เผยแพร่อีเวนต์ “${event.name}” เรียบร้อยแล้ว`);
       setReloadKey((value) => value + 1);
     } catch (cause) {

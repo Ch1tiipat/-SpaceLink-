@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -47,7 +48,7 @@ export class OrganizationEventsController {
   @OrgScoped('organizationId')
   publish(
     @CurrentOrgId() organizationId: string,
-    @Param('eventId') eventId: string,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
   ) {
     return this.eventsService.publish(eventId, organizationId);
   }

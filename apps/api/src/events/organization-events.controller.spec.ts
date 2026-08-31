@@ -1,5 +1,10 @@
-import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import {
+  ForbiddenException,
+  Logger,
+  NotFoundException,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 
 jest.mock('jose', () => ({
@@ -114,6 +119,21 @@ describe('OrganizationEventsController', () => {
     await controller.publish(ORGANIZATION_ID, 'event-1');
 
     expect(publish).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
+  });
+
+  it('validates the publish event id as a UUID', () => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      OrganizationEventsController,
+      'publish',
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    const eventIdParameter = Object.values(metadata).find(
+      (parameter) => parameter.data === 'eventId',
+    );
+
+    expect(eventIdParameter?.pipes).toEqual(
+      expect.arrayContaining([expect.any(ParseUUIDPipe)]),
+    );
   });
 
   it('answers 404 when an ORG_ADMIN requests another organization', async () => {
