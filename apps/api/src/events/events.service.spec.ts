@@ -1,5 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { BookingStatus, BoothStatus, Prisma } from '@prisma/client';
+import {
+  BookingStatus,
+  BoothStatus,
+  EventStatus,
+  Prisma,
+} from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
@@ -8,6 +13,7 @@ const findUnique = jest.fn();
 const findFirst = jest.fn();
 const eventFindMany = jest.fn();
 const eventUpdate = jest.fn();
+const eventUpdateMany = jest.fn();
 const eventDelete = jest.fn();
 const eventCreate = jest.fn();
 const zoneFindMany = jest.fn();
@@ -23,6 +29,7 @@ const mockPrismaService = {
     findFirst,
     findMany: eventFindMany,
     update: eventUpdate,
+    updateMany: eventUpdateMany,
     delete: eventDelete,
     create: eventCreate,
   },
@@ -509,6 +516,87 @@ describe('EventsService', () => {
         data: dto,
       }),
     );
+  });
+
+  it('publishes a draft event within the caller organization', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValue({
+      id: eventId,
+      status: EventStatus.PUBLISHED,
+      venue: { id: 'venue-1', name: 'Convention Center' },
+      subscription: null,
+    });
+
+    await expect(service.publish(eventId, orgId)).resolves.toEqual(
+      expect.objectContaining({
+        id: eventId,
+        status: EventStatus.PUBLISHED,
+      }),
+    );
+    expect(eventUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: eventId,
+        organizationId: orgId,
+        status: EventStatus.DRAFT,
+      },
+      data: { status: EventStatus.PUBLISHED },
+    });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      include: {
+        venue: { select: { id: true, name: true } },
+        subscription: true,
+      },
+    });
+  });
+
+  it('answers 404 when publishing an event outside the caller organization', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 0 });
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.publish(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      select: { status: true },
+    });
+  });
+
+  it('rejects publishing an event that is no longer a draft', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 0 });
+    findFirst.mockResolvedValue({ status: EventStatus.PUBLISHED });
+
+    await expect(service.publish(eventId, orgId)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('allows only one concurrent publish transition to succeed', async () => {
+    eventUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    findFirst
+      .mockResolvedValueOnce({
+        id: eventId,
+        status: EventStatus.PUBLISHED,
+        venue: { id: 'venue-1', name: 'Convention Center' },
+        subscription: null,
+      })
+      .mockResolvedValueOnce({ status: EventStatus.PUBLISHED });
+
+    const results = await Promise.allSettled([
+      service.publish(eventId, orgId),
+      service.publish(eventId, orgId),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(eventUpdateMany).toHaveBeenCalledTimes(2);
   });
 
   it('scopes the delete to the caller organization', async () => {

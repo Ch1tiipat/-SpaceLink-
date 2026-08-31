@@ -16,6 +16,7 @@ import {
   CircleDollarSign,
   Plus,
   RefreshCw,
+  Send,
   Search,
   X,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ import {
   createAdminEvent,
   getAdminOrganizationEvents,
   getAdminVenues,
+  publishAdminEvent,
   quoteAdminEventSubscription,
   type AdminVenue,
   type CreateAdminEventInput,
@@ -70,6 +72,7 @@ export function AdminEventsScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [publishingId, setPublishingId] = useState('');
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !organizationId) return;
@@ -139,6 +142,36 @@ export function AdminEventsScreen() {
   const upcomingCount = events.filter(
     (event) => new Date(event.startDate).getTime() > Date.now(),
   ).length;
+
+  async function publishEvent(event: AdminOrganizationEvent) {
+    if (!token || !organizationId || event.status !== 'DRAFT') return;
+    const confirmed = window.confirm(
+      `ยืนยันเผยแพร่อีเวนต์ “${event.name}” ให้ผู้ขายมองเห็นและเริ่มจองได้หรือไม่?`,
+    );
+    if (!confirmed) return;
+
+    setPublishingId(event.id);
+    setError('');
+    setNotice('');
+    try {
+      const published = await publishAdminEvent(
+        organizationId,
+        event.id,
+        token,
+      );
+      setEvents((current) =>
+        current.map((item) => (item.id === published.id ? published : item)),
+      );
+      setNotice(`เผยแพร่อีเวนต์ “${event.name}” เรียบร้อยแล้ว`);
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'เผยแพร่อีเวนต์ไม่สำเร็จ',
+      );
+    } finally {
+      setPublishingId('');
+    }
+  }
 
   return (
     <AdminAccessGate access={access}>
@@ -305,6 +338,19 @@ export function AdminEventsScreen() {
                         : 'Event เดิม · ไม่มีบิล'}
                     </strong>
                   </div>
+                  {event.status === 'DRAFT' ? (
+                    <button
+                      type="button"
+                      onClick={() => void publishEvent(event)}
+                      disabled={Boolean(publishingId)}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Send className="h-4 w-4" aria-hidden />
+                      {publishingId === event.id
+                        ? 'กำลังเผยแพร่...'
+                        : 'เผยแพร่อีเวนต์'}
+                    </button>
+                  ) : null}
                 </article>
               ))}
             </div>

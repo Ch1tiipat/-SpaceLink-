@@ -1,5 +1,10 @@
-import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import {
+  ForbiddenException,
+  Logger,
+  NotFoundException,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 
 jest.mock('jose', () => ({
@@ -23,17 +28,20 @@ const ORG_ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const findByOrganization = jest.fn();
 const create = jest.fn();
 const quoteSubscription = jest.fn();
+const publish = jest.fn();
 const service = {
   findByOrganization,
   create,
   quoteSubscription,
+  publish,
 } as unknown as EventsService;
 
 function handler(
   name:
     | 'findByOrganization'
     | 'create'
-    | 'quoteSubscription' = 'findByOrganization',
+    | 'quoteSubscription'
+    | 'publish' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     OrganizationEventsController.prototype,
@@ -63,6 +71,7 @@ describe('OrganizationEventsController', () => {
       'findByOrganization',
       'create',
       'quoteSubscription',
+      'publish',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -102,6 +111,29 @@ describe('OrganizationEventsController', () => {
     await controller.findByOrganization(ORGANIZATION_ID);
 
     expect(findByOrganization).toHaveBeenCalledWith(ORGANIZATION_ID);
+  });
+
+  it('publishes only within the guard-resolved organization', async () => {
+    publish.mockResolvedValue({ id: 'event-1', status: 'PUBLISHED' });
+
+    await controller.publish(ORGANIZATION_ID, 'event-1');
+
+    expect(publish).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
+  });
+
+  it('validates the publish event id as a UUID', () => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      OrganizationEventsController,
+      'publish',
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    const eventIdParameter = Object.values(metadata).find(
+      (parameter) => parameter.data === 'eventId',
+    );
+
+    expect(eventIdParameter?.pipes).toEqual(
+      expect.arrayContaining([expect.any(ParseUUIDPipe)]),
+    );
   });
 
   it('answers 404 when an ORG_ADMIN requests another organization', async () => {
