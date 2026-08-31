@@ -23,17 +23,20 @@ const ORG_ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const findByOrganization = jest.fn();
 const create = jest.fn();
 const quoteSubscription = jest.fn();
+const publish = jest.fn();
 const service = {
   findByOrganization,
   create,
   quoteSubscription,
+  publish,
 } as unknown as EventsService;
 
 function handler(
   name:
     | 'findByOrganization'
     | 'create'
-    | 'quoteSubscription' = 'findByOrganization',
+    | 'quoteSubscription'
+    | 'publish' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     OrganizationEventsController.prototype,
@@ -63,6 +66,7 @@ describe('OrganizationEventsController', () => {
       'findByOrganization',
       'create',
       'quoteSubscription',
+      'publish',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -102,6 +106,14 @@ describe('OrganizationEventsController', () => {
     await controller.findByOrganization(ORGANIZATION_ID);
 
     expect(findByOrganization).toHaveBeenCalledWith(ORGANIZATION_ID);
+  });
+
+  it('publishes only within the guard-resolved organization', async () => {
+    publish.mockResolvedValue({ id: 'event-1', status: 'PUBLISHED' });
+
+    await controller.publish(ORGANIZATION_ID, 'event-1');
+
+    expect(publish).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
   });
 
   it('answers 404 when an ORG_ADMIN requests another organization', async () => {

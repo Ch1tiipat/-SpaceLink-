@@ -1304,6 +1304,19 @@ export function createAdminEvent(
   );
 }
 
+export function publishAdminEvent(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return patchJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/publish`,
+    {},
+    { token },
+    "เผยแพร่อีเวนต์ไม่สำเร็จ",
+  );
+}
+
 export function getAdminOrganizationBookings(
   organizationId: string,
   token: string,

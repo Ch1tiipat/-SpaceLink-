@@ -404,6 +404,35 @@ export class EventsService {
     });
   }
 
+  async publish(id: string, orgId: string) {
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { status: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Event not found');
+    }
+    if (existing.status !== EventStatus.DRAFT) {
+      throw new BadRequestException('Only draft events can be published');
+    }
+
+    const event = await this.prisma.event.update({
+      where: { id, organizationId: orgId },
+      data: { status: EventStatus.PUBLISHED },
+      include: {
+        venue: { select: { id: true, name: true } },
+        subscription: true,
+      },
+    });
+
+    return {
+      ...event,
+      subscription: event.subscription
+        ? serializeSubscription(event.subscription)
+        : null,
+    };
+  }
+
   remove(id: string, orgId: string) {
     return this.prisma.event.delete({
       where: { id, organizationId: orgId },

@@ -1,5 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { BookingStatus, BoothStatus, Prisma } from '@prisma/client';
+import {
+  BookingStatus,
+  BoothStatus,
+  EventStatus,
+  Prisma,
+} from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
@@ -509,6 +514,53 @@ describe('EventsService', () => {
         data: dto,
       }),
     );
+  });
+
+  it('publishes a draft event within the caller organization', async () => {
+    findFirst.mockResolvedValue({ status: EventStatus.DRAFT });
+    eventUpdate.mockResolvedValue({
+      id: eventId,
+      status: EventStatus.PUBLISHED,
+      venue: { id: 'venue-1', name: 'Convention Center' },
+      subscription: null,
+    });
+
+    await expect(service.publish(eventId, orgId)).resolves.toEqual(
+      expect.objectContaining({
+        id: eventId,
+        status: EventStatus.PUBLISHED,
+      }),
+    );
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      select: { status: true },
+    });
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      data: { status: EventStatus.PUBLISHED },
+      include: {
+        venue: { select: { id: true, name: true } },
+        subscription: true,
+      },
+    });
+  });
+
+  it('answers 404 when publishing an event outside the caller organization', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.publish(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(eventUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects publishing an event that is no longer a draft', async () => {
+    findFirst.mockResolvedValue({ status: EventStatus.PUBLISHED });
+
+    await expect(service.publish(eventId, orgId)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(eventUpdate).not.toHaveBeenCalled();
   });
 
   it('scopes the delete to the caller organization', async () => {
