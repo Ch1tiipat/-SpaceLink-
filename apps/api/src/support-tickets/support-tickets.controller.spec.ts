@@ -10,7 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SupportTicketsController } from './support-tickets.controller';
 import { SupportTicketsService } from './support-tickets.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
-import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+import {
+  CreateSupportTicketDto,
+  SupportTicketRequestType,
+} from './dto/create-support-ticket.dto';
 
 jest.mock('../auth/guards/supabase-auth.guard', () => ({
   SupabaseAuthGuard: class SupabaseAuthGuard {},
@@ -32,12 +35,15 @@ const CURRENT_USER: User = {
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
 };
 const CREATE_DTO: CreateSupportTicketDto = {
+  requestType: SupportTicketRequestType.QUOTA_INCREASE,
   eventId: '55555555-5555-4555-8555-555555555555',
+  zoneId: '77777777-7777-4777-8777-777777777777',
+  boothId: '88888888-8888-4888-8888-888888888888',
   subject: 'ขอเพิ่มโควตาการจอง',
   message: 'ต้องการจองบูธเพิ่มอีก 1 บูธในงานนี้',
 };
 const APPROVE_DTO: ApproveQuotaExceptionDto = {
-  eventId: CREATE_DTO.eventId,
+  eventId: '55555555-5555-4555-8555-555555555555',
   boothId: '66666666-6666-4666-8666-666666666666',
 };
 

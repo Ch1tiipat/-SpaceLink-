@@ -1,6 +1,8 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  BookingStatus,
+  BoothStatus,
   NotificationType,
   Prisma,
   TicketStatus,
@@ -11,11 +13,15 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportTicketsService } from './support-tickets.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
-import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+import {
+  CreateSupportTicketDto,
+  SupportTicketRequestType,
+} from './dto/create-support-ticket.dto';
 
 const TICKET_ID = '11111111-1111-4111-8111-111111111111';
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const BOOTH_ID = '33333333-3333-4333-8333-333333333333';
+const ZONE_ID = '88888888-8888-4888-8888-888888888888';
 const SHOP_ID = '44444444-4444-4444-8444-444444444444';
 const VENDOR_ID = '55555555-5555-4555-8555-555555555555';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
@@ -23,9 +29,18 @@ const BOOKING_ID = '77777777-7777-4777-8777-777777777777';
 const NOW = new Date('2026-08-02T00:00:00.000Z');
 
 const CREATE_DTO: CreateSupportTicketDto = {
+  requestType: SupportTicketRequestType.QUOTA_INCREASE,
   eventId: EVENT_ID,
+  zoneId: ZONE_ID,
+  boothId: BOOTH_ID,
   subject: 'ขอเพิ่มโควตาการจอง',
   message: 'ต้องการจองบูธเพิ่มอีก 1 บูธในงานนี้',
+};
+const ISSUE_DTO: CreateSupportTicketDto = {
+  requestType: SupportTicketRequestType.ISSUE_REPORT,
+  bookingId: BOOKING_ID,
+  subject: 'พบปัญหาในบูธ',
+  message: 'ไฟฟ้าในบูธใช้งานไม่ได้',
 };
 const APPROVE_DTO: ApproveQuotaExceptionDto = {
   eventId: EVENT_ID,
@@ -50,7 +65,9 @@ const CREATED_BOOKING = {
   boothPrice: '1500',
 };
 
-const eventFindUnique = jest.fn();
+const bookingFindMany = jest.fn();
+const bookingFindFirst = jest.fn();
+const boothFindFirst = jest.fn();
 const supportTicketCreate = jest.fn();
 const supportTicketFindFirst = jest.fn();
 const supportTicketUpdateMany = jest.fn();
@@ -63,7 +80,8 @@ const createForAdmin = jest.fn();
 const createForUser = jest.fn();
 
 const mockPrismaService = {
-  event: { findUnique: eventFindUnique },
+  booking: { findMany: bookingFindMany, findFirst: bookingFindFirst },
+  booth: { findFirst: boothFindFirst },
   supportTicket: {
     create: supportTicketCreate,
     findFirst: supportTicketFindFirst,
@@ -91,7 +109,23 @@ describe('SupportTicketsService', () => {
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
     );
 
-    eventFindUnique.mockResolvedValue({ organizationId: ORGANIZATION_ID });
+    bookingFindMany.mockResolvedValue([
+      {
+        bookingCode: 'BK-ONE',
+        event: { name: 'งานทดสอบ', organizationId: ORGANIZATION_ID },
+        booth: {
+          code: 'A01',
+          zone: { code: 'A', name: 'โซนอาหาร' },
+        },
+      },
+    ]);
+    bookingFindFirst.mockResolvedValue(null);
+    boothFindFirst.mockResolvedValue({
+      id: BOOTH_ID,
+      code: 'A03',
+      widthM: new Prisma.Decimal('3'),
+      heightM: new Prisma.Decimal('2.5'),
+    });
     supportTicketCreate.mockResolvedValue(CREATED_TICKET);
     ticketMessageCreate.mockResolvedValue({ id: 'ticket-message-1' });
     supportTicketFindFirst.mockResolvedValue({
@@ -155,9 +189,49 @@ describe('SupportTicketsService', () => {
       const result = await service.create(CREATE_DTO, VENDOR_ID);
 
       expect(result).toEqual(CREATED_TICKET);
-      expect(eventFindUnique).toHaveBeenCalledWith({
-        where: { id: EVENT_ID },
-        select: { organizationId: true },
+      expect(bookingFindMany).toHaveBeenCalledWith({
+        where: {
+          vendorUserId: VENDOR_ID,
+          eventId: EVENT_ID,
+          status: {
+            in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+          },
+          booth: { zoneId: ZONE_ID },
+        },
+        select: {
+          bookingCode: true,
+          event: { select: { name: true, organizationId: true } },
+          booth: {
+            select: {
+              code: true,
+              zone: { select: { code: true, name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(boothFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: BOOTH_ID,
+          zoneId: ZONE_ID,
+          status: BoothStatus.AVAILABLE,
+        },
+        select: {
+          id: true,
+          code: true,
+          widthM: true,
+          heightM: true,
+        },
+      });
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: {
+          eventId: EVENT_ID,
+          boothId: BOOTH_ID,
+          status: {
+            in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+          },
+        },
+        select: { id: true },
       });
       expect(supportTicketCreate).toHaveBeenCalledWith({
         data: {
@@ -185,7 +259,15 @@ describe('SupportTicketsService', () => {
         data: {
           ticketId: TICKET_ID,
           senderUserId: VENDOR_ID,
-          message: CREATE_DTO.message,
+          message: [
+            'ประเภทคำร้อง: ขอโควต้าบูธเพิ่ม',
+            'งาน: งานทดสอบ',
+            'โซน: โซนอาหาร',
+            'บูธที่ต้องการเพิ่ม: A03 (3 × 2.5 เมตร)',
+            'บูธปัจจุบัน: A01 (BK-ONE)',
+            '',
+            CREATE_DTO.message,
+          ].join('\n'),
         },
       });
       // A ticket with no message would be a request nobody can read, so the two
@@ -202,17 +284,125 @@ describe('SupportTicketsService', () => {
       expect(args.data.userId).toBe(VENDOR_ID);
     });
 
-    it('returns 404 for an unknown event without writing anything', async () => {
-      eventFindUnique.mockResolvedValue(null);
+    it('returns 404 when the vendor has no active booking in that event and zone', async () => {
+      bookingFindMany.mockResolvedValue([]);
 
       await expect(
         service.create(CREATE_DTO, VENDOR_ID),
       ).rejects.toBeInstanceOf(NotFoundException);
       await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
-        'ไม่พบอีเวนต์',
+        'ไม่พบการจองของคุณในงานและโซนที่เลือก',
       );
       expect(supportTicketCreate).not.toHaveBeenCalled();
       expect(ticketMessageCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the requested booth is outside the selected zone', async () => {
+      boothFindFirst.mockResolvedValue(null);
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'ไม่พบบูธที่เลือกในโซนนี้',
+      );
+      expect(supportTicketCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a requested booth that is already actively booked', async () => {
+      bookingFindFirst.mockResolvedValue({ id: BOOKING_ID });
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'บูธที่เลือกไม่ว่างแล้ว กรุณาเลือกบูธอื่น',
+      );
+      expect(supportTicketCreate).not.toHaveBeenCalled();
+    });
+
+    it('links an issue report only to a booking owned by the vendor', async () => {
+      const issueTicket = {
+        ...CREATED_TICKET,
+        bookingId: BOOKING_ID,
+        type: TicketType.ISSUE_REPORT,
+        subject: ISSUE_DTO.subject,
+      };
+      supportTicketCreate.mockResolvedValue(issueTicket);
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        bookingCode: 'BK-ONE',
+        event: { name: 'งานทดสอบ', organizationId: ORGANIZATION_ID },
+        booth: {
+          code: 'A01',
+          zone: { code: 'A', name: 'โซนอาหาร' },
+        },
+      });
+
+      await expect(service.create(ISSUE_DTO, VENDOR_ID)).resolves.toEqual(
+        issueTicket,
+      );
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
+        select: {
+          id: true,
+          bookingCode: true,
+          event: { select: { name: true, organizationId: true } },
+          booth: {
+            select: {
+              code: true,
+              zone: { select: { code: true, name: true } },
+            },
+          },
+        },
+      });
+      const [createArgs] = supportTicketCreate.mock.calls[0] as [
+        {
+          data: {
+            organizationId: string | null;
+            bookingId: string | null;
+            type: TicketType;
+          };
+        },
+      ];
+      expect(createArgs.data).toMatchObject({
+        organizationId: ORGANIZATION_ID,
+        bookingId: BOOKING_ID,
+        type: TicketType.ISSUE_REPORT,
+      });
+    });
+
+    it('opens a general issue without assigning it to an organization', async () => {
+      const generalIssue = { ...ISSUE_DTO, bookingId: undefined };
+      const issueTicket = {
+        ...CREATED_TICKET,
+        organizationId: null,
+        type: TicketType.ISSUE_REPORT,
+        subject: ISSUE_DTO.subject,
+      };
+      supportTicketCreate.mockResolvedValue(issueTicket);
+
+      await service.create(generalIssue, VENDOR_ID);
+
+      expect(bookingFindFirst).not.toHaveBeenCalled();
+      const [createArgs] = supportTicketCreate.mock.calls[0] as [
+        {
+          data: {
+            organizationId: string | null;
+            bookingId: string | null;
+            type: TicketType;
+          };
+        },
+      ];
+      expect(createArgs.data).toMatchObject({
+        organizationId: null,
+        bookingId: null,
+        type: TicketType.ISSUE_REPORT,
+      });
+    });
+
+    it('returns 404 instead of linking an issue to another vendor booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(service.create(ISSUE_DTO, VENDOR_ID)).rejects.toThrow(
+        'ไม่พบการจองที่เลือก',
+      );
+      expect(supportTicketCreate).not.toHaveBeenCalled();
     });
   });
 

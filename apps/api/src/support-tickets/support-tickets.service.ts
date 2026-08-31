@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BookingStatus,
+  BoothStatus,
   NotificationType,
   Prisma,
   TicketStatus,
@@ -14,7 +16,10 @@ import type { BookingResponse } from '../bookings/bookings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
-import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+import {
+  CreateSupportTicketDto,
+  SupportTicketRequestType,
+} from './dto/create-support-ticket.dto';
 
 /**
  * A ticket an admin may still act on. CLOSED is deliberately absent: closing is
@@ -70,17 +75,11 @@ export type SupportTicketOverviewResponse = Prisma.SupportTicketGetPayload<{
 }>;
 
 /**
- * The vendor-facing half of the booking-quota exception: a vendor who has hit
- * the per-event quota (BookingsService, invariant §6.3.6) raises a ticket, and
- * an admin of the organization hosting that event approves it by creating the
- * booking directly.
- *
- * The ticket carries no structured request — `SupportTicket` has no column for
- * an event or a booth and the schema is frozen (§2.1) — so the *approving*
- * admin names the event and booth in `ApproveQuotaExceptionDto`. The ticket's
- * `subject` and first message are how the vendor says which booth they want;
- * the admin reads them and decides. Nothing a vendor sends here picks a booth
- * on its own.
+ * Vendor support covers quota-increase requests and issue reports. A quota
+ * request stays TicketType.OTHER because the frozen enum has no quota member;
+ * its validated event, zone and reference booth context is preserved in the
+ * first message. An issue report uses TicketType.ISSUE_REPORT and may link an
+ * owned booking. Neither path trusts an organization id from the browser.
  */
 @Injectable()
 export class SupportTicketsService {
@@ -90,38 +89,143 @@ export class SupportTicketsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  /**
-   * The organization is taken from the event, never from the vendor's request
-   * (§14.2) — the vendor names an event, and which organization that belongs to
-   * is ours to decide. It is what OrgScopeGuard later resolves the ticket to,
-   * so a vendor cannot raise a ticket into an organization of their choosing.
-   */
+  /** Derives organization and booking context from vendor-owned records. */
   async create(
     createSupportTicketDto: CreateSupportTicketDto,
     vendorUserId: string,
   ): Promise<SupportTicketResponse> {
-    const { eventId, subject, message } = createSupportTicketDto;
+    const { requestType, subject, message } = createSupportTicketDto;
 
     const ticket = await this.prisma.$transaction(async (transaction) => {
-      const event = await transaction.event.findUnique({
-        where: { id: eventId },
-        select: { organizationId: true },
-      });
-      if (!event) {
-        throw new NotFoundException('ไม่พบอีเวนต์');
+      let organizationId: string | null = null;
+      let bookingId: string | null = null;
+      let type: TicketType = TicketType.ISSUE_REPORT;
+      let contextualMessage = message;
+
+      if (requestType === SupportTicketRequestType.QUOTA_INCREASE) {
+        const eventId = createSupportTicketDto.eventId;
+        const zoneId = createSupportTicketDto.zoneId;
+        const boothId = createSupportTicketDto.boothId;
+        if (!eventId || !zoneId || !boothId) {
+          throw new NotFoundException('ไม่พบงาน โซน หรือบูธที่เลือก');
+        }
+
+        const bookings = await transaction.booking.findMany({
+          where: {
+            vendorUserId,
+            eventId,
+            status: {
+              in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+            },
+            booth: { zoneId },
+          },
+          select: {
+            bookingCode: true,
+            event: { select: { name: true, organizationId: true } },
+            booth: {
+              select: {
+                code: true,
+                zone: { select: { code: true, name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (bookings.length === 0) {
+          throw new NotFoundException('ไม่พบการจองของคุณในงานและโซนที่เลือก');
+        }
+
+        const requestedBooth = await transaction.booth.findFirst({
+          where: {
+            id: boothId,
+            zoneId,
+            status: BoothStatus.AVAILABLE,
+          },
+          select: {
+            id: true,
+            code: true,
+            widthM: true,
+            heightM: true,
+          },
+        });
+        if (!requestedBooth) {
+          throw new NotFoundException('ไม่พบบูธที่เลือกในโซนนี้');
+        }
+
+        const occupiedBooking = await transaction.booking.findFirst({
+          where: {
+            eventId,
+            boothId: requestedBooth.id,
+            status: {
+              in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+            },
+          },
+          select: { id: true },
+        });
+        if (occupiedBooking) {
+          throw new ConflictException(
+            'บูธที่เลือกไม่ว่างแล้ว กรุณาเลือกบูธอื่น',
+          );
+        }
+
+        const context = bookings[0];
+        organizationId = context.event.organizationId;
+        type = TicketType.OTHER;
+        contextualMessage = [
+          'ประเภทคำร้อง: ขอโควต้าบูธเพิ่ม',
+          `งาน: ${context.event.name}`,
+          `โซน: ${context.booth.zone.name ?? context.booth.zone.code}`,
+          `บูธที่ต้องการเพิ่ม: ${requestedBooth.code} (${this.formatBoothSize(
+            requestedBooth.widthM,
+            requestedBooth.heightM,
+          )})`,
+          `บูธปัจจุบัน: ${bookings
+            .map((booking) => `${booking.booth.code} (${booking.bookingCode})`)
+            .join(', ')}`,
+          '',
+          message,
+        ].join('\n');
+      } else if (createSupportTicketDto.bookingId) {
+        const booking = await transaction.booking.findFirst({
+          where: {
+            id: createSupportTicketDto.bookingId,
+            vendorUserId,
+          },
+          select: {
+            id: true,
+            bookingCode: true,
+            event: { select: { name: true, organizationId: true } },
+            booth: {
+              select: {
+                code: true,
+                zone: { select: { code: true, name: true } },
+              },
+            },
+          },
+        });
+        if (!booking) {
+          throw new NotFoundException('ไม่พบการจองที่เลือก');
+        }
+
+        organizationId = booking.event.organizationId;
+        bookingId = booking.id;
+        contextualMessage = [
+          'ประเภทคำร้อง: ติดต่อปัญหา',
+          `การจอง: ${booking.bookingCode}`,
+          `งาน: ${booking.event.name}`,
+          `โซน: ${booking.booth.zone.name ?? booking.booth.zone.code}`,
+          `บูธ: ${booking.booth.code}`,
+          '',
+          message,
+        ].join('\n');
       }
 
       const created = await transaction.supportTicket.create({
         data: {
           userId: vendorUserId,
-          organizationId: event.organizationId,
-          // Filled in by approveQuotaException once a booking exists. There is
-          // no booking to link at the moment the vendor asks for one.
-          bookingId: null,
-          // TicketType has no quota-exception member and the schema is frozen
-          // (§2.1), so OTHER is the honest choice — the subject and the first
-          // message carry what this is actually about.
-          type: TicketType.OTHER,
+          organizationId,
+          bookingId,
+          type,
           subject,
           status: TicketStatus.OPEN,
         },
@@ -132,7 +236,7 @@ export class SupportTicketsService {
         data: {
           ticketId: created.id,
           senderUserId: vendorUserId,
-          message,
+          message: contextualMessage,
         },
       });
 
@@ -255,5 +359,14 @@ export class SupportTicketsService {
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
     };
+  }
+
+  private formatBoothSize(
+    widthM: Prisma.Decimal | null,
+    heightM: Prisma.Decimal | null,
+  ): string {
+    return widthM && heightM
+      ? `${widthM.toString()} × ${heightM.toString()} เมตร`
+      : 'ไม่ระบุขนาด';
   }
 }

@@ -249,11 +249,21 @@ export type SupportTicketRecord = {
   updatedAt: string;
 };
 
-export type CreateSupportTicketInput = {
-  eventId: string;
-  subject: string;
-  message: string;
-};
+export type CreateSupportTicketInput =
+  | {
+      requestType: "QUOTA_INCREASE";
+      eventId: string;
+      zoneId: string;
+      boothId: string;
+      subject: string;
+      message: string;
+    }
+  | {
+      requestType: "ISSUE_REPORT";
+      bookingId?: string;
+      subject: string;
+      message: string;
+    };
 
 export type ApproveQuotaExceptionInput = {
   eventId: string;
@@ -643,6 +653,8 @@ export type AdminBooth = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type BoothOption = AdminBooth;
 
 export type SaveZoneInput = {
   code: string;
@@ -1035,6 +1047,16 @@ export function getAdminBooths(
     signal,
     token,
   });
+}
+
+export function getBooths(
+  zoneId: string,
+  signal?: AbortSignal,
+): Promise<BoothOption[]> {
+  return getJson<BoothOption[]>(
+    "/booths?zoneId=" + encodeURIComponent(zoneId),
+    { signal },
+  );
 }
 
 export function createAdminBooth(
@@ -1769,7 +1791,7 @@ export function confirmExemptBooking(
   );
 }
 
-/** Opens a quota-exception request for the organization that owns the event. */
+/** Opens a vendor request; the API derives every organization from owned data. */
 export function createSupportTicket(
   input: CreateSupportTicketInput,
   token: string,
@@ -1777,13 +1799,23 @@ export function createSupportTicket(
 ): Promise<SupportTicketRecord> {
   return postJson<SupportTicketRecord>(
     "/support-tickets",
-    {
-      eventId: input.eventId.trim(),
-      subject: input.subject.trim(),
-      message: input.message.trim(),
-    },
+    input.requestType === "QUOTA_INCREASE"
+      ? {
+          requestType: input.requestType,
+          eventId: input.eventId.trim(),
+          zoneId: input.zoneId.trim(),
+          boothId: input.boothId.trim(),
+          subject: input.subject.trim(),
+          message: input.message.trim(),
+        }
+      : {
+          requestType: input.requestType,
+          bookingId: input.bookingId?.trim() || undefined,
+          subject: input.subject.trim(),
+          message: input.message.trim(),
+        },
     { signal, token },
-    "ไม่สามารถส่งคำร้องขอเพิ่มโควตาได้",
+    "ไม่สามารถส่งคำร้องได้",
   );
 }
 
