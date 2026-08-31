@@ -46,19 +46,22 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31)
 
-The Prisma schema remains frozen except for these three additive changes:
+The Prisma schema remains frozen except for these four additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
 - SCRUM-130: add the `Shop.logoUpdatedAt` field (`DateTime? @map("logo_updated_at") @db.Timestamptz`)
   to the existing `Shop` model, to support the shop-logo-change cooldown (one change per 168 hours).
+- SCRUM-137: add the `OrgMembership.canEditQuota` field (`Boolean @default(false) @map("can_edit_quota")`)
+  to the existing `OrgMembership` model, so a Super Admin can delegate booking-quota-edit permission
+  to a specific Org Admin within a specific organization.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the three tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the four tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 
