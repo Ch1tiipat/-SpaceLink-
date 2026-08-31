@@ -252,6 +252,15 @@ const ADMIN_NAV_GROUP: NavGroup = {
   ],
 };
 
+const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
+  ...NAV_GROUPS[1],
+  items: NAV_GROUPS[1].items.map((item) =>
+    item.kind === "link" && item.href === "/help"
+      ? { ...item, label: "ส่งคำร้องถึง Super Admin" }
+      : item,
+  ),
+};
+
 /** Below `lg` the sidebar is replaced by this bar, so it repeats its items. */
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
@@ -437,7 +446,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const hasPrivateNavigation = auth.status === "signed-in";
   const navGroups = isAdmin
-    ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, NAV_GROUPS[1]]
+    ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, ADMIN_MY_SPACE_NAV_GROUP]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
     ? [NAV_GROUPS[0].items[0], ...ADMIN_NAV_GROUP.items, BOTTOM_NAV[2]]

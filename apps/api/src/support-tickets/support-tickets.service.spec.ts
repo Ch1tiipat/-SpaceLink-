@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BookingStatus,
@@ -24,6 +28,7 @@ const BOOTH_ID = '33333333-3333-4333-8333-333333333333';
 const ZONE_ID = '88888888-8888-4888-8888-888888888888';
 const SHOP_ID = '44444444-4444-4444-8444-444444444444';
 const VENDOR_ID = '55555555-5555-4555-8555-555555555555';
+const ADMIN_ID = '99999999-9999-4999-8999-999999999999';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
 const BOOKING_ID = '77777777-7777-4777-8777-777777777777';
 const NOW = new Date('2026-08-02T00:00:00.000Z');
@@ -41,6 +46,11 @@ const ISSUE_DTO: CreateSupportTicketDto = {
   bookingId: BOOKING_ID,
   subject: 'พบปัญหาในบูธ',
   message: 'ไฟฟ้าในบูธใช้งานไม่ได้',
+};
+const ADMIN_ISSUE_DTO: CreateSupportTicketDto = {
+  requestType: SupportTicketRequestType.ISSUE_REPORT,
+  subject: 'ขอความช่วยเหลือจาก Super Admin',
+  message: 'กรุณาตรวจสอบการตั้งค่าขององค์กร',
 };
 const APPROVE_DTO: ApproveQuotaExceptionDto = {
   eventId: EVENT_ID,
@@ -403,6 +413,64 @@ describe('SupportTicketsService', () => {
         'ไม่พบการจองที่เลือก',
       );
       expect(supportTicketCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createForOrganizationAdmin', () => {
+    it('creates a ticket for the guard-resolved organization', async () => {
+      const adminTicket = {
+        ...CREATED_TICKET,
+        userId: ADMIN_ID,
+        organizationId: ORGANIZATION_ID,
+        type: TicketType.ISSUE_REPORT,
+        subject: ADMIN_ISSUE_DTO.subject,
+      };
+      supportTicketCreate.mockResolvedValue(adminTicket);
+
+      await expect(
+        service.createForOrganizationAdmin(
+          ADMIN_ISSUE_DTO,
+          ADMIN_ID,
+          ORGANIZATION_ID,
+        ),
+      ).resolves.toEqual(adminTicket);
+
+      expect(supportTicketCreate).toHaveBeenCalledWith({
+        data: {
+          userId: ADMIN_ID,
+          organizationId: ORGANIZATION_ID,
+          bookingId: null,
+          type: TicketType.ISSUE_REPORT,
+          subject: ADMIN_ISSUE_DTO.subject,
+          status: TicketStatus.OPEN,
+        },
+        select: expect.any(Object) as object,
+      });
+      expect(ticketMessageCreate).toHaveBeenCalledWith({
+        data: {
+          ticketId: TICKET_ID,
+          senderUserId: ADMIN_ID,
+          message: [
+            'ประเภทคำร้อง: คำร้องจากผู้ดูแลองค์กรถึง Super Admin',
+            '',
+            ADMIN_ISSUE_DTO.message,
+          ].join('\n'),
+        },
+      });
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects the vendor-only quota request type', async () => {
+      await expect(
+        service.createForOrganizationAdmin(
+          CREATE_DTO,
+          ADMIN_ID,
+          ORGANIZATION_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(supportTicketCreate).not.toHaveBeenCalled();
+      expect(ticketMessageCreate).not.toHaveBeenCalled();
     });
   });
 
