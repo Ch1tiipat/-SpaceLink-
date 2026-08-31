@@ -1,4 +1,4 @@
-import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotificationType,
@@ -54,6 +54,7 @@ const eventFindUnique = jest.fn();
 const supportTicketCreate = jest.fn();
 const supportTicketFindFirst = jest.fn();
 const supportTicketUpdateMany = jest.fn();
+const supportTicketUpdate = jest.fn();
 const supportTicketFindMany = jest.fn();
 const ticketMessageCreate = jest.fn();
 const shopFindFirst = jest.fn();
@@ -67,6 +68,7 @@ const mockPrismaService = {
     create: supportTicketCreate,
     findFirst: supportTicketFindFirst,
     updateMany: supportTicketUpdateMany,
+    update: supportTicketUpdate,
     findMany: supportTicketFindMany,
   },
   ticketMessage: { create: ticketMessageCreate },
@@ -98,6 +100,7 @@ describe('SupportTicketsService', () => {
       status: TicketStatus.OPEN,
     });
     supportTicketUpdateMany.mockResolvedValue({ count: 1 });
+    supportTicketUpdate.mockResolvedValue({ id: TICKET_ID });
     shopFindFirst.mockResolvedValue({ id: SHOP_ID });
     createForAdmin.mockResolvedValue(CREATED_BOOKING);
     createForUser.mockResolvedValue(null);
@@ -214,7 +217,7 @@ describe('SupportTicketsService', () => {
   });
 
   describe('approveQuotaException', () => {
-    it('creates the booking for the ticket owner and closes the ticket', async () => {
+    it('claims the ticket, creates the booking, and links it before notifying', async () => {
       const result = await service.approveQuotaException(
         TICKET_ID,
         APPROVE_DTO,
@@ -229,6 +232,14 @@ describe('SupportTicketsService', () => {
         where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
         select: { id: true, userId: true, status: true },
       });
+      expect(supportTicketUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: TICKET_ID,
+          organizationId: ORGANIZATION_ID,
+          status: { in: [TicketStatus.OPEN, TicketStatus.PROCESSING] },
+        },
+        data: { status: TicketStatus.CLOSED },
+      });
       // The shop belongs to the ticket owner, not to the approving admin.
       expect(shopFindFirst).toHaveBeenCalledWith({
         where: { ownerUserId: VENDOR_ID },
@@ -237,7 +248,12 @@ describe('SupportTicketsService', () => {
       expect(createForAdmin).toHaveBeenCalledWith(
         { eventId: EVENT_ID, boothId: BOOTH_ID, shopId: SHOP_ID },
         VENDOR_ID,
+        ORGANIZATION_ID,
       );
+      expect(supportTicketUpdate).toHaveBeenCalledWith({
+        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
+        data: { bookingId: BOOKING_ID },
+      });
       expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
         type: NotificationType.SUPPORT_TICKET,
         title: 'คำร้องขอยกเว้นโควตาได้รับการอนุมัติแล้ว',
@@ -246,29 +262,17 @@ describe('SupportTicketsService', () => {
         relatedEntityId: TICKET_ID,
       });
       expect(supportTicketUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
+        shopFindFirst.mock.invocationCallOrder[0],
+      );
+      expect(shopFindFirst.mock.invocationCallOrder[0]).toBeLessThan(
+        createForAdmin.mock.invocationCallOrder[0],
+      );
+      expect(createForAdmin.mock.invocationCallOrder[0]).toBeLessThan(
+        supportTicketUpdate.mock.invocationCallOrder[0],
+      );
+      expect(supportTicketUpdate.mock.invocationCallOrder[0]).toBeLessThan(
         createForUser.mock.invocationCallOrder[0],
       );
-    });
-
-    // The status sits in the `where`, not only in the guard above it: two
-    // admins approving at once must not both close the same ticket.
-    it('closes the ticket only while it is still actionable', async () => {
-      await service.approveQuotaException(
-        TICKET_ID,
-        APPROVE_DTO,
-        ORGANIZATION_ID,
-      );
-
-      expect(supportTicketUpdateMany).toHaveBeenCalledWith({
-        where: {
-          id: TICKET_ID,
-          status: { in: [TicketStatus.OPEN, TicketStatus.PROCESSING] },
-        },
-        data: {
-          status: TicketStatus.CLOSED,
-          bookingId: BOOKING_ID,
-        },
-      });
     });
 
     it('approves a ticket that is already being processed', async () => {
@@ -295,6 +299,7 @@ describe('SupportTicketsService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
       expect(createForAdmin).not.toHaveBeenCalled();
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(supportTicketUpdate).not.toHaveBeenCalled();
       expect(createForUser).not.toHaveBeenCalled();
     });
 
@@ -304,49 +309,74 @@ describe('SupportTicketsService', () => {
       await expect(
         service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
       ).rejects.toBeInstanceOf(NotFoundException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(supportTicketUpdate).not.toHaveBeenCalled();
       expect(createForAdmin).not.toHaveBeenCalled();
     });
 
-    it('returns 404 when the ticket owner still has no shop', async () => {
+    it('restores the open ticket when its owner still has no shop', async () => {
       shopFindFirst.mockResolvedValue(null);
 
       await expect(
         service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
       ).rejects.toThrow('ไม่พบร้านค้าของผู้ใช้');
       expect(createForAdmin).not.toHaveBeenCalled();
-      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(supportTicketUpdate).toHaveBeenCalledWith({
+        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
+        data: { status: TicketStatus.OPEN },
+      });
       expect(createForUser).not.toHaveBeenCalled();
     });
 
     // Booth conflicts, an unbookable event and a missing booth are all decided
     // by BookingsService. Nothing here rewrites them into a different answer.
-    it('lets a booking failure propagate and leaves the ticket open', async () => {
-      createForAdmin.mockRejectedValue(
-        new ConflictException('บูธนี้ถูกจองไปแล้ว'),
-      );
+    it('restores the original status and rethrows the booking error unchanged', async () => {
+      const bookingError = new ConflictException('บูธนี้ถูกจองไปแล้ว');
+      supportTicketFindFirst.mockResolvedValue({
+        id: TICKET_ID,
+        userId: VENDOR_ID,
+        status: TicketStatus.PROCESSING,
+      });
+      createForAdmin.mockRejectedValue(bookingError);
 
       await expect(
         service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-      ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
-      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      ).rejects.toBe(bookingError);
+      expect(supportTicketUpdate).toHaveBeenCalledWith({
+        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
+        data: { status: TicketStatus.PROCESSING },
+      });
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
-    // Losing the close race does not un-create a committed booking: the admin
-    // is told which booking exists, and the divergence is logged for a human.
-    it('returns the booking and warns when another approval closed first', async () => {
-      const warn = jest
-        .spyOn(Logger.prototype, 'warn')
-        .mockImplementation(() => undefined);
-      supportTicketUpdateMany.mockResolvedValue({ count: 0 });
+    it('allows only one concurrent approval to create a booking', async () => {
+      supportTicketUpdateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
 
-      await expect(
+      const [winner, loser] = await Promise.allSettled([
         service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-      ).resolves.toEqual(CREATED_BOOKING);
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(BOOKING_ID) as string,
-      );
+        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
+      ]);
 
-      warn.mockRestore();
+      expect(winner.status).toBe('fulfilled');
+      if (winner.status === 'fulfilled') {
+        expect(winner.value).toEqual(CREATED_BOOKING);
+      }
+      expect(loser.status).toBe('rejected');
+      if (loser.status === 'rejected') {
+        expect(loser.reason).toBeInstanceOf(ConflictException);
+        expect(loser.reason).toMatchObject({
+          message: 'คำร้องนี้ถูกปิดไปแล้ว',
+        });
+      }
+      expect(shopFindFirst).toHaveBeenCalledTimes(1);
+      expect(createForAdmin).toHaveBeenCalledTimes(1);
+      expect(supportTicketUpdate).toHaveBeenCalledTimes(1);
+      expect(createForUser).toHaveBeenCalledTimes(1);
+      expect(supportTicketUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { bookingId: BOOKING_ID } }),
+      );
     });
   });
 });

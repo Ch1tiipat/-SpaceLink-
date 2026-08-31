@@ -19,10 +19,12 @@ type CaughtPrismaError =
 /**
  * Turns Prisma errors into ordinary HTTP responses.
  *
- * Prisma's own message names the table, column, and constraint that failed
- * (AGENTS.md §14.5) — it is logged, never sent. The client gets a fixed string
- * built by the matching Nest exception class, so the body is identical in shape
- * to every other error the API returns: { statusCode, message, error }.
+ * Prisma's own message can name tables, columns, constraints, and connection
+ * details (AGENTS.md §14.3, §14.5), so logs contain only the error type, the
+ * known Prisma code when one exists, and the resulting HTTP status. The client
+ * gets a fixed string built by the matching Nest exception class, so the body
+ * is identical in shape to every other error the API returns:
+ * { statusCode, message, error }.
  *
  * Only the two Prisma classes below are caught; everything else keeps falling
  * through to Nest's default handler.
@@ -37,10 +39,14 @@ export class PrismaExceptionFilter implements ExceptionFilter {
   catch(exception: CaughtPrismaError, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
     const httpException = this.toHttpException(exception);
+    const prismaCode =
+      exception instanceof Prisma.PrismaClientKnownRequestError
+        ? `; code=${exception.code}`
+        : '';
 
     this.logger.error(
-      `Prisma error -> HTTP ${httpException.getStatus()}: ${exception.message}`,
-      exception.stack,
+      `Prisma error -> HTTP ${httpException.getStatus()}; ` +
+        `type=${exception.constructor.name}${prismaCode}`,
     );
 
     response
