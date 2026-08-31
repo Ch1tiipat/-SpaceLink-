@@ -507,7 +507,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }`}
           >
             {children}
-            {!isAdminRoute ? <UserFooter /> : null}
+            {!isAdminRoute ? <UserFooter auth={auth} /> : null}
           </div>
         </div>
       </div>
@@ -2020,7 +2020,7 @@ function findRecommendedBooth(eventMap: EventMap | null, boothId: string) {
   return null;
 }
 
-function UserFooter() {
+function UserFooter({ auth }: { auth: AuthState }) {
   return (
     <footer
       className="border-t border-white/10 bg-[#211b2f] text-white"
@@ -2056,7 +2056,11 @@ function UserFooter() {
           <FooterColumn title="บริการช่วยเหลือ">
             <Link href="/help">ศูนย์ช่วยเหลือ</Link>
             <Link href="/notifications">การแจ้งเตือน</Link>
-            <Link href="/login">เข้าสู่ระบบ</Link>
+            {auth.status === "signed-in" ? (
+              <Link href="/profile">โปรไฟล์ของฉัน</Link>
+            ) : auth.status === "signed-out" ? (
+              <Link href="/login">เข้าสู่ระบบ</Link>
+            ) : null}
           </FooterColumn>
 
           <FooterColumn title="ติดต่อ SpaceLink">

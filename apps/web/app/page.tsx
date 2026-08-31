@@ -278,12 +278,17 @@ export default function DiscoveryPage() {
             }}
             options={withAllOption(filters.categories, "ทุกหมวดสินค้า")}
           />
-          <button
-            type="submit"
-            className="sl-action-primary min-h-[45px] self-end whitespace-nowrap px-6 max-lg:w-full"
-          >
-            ค้นหา Event
-          </button>
+          <div className="min-w-0">
+            <span aria-hidden className="mb-1.5 block text-sm font-bold uppercase tracking-[.12em] opacity-0">
+              ค้นหา
+            </span>
+            <button
+              type="submit"
+              className="sl-action-primary min-h-[45px] w-full whitespace-nowrap px-6"
+            >
+              ค้นหา Event
+            </button>
+          </div>
         </form>
       </section>
 

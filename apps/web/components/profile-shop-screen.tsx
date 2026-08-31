@@ -620,8 +620,8 @@ function PushNotificationCard({ token }: { token: string }) {
         </p>
       ) : null}
       {availability === 'unconfigured' ? (
-        <p role="alert" className="mt-3 text-sm text-[#b42318]">
-          ระบบยังไม่ได้ตั้งค่ากุญแจ Web Push กรุณาแจ้งผู้ดูแลระบบ
+        <p role="status" className="mt-3 text-sm text-muted">
+          การแจ้งเตือนบนอุปกรณ์ยังไม่พร้อมใช้งาน
         </p>
       ) : null}
       {message ? (

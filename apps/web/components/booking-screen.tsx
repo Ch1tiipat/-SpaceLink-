@@ -616,7 +616,12 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 {vendor.status === 'ready' && shop && (
                   <div className="mt-2 flex items-center gap-3">
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#8b5cf6,#6831d0)] text-sm font-black text-white">{shop.name.trim().charAt(0) || 'S'}</span>
-                    <div className="min-w-0"><b className="block truncate text-sm">{shop.name}</b><small className="mt-1 block truncate text-xs text-muted">{shop.categories.map((category) => category.name).join(' · ') || 'ยังไม่ระบุหมวดสินค้า'}</small><code className="mt-1 block truncate text-xs text-[#9a8fa0]">{shop.id}</code></div>
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{shop.name}</b>
+                      <small className="mt-1 block truncate text-xs text-muted">
+                        {shop.categories.map((category) => category.name).join(' · ') || 'ยังไม่ระบุหมวดสินค้า'}
+                      </small>
+                    </div>
                   </div>
                 )}
               </section>
