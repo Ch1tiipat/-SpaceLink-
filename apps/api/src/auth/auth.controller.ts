@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { getShopLogoAvailableAt } from '../shops/shops.service';
 import { toUserResponse } from '../users/user-response';
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
 
@@ -25,6 +26,7 @@ export class AuthController {
           name: true,
           description: true,
           logoUrl: true,
+          logoUpdatedAt: true,
           categories: {
             select: {
               category: { select: { id: true, name: true } },
@@ -54,6 +56,7 @@ export class AuthController {
         name: shop.name,
         description: shop.description,
         logoUrl: shop.logoUrl,
+        logoAvailableAt: getShopLogoAvailableAt(shop.logoUpdatedAt),
         categories: shop.categories.map(({ category }) => category),
       })),
       organizations: memberships.map(({ role, organization }) => ({

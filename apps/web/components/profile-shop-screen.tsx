@@ -53,6 +53,16 @@ const THAI_PHONE_PATTERN = /^0\d{8,9}$/;
 const MAX_LOGO_FILE_SIZE = 2 * 1024 * 1024;
 const MAX_LOGO_DIMENSION = 2000;
 const ACCEPTED_LOGO_TYPES = new Set(['image/jpeg', 'image/png']);
+const BANGKOK_LOGO_DATE_FORMATTER = new Intl.DateTimeFormat('th-TH', {
+  timeZone: 'Asia/Bangkok',
+  dateStyle: 'long',
+});
+const BANGKOK_LOGO_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
+  timeZone: 'Asia/Bangkok',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
 
 /**
  * Resolves `null` when the bytes cannot be decoded as an image — the same
@@ -656,6 +666,31 @@ function ShopLogoUploader({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [logoAvailableAt, setLogoAvailableAt] = useState<string | null>(
+    shop.logoAvailableAt ?? null,
+  );
+
+  useEffect(() => {
+    setLogoAvailableAt(shop.logoAvailableAt ?? null);
+  }, [shop.logoAvailableAt]);
+
+  // Keep a page left open across the deadline usable without requiring a
+  // refresh. The deadline itself still comes from the API, not the browser.
+  useEffect(() => {
+    if (!logoAvailableAt) return;
+
+    const remainingMs = Date.parse(logoAvailableAt) - Date.now();
+    if (remainingMs <= 0) {
+      setLogoAvailableAt(null);
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => setLogoAvailableAt(null),
+      remainingMs,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [logoAvailableAt]);
 
   // Revoked on the way out: an object URL pins the whole file in memory until
   // it is released, and a vendor may pick several before settling on one.
@@ -680,6 +715,11 @@ function ShopLogoUploader({
     const input = event.target;
     const selected = input.files?.[0] ?? null;
     setError(null);
+
+    if (logoAvailableAt && Date.parse(logoAvailableAt) > Date.now()) {
+      reject('ยังไม่ครบกำหนด 7 วันสำหรับการเปลี่ยนโลโก้ร้าน', input);
+      return;
+    }
 
     if (!selected) {
       setFile(null);
@@ -721,8 +761,12 @@ function ShopLogoUploader({
     setError(null);
 
     try {
-      await uploadShopLogo(file, token);
+      const updatedShop = await uploadShopLogo(file, token);
+      setLogoAvailableAt(updatedShop.logoAvailableAt ?? null);
     } catch (cause) {
+      if (cause instanceof ApiError && cause.availableAt) {
+        setLogoAvailableAt(cause.availableAt);
+      }
       setError(
         cause instanceof ApiError
           ? cause.message
@@ -743,6 +787,13 @@ function ShopLogoUploader({
   }
 
   const shownLogoUrl = previewUrl ?? shop.logoUrl;
+  const cooldownDate = logoAvailableAt ? new Date(logoAvailableAt) : null;
+  const isCooldownActive = Boolean(
+    cooldownDate &&
+    !Number.isNaN(cooldownDate.getTime()) &&
+    cooldownDate.getTime() > Date.now(),
+  );
+  const logoControlsDisabled = isUploading || isCooldownActive;
 
   return (
     <div className="relative">
@@ -771,7 +822,12 @@ function ShopLogoUploader({
       <div className="mt-3">
         <label
           htmlFor="shop-logo"
-          className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-bold text-violet"
+          aria-disabled={logoControlsDisabled}
+          className={`inline-flex items-center gap-1.5 text-[13px] font-bold ${
+            logoControlsDisabled
+              ? 'cursor-not-allowed text-muted'
+              : 'cursor-pointer text-violet'
+          }`}
         >
           <ImageUp aria-hidden className="h-4 w-4" strokeWidth={2} />
           {shop.logoUrl ? 'เปลี่ยนโลโก้' : 'เพิ่มโลโก้ร้าน'}
@@ -781,7 +837,7 @@ function ShopLogoUploader({
           id="shop-logo"
           type="file"
           accept="image/jpeg,image/png"
-          disabled={isUploading}
+          disabled={logoControlsDisabled}
           onChange={handleFileChange}
           className="mt-2 block w-full text-base text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-[#ede7ff] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
         />
@@ -789,6 +845,13 @@ function ShopLogoUploader({
           JPEG หรือ PNG ไม่เกิน 2 MB และไม่เกิน {MAX_LOGO_DIMENSION}×
           {MAX_LOGO_DIMENSION} พิกเซล
         </p>
+        {isCooldownActive && cooldownDate && (
+          <p className="mt-2 rounded-xl bg-[#f4f0ff] px-3 py-2 text-left text-sm font-bold leading-5 text-violet">
+            เปลี่ยนโลโก้ได้อีกครั้งวันที่{' '}
+            {BANGKOK_LOGO_DATE_FORMATTER.format(cooldownDate)} เวลา{' '}
+            {BANGKOK_LOGO_TIME_FORMATTER.format(cooldownDate)} น.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -804,7 +867,7 @@ function ShopLogoUploader({
         <button
           type="button"
           onClick={handleUpload}
-          disabled={isUploading}
+          disabled={logoControlsDisabled}
           className="mt-2.5 w-full rounded-xl bg-violet px-4 py-2 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {isUploading ? 'กำลังอัปโหลด…' : 'บันทึกโลโก้'}

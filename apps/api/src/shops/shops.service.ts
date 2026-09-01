@@ -23,6 +23,7 @@ const shopSelect = {
   name: true,
   description: true,
   logoUrl: true,
+  logoUpdatedAt: true,
   categories: {
     select: {
       category: { select: { id: true, name: true } },
@@ -37,7 +38,21 @@ export interface ShopResponse {
   name: string;
   description: string | null;
   logoUrl: string | null;
+  logoAvailableAt: string | null;
   categories: { id: string; name: string }[];
+}
+
+export const SHOP_LOGO_COOLDOWN_MS = 168 * 60 * 60 * 1_000;
+
+/** The API is authoritative for the next permitted logo-change time. */
+export function getShopLogoAvailableAt(
+  logoUpdatedAt: Date | null,
+): string | null {
+  if (!logoUpdatedAt) return null;
+
+  return new Date(
+    logoUpdatedAt.getTime() + SHOP_LOGO_COOLDOWN_MS,
+  ).toISOString();
 }
 
 @Injectable()
@@ -136,34 +151,49 @@ export class ShopsService {
   }
 
   /**
-   * Resolve, upload, then persist — one method rather than a storage step and a
-   * separate write, because the object path needs the `shopId` that resolving
-   * already found. Same shape as `BookingsService.uploadSlip`.
-   *
-   * No transaction: the upload is a network call to Supabase Storage and cannot
-   * be rolled back, so wrapping the write in one would only hold a connection
-   * open across it. A stored object whose row never got its URL is harmless —
-   * the next upload overwrites the same path (§14.4: the server names it).
+   * The row lock serializes logo changes for one shop. The storage call stays
+   * inside this transaction deliberately: if it fails, `logoUpdatedAt` remains
+   * unchanged; if two requests race, the second waits and then sees the first
+   * request's timestamp before it can touch Storage.
    */
   async uploadLogo(
     file: UploadedShopLogoFile,
     ownerUserId: string,
   ): Promise<ShopResponse> {
-    const existing = await this.prisma.shop.findFirst({
-      where: { ownerUserId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
-    }
+    const shop = await this.prisma.$transaction(
+      async (transaction) => {
+        const [existing] = await transaction.$queryRaw<
+          { id: string; logoUpdatedAt: Date | null }[]
+        >`
+          SELECT shop_id AS "id", logo_updated_at AS "logoUpdatedAt"
+          FROM shop
+          WHERE owner_user_id = ${ownerUserId}::uuid
+          ORDER BY created_at ASC, shop_id ASC
+          LIMIT 1
+          FOR UPDATE
+        `;
+        if (!existing) {
+          throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
+        }
 
-    const logoUrl = await this.logoStorage.uploadForShop(file, existing.id);
+        const availableAt = getShopLogoAvailableAt(existing.logoUpdatedAt);
+        if (availableAt && Date.now() < Date.parse(availableAt)) {
+          throw new ConflictException({
+            message: 'เปลี่ยนโลโก้ร้านได้อีกครั้งเมื่อครบ 7 วัน',
+            availableAt,
+          });
+        }
 
-    const shop = await this.prisma.shop.update({
-      where: { id: existing.id },
-      data: { logoUrl },
-      select: shopSelect,
-    });
+        const logoUrl = await this.logoStorage.uploadForShop(file, existing.id);
+
+        return transaction.shop.update({
+          where: { id: existing.id },
+          data: { logoUrl, logoUpdatedAt: new Date() },
+          select: shopSelect,
+        });
+      },
+      { timeout: 15_000 },
+    );
 
     return this.toResponse(shop);
   }
@@ -194,6 +224,7 @@ export class ShopsService {
       name: shop.name,
       description: shop.description,
       logoUrl: shop.logoUrl,
+      logoAvailableAt: getShopLogoAvailableAt(shop.logoUpdatedAt),
       categories: shop.categories.map(({ category }) => category),
     };
   }

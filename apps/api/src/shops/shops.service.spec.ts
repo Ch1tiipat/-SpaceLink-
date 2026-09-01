@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
 import { ShopLogoStorageService } from './shop-logo-storage.service';
-import { ShopsService } from './shops.service';
+import { SHOP_LOGO_COOLDOWN_MS, ShopsService } from './shops.service';
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const SHOP_ID = '22222222-2222-4222-8222-222222222222';
@@ -19,6 +19,7 @@ const OTHER_CATEGORY_ID = '44444444-4444-4444-8444-444444444444';
 const MISSING_CATEGORY_ID = '55555555-5555-4555-8555-555555555555';
 const LOGO_URL = `https://project.supabase.co/storage/v1/object/public/shop-logos/${SHOP_ID}/logo?v=1760000000000`;
 const LOGO_FILE = { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
+const LOGO_CHANGED_AT = new Date('2026-09-01T02:00:00.000Z');
 
 const CREATE_DTO: CreateShopDto = {
   name: 'ร้านขนมไทย',
@@ -31,6 +32,7 @@ const SHOP_RECORD = {
   name: 'ร้านขนมไทย',
   description: 'ขนมไทยโบราณ',
   logoUrl: null,
+  logoUpdatedAt: null,
   categories: [{ category: { id: CATEGORY_ID, name: 'อาหารและเครื่องดื่ม' } }],
 };
 
@@ -39,6 +41,7 @@ const SHOP_RESPONSE = {
   name: 'ร้านขนมไทย',
   description: 'ขนมไทยโบราณ',
   logoUrl: null,
+  logoAvailableAt: null,
   categories: [{ id: CATEGORY_ID, name: 'อาหารและเครื่องดื่ม' }],
 };
 
@@ -49,6 +52,7 @@ const shopCategoryDeleteMany = jest.fn();
 const shopCategoryCreateMany = jest.fn();
 const productCategoryCount = jest.fn();
 const prismaTransaction = jest.fn();
+const queryRaw = jest.fn();
 const uploadForShop = jest.fn();
 
 const mockPrismaService = {
@@ -63,6 +67,7 @@ const mockPrismaService = {
   },
   productCategory: { count: productCategoryCount },
   $transaction: prismaTransaction,
+  $queryRaw: queryRaw,
 };
 
 const mockLogoStorage = { uploadForShop };
@@ -84,6 +89,7 @@ describe('ShopsService', () => {
     shopCategoryDeleteMany.mockResolvedValue({ count: 1 });
     shopCategoryCreateMany.mockResolvedValue({ count: 1 });
     productCategoryCount.mockResolvedValue(1);
+    queryRaw.mockResolvedValue([]);
     uploadForShop.mockResolvedValue(LOGO_URL);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -224,6 +230,25 @@ describe('ShopsService', () => {
       expect(productCategoryCount).not.toHaveBeenCalled();
     });
 
+    it('does not reset the logo cooldown when shop metadata changes', async () => {
+      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+
+      await service.updateMe(
+        { name: 'ชื่อใหม่', description: 'คำอธิบายใหม่' },
+        OWNER_ID,
+      );
+
+      expect(shopUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { name: 'ชื่อใหม่', description: 'คำอธิบายใหม่' },
+        }),
+      );
+      const [updateArgs] = shopUpdate.mock.calls[0] as [
+        { data: Prisma.ShopUpdateInput },
+      ];
+      expect(updateArgs.data).not.toHaveProperty('logoUpdatedAt');
+    });
+
     it('replaces the category rows wholesale when categoryIds is sent', async () => {
       shopFindFirst.mockResolvedValue({ id: SHOP_ID });
       productCategoryCount.mockResolvedValue(2);
@@ -266,7 +291,7 @@ describe('ShopsService', () => {
 
   describe('uploadLogo', () => {
     it('returns 404 when the user has no shop, without touching storage', async () => {
-      shopFindFirst.mockResolvedValue(null);
+      queryRaw.mockResolvedValue([]);
 
       await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).rejects.toThrow(
         new NotFoundException('ไม่พบร้านค้าของผู้ใช้'),
@@ -280,35 +305,85 @@ describe('ShopsService', () => {
      * ownerUserId lookup — never from anything the client sent (§14.2).
      */
     it('names the object with the shop resolved from the authenticated user', async () => {
-      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+      queryRaw.mockResolvedValue([{ id: SHOP_ID, logoUpdatedAt: null }]);
 
       await service.uploadLogo(LOGO_FILE, OWNER_ID);
 
-      expect(shopFindFirst).toHaveBeenCalledWith({
-        where: { ownerUserId: OWNER_ID },
-        select: { id: true },
-      });
+      expect(queryRaw).toHaveBeenCalledTimes(1);
+      const [, queriedOwnerId] = queryRaw.mock.calls[0] as [
+        TemplateStringsArray,
+        string,
+      ];
+      expect(queriedOwnerId).toBe(OWNER_ID);
       expect(uploadForShop).toHaveBeenCalledWith(LOGO_FILE, SHOP_ID);
     });
 
-    it('stores the URL the storage service built and returns the me() shape', async () => {
-      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
-      shopUpdate.mockResolvedValue({ ...SHOP_RECORD, logoUrl: LOGO_URL });
+    it('allows the first upload and returns the server-computed next time', async () => {
+      jest.useFakeTimers().setSystemTime(LOGO_CHANGED_AT);
+      queryRaw.mockResolvedValue([{ id: SHOP_ID, logoUpdatedAt: null }]);
+      shopUpdate.mockResolvedValue({
+        ...SHOP_RECORD,
+        logoUrl: LOGO_URL,
+        logoUpdatedAt: LOGO_CHANGED_AT,
+      });
 
       await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).resolves.toEqual({
         ...SHOP_RESPONSE,
         logoUrl: LOGO_URL,
+        logoAvailableAt: new Date(
+          LOGO_CHANGED_AT.getTime() + SHOP_LOGO_COOLDOWN_MS,
+        ).toISOString(),
       });
       expect(shopUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: SHOP_ID },
-          data: { logoUrl: LOGO_URL },
+          data: { logoUrl: LOGO_URL, logoUpdatedAt: LOGO_CHANGED_AT },
         }),
       );
+      jest.useRealTimers();
     });
 
-    it('leaves logoUrl unchanged when the upload fails', async () => {
-      shopFindFirst.mockResolvedValue({ id: SHOP_ID });
+    it('rejects before 168 hours with 409 and availableAt before touching storage', async () => {
+      const now = new Date(
+        LOGO_CHANGED_AT.getTime() + SHOP_LOGO_COOLDOWN_MS - 1,
+      );
+      jest.useFakeTimers().setSystemTime(now);
+      queryRaw.mockResolvedValue([
+        { id: SHOP_ID, logoUpdatedAt: LOGO_CHANGED_AT },
+      ]);
+
+      const promise = service.uploadLogo(LOGO_FILE, OWNER_ID);
+
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await expect(promise).rejects.toMatchObject({
+        response: {
+          availableAt: new Date(
+            LOGO_CHANGED_AT.getTime() + SHOP_LOGO_COOLDOWN_MS,
+          ).toISOString(),
+        },
+      });
+      expect(uploadForShop).not.toHaveBeenCalled();
+      expect(shopUpdate).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('allows another upload exactly at 168 hours', async () => {
+      jest
+        .useFakeTimers()
+        .setSystemTime(LOGO_CHANGED_AT.getTime() + SHOP_LOGO_COOLDOWN_MS);
+      queryRaw.mockResolvedValue([
+        { id: SHOP_ID, logoUpdatedAt: LOGO_CHANGED_AT },
+      ]);
+
+      await expect(service.uploadLogo(LOGO_FILE, OWNER_ID)).resolves.toEqual(
+        SHOP_RESPONSE,
+      );
+      expect(uploadForShop).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
+    });
+
+    it('does not advance the cooldown when the upload fails', async () => {
+      queryRaw.mockResolvedValue([{ id: SHOP_ID, logoUpdatedAt: null }]);
       uploadForShop.mockRejectedValue(
         new BadGatewayException('ไม่สามารถจัดเก็บโลโก้ร้านได้'),
       );
@@ -317,6 +392,50 @@ describe('ShopsService', () => {
         BadGatewayException,
       );
       expect(shopUpdate).not.toHaveBeenCalled();
+    });
+
+    it('serializes concurrent changes so only one request reaches storage', async () => {
+      jest.useFakeTimers().setSystemTime(LOGO_CHANGED_AT);
+      let storedLogoUpdatedAt: Date | null = null;
+      let transactionLock = Promise.resolve();
+
+      queryRaw.mockImplementation(() =>
+        Promise.resolve([{ id: SHOP_ID, logoUpdatedAt: storedLogoUpdatedAt }]),
+      );
+      shopUpdate.mockImplementation(
+        ({ data }: { data: { logoUpdatedAt: Date } }) => {
+          storedLogoUpdatedAt = data.logoUpdatedAt;
+          return Promise.resolve({
+            ...SHOP_RECORD,
+            logoUrl: LOGO_URL,
+            logoUpdatedAt: data.logoUpdatedAt,
+          });
+        },
+      );
+      prismaTransaction.mockImplementation(
+        (operation: (client: Prisma.TransactionClient) => Promise<unknown>) => {
+          const result = transactionLock.then(() =>
+            operation(mockPrismaService as unknown as Prisma.TransactionClient),
+          );
+          transactionLock = result.then(
+            () => undefined,
+            () => undefined,
+          );
+          return result;
+        },
+      );
+
+      const results = await Promise.allSettled([
+        service.uploadLogo(LOGO_FILE, OWNER_ID),
+        service.uploadLogo(LOGO_FILE, OWNER_ID),
+      ]);
+
+      expect(results.map(({ status }) => status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      expect(uploadForShop).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
     });
   });
 });
