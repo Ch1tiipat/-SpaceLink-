@@ -113,6 +113,7 @@ interface CreateBookingOptions {
 
 interface SlipBooking {
   id: string;
+  bookingCode: string;
   status: BookingStatus;
   boothPrice: Prisma.Decimal;
   holdExpiresAt: Date | null;
@@ -136,11 +137,27 @@ export class BookingsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  create(
+  async create(
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
   ): Promise<BookingResponse> {
-    return this.createWithRetry(createBookingDto, vendorUserId, {});
+    const booking = await this.createWithRetry(
+      createBookingDto,
+      vendorUserId,
+      {},
+    );
+
+    await this.notifications
+      .createForUser(vendorUserId, {
+        type: NotificationType.BOOKING_STATUS,
+        title: 'สร้างการจองสำเร็จ',
+        body: `ระบบสร้าง Booking ${booking.bookingCode} แล้ว กรุณาชำระเงินและแนบสลิปภายในเวลาที่กำหนด`,
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: booking.id,
+      })
+      .catch(() => null);
+
+    return booking;
   }
 
   /**
@@ -386,6 +403,7 @@ export class BookingsService {
       where: { id: bookingId, vendorUserId },
       select: {
         id: true,
+        bookingCode: true,
         status: true,
         boothPrice: true,
         holdExpiresAt: true,
@@ -425,8 +443,10 @@ export class BookingsService {
       vendorUserId,
     );
 
+    let response: BookingSlipResponse;
+
     try {
-      return await this.prisma.$transaction(async (transaction) => {
+      response = await this.prisma.$transaction(async (transaction) => {
         const result = await this.slipVerification.verify(
           {
             bookingId: booking.id,
@@ -496,19 +516,36 @@ export class BookingsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        return this.toSlipResponse(
+        response = this.toSlipResponse(
           booking,
           SlipStatus.DUPLICATE,
           'สลิปนี้ถูกใช้แล้ว',
         );
+      } else {
+        response = this.toSlipResponse(
+          booking,
+          SlipStatus.ERROR,
+          'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่',
+        );
       }
-
-      return this.toSlipResponse(
-        booking,
-        SlipStatus.ERROR,
-        'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่',
-      );
     }
+
+    if (
+      response.booking.status === BookingStatus.CONFIRMED &&
+      response.verification.status === SlipStatus.VERIFIED
+    ) {
+      await this.notifications
+        .createForUser(vendorUserId, {
+          type: NotificationType.PAYMENT,
+          title: 'ชำระเงินสำเร็จ',
+          body: `ระบบตรวจสอบการชำระเงินของ Booking ${booking.bookingCode} เรียบร้อยแล้ว การจองได้รับการยืนยัน`,
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: booking.id,
+        })
+        .catch(() => null);
+    }
+
+    return response;
   }
 
   async findAll(vendorUserId: string): Promise<BookingListResponse[]> {
