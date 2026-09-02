@@ -80,6 +80,7 @@ const bookingFindFirst = jest.fn();
 const boothFindFirst = jest.fn();
 const supportTicketCreate = jest.fn();
 const supportTicketFindFirst = jest.fn();
+const supportTicketFindUnique = jest.fn();
 const supportTicketUpdateMany = jest.fn();
 const supportTicketUpdate = jest.fn();
 const supportTicketFindMany = jest.fn();
@@ -95,6 +96,7 @@ const mockPrismaService = {
   supportTicket: {
     create: supportTicketCreate,
     findFirst: supportTicketFindFirst,
+    findUnique: supportTicketFindUnique,
     updateMany: supportTicketUpdateMany,
     update: supportTicketUpdate,
     findMany: supportTicketFindMany,
@@ -142,6 +144,11 @@ describe('SupportTicketsService', () => {
       id: TICKET_ID,
       userId: VENDOR_ID,
       status: TicketStatus.OPEN,
+    });
+    supportTicketFindUnique.mockResolvedValue({
+      id: TICKET_ID,
+      status: TicketStatus.OPEN,
+      updatedAt: NOW,
     });
     supportTicketUpdateMany.mockResolvedValue({ count: 1 });
     supportTicketUpdate.mockResolvedValue({ id: TICKET_ID });
@@ -191,6 +198,135 @@ describe('SupportTicketsService', () => {
         },
         orderBy: { createdAt: 'desc' },
       });
+    });
+  });
+
+  describe('findOneForSuperAdmin', () => {
+    it('loads the full request conversation and related booking context', async () => {
+      const detail = {
+        ...CREATED_TICKET,
+        user: {
+          id: VENDOR_ID,
+          email: 'vendor@example.com',
+          fullName: 'Vendor One',
+        },
+        organization: { id: ORGANIZATION_ID, name: 'Organization One' },
+        booking: null,
+        messages: [],
+      };
+      supportTicketFindUnique.mockResolvedValue(detail);
+
+      await expect(service.findOneForSuperAdmin(TICKET_ID)).resolves.toEqual(
+        detail,
+      );
+
+      expect(supportTicketFindUnique).toHaveBeenCalledWith({
+        where: { id: TICKET_ID },
+        select: expect.objectContaining({
+          user: { select: { id: true, email: true, fullName: true } },
+          organization: { select: { id: true, name: true } },
+          booking: expect.any(Object) as object,
+          messages: expect.objectContaining({
+            orderBy: { createdAt: 'asc' },
+          }) as object,
+        }) as object,
+      });
+    });
+
+    it('returns 404 when the ticket no longer exists', async () => {
+      supportTicketFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findOneForSuperAdmin(TICKET_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('updateStatus', () => {
+    it('moves an open ticket to processing and returns the updated status', async () => {
+      const updated = {
+        id: TICKET_ID,
+        status: TicketStatus.PROCESSING,
+        updatedAt: new Date('2026-08-02T01:00:00.000Z'),
+      };
+      supportTicketFindUnique
+        .mockResolvedValueOnce({
+          id: TICKET_ID,
+          status: TicketStatus.OPEN,
+          updatedAt: NOW,
+        })
+        .mockResolvedValueOnce(updated);
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.PROCESSING),
+      ).resolves.toEqual(updated);
+
+      expect(supportTicketUpdateMany).toHaveBeenCalledWith({
+        where: { id: TICKET_ID, status: TicketStatus.OPEN },
+        data: { status: TicketStatus.PROCESSING },
+      });
+    });
+
+    it('moves a processing ticket to closed', async () => {
+      supportTicketFindUnique
+        .mockResolvedValueOnce({
+          id: TICKET_ID,
+          status: TicketStatus.PROCESSING,
+          updatedAt: NOW,
+        })
+        .mockResolvedValueOnce({
+          id: TICKET_ID,
+          status: TicketStatus.CLOSED,
+          updatedAt: NOW,
+        });
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.CLOSED),
+      ).resolves.toMatchObject({ status: TicketStatus.CLOSED });
+    });
+
+    it('keeps an idempotent status request unchanged', async () => {
+      const current = {
+        id: TICKET_ID,
+        status: TicketStatus.OPEN,
+        updatedAt: NOW,
+      };
+      supportTicketFindUnique.mockResolvedValue(current);
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.OPEN),
+      ).resolves.toEqual(current);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects skipping or reversing the workflow', async () => {
+      supportTicketFindUnique.mockResolvedValue({
+        id: TICKET_ID,
+        status: TicketStatus.OPEN,
+        updatedAt: NOW,
+      });
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.CLOSED),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for a missing ticket', async () => {
+      supportTicketFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.PROCESSING),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('detects a concurrent status change', async () => {
+      supportTicketUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.PROCESSING),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 

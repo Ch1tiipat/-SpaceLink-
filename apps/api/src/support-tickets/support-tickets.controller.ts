@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+import { UpdateSupportTicketStatusDto } from './dto/update-support-ticket-status.dto';
 import { SupportTicketsService } from './support-tickets.service';
 
 @Controller('support-tickets')
@@ -27,6 +28,22 @@ export class SupportTicketsController {
   @Get('all')
   findAllAcrossOrganizations() {
     return this.supportTicketsService.findAllAcrossOrganizations();
+  }
+
+  @Get(':ticketId')
+  findOneForSuperAdmin(@Param('ticketId') ticketId: string) {
+    return this.supportTicketsService.findOneForSuperAdmin(ticketId);
+  }
+
+  @Patch(':ticketId/status')
+  updateStatus(
+    @Param('ticketId') ticketId: string,
+    @Body() updateSupportTicketStatusDto: UpdateSupportTicketStatusDto,
+  ) {
+    return this.supportTicketsService.updateStatus(
+      ticketId,
+      updateSupportTicketStatusDto.status,
+    );
   }
 
   @Post()

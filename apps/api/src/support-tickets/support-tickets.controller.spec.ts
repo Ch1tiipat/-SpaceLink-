@@ -1,6 +1,6 @@
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
-import { UserRole, type User } from '@prisma/client';
+import { TicketStatus, UserRole, type User } from '@prisma/client';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -14,6 +14,7 @@ import {
   CreateSupportTicketDto,
   SupportTicketRequestType,
 } from './dto/create-support-ticket.dto';
+import { UpdateSupportTicketStatusDto } from './dto/update-support-ticket-status.dto';
 
 jest.mock('../auth/guards/supabase-auth.guard', () => ({
   SupabaseAuthGuard: class SupabaseAuthGuard {},
@@ -51,11 +52,15 @@ const create = jest.fn();
 const createForOrganizationAdmin = jest.fn();
 const approveQuotaException = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
+const findOneForSuperAdmin = jest.fn();
+const updateStatus = jest.fn();
 const mockSupportTicketsService = {
   create,
   createForOrganizationAdmin,
   approveQuotaException,
   findAllAcrossOrganizations,
+  findOneForSuperAdmin,
+  updateStatus,
 };
 
 function controllerHandler(
@@ -63,7 +68,9 @@ function controllerHandler(
     | 'create'
     | 'createForOrganizationAdmin'
     | 'approveQuotaException'
-    | 'findAllAcrossOrganizations',
+    | 'findAllAcrossOrganizations'
+    | 'findOneForSuperAdmin'
+    | 'updateStatus',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     SupportTicketsController.prototype,
@@ -113,6 +120,37 @@ describe('SupportTicketsController', () => {
     await controller.findAllAcrossOrganizations();
 
     expect(findAllAcrossOrganizations).toHaveBeenCalledWith();
+  });
+
+  it('loads one ticket detail using the class SUPER_ADMIN guard', async () => {
+    findOneForSuperAdmin.mockResolvedValue({ id: TICKET_ID });
+
+    await controller.findOneForSuperAdmin(TICKET_ID);
+
+    expect(findOneForSuperAdmin).toHaveBeenCalledWith(TICKET_ID);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, controllerHandler('findOneForSuperAdmin')),
+    ).toBeUndefined();
+  });
+
+  it('passes the validated target status to the service', async () => {
+    const dto: UpdateSupportTicketStatusDto = {
+      status: TicketStatus.PROCESSING,
+    };
+    updateStatus.mockResolvedValue({
+      id: TICKET_ID,
+      status: TicketStatus.PROCESSING,
+    });
+
+    await controller.updateStatus(TICKET_ID, dto);
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      TICKET_ID,
+      TicketStatus.PROCESSING,
+    );
+    expect(
+      Reflect.getMetadata(ROLES_KEY, controllerHandler('updateStatus')),
+    ).toBeUndefined();
   });
 
   it('runs authentication before role authorization', () => {

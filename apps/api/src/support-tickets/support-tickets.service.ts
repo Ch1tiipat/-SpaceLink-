@@ -75,6 +75,52 @@ export type SupportTicketOverviewResponse = Prisma.SupportTicketGetPayload<{
   select: typeof supportTicketOverviewSelect;
 }>;
 
+const supportTicketDetailSelect = {
+  ...supportTicketOverviewSelect,
+  booking: {
+    select: {
+      id: true,
+      bookingCode: true,
+      event: { select: { id: true, name: true } },
+      booth: {
+        select: {
+          id: true,
+          code: true,
+          zone: { select: { id: true, code: true, name: true } },
+        },
+      },
+    },
+  },
+  messages: {
+    select: {
+      id: true,
+      message: true,
+      createdAt: true,
+      sender: { select: { id: true, email: true, fullName: true } },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.SupportTicketSelect;
+
+export type SupportTicketDetailResponse = Prisma.SupportTicketGetPayload<{
+  select: typeof supportTicketDetailSelect;
+}>;
+
+const supportTicketStatusSelect = {
+  id: true,
+  status: true,
+  updatedAt: true,
+} satisfies Prisma.SupportTicketSelect;
+
+export type SupportTicketStatusResponse = Prisma.SupportTicketGetPayload<{
+  select: typeof supportTicketStatusSelect;
+}>;
+
+const NEXT_TICKET_STATUS: Partial<Record<TicketStatus, TicketStatus>> = {
+  [TicketStatus.OPEN]: TicketStatus.PROCESSING,
+  [TicketStatus.PROCESSING]: TicketStatus.CLOSED,
+};
+
 /**
  * Vendor support covers quota-increase requests and issue reports. A quota
  * request stays TicketType.OTHER because the frozen enum has no quota member;
@@ -302,6 +348,63 @@ export class SupportTicketsService {
       select: supportTicketOverviewSelect,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findOneForSuperAdmin(
+    ticketId: string,
+  ): Promise<SupportTicketDetailResponse> {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      select: supportTicketDetailSelect,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('ไม่พบคำร้อง');
+    }
+
+    return ticket;
+  }
+
+  async updateStatus(
+    ticketId: string,
+    targetStatus: TicketStatus,
+  ): Promise<SupportTicketStatusResponse> {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      select: supportTicketStatusSelect,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('ไม่พบคำร้อง');
+    }
+    if (ticket.status === targetStatus) {
+      return ticket;
+    }
+    if (NEXT_TICKET_STATUS[ticket.status] !== targetStatus) {
+      throw new BadRequestException(
+        'เปลี่ยนสถานะคำร้องได้ตามลำดับ เปิดอยู่ → กำลังดำเนินการ → ปิดแล้ว เท่านั้น',
+      );
+    }
+
+    const changed = await this.prisma.supportTicket.updateMany({
+      where: { id: ticketId, status: ticket.status },
+      data: { status: targetStatus },
+    });
+    if (changed.count === 0) {
+      throw new ConflictException(
+        'สถานะคำร้องถูกเปลี่ยนโดยผู้ดูแลคนอื่น กรุณาโหลดข้อมูลใหม่',
+      );
+    }
+
+    const updated = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      select: supportTicketStatusSelect,
+    });
+    if (!updated) {
+      throw new NotFoundException('ไม่พบคำร้อง');
+    }
+
+    return updated;
   }
 
   /**
