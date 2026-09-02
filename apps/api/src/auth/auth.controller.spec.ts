@@ -11,6 +11,8 @@ jest.mock('./guards/supabase-auth.guard', () => ({
 }));
 
 describe('AuthController', () => {
+  const logoUpdatedAt = new Date('2026-09-01T02:00:00.000Z');
+  const logoAvailableAt = '2026-09-08T02:00:00.000Z';
   const shopFindMany = jest.fn();
   const membershipFindMany = jest.fn();
   const controller = new AuthController({
@@ -54,6 +56,7 @@ describe('AuthController', () => {
         name: 'ร้านเกษตรดี',
         description: 'ผักและผลไม้',
         logoUrl: null,
+        logoUpdatedAt,
         categories: [
           {
             category: {
@@ -70,12 +73,17 @@ describe('AuthController', () => {
     expect(shopFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { ownerUserId: user.id } }),
     );
+    const [shopQuery] = shopFindMany.mock.calls[0] as [
+      { select: { logoUpdatedAt: boolean } },
+    ];
+    expect(shopQuery.select.logoUpdatedAt).toBe(true);
     expect(result.shops).toEqual([
       {
         id: '00000000-0000-4000-8000-000000000010',
         name: 'ร้านเกษตรดี',
         description: 'ผักและผลไม้',
         logoUrl: null,
+        logoAvailableAt,
         categories: [
           {
             id: '00000000-0000-4000-8000-000000000020',

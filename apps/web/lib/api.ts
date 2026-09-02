@@ -84,6 +84,8 @@ export type VendorShop = {
   name: string;
   description: string | null;
   logoUrl: string | null;
+  /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
+  logoAvailableAt?: string | null;
   categories: { id: string; name: string }[];
 };
 
@@ -751,6 +753,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly availableAt: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -1607,6 +1610,7 @@ export async function uploadShopLogo(
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
       message?: string | string[];
+      availableAt?: string;
     } | null;
     const detail = Array.isArray(payload?.message)
       ? payload.message.join(", ")
@@ -1614,6 +1618,7 @@ export async function uploadShopLogo(
     const fallbackByStatus: Record<number, string> = {
       400: "ไฟล์โลโก้ไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG",
       404: "ไม่พบร้านค้าของคุณ กรุณาสร้างร้านค้าก่อนอัปโหลดโลโก้",
+      409: "ยังไม่ครบกำหนด 7 วันสำหรับการเปลี่ยนโลโก้ร้าน",
       413: "ไฟล์โลโก้มีขนาดเกิน 2 MB",
       502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
     };
@@ -1621,6 +1626,7 @@ export async function uploadShopLogo(
     throw new ApiError(
       detail || fallbackByStatus[response.status] || "อัปโหลดโลโก้ไม่สำเร็จ",
       response.status,
+      payload?.availableAt ?? null,
     );
   }
 

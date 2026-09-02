@@ -421,13 +421,14 @@ model Subscription {
 }
 
 model Shop {
-  id          String   @id @default(uuid()) @map("shop_id") @db.Uuid
-  ownerUserId String   @map("owner_user_id") @db.Uuid
-  name        String
-  description String?
-  logoUrl     String?  @map("logo_url")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id            String    @id @default(uuid()) @map("shop_id") @db.Uuid
+  ownerUserId   String    @map("owner_user_id") @db.Uuid
+  name          String
+  description   String?
+  logoUrl       String?   @map("logo_url")
+  logoUpdatedAt DateTime? @map("logo_updated_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   owner      User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   bookings   Booking[]
