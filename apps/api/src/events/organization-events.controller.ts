@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -51,6 +52,39 @@ export class OrganizationEventsController {
     @Param('eventId', new ParseUUIDPipe()) eventId: string,
   ) {
     return this.eventsService.publish(eventId, organizationId);
+  }
+
+  @Patch(':eventId/open')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  open(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.eventsService.open(eventId, organizationId);
+  }
+
+  @Patch(':eventId/close')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  close(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.eventsService.close(eventId, organizationId);
+  }
+
+  @Delete(':eventId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  remove(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.eventsService.remove(eventId, organizationId);
   }
 
   @Get()

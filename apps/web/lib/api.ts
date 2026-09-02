@@ -1342,6 +1342,44 @@ export function publishAdminEvent(
   );
 }
 
+export function openAdminEvent(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return patchJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/open`,
+    {},
+    { token },
+    "เปิดอีเวนต์ไม่สำเร็จ",
+  );
+}
+
+export function closeAdminEvent(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return patchJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/close`,
+    {},
+    { token },
+    "ปิดอีเวนต์ไม่สำเร็จ",
+  );
+}
+
+export function deleteAdminEvent(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return deleteJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}`,
+    { token },
+    "ลบอีเวนต์ไม่สำเร็จ",
+  );
+}
+
 export function getAdminOrganizationBookings(
   organizationId: string,
   token: string,
