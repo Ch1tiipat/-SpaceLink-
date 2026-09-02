@@ -550,6 +550,31 @@ export type SuperAdminSupportTicket = {
   organization: { id: string; name: string } | null;
 };
 
+export type SuperAdminSupportTicketDetail = SuperAdminSupportTicket & {
+  booking: {
+    id: string;
+    bookingCode: string;
+    event: { id: string; name: string };
+    booth: {
+      id: string;
+      code: string;
+      zone: { id: string; code: string; name: string | null };
+    };
+  } | null;
+  messages: {
+    id: string;
+    message: string;
+    createdAt: string;
+    sender: { id: string; email: string; fullName: string };
+  }[];
+};
+
+export type SuperAdminSupportTicketStatusUpdate = {
+  id: string;
+  status: SupportTicketStatus;
+  updatedAt: string;
+};
+
 export type SuperAdminPenaltiesOverview = {
   penalties: {
     id: string;
@@ -1531,6 +1556,30 @@ export function getSuperAdminSupportTickets(
     signal,
     token,
   });
+}
+
+export function getSuperAdminSupportTicketDetail(
+  ticketId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<SuperAdminSupportTicketDetail> {
+  return getJson<SuperAdminSupportTicketDetail>(
+    `/support-tickets/${encodeURIComponent(ticketId)}`,
+    { signal, token },
+  );
+}
+
+export function updateSuperAdminSupportTicketStatus(
+  ticketId: string,
+  status: SupportTicketStatus,
+  token: string,
+): Promise<SuperAdminSupportTicketStatusUpdate> {
+  return patchJson<SuperAdminSupportTicketStatusUpdate>(
+    `/support-tickets/${encodeURIComponent(ticketId)}/status`,
+    { status },
+    { token },
+    "เปลี่ยนสถานะคำร้องไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+  );
 }
 
 export function getSuperAdminPenalties(

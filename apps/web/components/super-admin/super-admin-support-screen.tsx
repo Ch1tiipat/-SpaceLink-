@@ -6,19 +6,27 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  CircleCheckBig,
+  Clock3,
+  Mail,
   MessageCircleQuestion,
   RefreshCw,
   ShieldAlert,
   UserRound,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   getSuperAdminPenalties,
+  getSuperAdminSupportTicketDetail,
   getSuperAdminSupportTickets,
+  updateSuperAdminSupportTicketStatus,
   type PenaltyReason,
   type SuperAdminPenaltiesOverview,
   type SuperAdminSupportTicket,
+  type SuperAdminSupportTicketDetail,
+  type SuperAdminSupportTicketStatusUpdate,
   type SupportTicketStatus,
 } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -91,6 +99,22 @@ export function SuperAdminSupportScreen() {
     router.replace(`${pathname}?${params.toString()}`);
   }
 
+  function updateTicketStatus(
+    updated: SuperAdminSupportTicketStatusUpdate,
+  ) {
+    setTickets((current) =>
+      current.map((ticket) =>
+        ticket.id === updated.id
+          ? {
+              ...ticket,
+              status: updated.status,
+              updatedAt: updated.updatedAt,
+            }
+          : ticket,
+      ),
+    );
+  }
+
   return (
     <div className="relative z-0 mx-auto w-full max-w-[1440px] px-[15px] pb-11 pt-[23px] before:absolute before:right-[6%] before:top-[110px] before:-z-10 before:h-[280px] before:w-[280px] before:rounded-full before:bg-[rgba(124,58,237,.05)] sm:px-[34px] sm:pt-[31px]">
       <header className="mb-6 flex flex-col items-start justify-between gap-[18px] sm:flex-row sm:items-end">
@@ -137,7 +161,12 @@ export function SuperAdminSupportScreen() {
       </nav>
 
       {tab === "tickets" ? (
-        <TicketsTab tickets={tickets} loading={loading} error={error} />
+        <TicketsTab
+          tickets={tickets}
+          loading={loading}
+          error={error}
+          onTicketUpdated={updateTicketStatus}
+        />
       ) : (
         <ModerationTab overview={moderation} loading={loading} error={error} />
       )}
@@ -149,14 +178,17 @@ function TicketsTab({
   tickets,
   loading,
   error,
+  onTicketUpdated,
 }: {
   tickets: SuperAdminSupportTicket[];
   loading: boolean;
   error: string;
+  onTicketUpdated: (updated: SuperAdminSupportTicketStatusUpdate) => void;
 }) {
   const [status, setStatus] = useState<"ALL" | SupportTicketStatus>("ALL");
   const [type, setType] = useState("ALL");
   const [page, setPage] = useState(1);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   useEffect(() => setPage(1), [status, type]);
 
@@ -181,7 +213,8 @@ function TicketsTab({
   const hasFilters = status !== "ALL" || type !== "ALL";
 
   return (
-    <Panel
+    <>
+      <Panel
       title="คำร้องขอความช่วยเหลือ"
       description="รายการแบบอ่านอย่างเดียวจากทุกองค์กร"
       controls={
@@ -249,7 +282,20 @@ function TicketsTab({
               </thead>
               <tbody>
                 {visibleRows.map((ticket) => (
-                  <tr key={ticket.id} className="border-t border-[#f0ebf3] align-top">
+                  <tr
+                    key={ticket.id}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`เปิดรายละเอียดคำร้อง ${ticket.subject}`}
+                    onClick={() => setSelectedTicketId(ticket.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedTicketId(ticket.id);
+                      }
+                    }}
+                    className="cursor-pointer border-t border-[#f0ebf3] align-top transition hover:bg-[#fcf9ff] focus:bg-[#fcf9ff] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#c7a7f4]"
+                  >
                     <td className="max-w-[300px] px-5 py-4">
                       <strong className="block text-[#242032]">{ticket.subject}</strong>
                       <code className="mt-1 block truncate text-[10px] text-[#9a91a2]">{ticket.id}</code>
@@ -287,7 +333,320 @@ function TicketsTab({
           )}
         </PagedTable>
       )}
-    </Panel>
+      </Panel>
+      {selectedTicketId ? (
+        <TicketDetailDrawer
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+          onTicketUpdated={onTicketUpdated}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function TicketDetailDrawer({
+  ticketId,
+  onClose,
+  onTicketUpdated,
+}: {
+  ticketId: string;
+  onClose: () => void;
+  onTicketUpdated: (updated: SuperAdminSupportTicketStatusUpdate) => void;
+}) {
+  const [detail, setDetail] = useState<SuperAdminSupportTicketDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true);
+    setError("");
+
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        const result = await getSuperAdminSupportTicketDetail(
+          ticketId,
+          token,
+          controller.signal,
+        );
+        if (active) setDetail(result);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        if (active)
+          setError(errorMessage(cause, "โหลดรายละเอียดคำร้องไม่สำเร็จ"));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [reloadKey, ticketId]);
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  async function advanceStatus() {
+    if (!detail || savingStatus) return;
+    const targetStatus = nextTicketStatus(detail.status);
+    if (!targetStatus) return;
+
+    const previous = {
+      id: detail.id,
+      status: detail.status,
+      updatedAt: detail.updatedAt,
+    };
+    const optimistic = {
+      id: detail.id,
+      status: targetStatus,
+      updatedAt: new Date().toISOString(),
+    };
+    setSavingStatus(true);
+    setStatusError("");
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            status: optimistic.status,
+            updatedAt: optimistic.updatedAt,
+          }
+        : current,
+    );
+    onTicketUpdated(optimistic);
+
+    try {
+      const token = await getAccessToken();
+      const updated = await updateSuperAdminSupportTicketStatus(
+        detail.id,
+        targetStatus,
+        token,
+      );
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              status: updated.status,
+              updatedAt: updated.updatedAt,
+            }
+          : current,
+      );
+      onTicketUpdated(updated);
+    } catch (cause) {
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              status: previous.status,
+              updatedAt: previous.updatedAt,
+            }
+          : current,
+      );
+      onTicketUpdated(previous);
+      setStatusError(errorMessage(cause, "เปลี่ยนสถานะคำร้องไม่สำเร็จ"));
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  const nextStatus = detail ? nextTicketStatus(detail.status) : null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex justify-end bg-[rgba(25,17,38,.46)] backdrop-blur-[2px]">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="ปิดรายละเอียดคำร้อง"
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ticket-detail-title"
+        className="relative flex h-full w-full max-w-[680px] flex-col overflow-hidden border-l border-[#e3d8f0] bg-[#fbfaff] shadow-[-24px_0_70px_rgba(28,14,47,.2)]"
+      >
+        <header className="flex items-start justify-between border-b border-[#e9e1ee] bg-white px-5 py-4 sm:px-7">
+          <div className="min-w-0">
+            <span className="text-[10px] font-extrabold tracking-[1px] text-[#7c3aed]">
+              SUPPORT TICKET DETAIL
+            </span>
+            <h2
+              id="ticket-detail-title"
+              className="mt-1 truncate text-xl font-black text-[#242032]"
+            >
+              {detail?.subject ?? "รายละเอียดคำร้อง"}
+            </h2>
+            {detail ? (
+              <p className="mt-1 text-xs text-[#82788b]">
+                {ticketTypeLabel(detail.type)} · สร้างเมื่อ {formatDateTime(detail.createdAt)}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border border-[#e7dfea] bg-white text-[#716675]"
+            aria-label="ปิด"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        {loading ? (
+          <DrawerSkeleton />
+        ) : error ? (
+          <StatePanel
+            title="โหลดรายละเอียดคำร้องไม่สำเร็จ"
+            detail={error}
+            icon={MessageCircleQuestion}
+            action={() => setReloadKey((value) => value + 1)}
+          />
+        ) : detail ? (
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="grid gap-4">
+              <section className="rounded-[14px] border border-[#e7dfea] bg-white p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <span className="text-[11px] font-extrabold text-[#82788b]">
+                      สถานะคำร้อง
+                    </span>
+                    <div className="mt-2">
+                      <TicketStatusPill status={detail.status} />
+                    </div>
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-[#82788b]">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      อัปเดตล่าสุด {formatDateTime(detail.updatedAt)}
+                    </p>
+                  </div>
+                  {nextStatus ? (
+                    <button
+                      type="button"
+                      disabled={savingStatus}
+                      onClick={() => void advanceStatus()}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[9px] bg-[#6d28d9] px-4 text-sm font-extrabold text-white shadow-sm disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {savingStatus ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CircleCheckBig className="h-4 w-4" />
+                      )}
+                      {savingStatus
+                        ? "กำลังบันทึก..."
+                        : nextStatus === "PROCESSING"
+                          ? "เริ่มดำเนินการ"
+                          : "ปิดเคส"}
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 rounded-lg bg-[#e7f8ef] px-3 py-2 text-xs font-extrabold text-[#147653]">
+                      <CircleCheckBig className="h-4 w-4" /> ปิดเคสเรียบร้อย
+                    </span>
+                  )}
+                </div>
+                {statusError ? (
+                  <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    {statusError}
+                  </p>
+                ) : null}
+              </section>
+
+              <section className="rounded-[14px] border border-[#e7dfea] bg-white p-5">
+                <h3 className="text-sm font-black text-[#312939]">ข้อมูลผู้แจ้ง</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <DetailField icon={UserRound} label="ชื่อ" value={detail.user.fullName} />
+                  <DetailField icon={Mail} label="อีเมล" value={detail.user.email} />
+                  <DetailField
+                    icon={Building2}
+                    label="องค์กรที่เกี่ยวข้อง"
+                    value={detail.organization?.name ?? "ไม่ผูกองค์กร"}
+                  />
+                  <DetailField
+                    icon={MessageCircleQuestion}
+                    label="ประเภทคำร้อง"
+                    value={ticketTypeLabel(detail.type)}
+                  />
+                </div>
+              </section>
+
+              {detail.booking ? (
+                <section className="rounded-[14px] border border-[#e7dfea] bg-white p-5">
+                  <h3 className="text-sm font-black text-[#312939]">ข้อมูลการจองที่เกี่ยวข้อง</h3>
+                  <dl className="mt-3 grid gap-2 text-sm text-[#62576c]">
+                    <div className="flex justify-between gap-4"><dt>รหัสการจอง</dt><dd className="font-bold text-[#312939]">{detail.booking.bookingCode}</dd></div>
+                    <div className="flex justify-between gap-4"><dt>งาน</dt><dd className="text-right font-bold text-[#312939]">{detail.booking.event.name}</dd></div>
+                    <div className="flex justify-between gap-4"><dt>โซน / บูธ</dt><dd className="text-right font-bold text-[#312939]">{detail.booking.booth.zone.name ?? detail.booking.booth.zone.code} / {detail.booking.booth.code}</dd></div>
+                  </dl>
+                </section>
+              ) : null}
+
+              <section className="rounded-[14px] border border-[#e7dfea] bg-white p-5">
+                <h3 className="text-sm font-black text-[#312939]">ข้อความคำร้อง</h3>
+                {detail.messages.length === 0 ? (
+                  <p className="mt-3 text-sm text-[#82788b]">ไม่พบข้อความในคำร้องนี้</p>
+                ) : (
+                  <div className="mt-3 grid gap-3">
+                    {detail.messages.map((message) => (
+                      <article key={message.id} className="rounded-xl bg-[#f7f2fc] p-4">
+                        <div className="flex flex-col gap-1 text-xs text-[#82788b] sm:flex-row sm:items-center sm:justify-between">
+                          <strong className="text-[#4f4658]">{message.sender.fullName}</strong>
+                          <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[#312939]">
+                          {message.message}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
+function DetailField({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof UserRound;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl bg-[#faf7fd] p-3">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f1eaff] text-[#6d28d9]">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <span className="block text-[10px] font-bold text-[#82788b]">{label}</span>
+        <strong className="mt-0.5 block break-words text-sm text-[#312939]">{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function DrawerSkeleton() {
+  return (
+    <div className="grid gap-4 p-5 sm:p-6">
+      {[1, 2, 3].map((item) => (
+        <div key={item} className="h-32 animate-pulse rounded-[14px] bg-[#eee8f4]" />
+      ))}
+    </div>
   );
 }
 
@@ -420,8 +779,8 @@ function Pagination({ page, totalPages, total, onPage }: { page: number; totalPa
   return <footer className="flex flex-col gap-3 border-t border-[#ebe4ef] bg-[#fdfbff] px-5 py-3.5 text-xs text-[#82788b] sm:flex-row sm:items-center sm:justify-between"><span>แสดง {first.toLocaleString("th-TH")}–{last.toLocaleString("th-TH")} จาก {total.toLocaleString("th-TH")} รายการ</span><div className="flex items-center gap-2"><button type="button" aria-label="หน้าก่อนหน้า" disabled={page <= 1} onClick={() => onPage(page - 1)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e1d7e8] bg-white disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button><strong className="min-w-12 text-center text-[#62576c]">{page}/{totalPages}</strong><button type="button" aria-label="หน้าถัดไป" disabled={page >= totalPages} onClick={() => onPage(page + 1)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e1d7e8] bg-white disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button></div></footer>;
 }
 
-function StatePanel({ title, detail, icon: Icon }: { title: string; detail: string; icon: typeof ShieldAlert }) {
-  return <div className="grid min-h-[240px] place-items-center p-8 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#f2eaff] text-[#6d28d9]"><Icon className="h-5 w-5" /></span><h2 className="mb-1 mt-4 text-base font-black text-[#312939]">{title}</h2><p className="m-0 text-sm text-[#82788b]">{detail}</p></div></div>;
+function StatePanel({ title, detail, icon: Icon, action }: { title: string; detail: string; icon: typeof ShieldAlert; action?: () => void }) {
+  return <div className="grid min-h-[240px] place-items-center p-8 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#f2eaff] text-[#6d28d9]"><Icon className="h-5 w-5" /></span><h2 className="mb-1 mt-4 text-base font-black text-[#312939]">{title}</h2><p className="m-0 text-sm text-[#82788b]">{detail}</p>{action ? <button type="button" onClick={action} className="mt-4 min-h-9 rounded-lg bg-[#6d28d9] px-4 text-xs font-extrabold text-white">ลองอีกครั้ง</button> : null}</div></div>;
 }
 
 function TableSkeleton() {
@@ -435,6 +794,16 @@ function TicketStatusPill({ status }: { status: SupportTicketStatus }) {
 
 function ticketStatusLabel(status: SupportTicketStatus) {
   return { OPEN: "เปิดอยู่", PROCESSING: "กำลังดำเนินการ", CLOSED: "ปิดแล้ว" }[status];
+}
+
+function nextTicketStatus(
+  status: SupportTicketStatus,
+): SupportTicketStatus | null {
+  return status === "OPEN"
+    ? "PROCESSING"
+    : status === "PROCESSING"
+      ? "CLOSED"
+      : null;
 }
 
 function ticketTypeLabel(type: string) {
