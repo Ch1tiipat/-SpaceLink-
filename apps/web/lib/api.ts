@@ -1819,6 +1819,25 @@ export function createSupportTicket(
   );
 }
 
+/** Opens an ORG_ADMIN request after the API verifies the selected membership. */
+export function createOrganizationAdminSupportTicket(
+  organizationId: string,
+  input: { subject: string; message: string },
+  token: string,
+  signal?: AbortSignal,
+): Promise<SupportTicketRecord> {
+  return postJson<SupportTicketRecord>(
+    `/support-tickets/organizations/${encodeURIComponent(organizationId)}`,
+    {
+      requestType: "ISSUE_REPORT",
+      subject: input.subject.trim(),
+      message: input.message.trim(),
+    },
+    { signal, token },
+    "ไม่สามารถส่งคำร้องถึง Super Admin ได้",
+  );
+}
+
 /** Approves one request; the API derives the organization from the ticket. */
 export function approveQuotaException(
   ticketId: string,
