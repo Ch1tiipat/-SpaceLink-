@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Landmark, QrCode, ShieldCheck } from 'lucide-react';
+import { QrCode, ShieldCheck } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { PreviewSlipUploadPanel } from '@/components/booking-screen';
 import {
@@ -78,9 +78,8 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
 
             <article className="sl-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><span className="sl-kicker">PAYMENT METHOD</span><h2 className="mt-1 text-lg font-black">เลือกวิธีชำระเงิน</h2></div><small className="text-xs text-muted">ผู้รับเงิน: ผู้จัด Event</small></div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2">
                 <div className="flex min-h-[58px] items-center gap-3 rounded-[12px] border border-violet bg-violet-tint px-3 text-violet"><span className="grid h-9 w-9 place-items-center rounded-[10px] bg-white"><QrCode size={18} aria-hidden /></span><span><strong className="block text-sm">PromptPay QR</strong><small className="mt-0.5 block text-xs opacity-70">สแกนผ่าน Mobile Banking</small></span><b className="ml-auto text-sm">✓</b></div>
-                <div aria-disabled="true" className="flex min-h-[58px] items-center gap-3 rounded-[12px] border border-line bg-[#f7f5fa] px-3 text-muted opacity-65"><span className="grid h-9 w-9 place-items-center rounded-[10px] bg-white"><Landmark size={18} aria-hidden /></span><span><strong className="block text-sm">โอนผ่านบัญชีธนาคาร</strong><small className="mt-0.5 block text-xs">ยังไม่เปิดใช้งาน</small></span></div>
               </div>
 
               <div className="mt-3 grid gap-3 rounded-[14px] bg-[#faf8ff] p-4 md:grid-cols-[260px_minmax(0,1fr)] md:items-center">

@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import {
   Building2,
-  Landmark,
   MapPin,
   QrCode,
   ShieldCheck,
@@ -30,7 +29,6 @@ import { canUseUxPreview } from '@/lib/ux-preview';
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
 
-type PaymentMethod = 'qr' | 'bank';
 type BoothRatingState =
   | { status: 'idle' }
   | { status: 'loading' | 'error'; boothId: string }
@@ -62,7 +60,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   const [holdExpired, setHoldExpired] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qr');
   const [boothRating, setBoothRating] = useState<BoothRatingState>({
     status: 'idle',
   });
@@ -401,10 +398,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
             <div className="grid gap-5">
               <PaymentMethodPanel
-                method={paymentMethod}
-                onChange={setPaymentMethod}
                 amount={createdBooking.boothPrice}
-                disabled={holdExpired}
                 paymentQrDataUri={createdBooking.paymentQrDataUri ?? null}
               />
 
@@ -831,23 +825,12 @@ export function PreviewSlipUploadPanel({
 }
 
 function PaymentMethodPanel({
-  method,
-  onChange,
   amount,
-  disabled,
   paymentQrDataUri,
 }: {
-  method: PaymentMethod;
-  onChange: (method: PaymentMethod) => void;
   amount: string;
-  disabled: boolean;
   paymentQrDataUri: string | null;
 }) {
-  const methods = [
-    { id: 'qr' as const, label: 'QR Code', icon: QrCode },
-    { id: 'bank' as const, label: 'ธนาคารออนไลน์', icon: Landmark },
-  ];
-
   return (
     <section className="sl-surface p-5 sm:p-6">
       <div className="flex items-center gap-3">
@@ -855,70 +838,41 @@ function PaymentMethodPanel({
           <ShieldCheck className="h-5 w-5" aria-hidden />
         </span>
         <div>
-          <h2 className="font-black">เลือกวิธีชำระเงิน</h2>
+          <h2 className="font-black">ชำระเงินด้วย PromptPay QR</h2>
           <p className="text-xs text-muted">ข้อมูลการชำระเงินจะถูกเข้ารหัสอย่างปลอดภัย</p>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2">
-        {methods.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onChange(id)}
-            disabled={disabled || id === 'bank'}
-            className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-bold transition disabled:opacity-50 ${
-              method === id
-                ? 'border-violet bg-violet-tint text-violet'
-                : 'border-line bg-white text-ink'
-            }`}
-          >
-            <Icon className="h-5 w-5" aria-hidden />
-            {label}
-            {id === 'bank' ? (
-              <span className="ml-1 text-sm font-bold text-muted">ยังไม่เปิดใช้งาน</span>
-            ) : null}
-            <span className={`ml-auto h-4 w-4 rounded-full border-4 ${method === id ? 'border-violet' : 'border-[#d5cfdd]'}`} />
-          </button>
-        ))}
+      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-violet bg-violet-tint px-4 py-3 text-sm font-bold text-violet">
+        <QrCode className="h-5 w-5" aria-hidden />
+        PromptPay QR
+        <span className="ml-auto" aria-hidden>✓</span>
       </div>
 
-      {method === 'qr' && (
-        <div className="mt-5 rounded-2xl bg-[#faf8ff] p-5 text-center">
-          {paymentQrDataUri ? (
-            <Image
-              src={paymentQrDataUri}
-              alt="QR Code PromptPay สำหรับชำระค่าบูธ"
-              width={320}
-              height={320}
-              unoptimized
-              className="mx-auto h-40 w-40 rounded-2xl border-8 border-white bg-white shadow-sm"
-            />
-          ) : (
-            <span className="mx-auto grid h-40 w-40 place-items-center rounded-2xl border-8 border-white bg-[repeating-conic-gradient(#201b2e_0_25%,#fff_0_50%)] bg-[length:16px_16px] shadow-sm">
-              <span className="grid h-14 w-14 place-items-center rounded-xl bg-white text-violet shadow">
-                <QrCode className="h-9 w-9" aria-hidden />
-              </span>
+      <div className="mt-5 rounded-2xl bg-[#faf8ff] p-5 text-center">
+        {paymentQrDataUri ? (
+          <Image
+            src={paymentQrDataUri}
+            alt="QR Code PromptPay สำหรับชำระค่าบูธ"
+            width={320}
+            height={320}
+            unoptimized
+            className="mx-auto h-40 w-40 rounded-2xl border-8 border-white bg-white shadow-sm"
+          />
+        ) : (
+          <span className="mx-auto grid h-40 w-40 place-items-center rounded-2xl border-8 border-white bg-[repeating-conic-gradient(#201b2e_0_25%,#fff_0_50%)] bg-[length:16px_16px] shadow-sm">
+            <span className="grid h-14 w-14 place-items-center rounded-xl bg-white text-violet shadow">
+              <QrCode className="h-9 w-9" aria-hidden />
             </span>
-          )}
-          <b className="mt-4 block">สแกนเพื่อชำระ {formatMoney(amount)} บาท</b>
-          {!paymentQrDataUri ? (
-            <p className="mt-1 text-xs text-muted">QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง</p>
-          ) : (
-            <p className="mt-1 text-xs text-muted">QR PromptPay สร้างจากบัญชีรับเงินของผู้จัดงานและยอดค่าบูธรายการนี้</p>
-          )}
-        </div>
-      )}
-
-      {method === 'bank' && (
-        <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-[#faf8ff] p-4">
-          {['K PLUS', 'SCB EASY', 'Krungthai NEXT', 'Bualuang mBanking'].map((bank) => (
-            <button key={bank} type="button" className="rounded-xl border border-line bg-white px-3 py-3 text-xs font-extrabold">
-              {bank}
-            </button>
-          ))}
-        </div>
-      )}
+          </span>
+        )}
+        <b className="mt-4 block">สแกนเพื่อชำระ {formatMoney(amount)} บาท</b>
+        {!paymentQrDataUri ? (
+          <p className="mt-1 text-xs text-muted">QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง</p>
+        ) : (
+          <p className="mt-1 text-xs text-muted">QR PromptPay สร้างจากบัญชีรับเงินของผู้จัดงานและยอดค่าบูธรายการนี้</p>
+        )}
+      </div>
     </section>
   );
 }

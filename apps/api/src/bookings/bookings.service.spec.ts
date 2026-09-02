@@ -182,6 +182,7 @@ const mockNotificationsService = { createForUser };
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
+  bookingCode: BOOKING_CODE,
   status: BookingStatus.PENDING_PAYMENT,
   boothPrice: BOOTH_PRICE,
   holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
@@ -309,6 +310,24 @@ describe('BookingsService', () => {
     expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
+    expect(createForUser).toHaveBeenCalledTimes(1);
+    expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
+      type: NotificationType.BOOKING_STATUS,
+      title: 'สร้างการจองสำเร็จ',
+      body: `ระบบสร้าง Booking ${BOOKING_CODE} แล้ว กรุณาชำระเงินและแนบสลิปภายในเวลาที่กำหนด`,
+      relatedEntityType: 'BOOKING',
+      relatedEntityId: BOOKING_ID,
+    });
+  });
+
+  it('keeps booking creation successful when notification delivery fails', async () => {
+    createForUser.mockRejectedValueOnce(new Error('notification unavailable'));
+
+    await expect(service.create(CREATE_DTO, VENDOR_ID)).resolves.toEqual({
+      ...CREATED_BOOKING,
+      boothPrice: '1500',
+    });
+    expect(createForUser).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a blacklisted vendor before creating a booking', async () => {
@@ -490,6 +509,7 @@ describe('BookingsService', () => {
     });
     expect(prismaTransaction).toHaveBeenCalledTimes(2);
     expect(bookingCreate).toHaveBeenCalledTimes(1);
+    expect(createForUser).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a vendor who has reached the organization quota', async () => {
@@ -671,6 +691,7 @@ describe('BookingsService', () => {
         where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
         select: {
           id: true,
+          bookingCode: true,
           status: true,
           boothPrice: true,
           holdExpiresAt: true,
@@ -810,6 +831,28 @@ describe('BookingsService', () => {
       expect(JSON.stringify(result)).not.toContain('Sensitive');
       expect(JSON.stringify(result)).not.toContain('secret');
       expect(JSON.stringify(result)).not.toContain('token=');
+      expect(createForUser).toHaveBeenCalledTimes(1);
+      expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
+        type: NotificationType.PAYMENT,
+        title: 'ชำระเงินสำเร็จ',
+        body: `ระบบตรวจสอบการชำระเงินของ Booking ${BOOKING_CODE} เรียบร้อยแล้ว การจองได้รับการยืนยัน`,
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: BOOKING_ID,
+      });
+    });
+
+    it('keeps confirmation successful when notification delivery fails', async () => {
+      createForUser.mockRejectedValueOnce(
+        new Error('notification unavailable'),
+      );
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).resolves.toMatchObject({
+        booking: { status: BookingStatus.CONFIRMED },
+        verification: { status: SlipStatus.VERIFIED },
+      });
+      expect(createForUser).toHaveBeenCalledTimes(1);
     });
 
     it.each([SlipStatus.INVALID, SlipStatus.DUPLICATE, SlipStatus.ERROR])(
@@ -831,6 +874,7 @@ describe('BookingsService', () => {
         expect(result.verification.status).toBe(status);
         expect(result.verification.message).not.toContain('provider detail');
         expect(bookingUpdateMany).not.toHaveBeenCalled();
+        expect(createForUser).not.toHaveBeenCalled();
       },
     );
 
@@ -848,6 +892,7 @@ describe('BookingsService', () => {
         message: 'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ',
       });
       expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('does not confirm a VERIFIED result with no amount', async () => {
@@ -857,6 +902,7 @@ describe('BookingsService', () => {
 
       expect(result.verification.status).toBe(SlipStatus.INVALID);
       expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('maps a duplicate transaction P2002 to DUPLICATE', async () => {
@@ -875,6 +921,7 @@ describe('BookingsService', () => {
       });
       expect(bookingUpdateMany).not.toHaveBeenCalled();
       expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('returns a sanitized ERROR when the verifier throws', async () => {
@@ -891,6 +938,7 @@ describe('BookingsService', () => {
       expect(JSON.stringify(result)).not.toContain(SIGNED_SLIP_URL);
       expect(bookingUpdateMany).not.toHaveBeenCalled();
       expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('does not confirm if the booking changed during verification', async () => {
@@ -900,6 +948,7 @@ describe('BookingsService', () => {
         service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
       ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
       expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
+      expect(createForUser).not.toHaveBeenCalled();
     });
   });
 
