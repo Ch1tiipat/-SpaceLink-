@@ -39,8 +39,14 @@ export class AuthController {
         orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
         select: {
           role: true,
+          canEditQuota: true,
           organization: {
-            select: { id: true, name: true, promptpayId: true },
+            select: {
+              id: true,
+              name: true,
+              promptpayId: true,
+              orgConfig: { select: { bookingQuotaPerVendor: true } },
+            },
           },
         },
       }),
@@ -59,10 +65,17 @@ export class AuthController {
         logoAvailableAt: getShopLogoAvailableAt(shop.logoUpdatedAt),
         categories: shop.categories.map(({ category }) => category),
       })),
-      organizations: memberships.map(({ role, organization }) => ({
-        ...organization,
-        membershipRole: role,
-      })),
+      organizations: memberships.map(
+        ({ role, canEditQuota, organization }) => ({
+          id: organization.id,
+          name: organization.name,
+          promptpayId: organization.promptpayId,
+          membershipRole: role,
+          canEditQuota,
+          bookingQuotaPerVendor:
+            organization.orgConfig?.bookingQuotaPerVendor ?? null,
+        }),
+      ),
     };
   }
 }

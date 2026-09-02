@@ -249,6 +249,7 @@ model OrgMembership {
   organizationId String         @map("organization_id") @db.Uuid
   userId         String         @map("user_id") @db.Uuid
   role           MembershipRole @default(ADMIN)
+  canEditQuota   Boolean        @default(false) @map("can_edit_quota")
   joinedAt       DateTime       @default(now()) @map("joined_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

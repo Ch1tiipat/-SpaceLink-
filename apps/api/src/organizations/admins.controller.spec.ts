@@ -15,15 +15,21 @@ import { AdminsController } from './admins.controller';
 import { OrganizationsService } from './organizations.service';
 
 const listAllAdmins = jest.fn();
-const service = { listAllAdmins } as unknown as OrganizationsService;
+const setQuotaEditPermission = jest.fn();
+const service = {
+  listAllAdmins,
+  setQuotaEditPermission,
+} as unknown as OrganizationsService;
 
-function handler(): object {
+function handler(
+  name: 'findAll' | 'updateQuotaPermission' = 'findAll',
+): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     AdminsController.prototype,
-    'findAll',
+    name,
   );
   if (!descriptor) {
-    throw new Error('Missing controller handler: findAll');
+    throw new Error(`Missing controller handler: ${name}`);
   }
   return descriptor.value as object;
 }
@@ -55,5 +61,40 @@ describe('AdminsController', () => {
 
     expect(listAllAdmins).toHaveBeenCalledTimes(1);
     expect(listAllAdmins).toHaveBeenCalledWith();
+  });
+
+  it('protects quota permission updates with SUPER_ADMIN only', () => {
+    const updateHandler = handler('updateQuotaPermission');
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, updateHandler)).toEqual([
+      SupabaseAuthGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(GUARDS_METADATA, updateHandler)).not.toContain(
+      OrgScopeGuard,
+    );
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, updateHandler)).toBeUndefined();
+    expect(Reflect.getMetadata(ROLES_KEY, updateHandler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
+
+  it('passes the membership, permission, and actor to the service', async () => {
+    setQuotaEditPermission.mockResolvedValue({
+      id: 'membership-1',
+      canEditQuota: true,
+    });
+
+    await expect(
+      controller.updateQuotaPermission('membership-1', { canEditQuota: true }, {
+        id: 'actor-1',
+      } as never),
+    ).resolves.toEqual({ id: 'membership-1', canEditQuota: true });
+
+    expect(setQuotaEditPermission).toHaveBeenCalledWith(
+      'membership-1',
+      true,
+      'actor-1',
+    );
   });
 });

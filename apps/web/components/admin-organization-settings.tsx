@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { BadgeCheck, Building2, Landmark, ShieldCheck } from 'lucide-react';
+import { BadgeCheck, Building2, Gauge, Landmark, ShieldCheck } from 'lucide-react';
 import {
   getMe,
+  updateOrganizationBookingQuota,
   updateOrganizationPromptPay,
   type CurrentUser,
 } from '@/lib/api';
@@ -20,15 +21,23 @@ export function AdminOrganizationSettings() {
   const { selectedOrganizationId } = useAdminOrganizationSelection();
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
+  const [userRole, setUserRole] = useState<CurrentUser['role'] | null>(null);
   const [organizations, setOrganizations] = useState<
     CurrentUser['organizations']
   >([]);
   const [organizationId, setOrganizationId] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [promptpayId, setPromptpayId] = useState('');
+  const [currentBookingQuota, setCurrentBookingQuota] = useState<number | null>(
+    null,
+  );
+  const [bookingQuotaInput, setBookingQuotaInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [quotaSaving, setQuotaSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [quotaSuccess, setQuotaSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,6 +67,7 @@ export function AdminOrganizationSettings() {
         }
 
         setToken(accessToken);
+        setUserRole(me.role);
         setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
@@ -82,9 +92,24 @@ export function AdminOrganizationSettings() {
     setOrganizationId(organization.id);
     setOrganizationName(organization.name);
     setPromptpayId(organization.promptpayId ?? '');
+    setCurrentBookingQuota(organization.bookingQuotaPerVendor);
+    setBookingQuotaInput(
+      organization.bookingQuotaPerVendor?.toString() ?? '',
+    );
+  }, [access, organizations, selectedOrganizationId]);
+
+  useEffect(() => {
     setError(null);
     setSuccess(null);
-  }, [access, organizations, selectedOrganizationId]);
+    setQuotaError(null);
+    setQuotaSuccess(null);
+  }, [selectedOrganizationId]);
+
+  const selectedOrganization = organizations.find(
+    ({ id }) => id === organizationId,
+  );
+  const canEditBookingQuota =
+    userRole === 'ORG_ADMIN' && selectedOrganization?.canEditQuota === true;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,6 +134,60 @@ export function AdminOrganizationSettings() {
       setError(cause instanceof Error ? cause.message : 'บันทึกหมายเลข PromptPay ไม่สำเร็จ');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleQuotaSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setQuotaError(null);
+    setQuotaSuccess(null);
+
+    if (!/^\d+$/.test(bookingQuotaInput)) {
+      setQuotaError('กรุณากรอกโควตาเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');
+      return;
+    }
+
+    const bookingQuotaPerVendor = Number(bookingQuotaInput);
+    if (!Number.isSafeInteger(bookingQuotaPerVendor)) {
+      setQuotaError('ค่าโควตามีขนาดใหญ่เกินกว่าที่ระบบรองรับ');
+      return;
+    }
+
+    setQuotaSaving(true);
+    let quotaUpdated = false;
+    try {
+      await updateOrganizationBookingQuota(
+        organizationId,
+        bookingQuotaPerVendor,
+        token,
+      );
+      quotaUpdated = true;
+
+      const refreshed = await getMe(token);
+      const refreshedOrganization = refreshed.organizations.find(
+        ({ id }) => id === organizationId,
+      );
+      if (!refreshedOrganization) {
+        throw new Error('ไม่พบองค์กรที่เพิ่งอัปเดตในข้อมูลบัญชีล่าสุด');
+      }
+
+      setOrganizations(refreshed.organizations);
+      setUserRole(refreshed.role);
+      setCurrentBookingQuota(refreshedOrganization.bookingQuotaPerVendor);
+      setBookingQuotaInput(
+        refreshedOrganization.bookingQuotaPerVendor?.toString() ?? '',
+      );
+      setQuotaSuccess('บันทึกโควตาการจองเรียบร้อยแล้ว');
+    } catch (cause) {
+      setQuotaError(
+        quotaUpdated
+          ? 'บันทึกแล้วแต่โหลดค่าล่าสุดไม่สำเร็จ กรุณาโหลดหน้านี้ใหม่'
+          : cause instanceof Error
+            ? cause.message
+            : 'บันทึกโควตาการจองไม่สำเร็จ',
+      );
+    } finally {
+      setQuotaSaving(false);
     }
   }
 
@@ -150,10 +229,10 @@ export function AdminOrganizationSettings() {
             Organization settings
           </span>
           <h1 className="mt-5 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
-            ตั้งค่ารับชำระเงิน PromptPay
+            ตั้งค่าองค์กร
           </h1>
           <p className="mt-3 max-w-2xl text-muted">
-            QR ของรายการจองจะสร้างจากหมายเลขขององค์กรนี้และยอดค่าบูธจริง โดยข้อมูลส่วนนี้เปิดให้เฉพาะผู้ดูแลองค์กร
+            จัดการบัญชีรับชำระเงินและโควตาการจองขององค์กรตามสิทธิ์ที่ได้รับ
           </p>
         </section>
 
@@ -172,7 +251,8 @@ export function AdminOrganizationSettings() {
             </div>
           </aside>
 
-          <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
+          <div className="grid gap-6">
+            <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
                 <Landmark className="h-5 w-5" aria-hidden />
@@ -218,7 +298,84 @@ export function AdminOrganizationSettings() {
             >
               {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
             </button>
-          </form>
+            </form>
+
+            {canEditBookingQuota ? (
+              <form
+                className="sl-surface p-6 sm:p-8"
+                onSubmit={handleQuotaSubmit}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
+                    <Gauge className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h2 className="text-xl font-black">โควตาการจองต่ออีเวนต์</h2>
+                    <p className="text-sm text-muted">
+                      จำกัดจำนวนบูธที่ผู้ขายหนึ่งรายจองได้ในแต่ละอีเวนต์
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-6 rounded-2xl bg-[#f8f5fb] px-4 py-3 text-sm text-[#62576c]">
+                  ค่าปัจจุบัน:{' '}
+                  <strong className="text-[#242032]">
+                    {currentBookingQuota === null
+                      ? 'ยังไม่ได้กำหนดค่าเฉพาะองค์กร'
+                      : `${currentBookingQuota.toLocaleString('th-TH')} บูธ`}
+                  </strong>
+                </p>
+
+                <label
+                  className="mt-6 block text-sm font-bold"
+                  htmlFor="booking-quota-per-vendor"
+                >
+                  จำนวนบูธสูงสุดต่อผู้ขาย
+                </label>
+                <input
+                  id="booking-quota-per-vendor"
+                  name="bookingQuotaPerVendor"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3.5 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                  value={bookingQuotaInput}
+                  onChange={(event) => {
+                    setBookingQuotaInput(event.target.value.replace(/\D/g, ''));
+                    setQuotaError(null);
+                    setQuotaSuccess(null);
+                  }}
+                  placeholder="เช่น 2"
+                  aria-describedby="booking-quota-help booking-quota-feedback"
+                />
+                <p id="booking-quota-help" className="mt-2 text-xs text-muted">
+                  กำหนดเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป โดย 0 หมายถึงไม่อนุญาตให้จอง
+                </p>
+
+                <div id="booking-quota-feedback" aria-live="polite">
+                  {quotaError ? (
+                    <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                      {quotaError}
+                    </p>
+                  ) : null}
+                  {quotaSuccess ? (
+                    <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                      {quotaSuccess}
+                    </p>
+                  ) : null}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={quotaSaving}
+                  className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {quotaSaving ? 'กำลังบันทึก...' : 'บันทึกโควตาการจอง'}
+                </button>
+              </form>
+            ) : null}
+          </div>
         </section>
       </div>
     </main>

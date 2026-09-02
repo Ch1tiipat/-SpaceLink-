@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -15,9 +15,13 @@ const organizationUpdate = jest.fn();
 const userFindUnique = jest.fn();
 const userUpdate = jest.fn();
 const orgMembershipFindMany = jest.fn();
+const orgMembershipFindUnique = jest.fn();
 const orgMembershipCreate = jest.fn();
+const orgMembershipUpdate = jest.fn();
 const orgMembershipDelete = jest.fn();
 const orgMembershipCount = jest.fn();
+const orgConfigFindUnique = jest.fn();
+const orgConfigUpsert = jest.fn();
 const prismaTransaction = jest.fn();
 const record = jest.fn();
 const mockAuditLogsService = { record };
@@ -34,9 +38,15 @@ const mockPrismaService = {
   },
   orgMembership: {
     findMany: orgMembershipFindMany,
+    findUnique: orgMembershipFindUnique,
     create: orgMembershipCreate,
+    update: orgMembershipUpdate,
     delete: orgMembershipDelete,
     count: orgMembershipCount,
+  },
+  orgConfig: {
+    findUnique: orgConfigFindUnique,
+    upsert: orgConfigUpsert,
   },
   $transaction: prismaTransaction,
 };
@@ -52,6 +62,7 @@ const MEMBERSHIP = {
   organizationId: ORGANIZATION_ID,
   userId: USER_ID,
   role: MembershipRole.ADMIN,
+  canEditQuota: false,
   joinedAt: JOINED_AT,
 };
 
@@ -67,9 +78,16 @@ describe('OrganizationsService', () => {
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
     );
     orgMembershipFindMany.mockResolvedValue([]);
+    orgMembershipFindUnique.mockResolvedValue({ canEditQuota: true });
     orgMembershipCreate.mockResolvedValue(MEMBERSHIP);
+    orgMembershipUpdate.mockResolvedValue(MEMBERSHIP);
     orgMembershipDelete.mockResolvedValue(MEMBERSHIP);
     orgMembershipCount.mockResolvedValue(0);
+    orgConfigFindUnique.mockResolvedValue(null);
+    orgConfigUpsert.mockResolvedValue({
+      organizationId: ORGANIZATION_ID,
+      bookingQuotaPerVendor: 3,
+    });
     userFindUnique.mockResolvedValue({
       id: USER_ID,
       email: USER_EMAIL,
@@ -182,6 +200,7 @@ describe('OrganizationsService', () => {
     const admins = [
       {
         id: MEMBERSHIP_ID,
+        canEditQuota: false,
         joinedAt: JOINED_AT,
         user: {
           id: USER_ID,
@@ -201,6 +220,7 @@ describe('OrganizationsService', () => {
       },
       select: {
         id: true,
+        canEditQuota: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -217,6 +237,7 @@ describe('OrganizationsService', () => {
     const admins = [
       {
         id: MEMBERSHIP_ID,
+        canEditQuota: true,
         joinedAt: JOINED_AT,
         user: {
           id: USER_ID,
@@ -237,6 +258,7 @@ describe('OrganizationsService', () => {
       where: { role: MembershipRole.ADMIN },
       select: {
         id: true,
+        canEditQuota: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -250,6 +272,187 @@ describe('OrganizationsService', () => {
 
   it('returns an empty cross-organization admin list when none exist', async () => {
     await expect(service.listAllAdmins()).resolves.toEqual([]);
+  });
+
+  it('updates one membership quota permission and records its audit event', async () => {
+    orgMembershipUpdate.mockResolvedValue({
+      ...MEMBERSHIP,
+      canEditQuota: true,
+    });
+
+    await expect(
+      service.setQuotaEditPermission(MEMBERSHIP_ID, true, ACTOR_USER_ID),
+    ).resolves.toEqual(expect.objectContaining({ canEditQuota: true }));
+
+    expect(orgMembershipUpdate).toHaveBeenCalledWith({
+      where: { id: MEMBERSHIP_ID },
+      data: { canEditQuota: true },
+    });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'QUOTA_EDIT_PERMISSION_UPDATED',
+      targetType: 'ORG_MEMBERSHIP',
+      targetId: MEMBERSHIP_ID,
+      metadata: { canEditQuota: true },
+    });
+    expect(orgConfigUpsert).not.toHaveBeenCalled();
+  });
+
+  it('lets the global Prisma filter handle a missing membership update', async () => {
+    const notFound = new Prisma.PrismaClientKnownRequestError(
+      'Record not found',
+      { code: 'P2025', clientVersion: 'test' },
+    );
+    orgMembershipUpdate.mockRejectedValue(notFound);
+
+    await expect(
+      service.setQuotaEditPermission(MEMBERSHIP_ID, true, ACTOR_USER_ID),
+    ).rejects.toBe(notFound);
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('allows a delegated ORG_ADMIN to update an existing quota atomically', async () => {
+    orgConfigFindUnique.mockResolvedValue({ bookingQuotaPerVendor: 2 });
+    orgConfigUpsert.mockResolvedValue({
+      organizationId: ORGANIZATION_ID,
+      bookingQuotaPerVendor: 3,
+    });
+
+    await expect(
+      service.updateBookingQuota(
+        ORGANIZATION_ID,
+        3,
+        { id: USER_ID, role: UserRole.ORG_ADMIN },
+        ACTOR_USER_ID,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ bookingQuotaPerVendor: 3 }));
+
+    expect(prismaTransaction).toHaveBeenCalledTimes(1);
+    expect(orgMembershipFindUnique).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: {
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        },
+      },
+      select: { canEditQuota: true },
+    });
+    expect(orgConfigFindUnique).toHaveBeenCalledWith({
+      where: { organizationId: ORGANIZATION_ID },
+      select: { bookingQuotaPerVendor: true },
+    });
+    expect(orgConfigUpsert).toHaveBeenCalledWith({
+      where: { organizationId: ORGANIZATION_ID },
+      create: { organizationId: ORGANIZATION_ID, bookingQuotaPerVendor: 3 },
+      update: { bookingQuotaPerVendor: 3 },
+    });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'BOOKING_QUOTA_UPDATED',
+      targetType: 'ORGANIZATION',
+      targetId: ORGANIZATION_ID,
+      metadata: { from: 2, to: 3 },
+    });
+  });
+
+  it.each([null, { canEditQuota: false }])(
+    'rejects an ORG_ADMIN without delegated quota permission (%p)',
+    async (membership) => {
+      orgMembershipFindUnique.mockResolvedValue(membership);
+
+      await expect(
+        service.updateBookingQuota(
+          ORGANIZATION_ID,
+          3,
+          { id: USER_ID, role: UserRole.ORG_ADMIN },
+          ACTOR_USER_ID,
+        ),
+      ).rejects.toThrow(
+        new ForbiddenException('คุณไม่มีสิทธิ์แก้ไขโควตาการจองขององค์กรนี้'),
+      );
+
+      expect(orgConfigUpsert).not.toHaveBeenCalled();
+      expect(record).not.toHaveBeenCalled();
+    },
+  );
+
+  it('checks the requested organization instead of any other membership', async () => {
+    const otherOrganizationId = '00000000-0000-4000-8000-000000000004';
+    orgMembershipFindUnique.mockResolvedValue(null);
+
+    await expect(
+      service.updateBookingQuota(
+        otherOrganizationId,
+        3,
+        { id: USER_ID, role: UserRole.ORG_ADMIN },
+        ACTOR_USER_ID,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(orgMembershipFindUnique).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: {
+          organizationId: otherOrganizationId,
+          userId: USER_ID,
+        },
+      },
+      select: { canEditQuota: true },
+    });
+  });
+
+  it('lets SUPER_ADMIN create a missing OrgConfig without a permission lookup', async () => {
+    orgConfigFindUnique.mockResolvedValue(null);
+    orgConfigUpsert.mockResolvedValue({
+      organizationId: ORGANIZATION_ID,
+      bookingQuotaPerVendor: 4,
+    });
+
+    await service.updateBookingQuota(
+      ORGANIZATION_ID,
+      4,
+      { id: ACTOR_USER_ID, role: UserRole.SUPER_ADMIN },
+      ACTOR_USER_ID,
+    );
+
+    expect(orgMembershipFindUnique).not.toHaveBeenCalled();
+    expect(orgConfigUpsert).toHaveBeenCalledWith({
+      where: { organizationId: ORGANIZATION_ID },
+      create: { organizationId: ORGANIZATION_ID, bookingQuotaPerVendor: 4 },
+      update: { bookingQuotaPerVendor: 4 },
+    });
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { from: null, to: 4 } }),
+    );
+  });
+
+  it('keeps the configured quota when permission is revoked later', async () => {
+    let storedQuota: number | null = null;
+    orgConfigFindUnique.mockImplementation(() =>
+      Promise.resolve(
+        storedQuota === null ? null : { bookingQuotaPerVendor: storedQuota },
+      ),
+    );
+    orgConfigUpsert.mockImplementation(
+      ({ create }: { create: { bookingQuotaPerVendor: number } }) => {
+        storedQuota = create.bookingQuotaPerVendor;
+        return Promise.resolve({
+          organizationId: ORGANIZATION_ID,
+          bookingQuotaPerVendor: storedQuota,
+        });
+      },
+    );
+
+    await service.updateBookingQuota(
+      ORGANIZATION_ID,
+      5,
+      { id: ACTOR_USER_ID, role: UserRole.SUPER_ADMIN },
+      ACTOR_USER_ID,
+    );
+    await service.setQuotaEditPermission(MEMBERSHIP_ID, false, ACTOR_USER_ID);
+
+    expect(storedQuota).toBe(5);
+    expect(orgConfigUpsert).toHaveBeenCalledTimes(1);
   });
 
   it('grants admin membership and promotes a vendor atomically', async () => {
