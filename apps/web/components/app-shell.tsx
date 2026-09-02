@@ -27,7 +27,6 @@ import {
   Phone,
   RotateCcw,
   Send,
-  ShieldCheck,
   Sparkles,
   Star,
   Store,
@@ -195,13 +194,6 @@ const ADMIN_NAV_GROUP: NavGroup = {
     },
     {
       kind: "link",
-      label: "ยืนยันพิเศษ",
-      href: "/admin/booking-rescue",
-      icon: ShieldCheck,
-      matches: (pathname) => pathname.startsWith("/admin/booking-rescue"),
-    },
-    {
-      kind: "link",
       label: "โซนและบูธ",
       href: "/admin/zones",
       icon: MapPinned,
@@ -254,11 +246,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
 
 const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
   ...NAV_GROUPS[1],
-  items: NAV_GROUPS[1].items.map((item) =>
-    item.kind === "link" && item.href === "/help"
-      ? { ...item, label: "ส่งคำร้องถึง Super Admin" }
-      : item,
-  ),
+  items: NAV_GROUPS[1].items
+    .filter((item) => item.kind !== "link" || item.href !== "/bookings")
+    .map((item) =>
+      item.kind === "link" && item.href === "/help"
+        ? { ...item, label: "ส่งคำร้องถึง Super Admin" }
+        : item,
+    ),
 };
 
 /** Below `lg` the sidebar is replaced by this bar, so it repeats its items. */
