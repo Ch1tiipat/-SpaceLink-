@@ -1484,6 +1484,19 @@ export function updateSuperAdminOrganizationStatus(
   );
 }
 
+export function updateSuperAdminOrganizationPromptPay(
+  organizationId: string,
+  promptpayId: string,
+  token: string,
+): Promise<OrganizationSettings> {
+  return patchJson<OrganizationSettings>(
+    `/organizations/${encodeURIComponent(organizationId)}`,
+    { promptpayId },
+    { token },
+    "บันทึกหมายเลข PromptPay ขององค์กรไม่สำเร็จ",
+  );
+}
+
 export function getSuperAdminCompanyAdmins(
   token: string,
   signal?: AbortSignal,

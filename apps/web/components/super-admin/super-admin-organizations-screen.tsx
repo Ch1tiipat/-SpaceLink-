@@ -5,6 +5,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  PencilLine,
   Plus,
   RefreshCw,
   Search,
@@ -15,6 +16,7 @@ import {
   createSuperAdminOrganization,
   getSuperAdminCompanyAdmins,
   getSuperAdminOrganizations,
+  updateSuperAdminOrganizationPromptPay,
   updateSuperAdminOrganizationStatus,
   type CreateSuperAdminOrganizationInput,
   type SuperAdminCompanyAdmin,
@@ -40,6 +42,8 @@ export function SuperAdminOrganizationsScreen() {
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingOrganization, setEditingOrganization] =
+    useState<SuperAdminOrganization | null>(null);
   const [savingId, setSavingId] = useState('');
   const [toast, setToast] = useState('');
 
@@ -163,6 +167,20 @@ export function SuperAdminOrganizationsScreen() {
     }
   }
 
+  async function updatePromptPay(
+    organization: SuperAdminOrganization,
+    promptpayId: string,
+  ) {
+    const token = await getAccessToken();
+    await updateSuperAdminOrganizationPromptPay(
+      organization.id,
+      promptpayId,
+      token,
+    );
+    setEditingOrganization(null);
+    setToast(`บันทึก PromptPay ของ ${organization.name} แล้ว`);
+  }
+
   const hasFilters = query.trim().length > 0 || status !== 'ALL';
 
   return (
@@ -181,7 +199,7 @@ export function SuperAdminOrganizationsScreen() {
 
       <section className="mb-[18px] flex flex-col gap-2 rounded-[11px] border border-[#e1d5ef] bg-[#fbf8ff] px-3.5 py-3 text-xs text-[#675d70] sm:flex-row sm:items-center">
         <span className="w-fit shrink-0 rounded-full bg-[#eee5fb] px-2.5 py-1 text-[11px] font-extrabold text-[#6d28d9]">Backend พร้อมใช้</span>
-        <p className="m-0">รองรับรายชื่อ สร้าง และเปลี่ยนสถานะองค์กร · ทุก action ตรวจ SUPER_ADMIN ฝั่ง Server</p>
+        <p className="m-0">รองรับรายชื่อ สร้าง แก้ PromptPay และเปลี่ยนสถานะองค์กร · ทุก action ตรวจ SUPER_ADMIN ฝั่ง Server</p>
       </section>
 
       <section className="mb-[18px] grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
@@ -233,7 +251,7 @@ export function SuperAdminOrganizationsScreen() {
                       <td className="px-[7px] py-[13px]">{organization.contactEmail}<small className="mt-0.5 block text-[11px] text-[#82788b]">{organization.contactPhone || '—'}</small></td>
                       <td className="px-[7px] py-[13px]"><StatusPill status={organization.status} /></td>
                       <td className="px-[7px] py-[13px] font-bold">{adminCounts.get(organization.id) ?? 0} คน</td>
-                      <td className="px-[7px] py-[13px]"><StatusSelect organization={organization} disabled={savingId === organization.id} onChange={updateStatus} /></td>
+                      <td className="px-[7px] py-[13px]"><div className="flex items-center gap-2"><StatusSelect organization={organization} disabled={savingId === organization.id} onChange={updateStatus} /><button type="button" onClick={() => setEditingOrganization(organization)} className="inline-flex min-h-8 items-center gap-1 rounded-[7px] border border-[#dac8f3] bg-white px-2 text-[11px] font-bold text-[#6d28d9] hover:bg-[#f8f3ff]" aria-label={`แก้ PromptPay ของ ${organization.name}`}><PencilLine className="h-3.5 w-3.5" />แก้ PromptPay</button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -255,6 +273,7 @@ export function SuperAdminOrganizationsScreen() {
       </section>
 
       {createOpen ? <CreateOrganizationDialog onClose={() => setCreateOpen(false)} onCreate={createOrganization} /> : null}
+      {editingOrganization ? <EditPromptPayDialog organization={editingOrganization} onClose={() => setEditingOrganization(null)} onSave={updatePromptPay} /> : null}
       {toast ? <div role="status" className="fixed bottom-6 right-6 z-[70] max-w-[calc(100vw-3rem)] rounded-[10px] bg-[#1f1730] px-4 py-3 text-xs font-bold text-white shadow-[0_14px_35px_rgba(28,14,47,.25)]">{toast}</div> : null}
     </div>
   );
@@ -274,6 +293,14 @@ function CreateOrganizationDialog({ onClose, onCreate }: { onClose: () => void; 
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setError(''); try { await onCreate({ name: form.name.trim(), contactEmail: form.contactEmail.trim(), contactPhone: form.contactPhone.trim() || undefined, promptpayId: form.promptpayId.trim() || undefined }); } catch (cause) { setError(errorMessage(cause, 'สร้างองค์กรไม่สำเร็จ')); setSaving(false); } }
   return <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-[rgba(25,17,38,.48)] p-[18px] backdrop-blur-[3px]"><button type="button" onClick={onClose} className="absolute inset-0" aria-label="ปิดหน้าต่างสร้างองค์กร" /><section role="dialog" aria-modal="true" aria-labelledby="create-org-title" className="relative w-full max-w-[520px] overflow-hidden rounded-[18px] border border-[#e3d8f0] bg-white shadow-[0_28px_80px_rgba(28,14,47,.28)]"><header className="flex items-start justify-between border-b border-[#eee8f4] bg-[linear-gradient(135deg,#fff,#faf5ff)] px-[22px] pb-3.5 pt-5"><div><span className="text-[11px] font-extrabold tracking-[1px] text-[#7c3aed]">POST /organizations</span><h2 id="create-org-title" className="mb-0 mt-1 text-xl font-black">สร้างองค์กร</h2></div><button type="button" onClick={onClose} className="grid h-[34px] w-[34px] place-items-center rounded-[9px] border border-[#e7dfea] bg-white text-[#746a7d]" aria-label="ปิด"><X className="h-4 w-4" /></button></header><form onSubmit={submit} className="grid gap-3.5 px-[22px] pb-[22px] pt-[19px]"><Field label="ชื่อองค์กร" required value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} /><Field label="Contact email" type="email" required value={form.contactEmail} onChange={(value) => setForm((current) => ({ ...current, contactEmail: value }))} /><Field label="Contact phone" type="tel" value={form.contactPhone} onChange={(value) => setForm((current) => ({ ...current, contactPhone: value }))} /><Field label="PromptPay ID" inputMode="numeric" pattern="\d{10}|\d{13}|\d{15}" value={form.promptpayId} onChange={(value) => setForm((current) => ({ ...current, promptpayId: value.replace(/\D/g, '') }))} /><p className="m-0 rounded-lg bg-[#fff8e8] px-[11px] py-[9px] text-[11px] text-[#80632a]">สถานะเริ่มต้นคือ ACTIVE · PromptPay ไม่บังคับ</p>{error ? <p className="m-0 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{error}</p> : null}<div className="mt-0.5 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={saving} className="min-h-[38px] rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675]">ยกเลิก</button><button type="submit" disabled={saving} className="min-h-[38px] rounded-lg bg-[linear-gradient(135deg,#9656f0,#6d28d9)] px-[13px] text-[13px] font-bold text-white disabled:opacity-55">{saving ? 'กำลังสร้าง…' : 'ยืนยันและสร้าง'}</button></div></form></section></div>;
+}
+
+function EditPromptPayDialog({ organization, onClose, onSave }: { organization: SuperAdminOrganization; onClose: () => void; onSave: (organization: SuperAdminOrganization, promptpayId: string) => Promise<void> }) {
+  const [promptpayId, setPromptpayId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setError(''); try { await onSave(organization, promptpayId); } catch (cause) { setError(errorMessage(cause, 'บันทึกหมายเลข PromptPay ไม่สำเร็จ')); setSaving(false); } }
+  return <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-[rgba(25,17,38,.48)] p-[18px] backdrop-blur-[3px]"><button type="button" onClick={onClose} className="absolute inset-0" aria-label="ปิดหน้าต่างแก้ PromptPay" /><section role="dialog" aria-modal="true" aria-labelledby="edit-promptpay-title" className="relative w-full max-w-[520px] overflow-hidden rounded-[18px] border border-[#e3d8f0] bg-white shadow-[0_28px_80px_rgba(28,14,47,.28)]"><header className="flex items-start justify-between border-b border-[#eee8f4] bg-[linear-gradient(135deg,#fff,#faf5ff)] px-[22px] pb-3.5 pt-5"><div><span className="text-[11px] font-extrabold tracking-[1px] text-[#7c3aed]">PATCH /organizations/:id</span><h2 id="edit-promptpay-title" className="mb-0 mt-1 text-xl font-black">แก้ PromptPay</h2><p className="mb-0 mt-1 text-xs text-[#82788b]">{organization.name}</p></div><button type="button" onClick={onClose} className="grid h-[34px] w-[34px] place-items-center rounded-[9px] border border-[#e7dfea] bg-white text-[#746a7d]" aria-label="ปิด"><X className="h-4 w-4" /></button></header><form onSubmit={submit} className="grid gap-3.5 px-[22px] pb-[22px] pt-[19px]"><Field label="PromptPay ID ใหม่" required inputMode="numeric" pattern="\d{10}|\d{13}|\d{15}" value={promptpayId} onChange={(value) => setPromptpayId(value.replace(/\D/g, ''))} /><p className="m-0 rounded-lg bg-[#fff8e8] px-[11px] py-[9px] text-[11px] text-[#80632a]">กรอกเบอร์โทรศัพท์ 10 หลัก เลขบัตรประชาชน 13 หลัก หรือเลข e-Wallet 15 หลัก · ระบบไม่แสดงค่าเดิมเพื่อปกป้องข้อมูลการรับเงิน</p>{error ? <p className="m-0 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{error}</p> : null}<div className="mt-0.5 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={saving} className="min-h-[38px] rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] disabled:opacity-55">ยกเลิก</button><button type="submit" disabled={saving} className="min-h-[38px] rounded-lg bg-[linear-gradient(135deg,#9656f0,#6d28d9)] px-[13px] text-[13px] font-bold text-white disabled:opacity-55">{saving ? 'กำลังบันทึก…' : 'บันทึก PromptPay'}</button></div></form></section></div>;
 }
 
 function Field({ label, value, onChange, type = 'text', required = false, inputMode, pattern }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; inputMode?: 'numeric'; pattern?: string }) { return <label className="grid gap-1.5 text-xs font-bold text-[#4d4356]">{label}{required ? <span className="sr-only">จำเป็น</span> : null}<input type={type} required={required} inputMode={inputMode} pattern={pattern} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-[9px] border border-[#ded5e7] bg-white px-[11px] py-2.5 font-medium text-[#28202f] outline-none focus:border-[#9b6be1] focus:ring-4 focus:ring-[#f0e7ff]" /></label>; }

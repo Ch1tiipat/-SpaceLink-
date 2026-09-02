@@ -63,6 +63,11 @@ const BANGKOK_LOGO_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
   minute: '2-digit',
   hour12: false,
 });
+const ROLE_LABELS: Record<CurrentUser['role'], string> = {
+  SUPER_ADMIN: 'ผู้ดูแลระบบส่วนกลาง',
+  ORG_ADMIN: 'ผู้ดูแลองค์กร',
+  VENDOR: 'ผู้ขาย',
+};
 
 /**
  * Resolves `null` when the bytes cannot be decoded as an image — the same
@@ -108,12 +113,21 @@ export function ProfileShopScreen() {
   // three come from the same `ready` branch of the same render.
   const ready = state.status === 'ready' ? state : null;
   const readyShopId = ready?.shop?.id ?? null;
+  const isVendor = ready?.profile.role === 'VENDOR';
 
-  // Product categories are public reference data (GET /categories has no
-  // guard), so this is deliberately not gated behind the session — the form
-  // needs its options whether or not `/auth/me` has answered yet.
+  // Product categories are public reference data, but only the vendor form
+  // needs them. Waiting for `/auth/me` avoids an unrelated request when an
+  // administrator opens the account-only profile branch below.
   useEffect(() => {
+    if (!isVendor) {
+      setCategories([]);
+      setCategoriesError(null);
+      return;
+    }
+
     const controller = new AbortController();
+    setCategories(null);
+    setCategoriesError(null);
 
     getCategories(controller.signal)
       .then(setCategories)
@@ -125,7 +139,7 @@ export function ProfileShopScreen() {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [isVendor]);
 
   useEffect(() => {
     if (!readyShopId) {
@@ -171,7 +185,9 @@ export function ProfileShopScreen() {
               โปรไฟล์ของฉัน
             </h1>
             <p className="mt-2 text-muted">
-              ข้อมูลนี้จะถูกดึงไปใช้ในการจองและแสดงบนบูธ
+              {ready && !isVendor
+                ? 'ตรวจสอบข้อมูลบัญชีและช่องทางติดต่อของผู้ดูแลระบบ'
+                : 'ข้อมูลนี้จะถูกดึงไปใช้ในการจองและแสดงบนบูธ'}
             </p>
           </div>
 
@@ -188,7 +204,7 @@ export function ProfileShopScreen() {
           <section className="sl-surface mt-8 p-8 text-center">
             <h2 className="text-xl font-bold">กรุณาเข้าสู่ระบบก่อน</h2>
             <p className="mt-2 text-muted">
-              โปรไฟล์และข้อมูลร้านค้าจะแสดงเฉพาะของบัญชีผู้ขายปัจจุบัน
+              โปรไฟล์จะแสดงเฉพาะข้อมูลของบัญชีที่เข้าสู่ระบบอยู่
             </p>
             <Link
               href="/login"
@@ -208,7 +224,15 @@ export function ProfileShopScreen() {
           </p>
         )}
 
-        {ready && !ready.shop && (
+        {ready && !isVendor && (
+          <AdminAccountProfile
+            profile={ready.profile}
+            token={ready.token}
+            refresh={refresh}
+          />
+        )}
+
+        {ready && isVendor && !ready.shop && (
           <section className="sl-surface mt-8 p-6 sm:p-8">
             <h2 className="text-xl font-bold">เพิ่มข้อมูลร้านค้า</h2>
             <p className="mt-2 max-w-2xl text-muted">
@@ -231,7 +255,7 @@ export function ProfileShopScreen() {
           </section>
         )}
 
-        {ready && ready.shop && (
+        {ready && isVendor && ready.shop && (
           <>
             {phoneSaveWarning && (
               <p
@@ -417,6 +441,39 @@ export function ProfileShopScreen() {
       </div>
     </main>
   );
+}
+
+function AdminAccountProfile({ profile, token, refresh }: { profile: CurrentUser; token: string; refresh: () => void }) {
+  const [phone, setPhone] = useState(profile.phone ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => setPhone(profile.phone ?? ''), [profile.phone]);
+
+  async function savePhone() {
+    const normalizedPhone = phone.trim();
+    if (!THAI_PHONE_PATTERN.test(normalizedPhone)) {
+      setError('กรุณากรอกเบอร์โทรศัพท์ไทย 9–10 หลักและขึ้นต้นด้วย 0');
+      setNotice('');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await updateMe({ phone: normalizedPhone }, token);
+      setNotice('บันทึกเบอร์โทรศัพท์เรียบร้อยแล้ว');
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'บันทึกข้อมูลส่วนตัวไม่สำเร็จ');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <section className="sl-surface mt-8 overflow-hidden"><div className="border-b border-line bg-[linear-gradient(135deg,#fff,#faf7ff)] p-6 sm:p-8"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">{[...profile.fullName.trim()][0] ?? '?'}</span><div className="min-w-0"><span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-xs font-extrabold text-violet">{ROLE_LABELS[profile.role]}</span><h2 className="mt-3 truncate text-2xl font-black text-ink">{profile.fullName}</h2><p className="mt-1 truncate text-sm text-muted">{profile.email}</p></div></div></div><div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.8fr)]"><div><span className="sl-kicker">Account information</span><h3 className="mt-2 text-lg font-bold text-ink">ข้อมูลบัญชีผู้ดูแลระบบ</h3><dl className="mt-5 grid gap-4 sm:grid-cols-2"><InfoLine icon={UserRound} label="ชื่อบัญชี" value={profile.fullName} /><InfoLine icon={Mail} label="อีเมล" value={profile.email} /><InfoLine icon={Phone} label="เบอร์โทรศัพท์" value={profile.phone ?? 'ยังไม่ระบุ'} /><InfoLine icon={BadgeCheck} label="สิทธิ์การใช้งาน" value={ROLE_LABELS[profile.role]} /></dl>{profile.organizations.length > 0 ? <div className="mt-5"><span className="text-xs font-bold text-muted">องค์กรที่ดูแล</span><div className="mt-2 flex flex-wrap gap-2">{profile.organizations.map((organization) => <span key={organization.id} className="rounded-full bg-[#f1eaff] px-3 py-1.5 text-xs font-extrabold text-violet">{organization.name}</span>)}</div></div> : null}</div><div className="rounded-2xl border border-[#e5ddec] bg-[#fcfbff] p-5"><h3 className="font-bold text-ink">แก้ไขข้อมูลติดต่อ</h3><p className="mt-1 text-xs leading-5 text-muted">บัญชีผู้ดูแลแก้ไขได้เฉพาะเบอร์โทรศัพท์ ข้อมูลร้านค้าสงวนไว้สำหรับบัญชีผู้ขายเท่านั้น</p><label className="mt-4 block"><span className="mb-2 block text-sm font-bold">เบอร์โทรศัพท์</span><input type="tel" inputMode="numeric" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="เช่น 0812345678" className="h-11 w-full rounded-xl border border-line bg-white px-4 text-sm outline-none focus:border-violet focus:ring-4 focus:ring-violet-tint" /></label>{error ? <p role="alert" className="mt-3 text-sm text-[#b42318]">{error}</p> : null}{notice ? <p role="status" className="mt-3 text-sm font-bold text-[#13795b]">{notice}</p> : null}<button type="button" onClick={() => void savePhone()} disabled={saving || phone.trim() === (profile.phone ?? '')} className="sl-action-primary mt-5 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'กำลังบันทึก…' : 'บันทึกเบอร์โทรศัพท์'}</button></div></div></section>;
 }
 
 type PushAvailability =
