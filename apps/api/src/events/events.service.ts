@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -444,10 +445,99 @@ export class EventsService {
     };
   }
 
-  remove(id: string, orgId: string) {
-    return this.prisma.event.delete({
-      where: { id, organizationId: orgId },
+  open(id: string, orgId: string) {
+    return this.transitionStatus(
+      id,
+      orgId,
+      EventStatus.CANCELLED,
+      EventStatus.PUBLISHED,
+      'Only cancelled events can be opened',
+    );
+  }
+
+  close(id: string, orgId: string) {
+    return this.transitionStatus(
+      id,
+      orgId,
+      [EventStatus.PUBLISHED, EventStatus.ONGOING],
+      EventStatus.CANCELLED,
+      'Only published or ongoing events can be closed',
+    );
+  }
+
+  async remove(id: string, orgId: string) {
+    try {
+      return await this.prisma.event.delete({
+        where: {
+          id,
+          organizationId: orgId,
+          bookings: { none: {} },
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        const existing = await this.prisma.event.findFirst({
+          where: { id, organizationId: orgId },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new ConflictException(
+            'ไม่สามารถลบอีเวนต์นี้ได้เนื่องจากมีประวัติการจองที่เกี่ยวข้องอยู่',
+          );
+        }
+        throw new NotFoundException('Event not found');
+      }
+      throw error;
+    }
+  }
+
+  private async transitionStatus(
+    id: string,
+    orgId: string,
+    from: EventStatus | EventStatus[],
+    to: EventStatus,
+    invalidStatusMessage: string,
+  ) {
+    const result = await this.prisma.event.updateMany({
+      where: {
+        id,
+        organizationId: orgId,
+        status: Array.isArray(from) ? { in: from } : from,
+      },
+      data: { status: to },
     });
+
+    if (result.count === 0) {
+      const existing = await this.prisma.event.findFirst({
+        where: { id, organizationId: orgId },
+        select: { status: true },
+      });
+      if (!existing) {
+        throw new NotFoundException('Event not found');
+      }
+      throw new BadRequestException(invalidStatusMessage);
+    }
+
+    const event = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        venue: { select: { id: true, name: true } },
+        subscription: true,
+      },
+    });
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    return {
+      ...event,
+      subscription: event.subscription
+        ? serializeSubscription(event.subscription)
+        : null,
+    };
   }
 }
 
