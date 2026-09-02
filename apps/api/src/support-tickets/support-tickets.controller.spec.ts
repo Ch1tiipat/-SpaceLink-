@@ -48,16 +48,22 @@ const APPROVE_DTO: ApproveQuotaExceptionDto = {
 };
 
 const create = jest.fn();
+const createForOrganizationAdmin = jest.fn();
 const approveQuotaException = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const mockSupportTicketsService = {
   create,
+  createForOrganizationAdmin,
   approveQuotaException,
   findAllAcrossOrganizations,
 };
 
 function controllerHandler(
-  name: 'create' | 'approveQuotaException' | 'findAllAcrossOrganizations',
+  name:
+    | 'create'
+    | 'createForOrganizationAdmin'
+    | 'approveQuotaException'
+    | 'findAllAcrossOrganizations',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     SupportTicketsController.prototype,
@@ -115,13 +121,19 @@ describe('SupportTicketsController', () => {
     ).toEqual([SupabaseAuthGuard, RolesGuard]);
   });
 
-  it('keeps raising vendor-only and approving admin-only', () => {
+  it('keeps each action restricted to its intended role', () => {
     expect(Reflect.getMetadata(ROLES_KEY, SupportTicketsController)).toEqual([
       UserRole.SUPER_ADMIN,
     ]);
     expect(Reflect.getMetadata(ROLES_KEY, controllerHandler('create'))).toEqual(
       [UserRole.VENDOR],
     );
+    expect(
+      Reflect.getMetadata(
+        ROLES_KEY,
+        controllerHandler('createForOrganizationAdmin'),
+      ),
+    ).toEqual([UserRole.ORG_ADMIN]);
     // SUPER_ADMIN is listed explicitly because OrgScopeGuard bypasses the
     // membership check for that role — omitting it would let a super admin pass
     // OrgScopeGuard and then be rejected by RolesGuard.
@@ -155,12 +167,39 @@ describe('SupportTicketsController', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeUndefined();
   });
 
+  it('scopes organization-admin requests to the selected membership', () => {
+    const handler = controllerHandler('createForOrganizationAdmin');
+
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+    ]);
+  });
+
   it('passes the authenticated vendor id when raising a ticket', async () => {
     create.mockResolvedValue({ id: TICKET_ID });
 
     await controller.create(CREATE_DTO, CURRENT_USER);
 
     expect(create).toHaveBeenCalledWith(CREATE_DTO, VENDOR_ID);
+  });
+
+  it('passes only authenticated and guard-resolved admin context', async () => {
+    const admin = { ...CURRENT_USER, role: UserRole.ORG_ADMIN };
+    createForOrganizationAdmin.mockResolvedValue({ id: TICKET_ID });
+
+    await controller.createForOrganizationAdmin(
+      CREATE_DTO,
+      admin,
+      ORGANIZATION_ID,
+    );
+
+    expect(createForOrganizationAdmin).toHaveBeenCalledWith(
+      CREATE_DTO,
+      VENDOR_ID,
+      ORGANIZATION_ID,
+    );
   });
 
   it('passes the guard-resolved organization id when approving', async () => {

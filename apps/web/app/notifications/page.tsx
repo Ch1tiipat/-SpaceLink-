@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  ChevronDown,
   CircleAlert,
   Clock3,
   CreditCard,
@@ -102,6 +103,19 @@ const KIND_META = {
   NotificationKind,
   { label: string; icon: typeof Bell; tone: string }
 >;
+
+const FILTER_OPTIONS = [
+  { value: 'all', label: 'ทั้งหมด' },
+  { value: 'unread', label: 'ยังไม่ได้อ่าน' },
+  { value: 'booking', label: 'การจอง' },
+  { value: 'payment', label: 'ชำระเงิน' },
+  { value: 'event', label: 'ข่าวงาน' },
+  { value: 'penalty', label: 'แต้มโทษ' },
+  { value: 'system', label: 'ระบบ' },
+] as const satisfies ReadonlyArray<{
+  value: NotificationFilter;
+  label: string;
+}>;
 
 const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat('th', {
   numeric: 'auto',
@@ -288,6 +302,28 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter(
     (notification) => notification.unread,
   ).length;
+  const notificationCounts = useMemo<Record<NotificationFilter, number>>(
+    () => ({
+      all: notifications.length,
+      unread: unreadCount,
+      booking: notifications.filter(
+        (notification) => notification.kind === 'booking',
+      ).length,
+      payment: notifications.filter(
+        (notification) => notification.kind === 'payment',
+      ).length,
+      event: notifications.filter(
+        (notification) => notification.kind === 'event',
+      ).length,
+      penalty: notifications.filter(
+        (notification) => notification.kind === 'penalty',
+      ).length,
+      system: notifications.filter(
+        (notification) => notification.kind === 'system',
+      ).length,
+    }),
+    [notifications, unreadCount],
+  );
 
   async function markAllAsRead() {
     if (access.status !== 'ready' || unreadCount === 0) return;
@@ -436,30 +472,33 @@ export default function NotificationsPage() {
 
             <section className="sl-surface overflow-hidden">
               <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:px-7">
-                <div className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-[#f5f2f9] p-1" role="tablist" aria-label="กรองการแจ้งเตือน">
-                  {([
-                    ['all', 'ทั้งหมด'],
-                    ['unread', 'ยังไม่ได้อ่าน'],
-                    ['booking', 'การจอง'],
-                    ['payment', 'ชำระเงิน'],
-                    ['event', 'ข่าวงาน'],
-                    ['penalty', 'แต้มโทษ'],
-                    ['system', 'แนะนำ'],
-                  ] as const).map(([value, label]) => (
-                    <FilterButton
-                      key={value}
-                      active={filter === value}
-                      onClick={() => setFilter(value)}
-                      label={label}
-                      count={
-                        value === 'all'
-                          ? notifications.length
-                          : value === 'unread'
-                            ? unreadCount
-                            : notifications.filter((notification) => notification.kind === value).length
+                <div className="w-full sm:max-w-sm">
+                  <label
+                    htmlFor="notification-filter"
+                    className="mb-2 block text-sm font-bold text-ink"
+                  >
+                    กรองการแจ้งเตือน
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="notification-filter"
+                      value={filter}
+                      onChange={(event) =>
+                        setFilter(event.currentTarget.value as NotificationFilter)
                       }
+                      className="min-h-12 w-full appearance-none rounded-2xl border border-line bg-white px-4 pr-11 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                    >
+                      {FILTER_OPTIONS.map(({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label} ({notificationCounts[value]})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
+                      aria-hidden
                     />
-                  ))}
+                  </div>
                 </div>
 
                 <span
@@ -704,41 +743,6 @@ function ToggleSwitch({
           compact ? 'h-5 w-5' : 'h-7 w-7'
         } ${checked ? (compact ? 'translate-x-6' : 'translate-x-7') : 'translate-x-1'}`}
       />
-    </button>
-  );
-}
-
-function FilterButton({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold transition sm:px-4 ${
-        active
-          ? 'bg-white text-violet shadow-[0_5px_16px_rgba(54,36,91,0.09)]'
-          : 'text-muted hover:text-ink'
-      }`}
-    >
-      {label}
-      <span
-        className={`rounded-full px-2 py-0.5 text-sm ${
-          active ? 'bg-violet-tint text-violet' : 'bg-white/70 text-muted'
-        }`}
-      >
-        {count}
-      </span>
     </button>
   );
 }

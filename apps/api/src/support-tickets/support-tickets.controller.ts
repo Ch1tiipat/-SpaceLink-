@@ -41,6 +41,21 @@ export class SupportTicketsController {
     );
   }
 
+  @Post('organizations/:organizationId')
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  createForOrganizationAdmin(
+    @Body() createSupportTicketDto: CreateSupportTicketDto,
+    @CurrentUser() currentUser: User,
+    @CurrentOrgId() organizationId: string,
+  ) {
+    return this.supportTicketsService.createForOrganizationAdmin(
+      createSupportTicketDto,
+      currentUser.id,
+      organizationId,
+    );
+  }
+
   // Org-scoped, so its effective guard chain is [SupabaseAuthGuard, RolesGuard,
   // SupabaseAuthGuard, OrgScopeGuard] — Nest runs controller-level guards before
   // route-level ones, and `@OrgScoped` bundles its own SupabaseAuthGuard. That

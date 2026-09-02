@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -237,6 +238,56 @@ export class SupportTicketsService {
           ticketId: created.id,
           senderUserId: vendorUserId,
           message: contextualMessage,
+        },
+      });
+
+      return created;
+    });
+
+    return this.toResponse(ticket);
+  }
+
+  /**
+   * Opens an organization-scoped request from an ORG_ADMIN to SUPER_ADMIN.
+   * `organizationId` is supplied only by `@CurrentOrgId()` after
+   * `@OrgScoped('organizationId')` verified the caller's membership.
+   */
+  async createForOrganizationAdmin(
+    createSupportTicketDto: CreateSupportTicketDto,
+    adminUserId: string,
+    organizationId: string,
+  ): Promise<SupportTicketResponse> {
+    if (
+      createSupportTicketDto.requestType !==
+      SupportTicketRequestType.ISSUE_REPORT
+    ) {
+      throw new BadRequestException(
+        'ผู้ดูแลองค์กรส่งได้เฉพาะคำร้องขอความช่วยเหลือทั่วไป',
+      );
+    }
+
+    const ticket = await this.prisma.$transaction(async (transaction) => {
+      const created = await transaction.supportTicket.create({
+        data: {
+          userId: adminUserId,
+          organizationId,
+          bookingId: null,
+          type: TicketType.ISSUE_REPORT,
+          subject: createSupportTicketDto.subject,
+          status: TicketStatus.OPEN,
+        },
+        select: supportTicketSelect,
+      });
+
+      await transaction.ticketMessage.create({
+        data: {
+          ticketId: created.id,
+          senderUserId: adminUserId,
+          message: [
+            'ประเภทคำร้อง: คำร้องจากผู้ดูแลองค์กรถึง Super Admin',
+            '',
+            createSupportTicketDto.message,
+          ].join('\n'),
         },
       });
 
