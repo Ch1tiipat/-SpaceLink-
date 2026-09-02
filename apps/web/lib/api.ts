@@ -312,6 +312,8 @@ export type CurrentUser = {
     name: string;
     promptpayId: string | null;
     membershipRole: "OWNER" | "ADMIN";
+    canEditQuota: boolean;
+    bookingQuotaPerVendor: number | null;
   }[];
 };
 
@@ -347,6 +349,7 @@ export type CreateSuperAdminOrganizationInput = {
 
 export type SuperAdminCompanyAdmin = {
   id: string;
+  canEditQuota: boolean;
   joinedAt: string;
   user: { id: string; email: string; fullName: string };
   organization: { id: string; name: string };
@@ -1463,6 +1466,20 @@ export function getSuperAdminCompanyAdmins(
   return getJson<SuperAdminCompanyAdmin[]>("/admins", { signal, token });
 }
 
+export function updateSuperAdminQuotaPermission(
+  membershipId: string,
+  canEditQuota: boolean,
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ id: string; canEditQuota: boolean }> {
+  return patchJson<{ id: string; canEditQuota: boolean }>(
+    `/admins/${encodeURIComponent(membershipId)}/quota-permission`,
+    { canEditQuota },
+    { signal, token },
+    "เปลี่ยนสิทธิ์แก้ไขโควตาไม่สำเร็จ",
+  );
+}
+
 export function getSuperAdminUsers(
   token: string,
   signal?: AbortSignal,
@@ -1566,6 +1583,20 @@ export function updateOrganizationPromptPay(
     { promptpayId },
     { signal, token },
     "บันทึกหมายเลข PromptPay ไม่สำเร็จ",
+  );
+}
+
+export function updateOrganizationBookingQuota(
+  organizationId: string,
+  bookingQuotaPerVendor: number,
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ bookingQuotaPerVendor: number | null }> {
+  return patchJson<{ bookingQuotaPerVendor: number | null }>(
+    `/organizations/${encodeURIComponent(organizationId)}/quota`,
+    { bookingQuotaPerVendor },
+    { signal, token },
+    "บันทึกโควตาการจองไม่สำเร็จ",
   );
 }
 

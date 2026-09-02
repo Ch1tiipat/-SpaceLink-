@@ -17,6 +17,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GrantAdminDto } from './dto/grant-admin.dto';
+import { UpdateBookingQuotaDto } from './dto/update-booking-quota.dto';
 import { UpdateOrganizationStatusDto } from './dto/update-organization-status.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -85,6 +86,23 @@ export class OrganizationsController {
     return this.organizationsService.revokeAdmin(
       organizationId,
       userId,
+      currentUser.id,
+    );
+  }
+
+  @Patch(':organizationId/quota')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  updateBookingQuota(
+    @Param('organizationId') organizationId: string,
+    @Body() updateBookingQuotaDto: UpdateBookingQuotaDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.organizationsService.updateBookingQuota(
+      organizationId,
+      updateBookingQuotaDto.bookingQuotaPerVendor,
+      currentUser,
       currentUser.id,
     );
   }

@@ -16,9 +16,13 @@ import { OrganizationsService } from './organizations.service';
 
 describe('OrganizationsController', () => {
   let controller: OrganizationsController;
+  const updateBookingQuota = jest.fn();
 
   beforeEach(() => {
-    controller = new OrganizationsController({} as OrganizationsService);
+    jest.clearAllMocks();
+    controller = new OrganizationsController({
+      updateBookingQuota,
+    } as unknown as OrganizationsService);
   });
 
   it('should be defined', () => {
@@ -70,6 +74,46 @@ describe('OrganizationsController', () => {
       UserRole.SUPER_ADMIN,
       UserRole.ORG_ADMIN,
     ]);
+  });
+
+  it('protects quota updates with auth, org scope, and both admin roles', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).updateBookingQuota;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+      UserRole.ORG_ADMIN,
+    ]);
+  });
+
+  it('passes quota updates and the authenticated actor to the service', async () => {
+    const currentUser = {
+      id: '00000000-0000-4000-8000-000000000099',
+      role: UserRole.ORG_ADMIN,
+    };
+    updateBookingQuota.mockResolvedValue({ bookingQuotaPerVendor: 3 });
+
+    await expect(
+      controller.updateBookingQuota(
+        '00000000-0000-4000-8000-000000000001',
+        { bookingQuotaPerVendor: 3 },
+        currentUser as never,
+      ),
+    ).resolves.toEqual({ bookingQuotaPerVendor: 3 });
+
+    expect(updateBookingQuota).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      currentUser,
+      currentUser.id,
+    );
   });
 
   it('protects status update with org scope and SUPER_ADMIN only', () => {

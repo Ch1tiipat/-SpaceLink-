@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
 import {
   AUDIT_LOG_ACTIONS,
@@ -98,6 +102,7 @@ export class OrganizationsService {
       where: { organizationId, role: MembershipRole.ADMIN },
       select: {
         id: true,
+        canEditQuota: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -111,6 +116,7 @@ export class OrganizationsService {
       where: { role: MembershipRole.ADMIN },
       select: {
         id: true,
+        canEditQuota: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -120,6 +126,81 @@ export class OrganizationsService {
         },
       },
     });
+  }
+
+  async setQuotaEditPermission(
+    membershipId: string,
+    canEditQuota: boolean,
+    actorUserId: string,
+  ) {
+    const membership = await this.prisma.orgMembership.update({
+      where: { id: membershipId },
+      data: { canEditQuota },
+    });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.QUOTA_EDIT_PERMISSION_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.ORG_MEMBERSHIP,
+      targetId: membershipId,
+      metadata: { canEditQuota },
+    });
+
+    return membership;
+  }
+
+  async updateBookingQuota(
+    organizationId: string,
+    bookingQuotaPerVendor: number,
+    currentUser: { id: string; role: UserRole },
+    actorUserId: string,
+  ) {
+    const { updated, previousValue } = await this.prisma.$transaction(
+      async (transaction) => {
+        if (currentUser.role !== UserRole.SUPER_ADMIN) {
+          const membership = await transaction.orgMembership.findUnique({
+            where: {
+              organizationId_userId: {
+                organizationId,
+                userId: currentUser.id,
+              },
+            },
+            select: { canEditQuota: true },
+          });
+          if (!membership?.canEditQuota) {
+            throw new ForbiddenException(
+              'คุณไม่มีสิทธิ์แก้ไขโควตาการจองขององค์กรนี้',
+            );
+          }
+        }
+
+        const previous = await transaction.orgConfig.findUnique({
+          where: { organizationId },
+          select: { bookingQuotaPerVendor: true },
+        });
+
+        const updated = await transaction.orgConfig.upsert({
+          where: { organizationId },
+          create: { organizationId, bookingQuotaPerVendor },
+          update: { bookingQuotaPerVendor },
+        });
+
+        return {
+          updated,
+          previousValue: previous?.bookingQuotaPerVendor ?? null,
+        };
+      },
+    );
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.BOOKING_QUOTA_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.ORGANIZATION,
+      targetId: organizationId,
+      metadata: { from: previousValue, to: bookingQuotaPerVendor },
+    });
+
+    return updated;
   }
 
   async grantAdmin(organizationId: string, email: string, actorUserId: string) {

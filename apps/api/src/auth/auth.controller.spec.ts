@@ -100,10 +100,22 @@ describe('AuthController', () => {
     membershipFindMany.mockResolvedValue([
       {
         role: 'ADMIN',
+        canEditQuota: true,
         organization: {
           id: '00000000-0000-4000-8000-000000000030',
           name: 'SpaceLink Organizer',
           promptpayId: '0812345678',
+          orgConfig: { bookingQuotaPerVendor: 3 },
+        },
+      },
+      {
+        role: 'ADMIN',
+        canEditQuota: false,
+        organization: {
+          id: '00000000-0000-4000-8000-000000000031',
+          name: 'Second Organizer',
+          promptpayId: null,
+          orgConfig: null,
         },
       },
     ]);
@@ -113,12 +125,39 @@ describe('AuthController', () => {
     expect(membershipFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: user.id } }),
     );
+    const [membershipQuery] = membershipFindMany.mock.calls[0] as [
+      {
+        select: {
+          canEditQuota: boolean;
+          organization: {
+            select: {
+              orgConfig: { select: { bookingQuotaPerVendor: boolean } };
+            };
+          };
+        };
+      },
+    ];
+    expect(membershipQuery.select.canEditQuota).toBe(true);
+    expect(
+      membershipQuery.select.organization.select.orgConfig.select
+        .bookingQuotaPerVendor,
+    ).toBe(true);
     expect(result.organizations).toEqual([
       {
         id: '00000000-0000-4000-8000-000000000030',
         name: 'SpaceLink Organizer',
         promptpayId: '0812345678',
         membershipRole: 'ADMIN',
+        canEditQuota: true,
+        bookingQuotaPerVendor: 3,
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000031',
+        name: 'Second Organizer',
+        promptpayId: null,
+        membershipRole: 'ADMIN',
+        canEditQuota: false,
+        bookingQuotaPerVendor: null,
       },
     ]);
   });

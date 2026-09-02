@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   getSuperAdminCompanyAdmins,
+  updateSuperAdminQuotaPermission,
   type SuperAdminCompanyAdmin,
 } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -33,6 +34,12 @@ export function SuperAdminAdminsScreen() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatingMembershipIds, setUpdatingMembershipIds] = useState<
+    Set<string>
+  >(new Set());
+  const [permissionErrors, setPermissionErrors] = useState<
+    Record<string, string>
+  >({});
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -111,6 +118,44 @@ export function SuperAdminAdminsScreen() {
 
   function openUser(userId: string) {
     router.push(`/super-admin/users?id=${encodeURIComponent(userId)}`);
+  }
+
+  async function toggleQuotaPermission(admin: SuperAdminCompanyAdmin) {
+    if (updatingMembershipIds.has(admin.id)) return;
+
+    setUpdatingMembershipIds((current) => new Set(current).add(admin.id));
+    setPermissionErrors((current) => {
+      const next = { ...current };
+      delete next[admin.id];
+      return next;
+    });
+
+    try {
+      const token = await getAccessToken();
+      const updated = await updateSuperAdminQuotaPermission(
+        admin.id,
+        !admin.canEditQuota,
+        token,
+      );
+      setAdmins((current) =>
+        current.map((item) =>
+          item.id === admin.id
+            ? { ...item, canEditQuota: updated.canEditQuota }
+            : item,
+        ),
+      );
+    } catch (cause) {
+      setPermissionErrors((current) => ({
+        ...current,
+        [admin.id]: errorMessage(cause, "เปลี่ยนสิทธิ์แก้โควตาไม่สำเร็จ"),
+      }));
+    } finally {
+      setUpdatingMembershipIds((current) => {
+        const next = new Set(current);
+        next.delete(admin.id);
+        return next;
+      });
+    }
   }
 
   return (
@@ -228,13 +273,14 @@ export function SuperAdminAdminsScreen() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-left text-[13px] text-[#4f4658]">
+            <table className="w-full min-w-[980px] border-collapse text-left text-[13px] text-[#4f4658]">
               <thead className="bg-[#faf7fd] text-[11px] font-extrabold uppercase tracking-[.45px] text-[#82788b]">
                 <tr>
                   <th className="px-5 py-3">ผู้ดูแล</th>
                   <th className="px-3 py-3">อีเมล</th>
                   <th className="px-3 py-3">องค์กร</th>
                   <th className="px-3 py-3">วันที่เข้าร่วม</th>
+                  <th className="px-3 py-3">สิทธิ์แก้โควตา</th>
                   <th className="px-5 py-3 text-right">รายละเอียด</th>
                 </tr>
               </thead>
@@ -278,6 +324,44 @@ export function SuperAdminAdminsScreen() {
                       <time dateTime={admin.joinedAt}>
                         {THAI_DATE_TIME.format(new Date(admin.joinedAt))}
                       </time>
+                    </td>
+                    <td
+                      className="px-3 py-4"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={admin.canEditQuota}
+                        aria-label={`${admin.canEditQuota ? "ปิด" : "เปิด"}สิทธิ์แก้โควตาของ ${admin.user.fullName} ใน ${admin.organization.name}`}
+                        disabled={updatingMembershipIds.has(admin.id)}
+                        onClick={() => void toggleQuotaPermission(admin)}
+                        className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs font-bold text-[#62576c] disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <span
+                          aria-hidden
+                          className={`relative h-6 w-11 rounded-full transition ${
+                            admin.canEditQuota ? "bg-[#6d28d9]" : "bg-[#d9d1de]"
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                              admin.canEditQuota ? "left-6" : "left-1"
+                            }`}
+                          />
+                        </span>
+                        {updatingMembershipIds.has(admin.id)
+                          ? "กำลังบันทึก..."
+                          : admin.canEditQuota
+                            ? "เปิด"
+                            : "ปิด"}
+                      </button>
+                      {permissionErrors[admin.id] ? (
+                        <p className="mt-1 max-w-[180px] text-[11px] font-bold text-red-700">
+                          {permissionErrors[admin.id]}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-5 py-4 text-right font-extrabold text-[#6d28d9]">
                       ดูข้อมูลผู้ใช้ →
