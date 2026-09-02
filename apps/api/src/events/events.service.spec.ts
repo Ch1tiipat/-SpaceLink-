@@ -11,7 +11,14 @@ import {
 } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateEventSlug } from './event-slug.util';
 import { EventsService } from './events.service';
+
+jest.mock('./event-slug.util', () => ({
+  generateEventSlug: jest.fn(),
+}));
+
+const generateEventSlugMock = jest.mocked(generateEventSlug);
 
 const findUnique = jest.fn();
 const findFirst = jest.fn();
@@ -52,6 +59,7 @@ describe('EventsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    generateEventSlugMock.mockReturnValue('sut-market-abc123');
     transaction.mockImplementation(
       (callback: (client: typeof mockPrismaService) => unknown) =>
         callback(mockPrismaService),
@@ -146,6 +154,7 @@ describe('EventsService', () => {
           organizationId: orgId,
           venueId: input.venueId,
           name: input.name,
+          slug: 'sut-market-abc123',
           description: undefined,
           startDate: new Date('2026-09-01T00:00:00.000Z'),
           endDate: new Date('2026-09-03T00:00:00.000Z'),
@@ -174,6 +183,64 @@ describe('EventsService', () => {
         },
       });
       expect(result.subscription.finalPrice).toBe('1000');
+      expect(generateEventSlugMock).toHaveBeenCalledWith(input.name);
+    });
+
+    it('retries the whole transaction when the generated slug collides', async () => {
+      const slugConflict = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['slug'] },
+        },
+      );
+      generateEventSlugMock
+        .mockReturnValueOnce('sut-market-aaaaaa')
+        .mockReturnValueOnce('sut-market-bbbbbb');
+      eventCreate.mockRejectedValueOnce(slugConflict).mockResolvedValueOnce({
+        id: eventId,
+        ...input,
+        slug: 'sut-market-bbbbbb',
+      });
+      subscriptionCreate.mockImplementation(({ data }) =>
+        Promise.resolve({
+          id: 'subscription-1',
+          ...data,
+          platformPaidAt: null,
+          createdAt: new Date('2026-08-28T00:00:00Z'),
+          updatedAt: new Date('2026-08-28T00:00:00Z'),
+        }),
+      );
+
+      await expect(service.create(input, orgId)).resolves.toMatchObject({
+        id: eventId,
+        slug: 'sut-market-bbbbbb',
+      });
+
+      expect(transaction).toHaveBeenCalledTimes(2);
+      expect(eventCreate).toHaveBeenCalledTimes(2);
+      expect(generateEventSlugMock).toHaveBeenCalledTimes(2);
+      expect(subscriptionCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops after three slug collisions and rethrows the conflict', async () => {
+      const slugConflict = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['slug'] },
+        },
+      );
+      eventCreate.mockRejectedValue(slugConflict);
+
+      await expect(service.create(input, orgId)).rejects.toBe(slugConflict);
+
+      expect(transaction).toHaveBeenCalledTimes(3);
+      expect(eventCreate).toHaveBeenCalledTimes(3);
+      expect(generateEventSlugMock).toHaveBeenCalledTimes(3);
+      expect(subscriptionCreate).not.toHaveBeenCalled();
     });
 
     it('requires a new quote when the confirmed price no longer matches', async () => {
@@ -325,6 +392,56 @@ describe('EventsService', () => {
   });
 
   describe('findMap', () => {
+    it('resolves a public map by slug with the same visibility filters', async () => {
+      findFirst.mockResolvedValue({
+        id: 'event-1',
+        slug: 'sut-agri-fair-abc123',
+        venueId: 'venue-1',
+        organization: {
+          id: 'org-1',
+          name: 'SUT',
+          contactEmail: 'contact@example.com',
+          contactPhone: null,
+          logoUrl: null,
+          orgConfig: null,
+        },
+        venue: { id: 'venue-1', name: 'SUT', address: null },
+        policy: null,
+      });
+      zoneFindMany.mockResolvedValue([]);
+
+      await expect(
+        service.findMapBySlug('sut-agri-fair-abc123'),
+      ).resolves.toMatchObject({
+        event: { id: 'event-1', slug: 'sut-agri-fair-abc123' },
+        zones: [],
+      });
+
+      expect(findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            slug: 'sut-agri-fair-abc123',
+            status: { in: ['PUBLISHED', 'ONGOING'] },
+            organization: { status: 'ACTIVE' },
+          },
+        }),
+      );
+    });
+
+    it.each([
+      ['a slug that does not exist', 'missing-event'],
+      ['a draft event slug', 'draft-event'],
+      ['an event slug owned by an inactive organization', 'inactive-org-event'],
+    ])('returns the same 404 for %s', async (_caseName, slug) => {
+      findFirst.mockResolvedValue(null);
+
+      await expect(service.findMapBySlug(slug)).rejects.toMatchObject({
+        status: 404,
+        message: 'Event not found',
+      });
+      expect(zoneFindMany).not.toHaveBeenCalled();
+    });
+
     it('returns a public map and converts booking state to availability', async () => {
       findFirst.mockResolvedValue({
         id: 'event-1',
