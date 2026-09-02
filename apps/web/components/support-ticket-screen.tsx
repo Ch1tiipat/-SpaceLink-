@@ -12,6 +12,7 @@ import {
 import {
   ApiError,
   approveQuotaException,
+  createOrganizationAdminSupportTicket,
   createSupportTicket,
   getBooths,
   getMyBookings,
@@ -22,6 +23,7 @@ import {
   type SupportTicketRecord,
   type UserRole,
 } from '@/lib/api';
+import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
@@ -179,14 +181,20 @@ export function SupportTicketScreen() {
     );
   }
 
-  return access.role === 'VENDOR' ? (
-    <VendorTicketForm
-      token={access.token}
-      preview={access.token === UX_PREVIEW_TOKEN}
-    />
-  ) : (
-    <AdminApprovalForm token={access.token} />
-  );
+  if (access.role === 'VENDOR') {
+    return (
+      <VendorTicketForm
+        token={access.token}
+        preview={access.token === UX_PREVIEW_TOKEN}
+      />
+    );
+  }
+
+  if (access.role === 'ORG_ADMIN') {
+    return <OrganizationAdminTicketForm token={access.token} />;
+  }
+
+  return <AdminApprovalForm token={access.token} />;
 }
 
 function VendorTicketForm({ token, preview }: { token: string; preview: boolean }) {
@@ -565,6 +573,120 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
             : requestType === 'QUOTA_INCREASE'
               ? 'ส่งคำขอโควต้าบูธเพิ่ม'
               : 'ส่งเรื่องติดต่อปัญหา'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function OrganizationAdminTicketForm({ token }: { token: string }) {
+  const { organizations, selectedOrganizationId } =
+    useAdminOrganizationSelection();
+  const [subject, setSubject] = useState('ขอความช่วยเหลือจาก Super Admin');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ticket, setTicket] = useState<SupportTicketRecord | null>(null);
+  const organization = organizations.find(
+    (item) => item.id === selectedOrganizationId,
+  );
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedOrganizationId) {
+      setError('กรุณาเลือกองค์กรก่อนส่งคำร้อง');
+      return;
+    }
+    if (!subject.trim() || !message.trim()) {
+      setError('กรุณากรอกหัวข้อและรายละเอียดให้ครบ');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setTicket(null);
+    try {
+      const created = await createOrganizationAdminSupportTicket(
+        selectedOrganizationId,
+        { subject, message },
+        token,
+      );
+      setTicket(created);
+      setMessage('');
+    } catch (cause) {
+      setError(describeError(cause, 'ส่งคำร้องถึง Super Admin ไม่สำเร็จ'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="organization-admin-request-heading"
+      className="sl-surface mt-8 p-6 sm:p-8"
+    >
+      <div className="flex items-start gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+          <Send className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+            Organization support
+          </p>
+          <h2
+            id="organization-admin-request-heading"
+            className="mt-1 text-2xl font-black text-ink"
+          >
+            ส่งคำร้องถึง Super Admin
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            ส่งปัญหาหรือคำขอเกี่ยวกับองค์กรให้ผู้ดูแลแพลตฟอร์มตรวจสอบ
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-[#ded5eb] bg-violet-tint/50 p-4">
+        <p className="text-xs font-bold text-muted">องค์กรที่ส่งคำร้อง</p>
+        <p className="mt-1 font-extrabold text-ink">
+          {organization?.name ?? 'ยังไม่ได้เลือกองค์กร'}
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
+        <Field label="หัวข้อคำร้อง">
+          <input
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            className={inputClass}
+            maxLength={200}
+            required
+          />
+        </Field>
+        <Field label="รายละเอียด">
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            className={`${inputClass} min-h-32 py-3`}
+            placeholder="อธิบายปัญหา สิ่งที่ต้องการให้ช่วย และข้อมูลที่เกี่ยวข้อง"
+            maxLength={2000}
+            required
+          />
+        </Field>
+
+        {error ? <ErrorMessage message={error} /> : null}
+        {ticket ? (
+          <SuccessMessage>
+            ส่งคำร้องเรียบร้อยแล้ว เลขคำร้อง {ticket.id}
+          </SuccessMessage>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={submitting || !selectedOrganizationId}
+          className="sl-action-primary justify-center disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" aria-hidden />
+          {submitting ? 'กำลังส่งคำร้อง...' : 'ส่งคำร้องถึง Super Admin'}
         </button>
       </form>
     </section>
