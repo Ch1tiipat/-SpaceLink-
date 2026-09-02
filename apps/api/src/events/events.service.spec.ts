@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   BookingStatus,
   BoothStatus,
@@ -606,8 +610,104 @@ describe('EventsService', () => {
 
     expect(eventDelete).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: eventId, organizationId: orgId },
+        where: {
+          id: eventId,
+          organizationId: orgId,
+          bookings: { none: {} },
+        },
       }),
+    );
+  });
+
+  it('opens only a cancelled event within the caller organization', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValue({
+      id: eventId,
+      status: EventStatus.PUBLISHED,
+      venue: { id: 'venue-1', name: 'Convention Center' },
+      subscription: null,
+    });
+
+    await expect(service.open(eventId, orgId)).resolves.toEqual(
+      expect.objectContaining({ status: EventStatus.PUBLISHED }),
+    );
+    expect(eventUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: eventId,
+        organizationId: orgId,
+        status: EventStatus.CANCELLED,
+      },
+      data: { status: EventStatus.PUBLISHED },
+    });
+  });
+
+  it('closes a published or ongoing event within the caller organization', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValue({
+      id: eventId,
+      status: EventStatus.CANCELLED,
+      venue: { id: 'venue-1', name: 'Convention Center' },
+      subscription: null,
+    });
+
+    await expect(service.close(eventId, orgId)).resolves.toEqual(
+      expect.objectContaining({ status: EventStatus.CANCELLED }),
+    );
+    expect(eventUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: eventId,
+        organizationId: orgId,
+        status: { in: [EventStatus.PUBLISHED, EventStatus.ONGOING] },
+      },
+      data: { status: EventStatus.CANCELLED },
+    });
+  });
+
+  it('rejects an invalid open transition', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 0 });
+    findFirst.mockResolvedValue({ status: EventStatus.DRAFT });
+
+    await expect(service.open(eventId, orgId)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('answers 404 when closing an event outside the caller organization', async () => {
+    eventUpdateMany.mockResolvedValue({ count: 0 });
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.close(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('blocks deleting an event with booking history', async () => {
+    eventDelete.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Record not found', {
+        code: 'P2025',
+        clientVersion: 'test',
+      }),
+    );
+    findFirst.mockResolvedValue({ id: eventId });
+
+    await expect(service.remove(eventId, orgId)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove(eventId, orgId)).rejects.toThrow(
+      'ไม่สามารถลบอีเวนต์นี้ได้เนื่องจากมีประวัติการจองที่เกี่ยวข้องอยู่',
+    );
+  });
+
+  it('answers 404 for a missing or cross-organization delete', async () => {
+    const notFound = new Prisma.PrismaClientKnownRequestError(
+      'Record not found',
+      { code: 'P2025', clientVersion: 'test' },
+    );
+    eventDelete.mockRejectedValue(notFound);
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.remove(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
     );
   });
 });

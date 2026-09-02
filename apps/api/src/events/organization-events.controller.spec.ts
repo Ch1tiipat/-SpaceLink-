@@ -29,11 +29,17 @@ const findByOrganization = jest.fn();
 const create = jest.fn();
 const quoteSubscription = jest.fn();
 const publish = jest.fn();
+const open = jest.fn();
+const close = jest.fn();
+const remove = jest.fn();
 const service = {
   findByOrganization,
   create,
   quoteSubscription,
   publish,
+  open,
+  close,
+  remove,
 } as unknown as EventsService;
 
 function handler(
@@ -41,7 +47,10 @@ function handler(
     | 'findByOrganization'
     | 'create'
     | 'quoteSubscription'
-    | 'publish' = 'findByOrganization',
+    | 'publish'
+    | 'open'
+    | 'close'
+    | 'remove' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     OrganizationEventsController.prototype,
@@ -72,6 +81,9 @@ describe('OrganizationEventsController', () => {
       'create',
       'quoteSubscription',
       'publish',
+      'open',
+      'close',
+      'remove',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -121,6 +133,20 @@ describe('OrganizationEventsController', () => {
     expect(publish).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
   });
 
+  it('opens, closes, and deletes only within the guard-resolved organization', async () => {
+    open.mockResolvedValue({ id: 'event-1', status: 'PUBLISHED' });
+    close.mockResolvedValue({ id: 'event-1', status: 'CANCELLED' });
+    remove.mockResolvedValue({ id: 'event-1' });
+
+    await controller.open(ORGANIZATION_ID, 'event-1');
+    await controller.close(ORGANIZATION_ID, 'event-1');
+    await controller.remove(ORGANIZATION_ID, 'event-1');
+
+    expect(open).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
+    expect(close).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
+    expect(remove).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
+  });
+
   it('validates the publish event id as a UUID', () => {
     const metadata = Reflect.getMetadata(
       ROUTE_ARGS_METADATA,
@@ -135,6 +161,24 @@ describe('OrganizationEventsController', () => {
       expect.arrayContaining([expect.any(ParseUUIDPipe)]),
     );
   });
+
+  it.each(['open', 'close', 'remove'] as const)(
+    'validates the %s event id as a UUID',
+    (method) => {
+      const metadata = Reflect.getMetadata(
+        ROUTE_ARGS_METADATA,
+        OrganizationEventsController,
+        method,
+      ) as Record<string, { data?: string; pipes?: unknown[] }>;
+      const eventIdParameter = Object.values(metadata).find(
+        (parameter) => parameter.data === 'eventId',
+      );
+
+      expect(eventIdParameter?.pipes).toEqual(
+        expect.arrayContaining([expect.any(ParseUUIDPipe)]),
+      );
+    },
+  );
 
   it('answers 404 when an ORG_ADMIN requests another organization', async () => {
     const warn = jest

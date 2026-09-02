@@ -14,10 +14,12 @@ import {
   CalendarClock,
   CalendarDays,
   CircleDollarSign,
+  Power,
   Plus,
   RefreshCw,
   Send,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import {
@@ -32,9 +34,12 @@ import {
   useAdminPageAccess,
 } from '@/components/admin-ui';
 import {
+  closeAdminEvent,
   createAdminEvent,
+  deleteAdminEvent,
   getAdminOrganizationEvents,
   getAdminVenues,
+  openAdminEvent,
   publishAdminEvent,
   quoteAdminEventSubscription,
   type AdminVenue,
@@ -72,7 +77,7 @@ export function AdminEventsScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState('');
-  const [publishingId, setPublishingId] = useState('');
+  const [busyAction, setBusyAction] = useState('');
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !organizationId) return;
@@ -150,7 +155,7 @@ export function AdminEventsScreen() {
     );
     if (!confirmed) return;
 
-    setPublishingId(event.id);
+    setBusyAction(`publish:${event.id}`);
     setError('');
     setNotice('');
     try {
@@ -169,7 +174,65 @@ export function AdminEventsScreen() {
         cause instanceof Error ? cause.message : 'เผยแพร่อีเวนต์ไม่สำเร็จ',
       );
     } finally {
-      setPublishingId('');
+      setBusyAction('');
+    }
+  }
+
+  async function setEventOpenState(
+    event: AdminOrganizationEvent,
+    action: 'open' | 'close',
+  ) {
+    if (!token || !organizationId) return;
+    const opening = action === 'open';
+    const confirmed = window.confirm(
+      opening
+        ? `เปิดอีเวนต์ “${event.name}” อีกครั้งให้ผู้ขายมองเห็นและจองได้หรือไม่?`
+        : `ปิดอีเวนต์ “${event.name}” หรือไม่? ผู้ขายจะไม่สามารถดูหรือจองอีเวนต์นี้ได้จนกว่าจะเปิดใหม่`,
+    );
+    if (!confirmed) return;
+
+    setBusyAction(`${action}:${event.id}`);
+    setError('');
+    setNotice('');
+    try {
+      const updated = opening
+        ? await openAdminEvent(organizationId, event.id, token)
+        : await closeAdminEvent(organizationId, event.id, token);
+      setEvents((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setNotice(
+        `${opening ? 'เปิด' : 'ปิด'}อีเวนต์ “${event.name}” เรียบร้อยแล้ว`,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : `${opening ? 'เปิด' : 'ปิด'}อีเวนต์ไม่สำเร็จ`,
+      );
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  async function deleteEvent(event: AdminOrganizationEvent) {
+    if (!token || !organizationId) return;
+    const confirmed = window.confirm(
+      `ลบอีเวนต์ “${event.name}” ถาวรหรือไม่? หากอีเวนต์นี้มีประวัติการจอง ระบบจะไม่อนุญาตให้ลบ`,
+    );
+    if (!confirmed) return;
+
+    setBusyAction(`delete:${event.id}`);
+    setError('');
+    setNotice('');
+    try {
+      await deleteAdminEvent(organizationId, event.id, token);
+      setEvents((current) => current.filter((item) => item.id !== event.id));
+      setNotice(`ลบอีเวนต์ “${event.name}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ลบอีเวนต์ไม่สำเร็จ');
+    } finally {
+      setBusyAction('');
     }
   }
 
@@ -342,15 +405,49 @@ export function AdminEventsScreen() {
                     <button
                       type="button"
                       onClick={() => void publishEvent(event)}
-                      disabled={Boolean(publishingId)}
+                      disabled={Boolean(busyAction)}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Send className="h-4 w-4" aria-hidden />
-                      {publishingId === event.id
+                      {busyAction === `publish:${event.id}`
                         ? 'กำลังเผยแพร่...'
                         : 'เผยแพร่อีเวนต์'}
                     </button>
                   ) : null}
+                  {event.status === 'PUBLISHED' ||
+                  event.status === 'ONGOING' ||
+                  event.status === 'CANCELLED' ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void setEventOpenState(
+                          event,
+                          event.status === 'CANCELLED' ? 'open' : 'close',
+                        )
+                      }
+                      disabled={Boolean(busyAction)}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-violet bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Power className="h-4 w-4" aria-hidden />
+                      {busyAction === `open:${event.id}` ||
+                      busyAction === `close:${event.id}`
+                        ? 'กำลังบันทึก...'
+                        : event.status === 'CANCELLED'
+                          ? 'เปิดอีเวนต์อีกครั้ง'
+                          : 'ปิดอีเวนต์'}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void deleteEvent(event)}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    {busyAction === `delete:${event.id}`
+                      ? 'กำลังลบ...'
+                      : 'ลบอีเวนต์'}
+                  </button>
                 </article>
               ))}
             </div>
