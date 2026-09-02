@@ -7,6 +7,7 @@ import {
   PrismaClient,
   UserRole,
 } from '@prisma/client';
+import { generateEventSlug } from '../src/events/event-slug.util';
 
 const prisma = new PrismaClient();
 
@@ -594,7 +595,10 @@ async function main(): Promise<void> {
         contactEmail: eventSeed.contactEmail,
         status: eventSeed.status,
       },
-      create: eventSeed,
+      create: {
+        ...eventSeed,
+        slug: generateEventSlug(eventSeed.name),
+      },
     });
   }
 
@@ -780,6 +784,7 @@ async function seedPhase6Fixtures(vendorA: { id: string }): Promise<{
       },
       create: {
         ...eventSeed,
+        slug: generateEventSlug(eventSeed.name),
         organizationId: ORIGINAL_ORG_ID,
         venueId: ORIGINAL_VENUE_ID,
         startTime: '09:00',
@@ -1222,6 +1227,7 @@ async function seedZzTestFixtures(
         },
         create: {
           ...eventSeed,
+          slug: generateEventSlug(eventSeed.name),
           description: 'SCRUM-26/56 shared database test event',
           startDate: new Date('2026-09-20T00:00:00.000Z'),
           endDate: new Date('2026-09-22T00:00:00.000Z'),

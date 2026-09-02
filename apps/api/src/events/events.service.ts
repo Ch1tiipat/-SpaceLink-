@@ -18,70 +18,86 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { decimalString } from '../common/decimal';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_BILLING_CONFIG } from '../platform-config/platform-config.service';
+import { generateEventSlug } from './event-slug.util';
 
 const ACTIVE_BOOKING_STATUSES = [
   BookingStatus.PENDING_PAYMENT,
   BookingStatus.CONFIRMED,
 ];
+const MAX_EVENT_SLUG_ATTEMPTS = 3;
 
 @Injectable()
 export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createEventDto: CreateEventDto, organizationId: string) {
-    return this.prisma.$transaction(async (transaction) => {
-      const quote = await this.buildSubscriptionQuote(
-        transaction,
-        createEventDto,
-        organizationId,
-      );
-      if (
-        createEventDto.expectedFinalPrice !== undefined &&
-        !quote.finalPrice.equals(createEventDto.expectedFinalPrice)
-      ) {
-        throw new BadRequestException(
-          'Subscription price changed; calculate a new quote before creating the event',
-        );
-      }
-      const event = await transaction.event.create({
-        data: {
-          organizationId,
-          venueId: createEventDto.venueId,
-          name: createEventDto.name,
-          description: createEventDto.description,
-          startDate: dateValue(createEventDto.startDate),
-          endDate: dateValue(createEventDto.endDate),
-          startTime: createEventDto.startTime,
-          endTime: createEventDto.endTime,
-          contactPhone: createEventDto.contactPhone,
-          contactEmail: createEventDto.contactEmail,
-          status: EventStatus.DRAFT,
-        },
-      });
-      const subscription = await transaction.subscription.create({
-        data: {
-          organizationId,
-          eventId: event.id,
-          status: SubscriptionStatus.DRAFT,
-          baseFee: quote.values.baseFee,
-          zoneCount: quote.zoneCount,
-          perZoneRate: quote.values.perZoneRate,
-          eventDays: quote.eventDays,
-          perDayRate: quote.values.perDayRate,
-          calculatedPrice: quote.calculatedPrice,
-          priceMin: quote.values.priceMin,
-          priceMax: quote.values.priceMax,
-          finalPrice: quote.finalPrice,
-          isOverMax: quote.isOverMax,
-        },
-      });
+  async create(createEventDto: CreateEventDto, organizationId: string) {
+    for (let attempt = 1; attempt <= MAX_EVENT_SLUG_ATTEMPTS; attempt += 1) {
+      const slug = generateEventSlug(createEventDto.name);
 
-      return {
-        ...event,
-        venue: quote.venue,
-        subscription: serializeSubscription(subscription),
-      };
-    });
+      try {
+        return await this.prisma.$transaction(async (transaction) => {
+          const quote = await this.buildSubscriptionQuote(
+            transaction,
+            createEventDto,
+            organizationId,
+          );
+          if (
+            createEventDto.expectedFinalPrice !== undefined &&
+            !quote.finalPrice.equals(createEventDto.expectedFinalPrice)
+          ) {
+            throw new BadRequestException(
+              'Subscription price changed; calculate a new quote before creating the event',
+            );
+          }
+          const event = await transaction.event.create({
+            data: {
+              organizationId,
+              venueId: createEventDto.venueId,
+              name: createEventDto.name,
+              slug,
+              description: createEventDto.description,
+              startDate: dateValue(createEventDto.startDate),
+              endDate: dateValue(createEventDto.endDate),
+              startTime: createEventDto.startTime,
+              endTime: createEventDto.endTime,
+              contactPhone: createEventDto.contactPhone,
+              contactEmail: createEventDto.contactEmail,
+              status: EventStatus.DRAFT,
+            },
+          });
+          const subscription = await transaction.subscription.create({
+            data: {
+              organizationId,
+              eventId: event.id,
+              status: SubscriptionStatus.DRAFT,
+              baseFee: quote.values.baseFee,
+              zoneCount: quote.zoneCount,
+              perZoneRate: quote.values.perZoneRate,
+              eventDays: quote.eventDays,
+              perDayRate: quote.values.perDayRate,
+              calculatedPrice: quote.calculatedPrice,
+              priceMin: quote.values.priceMin,
+              priceMax: quote.values.priceMax,
+              finalPrice: quote.finalPrice,
+              isOverMax: quote.isOverMax,
+            },
+          });
+
+          return {
+            ...event,
+            venue: quote.venue,
+            subscription: serializeSubscription(subscription),
+          };
+        });
+      } catch (error) {
+        if (attempt < MAX_EVENT_SLUG_ATTEMPTS && isEventSlugConflict(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new Error('Event slug generation attempts exhausted');
   }
 
   quoteSubscription(createEventDto: CreateEventDto, organizationId: string) {
@@ -251,10 +267,18 @@ export class EventsService {
    * for a confirmed booking only, the public shop identity used on the map.
    * The browser never receives another vendor's booking id or personal data.
    */
-  async findMap(id: string) {
+  findMap(id: string) {
+    return this.findMapBy({ id });
+  }
+
+  findMapBySlug(slug: string) {
+    return this.findMapBy({ slug });
+  }
+
+  private async findMapBy(identifier: Prisma.EventWhereInput) {
     const event = await this.prisma.event.findFirst({
       where: {
-        id,
+        ...identifier,
         status: { in: [EventStatus.PUBLISHED, EventStatus.ONGOING] },
         organization: { status: OrgStatus.ACTIVE },
       },
@@ -323,7 +347,7 @@ export class EventsService {
             status: true,
             bookings: {
               where: {
-                eventId: id,
+                eventId: event.id,
                 status: { in: ACTIVE_BOOKING_STATUSES },
               },
               select: {
@@ -580,6 +604,22 @@ function dateValue(value: string): Date {
 
 function decimal(value: string | Prisma.Decimal): Prisma.Decimal {
   return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function isEventSlugConflict(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  if (Array.isArray(target)) {
+    return target.some((field) => String(field).includes('slug'));
+  }
+
+  return typeof target === 'string' && target.includes('slug');
 }
 
 function serializeQuote(quote: SubscriptionQuoteCalculation) {

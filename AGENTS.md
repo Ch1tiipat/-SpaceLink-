@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03)
 
-The Prisma schema remains frozen except for these four additive changes:
+The Prisma schema remains frozen except for these five additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -57,11 +57,15 @@ The Prisma schema remains frozen except for these four additive changes:
 - SCRUM-137: add the `OrgMembership.canEditQuota` field (`Boolean @default(false) @map("can_edit_quota")`)
   to the existing `OrgMembership` model, so a Super Admin can delegate booking-quota-edit permission
   to a specific Org Admin within a specific organization.
+- SCRUM-149: add the `Event.slug` field (`String @unique`) to the existing `Event` model, to give
+  each event a human-readable public identifier for shareable URLs. Generated automatically from
+  the event name (with a random-suffix fallback for names that slugify to empty, e.g. Thai-only
+  names) — existing events are backfilled via migration so no row is left null.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the four tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the five tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 

@@ -355,6 +355,7 @@ model Event {
   organizationId String      @map("organization_id") @db.Uuid
   venueId        String      @map("venue_id") @db.Uuid
   name           String
+  slug           String      @unique
   description    String?
   startDate      DateTime    @map("start_date") @db.Date
   endDate        DateTime    @map("end_date") @db.Date
