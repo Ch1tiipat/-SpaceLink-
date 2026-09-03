@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgScopeGuard } from './org-scope.guard';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
+const LEGACY_ORG_ID = '11111111-1111-1111-1111-111111111111';
 const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
 const VENUE_ID = '33333333-3333-4333-8333-333333333333';
 const EVENT_ID = '44444444-4444-4444-8444-444444444444';
@@ -144,19 +145,42 @@ describe('OrgScopeGuard', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rejects a route param that is not a UUID', async () => {
+  it.each(['not-a-uuid', "' OR 1=1", ''])(
+    'rejects malformed route param %p',
+    async (resourceId) => {
+      const request: RequestStub = {
+        params: { organizationId: resourceId },
+        user: createUser('user-1', UserRole.ORG_ADMIN),
+      };
+
+      await expect(
+        guard.canActivate(
+          createContext(TestController.prototype.byOrganization, request),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts a legacy UUID-shaped route param', async () => {
+    prisma.organization.findUnique.mockResolvedValue({ id: LEGACY_ORG_ID });
     const request: RequestStub = {
-      params: { organizationId: 'not-a-uuid' },
-      user: createUser('user-1', UserRole.ORG_ADMIN),
+      params: { organizationId: LEGACY_ORG_ID },
+      user: createUser('user-1', UserRole.SUPER_ADMIN),
     };
 
     await expect(
       guard.canActivate(
         createContext(TestController.prototype.byOrganization, request),
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toBe(true);
 
-    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.organization.findUnique).toHaveBeenCalledWith({
+      where: { id: LEGACY_ORG_ID },
+      select: { id: true },
+    });
+    expect(request.organizationId).toBe(LEGACY_ORG_ID);
   });
 
   it('lets a SUPER_ADMIN through without a membership query', async () => {

@@ -1,8 +1,8 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Logger,
   NotFoundException,
-  ParseUUIDPipe,
 } from '@nestjs/common';
 import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
@@ -19,11 +19,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
+import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
 import { OrganizationEventsController } from './organization-events.controller';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+const LEGACY_EVENT_ID = '44444444-4444-4444-4444-444444444444';
 const ORG_ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const findByOrganization = jest.fn();
 const create = jest.fn();
@@ -147,23 +149,8 @@ describe('OrganizationEventsController', () => {
     expect(remove).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
   });
 
-  it('validates the publish event id as a UUID', () => {
-    const metadata = Reflect.getMetadata(
-      ROUTE_ARGS_METADATA,
-      OrganizationEventsController,
-      'publish',
-    ) as Record<string, { data?: string; pipes?: unknown[] }>;
-    const eventIdParameter = Object.values(metadata).find(
-      (parameter) => parameter.data === 'eventId',
-    );
-
-    expect(eventIdParameter?.pipes).toEqual(
-      expect.arrayContaining([expect.any(ParseUUIDPipe)]),
-    );
-  });
-
-  it.each(['open', 'close', 'remove'] as const)(
-    'validates the %s event id as a UUID',
+  it.each(['publish', 'open', 'close', 'remove'] as const)(
+    'validates the %s event id by UUID shape',
     (method) => {
       const metadata = Reflect.getMetadata(
         ROUTE_ARGS_METADATA,
@@ -175,8 +162,14 @@ describe('OrganizationEventsController', () => {
       );
 
       expect(eventIdParameter?.pipes).toEqual(
-        expect.arrayContaining([expect.any(ParseUUIDPipe)]),
+        expect.arrayContaining([expect.any(LooseUuidPipe)]),
       );
+
+      const pipe = eventIdParameter?.pipes?.find(
+        (candidate) => candidate instanceof LooseUuidPipe,
+      ) as LooseUuidPipe;
+      expect(pipe.transform(LEGACY_EVENT_ID)).toBe(LEGACY_EVENT_ID);
+      expect(() => pipe.transform('not-a-uuid')).toThrow(BadRequestException);
     },
   );
 

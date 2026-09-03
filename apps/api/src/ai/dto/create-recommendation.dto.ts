@@ -5,16 +5,17 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class CreateRecommendationDto {
   /** The shop this vendor intends to create the booking for. */
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   shopId!: string;
 
   /**
@@ -24,12 +25,12 @@ export class CreateRecommendationDto {
   @IsOptional()
   @IsArray()
   @ArrayUnique()
-  @IsUUID(undefined, { each: true })
+  @Matches(UUID_SHAPE, { each: true })
   productCategoryIds?: string[];
 
   /** Optional zone selected by the vendor in the assistant flow. */
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   preferredZoneId?: string;
 
   /** Public booth facilities the vendor would like the recommender to match. */

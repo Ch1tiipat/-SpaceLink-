@@ -4,13 +4,13 @@ import {
   Controller,
   NotFoundException,
   Param,
-  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRecommendationDto } from './dto/create-recommendation.dto';
 import { ZoneRecommendationService } from './zone-recommendation.service';
@@ -25,7 +25,7 @@ export class RecommendationsController {
 
   @Post(':eventId/recommendations')
   async recommend(
-    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
     @CurrentUser() vendor: User,
     @Body() input: CreateRecommendationDto,
   ) {

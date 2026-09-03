@@ -4,8 +4,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
 } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 /**
  * `ownerUserId` is deliberately absent: it comes from the authenticated user
@@ -31,11 +32,11 @@ export class CreateShopDto {
 
   /**
    * A shop must sit in at least one product category — the category drives
-   * which zones it can book into. `'all'` rather than `'4'` matches
-   * CreateBookingDto, which does not pin a version either.
+   * which zones it can book into. UUID shape validation also accepts the
+   * legacy category ids that PostgreSQL already stores.
    */
   @IsArray()
   @ArrayMinSize(1)
-  @IsUUID('all', { each: true })
+  @Matches(UUID_SHAPE, { each: true })
   categoryIds!: string[];
 }

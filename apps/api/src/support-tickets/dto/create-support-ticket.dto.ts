@@ -3,9 +3,10 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   ValidateIf,
 } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export enum SupportTicketRequestType {
   QUOTA_INCREASE = 'QUOTA_INCREASE',
@@ -20,25 +21,25 @@ export class CreateSupportTicketDto {
     (request: CreateSupportTicketDto) =>
       request.requestType === SupportTicketRequestType.QUOTA_INCREASE,
   )
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   eventId?: string;
 
   @ValidateIf(
     (request: CreateSupportTicketDto) =>
       request.requestType === SupportTicketRequestType.QUOTA_INCREASE,
   )
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   zoneId?: string;
 
   @ValidateIf(
     (request: CreateSupportTicketDto) =>
       request.requestType === SupportTicketRequestType.QUOTA_INCREASE,
   )
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   boothId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   bookingId?: string;
 
   @IsString()

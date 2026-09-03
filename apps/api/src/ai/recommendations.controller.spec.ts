@@ -1,9 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
 import type { User } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecommendationsController } from './recommendations.controller';
 import { ZoneRecommendationService } from './zone-recommendation.service';
@@ -15,6 +16,7 @@ jest.mock('../auth/guards/supabase-auth.guard', () => ({
 const VENDOR_ID = '00000000-0000-4000-8000-000000000001';
 const SHOP_ID = '00000000-0000-4000-8000-000000000002';
 const EVENT_ID = '00000000-0000-4000-8000-000000000003';
+const LEGACY_EVENT_ID = '44444444-4444-4444-4444-444444444444';
 const CATEGORY_A = '00000000-0000-4000-8000-000000000004';
 const CATEGORY_B = '00000000-0000-4000-8000-000000000005';
 const OTHER_CATEGORY = '00000000-0000-4000-8000-000000000006';
@@ -62,6 +64,24 @@ describe('RecommendationsController', () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, RecommendationsController),
     ).toEqual([SupabaseAuthGuard]);
+  });
+
+  it('validates the event id by UUID shape', () => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      RecommendationsController,
+      'recommend',
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    const eventIdParameter = Object.values(metadata).find(
+      (parameter) => parameter.data === 'eventId',
+    );
+    const pipe = eventIdParameter?.pipes?.find(
+      (candidate) => candidate instanceof LooseUuidPipe,
+    ) as LooseUuidPipe;
+
+    expect(pipe).toBeInstanceOf(LooseUuidPipe);
+    expect(pipe.transform(LEGACY_EVENT_ID)).toBe(LEGACY_EVENT_ID);
+    expect(() => pipe.transform("' OR 1=1")).toThrow(BadRequestException);
   });
 
   it('uses every category from the selected vendor-owned shop by default', async () => {
