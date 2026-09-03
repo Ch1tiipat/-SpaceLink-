@@ -3,17 +3,18 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
 } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class CreateReviewDto {
   @IsIn(['BOOTH', 'ZONE'])
   targetType!: 'BOOTH' | 'ZONE';
 
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   targetId!: string;
 
   @IsInt()

@@ -21,6 +21,7 @@ function constraintsFor(body: Record<string, unknown>): string[] {
 }
 
 const VALID_ID = '33333333-3333-4333-8333-333333333333';
+const LEGACY_ID = '33333333-3333-3333-3333-333333333333';
 
 describe('UpdateShopDto', () => {
   describe('categoryIds', () => {
@@ -30,6 +31,10 @@ describe('UpdateShopDto', () => {
 
     it('accepts a non-empty array of UUIDs', () => {
       expect(constraintsFor({ categoryIds: [VALID_ID] })).toEqual([]);
+    });
+
+    it('accepts a legacy UUID-shaped category id', () => {
+      expect(constraintsFor({ categoryIds: [LEGACY_ID] })).toEqual([]);
     });
 
     it('rejects an explicit null despite PartialType marking it optional', () => {
@@ -44,7 +49,7 @@ describe('UpdateShopDto', () => {
 
     it('rejects a non-UUID entry', () => {
       expect(constraintsFor({ categoryIds: ['not-a-uuid'] })).toEqual(
-        expect.arrayContaining(['isUuid']),
+        expect.arrayContaining(['matches']),
       );
     });
 

@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, Matches } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class ListAuditLogsQueryDto {
   @IsOptional()
@@ -6,6 +7,6 @@ export class ListAuditLogsQueryDto {
   action?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   actorUserId?: string;
 }

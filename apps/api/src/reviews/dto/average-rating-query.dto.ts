@@ -1,10 +1,11 @@
 import { ReviewTargetType } from '@prisma/client';
-import { IsEnum, IsUUID } from 'class-validator';
+import { IsEnum, Matches } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class AverageRatingQueryDto {
   @IsEnum(ReviewTargetType)
   targetType!: ReviewTargetType;
 
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   targetId!: string;
 }

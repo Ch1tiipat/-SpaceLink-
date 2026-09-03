@@ -10,12 +10,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { OrgStatus, User, UserRole } from '@prisma/client';
-import { isUUID } from 'class-validator';
 import type { OrgScopedRequest } from '../../common/decorators/current-org-id.decorator';
 import {
   ORG_SCOPE_KEY,
   OrgScopeParam,
 } from '../../common/decorators/org-scope.decorator';
+import { isLooseUuid } from '../../common/utils/uuid.util';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface OrgScopeRequest extends OrgScopedRequest {
@@ -81,7 +81,7 @@ export class OrgScopeGuard implements CanActivate {
 
     const resourceId = request.params?.[param];
 
-    if (!resourceId || !isUUID(resourceId)) {
+    if (!resourceId || !isLooseUuid(resourceId)) {
       throw new BadRequestException(`Route param ${param} must be a UUID`);
     }
 

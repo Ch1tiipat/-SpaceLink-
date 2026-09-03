@@ -10,11 +10,18 @@ function constraintsFor(body: Record<string, unknown>): string[] {
 }
 
 const VALID_ID = '33333333-3333-4333-8333-333333333333';
+const LEGACY_ID = '33333333-3333-3333-3333-333333333333';
 
 describe('CreateShopDto', () => {
   it('accepts a name with at least one category', () => {
     expect(
       constraintsFor({ name: 'ร้านขนมไทย', categoryIds: [VALID_ID] }),
+    ).toEqual([]);
+  });
+
+  it('accepts a legacy UUID-shaped category id', () => {
+    expect(
+      constraintsFor({ name: 'ร้านขนมไทย', categoryIds: [LEGACY_ID] }),
     ).toEqual([]);
   });
 
@@ -52,7 +59,7 @@ describe('CreateShopDto', () => {
   it('rejects a non-UUID entry', () => {
     expect(
       constraintsFor({ name: 'ร้านขนมไทย', categoryIds: ['not-a-uuid'] }),
-    ).toEqual(expect.arrayContaining(['isUuid']));
+    ).toEqual(expect.arrayContaining(['matches']));
   });
 
   it('rejects a missing name', () => {

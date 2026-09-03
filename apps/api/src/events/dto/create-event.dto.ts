@@ -3,13 +3,13 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
   Matches,
   MaxLength,
 } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class CreateEventDto {
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   venueId!: string;
 
   @IsString()

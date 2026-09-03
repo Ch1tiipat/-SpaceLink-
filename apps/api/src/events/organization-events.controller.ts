@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -14,6 +13,7 @@ import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventsService } from './events.service';
 
@@ -49,7 +49,7 @@ export class OrganizationEventsController {
   @OrgScoped('organizationId')
   publish(
     @CurrentOrgId() organizationId: string,
-    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
   ) {
     return this.eventsService.publish(eventId, organizationId);
   }
@@ -60,7 +60,7 @@ export class OrganizationEventsController {
   @OrgScoped('organizationId')
   open(
     @CurrentOrgId() organizationId: string,
-    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
   ) {
     return this.eventsService.open(eventId, organizationId);
   }
@@ -71,7 +71,7 @@ export class OrganizationEventsController {
   @OrgScoped('organizationId')
   close(
     @CurrentOrgId() organizationId: string,
-    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
   ) {
     return this.eventsService.close(eventId, organizationId);
   }
@@ -82,7 +82,7 @@ export class OrganizationEventsController {
   @OrgScoped('organizationId')
   remove(
     @CurrentOrgId() organizationId: string,
-    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
   ) {
     return this.eventsService.remove(eventId, organizationId);
   }

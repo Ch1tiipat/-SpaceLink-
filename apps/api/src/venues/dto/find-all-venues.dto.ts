@@ -1,7 +1,8 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, Matches } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class FindAllVenuesDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   organizationId?: string;
 }

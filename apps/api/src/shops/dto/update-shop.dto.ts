@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { ArrayMinSize, IsArray, IsUUID, ValidateIf } from 'class-validator';
+import { ArrayMinSize, IsArray, Matches, ValidateIf } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 import { CreateShopDto } from './create-shop.dto';
 
 /**
@@ -23,6 +24,6 @@ export class UpdateShopDto extends PartialType(CreateShopDto) {
   @ValidateIf((dto: UpdateShopDto) => dto.categoryIds !== undefined)
   @IsArray()
   @ArrayMinSize(1)
-  @IsUUID('all', { each: true })
+  @Matches(UUID_SHAPE, { each: true })
   categoryIds?: string[];
 }

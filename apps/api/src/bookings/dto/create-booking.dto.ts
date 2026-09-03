@@ -1,12 +1,13 @@
-import { IsUUID } from 'class-validator';
+import { Matches } from 'class-validator';
+import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class CreateBookingDto {
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   eventId!: string;
 
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   boothId!: string;
 
-  @IsUUID()
+  @Matches(UUID_SHAPE)
   shopId!: string;
 }
