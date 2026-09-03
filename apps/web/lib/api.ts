@@ -1631,6 +1631,17 @@ export function getSuperAdminAnnouncements(
   });
 }
 
+export function deleteSuperAdminAnnouncement(
+  announcementId: string,
+  token: string,
+): Promise<SuperAdminAnnouncement> {
+  return deleteJson<SuperAdminAnnouncement>(
+    `/announcements/${encodeURIComponent(announcementId)}`,
+    { token },
+    "ลบประกาศกลางไม่สำเร็จ",
+  );
+}
+
 export function getSuperAdminAuditLogs(
   token: string,
   signal?: AbortSignal,

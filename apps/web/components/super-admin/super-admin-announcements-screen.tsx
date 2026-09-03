@@ -10,10 +10,12 @@ import {
   Megaphone,
   RefreshCw,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  deleteSuperAdminAnnouncement,
   getSuperAdminAnnouncements,
   type SuperAdminAnnouncement,
 } from "@/lib/api";
@@ -35,6 +37,8 @@ export function SuperAdminAnnouncementsScreen() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -111,6 +115,37 @@ export function SuperAdminAnnouncementsScreen() {
     });
   }
 
+  async function removeAnnouncement(announcement: SuperAdminAnnouncement) {
+    if (
+      !window.confirm(
+        `ยืนยันลบประกาศ “${announcement.title}” ของ ${announcement.organization.name}?\n\nเมื่อลบแล้วจะไม่สามารถกู้คืนได้`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(announcement.id);
+    setError("");
+    setNotice("");
+    try {
+      const token = await getAccessToken();
+      await deleteSuperAdminAnnouncement(announcement.id, token);
+      setAnnouncements((current) =>
+        current.filter((item) => item.id !== announcement.id),
+      );
+      setExpandedIds((current) => {
+        const next = new Set(current);
+        next.delete(announcement.id);
+        return next;
+      });
+      setNotice(`ลบประกาศ “${announcement.title}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(errorMessage(cause, "ลบประกาศกลางไม่สำเร็จ"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="relative z-0 mx-auto w-full max-w-[1440px] px-[15px] pb-11 pt-[23px] before:absolute before:right-[6%] before:top-[110px] before:-z-10 before:h-[280px] before:w-[280px] before:rounded-full before:bg-[rgba(124,58,237,.05)] sm:px-[34px] sm:pt-[31px]">
       <header className="mb-6 flex flex-col items-start justify-between gap-[18px] sm:flex-row sm:items-end">
@@ -122,7 +157,7 @@ export function SuperAdminAnnouncementsScreen() {
             ประกาศกลาง
           </h1>
           <p className="m-0 text-[15px] text-[#82788b]">
-            ตรวจสอบประกาศจากทุกองค์กรในระบบแบบอ่านอย่างเดียว
+            ตรวจสอบและลบประกาศจากทุกองค์กรในระบบ
           </p>
         </div>
         <button
@@ -144,6 +179,15 @@ export function SuperAdminAnnouncementsScreen() {
         <SummaryCard label="กำลังเผยแพร่" value={activeCount} loading={loading} />
         <SummaryCard label="องค์กรที่มีประกาศ" value={organizations.length} loading={loading} />
       </section>
+
+      {notice ? (
+        <p
+          role="status"
+          className="mb-[18px] rounded-[10px] border border-[#bce8d2] bg-[#ecfbf3] px-4 py-3 text-sm font-bold text-[#147653]"
+        >
+          {notice}
+        </p>
+      ) : null}
 
       <section className="overflow-hidden rounded-[15px] border border-[#e7dfea] bg-white shadow-[0_12px_32px_rgba(65,43,85,.055)]">
         <div className="grid gap-3 border-b border-[#ebe4ef] bg-[#fdfbff] p-4 lg:grid-cols-[minmax(280px,1fr)_280px_auto]">
@@ -233,6 +277,15 @@ export function SuperAdminAnnouncementsScreen() {
                       {expanded ? "ย่อเนื้อหา" : "ดูเนื้อหาเต็ม"}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void removeAnnouncement(announcement)}
+                    disabled={deletingId !== null}
+                    className="mt-4 inline-flex min-h-9 w-fit items-center gap-2 rounded-lg border border-[#f0caca] bg-[#fff7f7] px-3 text-xs font-extrabold text-[#b4232c] transition hover:bg-[#ffeded] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deletingId === announcement.id ? "กำลังลบ…" : "ลบประกาศ"}
+                  </button>
                   <footer className="mt-auto grid gap-1.5 border-t border-[#eee8f2] pt-4 text-[11px] text-[#82788b] sm:grid-cols-2">
                     <span className="inline-flex items-center gap-1.5">
                       <CalendarClock className="h-3.5 w-3.5" />

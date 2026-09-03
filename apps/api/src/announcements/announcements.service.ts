@@ -37,6 +37,17 @@ export class AnnouncementsService {
     });
   }
 
+  removeAcrossOrganizations(id: string) {
+    return this.prisma.announcement.delete({
+      where: { id },
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  }
+
   async create(
     organizationId: string,
     createAnnouncementDto: CreateAnnouncementDto,
