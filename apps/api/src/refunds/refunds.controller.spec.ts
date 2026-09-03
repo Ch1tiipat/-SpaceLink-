@@ -40,6 +40,7 @@ const baseUser = {
   email: 'user@example.com',
   fullName: 'User',
   phone: null,
+  trustScore: 100,
   isBlacklisted: false,
   blacklistReason: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),

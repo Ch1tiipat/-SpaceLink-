@@ -60,7 +60,7 @@ describe('PenaltiesController', () => {
 
   it('passes only the resolved organization and DTO to create', async () => {
     const dto = { reason: PenaltyReason.NO_SHOW };
-    create.mockResolvedValue({ totalPoints: 1 });
+    create.mockResolvedValue({ trustScore: 80 });
 
     await controller.create(bookingId, organizationId, dto);
 
@@ -70,7 +70,8 @@ describe('PenaltiesController', () => {
   it('lists the booking vendor history for the resolved organization', async () => {
     listForBookingVendor.mockResolvedValue({
       penalties: [],
-      totalPointsAllOrgs: 0,
+      trustScore: 100,
+      isBlacklisted: false,
     });
 
     await controller.findAll(bookingId, organizationId);

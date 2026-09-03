@@ -11,6 +11,7 @@ const userListSelect = {
   email: true,
   fullName: true,
   role: true,
+  trustScore: true,
   isBlacklisted: true,
 } satisfies Prisma.UserSelect;
 
@@ -24,6 +25,7 @@ const userDetailSelect = {
   fullName: true,
   phone: true,
   role: true,
+  trustScore: true,
   isBlacklisted: true,
   blacklistReason: true,
   createdAt: true,

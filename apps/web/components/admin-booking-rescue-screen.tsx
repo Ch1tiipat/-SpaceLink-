@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { useRouter } from "next/navigation";
+import { type FormEvent, useEffect, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,8 +11,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   TicketCheck,
-} from 'lucide-react';
-import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
+} from "lucide-react";
+import { SelectMenu, type SelectMenuOption } from "@/components/select-menu";
 import {
   ApiError,
   createPenalty,
@@ -23,38 +23,46 @@ import {
   type BookingRecord,
   type PenaltyHistory,
   type PenaltyReason,
-} from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
+} from "@/lib/api";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 
-type AccessState = 'loading' | 'allowed' | 'denied';
+type AccessState = "loading" | "allowed" | "denied";
 
-const STATUS_LABELS: Record<BookingRecord['status'], string> = {
-  PENDING_PAYMENT: 'รอชำระเงิน',
-  CONFIRMED: 'ยืนยันแล้ว',
-  CANCELLED: 'ยกเลิกแล้ว',
-  NO_SHOW: 'ไม่มาใช้พื้นที่',
-  COMPLETED: 'เสร็จสิ้น',
+const STATUS_LABELS: Record<BookingRecord["status"], string> = {
+  PENDING_PAYMENT: "รอชำระเงิน",
+  CONFIRMED: "ยืนยันแล้ว",
+  CANCELLED: "ยกเลิกแล้ว",
+  NO_SHOW: "ไม่มาใช้พื้นที่",
+  COMPLETED: "เสร็จสิ้น",
 };
 
 const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
-  NO_SHOW: 'ไม่มาใช้พื้นที่ตามที่จอง',
-  RULE_VIOLATION: 'ฝ่าฝืนกติกาการใช้พื้นที่',
-  CONTRACT_BREACH: 'ผิดเงื่อนไขสัญญา',
-  BAD_REVIEW: 'ได้รับรีวิวเชิงลบร้ายแรง',
-  OTHER: 'อื่นๆ',
+  NO_SHOW: "ไม่มาใช้พื้นที่ตามที่จอง",
+  RULE_VIOLATION: "ฝ่าฝืนกติกาการใช้พื้นที่",
+  CONTRACT_BREACH: "ผิดเงื่อนไขสัญญา",
+  BAD_REVIEW: "ได้รับรีวิวเชิงลบร้ายแรง",
+  OTHER: "อื่นๆ",
 };
 
 const PENALTY_REASON_OPTIONS: SelectMenuOption[] = Object.entries(
   PENALTY_REASON_LABELS,
 ).map(([value, label]) => ({ value, label }));
 
+const DEFAULT_PENALTY_POINTS: Record<PenaltyReason, number> = {
+  NO_SHOW: 20,
+  RULE_VIOLATION: 15,
+  CONTRACT_BREACH: 30,
+  BAD_REVIEW: 10,
+  OTHER: 5,
+};
+
 export function AdminBookingRescueScreen() {
   const router = useRouter();
-  const [access, setAccess] = useState<AccessState>('loading');
-  const [token, setToken] = useState('');
-  const [bookingCode, setBookingCode] = useState('');
+  const [access, setAccess] = useState<AccessState>("loading");
+  const [token, setToken] = useState("");
+  const [bookingCode, setBookingCode] = useState("");
   const [booking, setBooking] = useState<BookingRecord | null>(null);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,23 +78,24 @@ export function AdminBookingRescueScreen() {
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
         if (!accessToken) {
-          router.replace('/login');
+          router.replace("/login");
           return;
         }
 
         const me = await getMe(accessToken, controller.signal);
         if (!active) return;
 
-        if (me.role !== 'ORG_ADMIN' && me.role !== 'SUPER_ADMIN') {
-          setAccess('denied');
+        if (me.role !== "ORG_ADMIN" && me.role !== "SUPER_ADMIN") {
+          setAccess("denied");
           return;
         }
 
         setToken(accessToken);
-        setAccess('allowed');
+        setAccess("allowed");
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        if (active) setAccess('denied');
+        if (cause instanceof DOMException && cause.name === "AbortError")
+          return;
+        if (active) setAccess("denied");
       }
     })();
 
@@ -100,13 +109,13 @@ export function AdminBookingRescueScreen() {
     event.preventDefault();
     const normalizedCode = bookingCode.trim().toUpperCase();
     if (!normalizedCode) {
-      setError('กรุณากรอกรหัสการจอง');
+      setError("กรุณากรอกรหัสการจอง");
       return;
     }
 
     setSearching(true);
     setBooking(null);
-    setReason('');
+    setReason("");
     setError(null);
     setSuccess(null);
     try {
@@ -114,16 +123,16 @@ export function AdminBookingRescueScreen() {
       setBooking(result);
       setBookingCode(result.bookingCode);
     } catch (cause) {
-      setError(describeError(cause, 'ค้นหาการจองไม่สำเร็จ'));
+      setError(describeError(cause, "ค้นหาการจองไม่สำเร็จ"));
     } finally {
       setSearching(false);
     }
   }
 
   async function handleConfirm() {
-    if (!booking || booking.status !== 'PENDING_PAYMENT') return;
+    if (!booking || booking.status !== "PENDING_PAYMENT") return;
     if (!reason.trim()) {
-      setError('กรุณาระบุเหตุผลที่ยกเว้นการชำระเงิน');
+      setError("กรุณาระบุเหตุผลที่ยกเว้นการชำระเงิน");
       return;
     }
 
@@ -131,36 +140,37 @@ export function AdminBookingRescueScreen() {
     setError(null);
     setSuccess(null);
     try {
-      const confirmed = await confirmExemptBooking(
-        booking.id,
-        reason,
-        token,
-      );
+      const confirmed = await confirmExemptBooking(booking.id, reason, token);
       setBooking(confirmed);
       setSuccess(`ยืนยันการจอง ${confirmed.bookingCode} เรียบร้อยแล้ว`);
     } catch (cause) {
-      setError(describeError(cause, 'ยืนยันการจองไม่สำเร็จ'));
+      setError(describeError(cause, "ยืนยันการจองไม่สำเร็จ"));
     } finally {
       setConfirming(false);
     }
   }
 
-  if (access === 'loading') {
+  if (access === "loading") {
     return <AdminPageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแลระบบ" />;
   }
 
-  if (access === 'denied') {
+  if (access === "denied") {
     return (
       <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5 py-12">
         <section className="max-w-lg rounded-[28px] border border-[#eadff7] bg-white p-8 text-center shadow-[0_22px_55px_rgba(54,36,91,0.08)]">
-          <AlertCircle className="mx-auto h-11 w-11 text-[#dc2626]" aria-hidden />
-          <h1 className="mt-4 text-2xl font-black text-ink">ไม่มีสิทธิ์เข้าถึงหน้านี้</h1>
+          <AlertCircle
+            className="mx-auto h-11 w-11 text-[#dc2626]"
+            aria-hidden
+          />
+          <h1 className="mt-4 text-2xl font-black text-ink">
+            ไม่มีสิทธิ์เข้าถึงหน้านี้
+          </h1>
           <p className="mt-2 text-sm leading-6 text-[#756d80]">
             หน้านี้เปิดให้เฉพาะผู้ดูแลองค์กรและผู้ดูแลระบบเท่านั้น
           </p>
           <button
             type="button"
-            onClick={() => router.replace('/')}
+            onClick={() => router.replace("/")}
             className="mt-6 rounded-2xl bg-violet px-5 py-3 text-sm font-extrabold text-white"
           >
             กลับหน้าหลัก
@@ -183,15 +193,21 @@ export function AdminBookingRescueScreen() {
               ยืนยันการจองที่ค้างชำระ
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#756d80]">
-              ค้นหาด้วยรหัสการจองที่ได้รับจากผู้ขาย แล้วตรวจสอบสถานะก่อนยืนยันแบบยกเว้นการชำระเงิน
+              ค้นหาด้วยรหัสการจองที่ได้รับจากผู้ขาย
+              แล้วตรวจสอบสถานะก่อนยืนยันแบบยกเว้นการชำระเงิน
             </p>
           </div>
         </header>
 
         <section className="rounded-[28px] border border-[#e9e3f2] bg-white p-5 shadow-[0_22px_55px_rgba(54,36,91,0.07)] sm:p-7">
-          <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
             <label className="min-w-0 flex-1">
-              <span className="mb-2 block text-sm font-extrabold text-ink">รหัสการจอง</span>
+              <span className="mb-2 block text-sm font-extrabold text-ink">
+                รหัสการจอง
+              </span>
               <span className="flex h-[52px] items-center gap-3 rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-4 focus-within:border-violet focus-within:ring-4 focus-within:ring-[#7c3aed18]">
                 <Search className="h-5 w-5 shrink-0 text-violet" aria-hidden />
                 <input
@@ -208,7 +224,7 @@ export function AdminBookingRescueScreen() {
               disabled={searching}
               className="mt-auto h-[52px] rounded-2xl bg-violet px-6 text-sm font-extrabold text-white shadow-[0_12px_28px_rgba(124,58,237,0.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {searching ? 'กำลังค้นหา...' : 'ค้นหาการจอง'}
+              {searching ? "กำลังค้นหา..." : "ค้นหาการจอง"}
             </button>
           </form>
 
@@ -230,9 +246,16 @@ export function AdminBookingRescueScreen() {
         ) : (
           <section className="mt-6 grid min-h-64 place-items-center rounded-[28px] border border-dashed border-[#dcd3e8] bg-white/70 p-8 text-center">
             <div>
-              <TicketCheck className="mx-auto h-10 w-10 text-[#9b83c7]" aria-hidden />
-              <h2 className="mt-3 text-lg font-black text-ink">ยังไม่ได้เลือกรายการจอง</h2>
-              <p className="mt-1 text-sm text-[#82798d]">กรอกรหัสด้านบนเพื่อดูข้อมูลก่อนยืนยัน</p>
+              <TicketCheck
+                className="mx-auto h-10 w-10 text-[#9b83c7]"
+                aria-hidden
+              />
+              <h2 className="mt-3 text-lg font-black text-ink">
+                ยังไม่ได้เลือกรายการจอง
+              </h2>
+              <p className="mt-1 text-sm text-[#82798d]">
+                กรอกรหัสด้านบนเพื่อดูข้อมูลก่อนยืนยัน
+              </p>
             </div>
           </section>
         )}
@@ -251,12 +274,14 @@ function PenaltyPanel({
   const [history, setHistory] = useState<PenaltyHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [penaltyReason, setPenaltyReason] =
-    useState<PenaltyReason>('NO_SHOW');
-  const [description, setDescription] = useState('');
+  const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>("NO_SHOW");
+  const [penaltyPoints, setPenaltyPoints] = useState(
+    DEFAULT_PENALTY_POINTS.NO_SHOW,
+  );
+  const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<{
-    tone: 'success' | 'warning';
+    tone: "success" | "warning";
     text: string;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -268,7 +293,9 @@ function PenaltyPanel({
     setHistory(null);
     setLoading(true);
     setLoadError(null);
-    setDescription('');
+    setPenaltyReason("NO_SHOW");
+    setPenaltyPoints(DEFAULT_PENALTY_POINTS.NO_SHOW);
+    setDescription("");
     setResultMessage(null);
     setSubmitError(null);
 
@@ -277,9 +304,10 @@ function PenaltyPanel({
         if (active) setHistory(result);
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === "AbortError")
+          return;
         if (active) {
-          setLoadError(describeError(cause, 'โหลดประวัติแต้มโทษไม่สำเร็จ'));
+          setLoadError(describeError(cause, "โหลดประวัติแต้มโทษไม่สำเร็จ"));
         }
       })
       .finally(() => {
@@ -297,7 +325,11 @@ function PenaltyPanel({
     if (submitting) return;
 
     const reasonLabel = PENALTY_REASON_LABELS[penaltyReason];
-    if (!window.confirm(`ยืนยันออกแต้มโทษ "${reasonLabel}" ให้ผู้ขายรายนี้?`)) {
+    if (
+      !window.confirm(
+        `ยืนยันหักคะแนนความน่าเชื่อถือ ${penaltyPoints} คะแนน จากเหตุผล "${reasonLabel}"?`,
+      )
+    ) {
       return;
     }
 
@@ -311,21 +343,22 @@ function PenaltyPanel({
         booking.id,
         {
           reason: penaltyReason,
+          points: penaltyPoints,
           description: normalizedDescription || undefined,
         },
         token,
       );
 
-      setDescription('');
+      setDescription("");
       setResultMessage(
         result.justBlacklisted
           ? {
-              tone: 'warning',
-              text: `⚠️ ครบ ${result.totalPoints} แต้มแล้ว บัญชีนี้ถูกขึ้นบัญชีดำอัตโนมัติ`,
+              tone: "warning",
+              text: "⚠️ คะแนนความน่าเชื่อถือลดลงเหลือ 0 บัญชีนี้ถูกขึ้นบัญชีดำอัตโนมัติ",
             }
           : {
-              tone: 'success',
-              text: `ออกแต้มโทษเรียบร้อยแล้ว (รวม ${result.totalPoints} แต้ม)`,
+              tone: "success",
+              text: `ออกบทลงโทษเรียบร้อยแล้ว เหลือ Trust Score ${result.trustScore} คะแนน`,
             },
       );
 
@@ -337,19 +370,19 @@ function PenaltyPanel({
         setLoadError(
           describeError(
             cause,
-            'ออกแต้มโทษสำเร็จ แต่โหลดประวัติล่าสุดไม่สำเร็จ',
+            "ออกแต้มโทษสำเร็จ แต่โหลดประวัติล่าสุดไม่สำเร็จ",
           ),
         );
       }
     } catch (cause) {
-      setSubmitError(describeError(cause, 'ออกแต้มโทษไม่สำเร็จ'));
+      setSubmitError(describeError(cause, "ออกแต้มโทษไม่สำเร็จ"));
     } finally {
       setSubmitting(false);
     }
   }
 
-  const totalPoints = history?.totalPointsAllOrgs ?? 0;
-  const isBlacklisted = totalPoints >= 3;
+  const trustScore = history?.trustScore ?? 100;
+  const isBlacklisted = history?.isBlacklisted ?? false;
 
   return (
     <section className="mt-6 rounded-[28px] border border-[#eadff7] bg-white p-6 shadow-[0_22px_55px_rgba(54,36,91,0.07)] sm:p-7">
@@ -359,13 +392,21 @@ function PenaltyPanel({
             <Gavel className="h-5 w-5" aria-hidden />
           </span>
           <div>
-            <h2 className="font-black text-ink">แต้มโทษของผู้ขาย</h2>
-            <p className="mt-1 text-xs text-[#81778c]">ประวัติด้านล่างแสดงเฉพาะองค์กรนี้</p>
+            <h2 className="font-black text-ink">
+              คะแนนความน่าเชื่อถือของผู้ขาย
+            </h2>
+            <p className="mt-1 text-xs text-[#81778c]">
+              ประวัติด้านล่างแสดงเฉพาะองค์กรนี้
+            </p>
           </div>
         </div>
-        <div className={`rounded-2xl px-4 py-3 text-right ${isBlacklisted ? 'bg-[#fff1f2] text-[#b91c1c]' : 'bg-[#f7f2ff] text-[#6d28d9]'}`}>
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em]">รวมทุกองค์กร</p>
-          <p className="mt-0.5 text-lg font-black">{totalPoints} / 3 แต้ม</p>
+        <div
+          className={`rounded-2xl px-4 py-3 text-right ${isBlacklisted ? "bg-[#fff1f2] text-[#b91c1c]" : "bg-[#f7f2ff] text-[#6d28d9]"}`}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em]">
+            Trust Score
+          </p>
+          <p className="mt-0.5 text-lg font-black">{trustScore} / 100 คะแนน</p>
         </div>
       </div>
 
@@ -380,40 +421,80 @@ function PenaltyPanel({
         <div>
           <h3 className="text-sm font-black text-ink">ประวัติในองค์กรนี้</h3>
           {loading ? (
-            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">กำลังโหลดประวัติแต้มโทษ...</p>
+            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">
+              กำลังโหลดประวัติแต้มโทษ...
+            </p>
           ) : history?.penalties.length ? (
             <ul className="mt-3 space-y-3">
               {history.penalties.map((penalty) => (
-                <li key={penalty.id} className="rounded-2xl border border-[#eee9f4] bg-[#fcfbff] p-4">
+                <li
+                  key={penalty.id}
+                  className="rounded-2xl border border-[#eee9f4] bg-[#fcfbff] p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-extrabold text-ink">{PENALTY_REASON_LABELS[penalty.reason]}</p>
-                    <span className="shrink-0 rounded-full bg-[#fee2e2] px-2.5 py-1 text-xs font-black text-[#b91c1c]">+{penalty.points} แต้ม</span>
+                    <p className="text-sm font-extrabold text-ink">
+                      {PENALTY_REASON_LABELS[penalty.reason]}
+                    </p>
+                    <span className="shrink-0 rounded-full bg-[#fee2e2] px-2.5 py-1 text-xs font-black text-[#b91c1c]">
+                      -{penalty.points} คะแนน
+                    </span>
                   </div>
                   {penalty.description && (
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#655d70]">{penalty.description}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#655d70]">
+                      {penalty.description}
+                    </p>
                   )}
-                  <p className="mt-2 text-xs text-[#91889c]">{formatDateTime(penalty.issuedAt)}</p>
+                  <p className="mt-2 text-xs text-[#91889c]">
+                    {formatDateTime(penalty.issuedAt)}
+                  </p>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">ยังไม่มีประวัติแต้มโทษในองค์กรนี้</p>
+            <p className="mt-3 rounded-2xl bg-[#faf8fd] p-4 text-sm text-[#756d80]">
+              ยังไม่มีประวัติแต้มโทษในองค์กรนี้
+            </p>
           )}
           {loadError && <Feedback tone="error">{loadError}</Feedback>}
         </div>
 
-        <form onSubmit={handlePenaltySubmit} className="rounded-2xl border border-[#e6dcf3] bg-[#faf7ff] p-4">
+        <form
+          onSubmit={handlePenaltySubmit}
+          className="rounded-2xl border border-[#e6dcf3] bg-[#faf7ff] p-4"
+        >
           <h3 className="text-sm font-black text-ink">ออกแต้มโทษ</h3>
           <SelectMenu
             label="เหตุผล"
             value={penaltyReason}
-            onChange={(value) => setPenaltyReason(value as PenaltyReason)}
+            onChange={(value) => {
+              const reason = value as PenaltyReason;
+              setPenaltyReason(reason);
+              setPenaltyPoints(DEFAULT_PENALTY_POINTS[reason]);
+            }}
             options={PENALTY_REASON_OPTIONS}
             placeholder="เลือกเหตุผล"
             className="mt-4"
           />
           <label className="mt-4 block">
-            <span className="text-sm font-extrabold text-ink">รายละเอียด (ไม่บังคับ)</span>
+            <span className="text-sm font-extrabold text-ink">คะแนนที่หัก</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              required
+              value={penaltyPoints}
+              onChange={(event) => setPenaltyPoints(Number(event.target.value))}
+              className="mt-2 h-12 w-full rounded-2xl border border-[#dcd2e9] bg-white px-4 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]"
+            />
+            <span className="mt-1 block text-xs text-[#81778c]">
+              ปรับได้ตั้งแต่ 1–100 คะแนน
+            </span>
+          </label>
+          <label className="mt-4 block">
+            <span className="text-sm font-extrabold text-ink">
+              รายละเอียด (ไม่บังคับ)
+            </span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -428,13 +509,13 @@ function PenaltyPanel({
             disabled={submitting}
             className="mt-4 w-full rounded-2xl bg-[#7e22ce] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#6b21a8] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? 'กำลังออกแต้มโทษ...' : 'ออกแต้มโทษ'}
+            {submitting ? "กำลังออกแต้มโทษ..." : "ออกแต้มโทษ"}
           </button>
           {submitError && <Feedback tone="error">{submitError}</Feedback>}
           {resultMessage && (
             <p
               role="status"
-              className={`mt-4 rounded-2xl p-3 text-sm font-bold ${resultMessage.tone === 'warning' ? 'bg-[#fff7ed] text-[#c2410c]' : 'bg-[#ecfdf3] text-[#166534]'}`}
+              className={`mt-4 rounded-2xl p-3 text-sm font-bold ${resultMessage.tone === "warning" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#ecfdf3] text-[#166534]"}`}
             >
               {resultMessage.text}
             </p>
@@ -458,24 +539,40 @@ function BookingResult({
   onConfirm: () => void;
   confirming: boolean;
 }) {
-  const canConfirm = booking.status === 'PENDING_PAYMENT';
+  const canConfirm = booking.status === "PENDING_PAYMENT";
 
   return (
     <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <article className="rounded-[28px] border border-[#e9e3f2] bg-white p-6 shadow-[0_22px_55px_rgba(54,36,91,0.06)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eee9f4] pb-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8b8197]">Booking code</p>
-            <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-ink">{booking.bookingCode}</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8b8197]">
+              Booking code
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-ink">
+              {booking.bookingCode}
+            </h2>
           </div>
           <StatusBadge status={booking.status} />
         </div>
 
         <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Detail label="ราคาบูธ" value={`฿${formatMoney(booking.boothPrice)}`} />
-          <Detail label="วันเริ่มจอง" value={formatDate(booking.bookingStartDate)} />
-          <Detail label="วันสิ้นสุดจอง" value={formatDate(booking.bookingEndDate)} />
-          <Detail label="หมดเวลาถือสิทธิ์" value={formatDateTime(booking.holdExpiresAt)} />
+          <Detail
+            label="ราคาบูธ"
+            value={`฿${formatMoney(booking.boothPrice)}`}
+          />
+          <Detail
+            label="วันเริ่มจอง"
+            value={formatDate(booking.bookingStartDate)}
+          />
+          <Detail
+            label="วันสิ้นสุดจอง"
+            value={formatDate(booking.bookingEndDate)}
+          />
+          <Detail
+            label="หมดเวลาถือสิทธิ์"
+            value={formatDateTime(booking.holdExpiresAt)}
+          />
           <Detail label="Event ID" value={booking.eventId} compact />
           <Detail label="Booth ID" value={booking.boothId} compact />
         </dl>
@@ -495,7 +592,9 @@ function BookingResult({
         {canConfirm ? (
           <>
             <label className="mt-5 block">
-              <span className="text-sm font-extrabold text-ink">เหตุผลที่ยกเว้นการชำระเงิน</span>
+              <span className="text-sm font-extrabold text-ink">
+                เหตุผลที่ยกเว้นการชำระเงิน
+              </span>
               <textarea
                 value={reason}
                 onChange={(event) => onReasonChange(event.target.value)}
@@ -506,7 +605,8 @@ function BookingResult({
             </label>
             <p className="mt-3 flex gap-2 rounded-2xl bg-[#fff8e6] p-3 text-xs leading-5 text-[#8a5a00]">
               <Clock3 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              ระบบจะตรวจสถานะอีกครั้งตอนยืนยัน เพื่อป้องกันการชนกับการยกเลิกอัตโนมัติ
+              ระบบจะตรวจสถานะอีกครั้งตอนยืนยัน
+              เพื่อป้องกันการชนกับการยกเลิกอัตโนมัติ
             </p>
             <button
               type="button"
@@ -514,12 +614,15 @@ function BookingResult({
               disabled={confirming || !reason.trim()}
               className="mt-4 w-full rounded-2xl bg-[#15803d] px-4 py-3.5 text-sm font-extrabold text-white shadow-[0_12px_26px_rgba(21,128,61,0.18)] transition hover:bg-[#166534] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {confirming ? 'กำลังยืนยัน...' : 'ยืนยันการจองโดยยกเว้นการชำระเงิน'}
+              {confirming
+                ? "กำลังยืนยัน..."
+                : "ยืนยันการจองโดยยกเว้นการชำระเงิน"}
             </button>
           </>
         ) : (
           <div className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-[#696071]">
-            รายการนี้ไม่ได้อยู่ในสถานะรอชำระเงิน จึงไม่สามารถยืนยันด้วยขั้นตอนนี้ได้
+            รายการนี้ไม่ได้อยู่ในสถานะรอชำระเงิน
+            จึงไม่สามารถยืนยันด้วยขั้นตอนนี้ได้
           </div>
         )}
       </aside>
@@ -527,17 +630,17 @@ function BookingResult({
   );
 }
 
-function StatusBadge({ status }: { status: BookingRecord['status'] }) {
-  const pending = status === 'PENDING_PAYMENT';
-  const confirmed = status === 'CONFIRMED';
+function StatusBadge({ status }: { status: BookingRecord["status"] }) {
+  const pending = status === "PENDING_PAYMENT";
+  const confirmed = status === "CONFIRMED";
   return (
     <span
       className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${
         pending
-          ? 'bg-[#fff3cd] text-[#8a5a00]'
+          ? "bg-[#fff3cd] text-[#8a5a00]"
           : confirmed
-            ? 'bg-[#dcfce7] text-[#166534]'
-            : 'bg-[#f1eef4] text-[#655d70]'
+            ? "bg-[#dcfce7] text-[#166534]"
+            : "bg-[#f1eef4] text-[#655d70]"
       }`}
     >
       {STATUS_LABELS[status]}
@@ -557,7 +660,9 @@ function Detail({
   return (
     <div className="rounded-2xl bg-[#faf8fd] p-4">
       <dt className="text-xs font-bold text-[#8b8197]">{label}</dt>
-      <dd className={`mt-1 font-extrabold text-ink ${compact ? 'break-all text-xs' : 'text-sm'}`}>
+      <dd
+        className={`mt-1 font-extrabold text-ink ${compact ? "break-all text-xs" : "text-sm"}`}
+      >
         {value}
       </dd>
     </div>
@@ -568,16 +673,16 @@ function Feedback({
   tone,
   children,
 }: {
-  tone: 'error' | 'success';
+  tone: "error" | "success";
   children: string;
 }) {
-  const success = tone === 'success';
+  const success = tone === "success";
   const Icon = success ? CheckCircle2 : AlertCircle;
   return (
     <p
-      role={success ? 'status' : 'alert'}
+      role={success ? "status" : "alert"}
       className={`mt-4 flex items-start gap-2 rounded-2xl p-3 text-sm font-semibold ${
-        success ? 'bg-[#ecfdf3] text-[#166534]' : 'bg-[#fff1f2] text-[#b91c1c]'
+        success ? "bg-[#ecfdf3] text-[#166534]" : "bg-[#fff1f2] text-[#b91c1c]"
       }`}
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -589,7 +694,9 @@ function Feedback({
 function AdminPageState({ label }: { label: string }) {
   return (
     <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
-      <p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-[#706778] shadow-sm">{label}</p>
+      <p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-[#706778] shadow-sm">
+        {label}
+      </p>
     </main>
   );
 }
@@ -599,23 +706,23 @@ function describeError(cause: unknown, fallback: string): string {
 }
 
 function formatMoney(value: string): string {
-  const [whole, fraction] = value.split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return fraction ? `${grouped}.${fraction.padEnd(2, '0')}` : `${grouped}.00`;
+  const [whole, fraction] = value.split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return fraction ? `${grouped}.${fraction.padEnd(2, "0")}` : `${grouped}.00`;
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('th-TH', {
-    dateStyle: 'medium',
-    timeZone: 'Asia/Bangkok',
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "medium",
+    timeZone: "Asia/Bangkok",
   }).format(new Date(value));
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return 'ไม่มีกำหนด';
-  return new Intl.DateTimeFormat('th-TH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Bangkok',
+  if (!value) return "ไม่มีกำหนด";
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Bangkok",
   }).format(new Date(value));
 }

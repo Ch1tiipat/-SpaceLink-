@@ -21,6 +21,7 @@ const user = {
   fullName: 'Vendor Demo',
   phone: null,
   role: UserRole.VENDOR,
+  trustScore: 100,
   isBlacklisted: false,
   blacklistReason: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
