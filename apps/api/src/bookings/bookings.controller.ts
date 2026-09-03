@@ -109,7 +109,17 @@ export class BookingsController {
     return this.bookingsService.findByCode(bookingCode, currentUser);
   }
 
-  // The two admin routes below are org-scoped. Their effective guard chain is
+  @Get(':bookingId/slip')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('bookingId')
+  getAdminSlip(
+    @Param('bookingId') bookingId: string,
+    @CurrentOrgId() orgId: string,
+  ) {
+    return this.bookingsService.createAdminSlipAccess(bookingId, orgId);
+  }
+
+  // The admin routes below are org-scoped. Their effective guard chain is
   // [SupabaseAuthGuard, RolesGuard, SupabaseAuthGuard, OrgScopeGuard]: Nest runs
   // controller-level guards before route-level ones, and `@OrgScoped` bundles its
   // own SupabaseAuthGuard alongside OrgScopeGuard. That guard therefore runs

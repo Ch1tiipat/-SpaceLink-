@@ -25,6 +25,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
+  type AdminSlipAccess,
   BookingSlipStorageService,
   type UploadedSlipFile,
 } from './booking-slip-storage.service';
@@ -574,6 +575,28 @@ export class BookingsService {
       orderBy: { createdAt: 'desc' },
     });
     return bookings.map((booking) => this.toAdminResponse(booking));
+  }
+
+  async createAdminSlipAccess(
+    bookingId: string,
+    organizationId: string,
+  ): Promise<AdminSlipAccess> {
+    const slip = await this.prisma.verifiedSlip.findFirst({
+      where: {
+        bookingId,
+        booking: { event: { organizationId } },
+      },
+      select: { slipImageUrl: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!slip) {
+      // Unknown bookings, another tenant's booking and bookings without a slip
+      // intentionally share one response (§14.1).
+      throw new NotFoundException('ไม่พบสลิปการชำระเงิน');
+    }
+
+    return this.slipStorage.createAdminAccess(slip.slipImageUrl);
   }
 
   async cancel(

@@ -154,9 +154,11 @@ const bookingFindUnique = jest.fn();
 const bookingFindMany = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const bookingUpdateMany = jest.fn();
+const verifiedSlipFindFirst = jest.fn();
 const verifySlip = jest.fn();
 const uploadForVerification = jest.fn();
 const removeObject = jest.fn();
+const createAdminAccess = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 
@@ -173,11 +175,16 @@ const mockPrismaService = {
     findMany: bookingFindMany,
     updateMany: bookingUpdateMany,
   },
+  verifiedSlip: { findFirst: verifiedSlipFindFirst },
   platformConfig: { findFirst: platformConfigFindFirst },
   $transaction: prismaTransaction,
 };
 const mockSlipVerificationService = { verify: verifySlip };
-const mockSlipStorageService = { removeObject, uploadForVerification };
+const mockSlipStorageService = {
+  createAdminAccess,
+  removeObject,
+  uploadForVerification,
+};
 const mockNotificationsService = { createForUser };
 
 const PENDING_SLIP_BOOKING = {
@@ -1204,6 +1211,44 @@ describe('BookingsService', () => {
     expect(bookingFindMany).toHaveBeenCalledWith({
       include: ADMIN_BOOKING_INCLUDE,
       orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  describe('createAdminSlipAccess', () => {
+    it('signs only the latest slip inside the guard-resolved organization', async () => {
+      verifiedSlipFindFirst.mockResolvedValue({
+        slipImageUrl: SLIP_OBJECT_PATH,
+      });
+      createAdminAccess.mockResolvedValue({
+        viewUrl: SIGNED_SLIP_URL,
+        downloadUrl: `${SIGNED_SLIP_URL}&download=payment-slip.jpg`,
+        expiresInSeconds: 300,
+      });
+
+      const result = await service.createAdminSlipAccess(
+        BOOKING_ID,
+        ORGANIZATION_ID,
+      );
+
+      expect(verifiedSlipFindFirst).toHaveBeenCalledWith({
+        where: {
+          bookingId: BOOKING_ID,
+          booking: { event: { organizationId: ORGANIZATION_ID } },
+        },
+        select: { slipImageUrl: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(createAdminAccess).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
+      expect(result.expiresInSeconds).toBe(300);
+    });
+
+    it('returns the same 404 for missing and out-of-organization slips', async () => {
+      verifiedSlipFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.createAdminSlipAccess(BOOKING_ID, ORGANIZATION_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(createAdminAccess).not.toHaveBeenCalled();
     });
   });
 

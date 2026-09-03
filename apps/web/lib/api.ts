@@ -496,6 +496,12 @@ export type UpdatePlatformBillingConfigInput = Omit<
  * admin projection as the platform overview, already filtered by membership. */
 export type AdminOrganizationBooking = SuperAdminBooking;
 
+export type AdminSlipAccess = {
+  viewUrl: string;
+  downloadUrl: string;
+  expiresInSeconds: number;
+};
+
 export type AdminOrganizationRefund = {
   id: string;
   bookingId: string;
@@ -1416,6 +1422,16 @@ export function getAdminOrganizationBookings(
   return getJson<AdminOrganizationBooking[]>(
     `/organizations/${encodeURIComponent(organizationId)}/bookings`,
     { signal, token },
+  );
+}
+
+export function getAdminBookingSlipAccess(
+  bookingId: string,
+  token: string,
+): Promise<AdminSlipAccess> {
+  return getJson<AdminSlipAccess>(
+    `/bookings/${encodeURIComponent(bookingId)}/slip`,
+    { token },
   );
 }
 

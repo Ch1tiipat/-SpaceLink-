@@ -75,6 +75,7 @@ const findAll = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const findByCode = jest.fn();
 const findOne = jest.fn();
+const createAdminSlipAccess = jest.fn();
 const uploadSlip = jest.fn();
 const mockBookingsService = {
   cancel,
@@ -84,6 +85,7 @@ const mockBookingsService = {
   findAllAcrossOrganizations,
   findByCode,
   findOne,
+  createAdminSlipAccess,
   uploadSlip,
 };
 
@@ -107,6 +109,7 @@ function controllerHandler(
     | 'findAllAcrossOrganizations'
     | 'findByCode'
     | 'findOne'
+    | 'getAdminSlip'
     | 'uploadSlip',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -191,7 +194,12 @@ describe('BookingsController', () => {
     // org-scoped ones because OrgScopeGuard bypasses the membership check for
     // that role — omitting it here would let a super admin pass OrgScopeGuard
     // and then be rejected by RolesGuard.
-    for (const name of ['findOne', 'confirmExempt', 'findByCode'] as const) {
+    for (const name of [
+      'findOne',
+      'confirmExempt',
+      'findByCode',
+      'getAdminSlip',
+    ] as const) {
       expect(Reflect.getMetadata(ROLES_KEY, controllerHandler(name))).toEqual([
         UserRole.SUPER_ADMIN,
         UserRole.ORG_ADMIN,
@@ -204,7 +212,7 @@ describe('BookingsController', () => {
   // Metadata alone enforces nothing, so assert the guard travels with it: both
   // come from @OrgScoped, and a route carrying only the metadata would return
   // 200 while checking no tenant at all.
-  it.each(['findOne', 'confirmExempt'] as const)(
+  it.each(['findOne', 'confirmExempt', 'getAdminSlip'] as const)(
     'puts %s behind OrgScopeGuard scoped to bookingId',
     (name) => {
       const handler = controllerHandler(name);
@@ -311,6 +319,17 @@ describe('BookingsController', () => {
     await controller.findOne('booking-id', ORGANIZATION_ID);
 
     expect(findOne).toHaveBeenCalledWith('booking-id', ORGANIZATION_ID);
+  });
+
+  it('passes the guard-resolved organization id when signing a slip', async () => {
+    createAdminSlipAccess.mockResolvedValue({ viewUrl: 'signed' });
+
+    await controller.getAdminSlip('booking-id', ORGANIZATION_ID);
+
+    expect(createAdminSlipAccess).toHaveBeenCalledWith(
+      'booking-id',
+      ORGANIZATION_ID,
+    );
   });
 
   it('passes the exemption reason and guard-resolved organization id', async () => {
