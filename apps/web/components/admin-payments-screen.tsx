@@ -21,6 +21,7 @@ import {
   formatAdminMoney,
   useAdminPageAccess,
 } from '@/components/admin-ui';
+import { AdminSlipActions } from '@/components/admin-slip-actions';
 import {
   getAdminOrganizationBookings,
   getAdminOrganizationRefunds,
@@ -109,7 +110,7 @@ export function AdminPaymentsScreen() {
         />
 
         <div className="mt-6 rounded-[16px] border border-[#dfd3ef] bg-[#f7f2ff] px-4 py-3 text-sm leading-6 text-[#5f3ca1]">
-          <strong>Read-only log:</strong> Endpoint ปัจจุบันไม่ส่งรายละเอียดสลิปหรือผล SlipOK ให้หน้า ORG_ADMIN จึงแสดงเฉพาะสถานะ Booking, การยกเว้นชำระ และคำร้องคืนเงินที่ตรวจสอบได้จาก API
+          <strong>Read-only log:</strong> หน้านี้แสดงสถานะ Booking และคำร้องคืนเงินโดยไม่เปลี่ยนสถานะเงินจริง ผู้ดูแลเปิดดูหรือดาวน์โหลดสลิปด้วยลิงก์ชั่วคราวได้
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -154,6 +155,7 @@ export function AdminPaymentsScreen() {
                     <th className="px-4 py-3 font-extrabold">ยอดตาม Booking</th>
                     <th className="px-4 py-3 font-extrabold">ช่องทางยืนยัน</th>
                     <th className="px-4 py-3 font-extrabold">สถานะ</th>
+                    <th className="px-4 py-3 font-extrabold">หลักฐาน</th>
                     <th className="px-4 py-3 font-extrabold">เวลา</th>
                   </tr>
                 </thead>
@@ -166,6 +168,13 @@ export function AdminPaymentsScreen() {
                       <td className="px-4 py-4 font-extrabold text-ink">{formatAdminMoney(booking.boothPrice)}</td>
                       <td className="px-4 py-4 text-xs font-bold text-[#655d70]">{booking.isPaymentExempt ? 'ผู้ดูแลยกเว้นการชำระ' : 'สถานะจาก Booking API'}</td>
                       <td className="px-4 py-4"><PaymentStatus booking={booking} /></td>
+                      <td className="px-4 py-4">
+                        {booking.isPaymentExempt ? (
+                          <span className="text-xs font-bold text-muted">ไม่มีสลิป</span>
+                        ) : (
+                          <AdminSlipActions bookingId={booking.id} />
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-xs text-muted">{formatAdminDateTime(booking.confirmedAt ?? booking.createdAt)}</td>
                     </tr>
                   ))}
@@ -189,7 +198,7 @@ export function AdminPaymentsScreen() {
             <div className="overflow-x-auto">
               <table className="min-w-[850px] w-full border-collapse text-left text-sm">
                 <thead className="bg-[#faf8fc] text-[11px] uppercase tracking-[0.08em] text-muted">
-                  <tr><th className="px-5 py-3">Booking ID</th><th className="px-4 py-3">เหตุผล</th><th className="px-4 py-3">ยอดที่ขอ</th><th className="px-4 py-3">ยอดอนุมัติ</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">สร้างเมื่อ</th></tr>
+                  <tr><th className="px-5 py-3">Booking ID</th><th className="px-4 py-3">เหตุผล</th><th className="px-4 py-3">ยอดที่ขอ</th><th className="px-4 py-3">ยอดอนุมัติ</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3">สลิปต้นทาง</th><th className="px-4 py-3">สร้างเมื่อ</th></tr>
                 </thead>
                 <tbody>
                   {refunds.map((refund) => (
@@ -199,6 +208,7 @@ export function AdminPaymentsScreen() {
                       <td className="px-4 py-4 font-extrabold text-ink">{formatAdminMoney(refund.requestedAmount)}</td>
                       <td className="px-4 py-4 font-extrabold text-ink">{refund.approvedAmount ? formatAdminMoney(refund.approvedAmount) : '—'}</td>
                       <td className="px-4 py-4"><RefundStatus status={refund.status} /></td>
+                      <td className="px-4 py-4"><AdminSlipActions bookingId={refund.bookingId} /></td>
                       <td className="px-4 py-4 text-xs text-muted">{formatAdminDateTime(refund.createdAt)}</td>
                     </tr>
                   ))}

@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 export const PAYMENT_SLIP_BUCKET = 'slips';
 export const MAX_SLIP_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-const SIGNED_URL_TTL_SECONDS = 5 * 60;
+export const SIGNED_URL_TTL_SECONDS = 5 * 60;
 const STORAGE_REQUEST_TIMEOUT_MS = 15_000;
 const STORAGE_REQUEST_ATTEMPTS = 2;
 const STORAGE_RETRY_DELAY_MS = 200;
@@ -23,6 +23,12 @@ export interface UploadedSlipFile {
 export interface StoredSlipUpload {
   objectPath: string;
   verificationUrl: string;
+}
+
+export interface AdminSlipAccess {
+  viewUrl: string;
+  downloadUrl: string;
+  expiresInSeconds: number;
 }
 
 interface ValidatedSlipImage {
@@ -89,6 +95,23 @@ export class BookingSlipStorageService {
     if (!response.ok && response.status !== 404) {
       throw new BadGatewayException('ไม่สามารถลบไฟล์สลิปที่ไม่สมบูรณ์ได้');
     }
+  }
+
+  /**
+   * Generates short-lived access only after the caller has completed its own
+   * booking and organization authorization. The stable object path remains in
+   * the database; neither signed URL is persisted.
+   */
+  async createAdminAccess(objectPath: string): Promise<AdminSlipAccess> {
+    const viewUrl = await this.createSignedUrl(objectPath);
+    const downloadUrl = new URL(viewUrl);
+    downloadUrl.searchParams.set('download', this.downloadFileName(objectPath));
+
+    return {
+      viewUrl,
+      downloadUrl: downloadUrl.toString(),
+      expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+    };
   }
 
   private validateImage(file: UploadedSlipFile): ValidatedSlipImage {
@@ -212,6 +235,11 @@ export class BookingSlipStorageService {
 
   private encodePath(objectPath: string): string {
     return objectPath.split('/').map(encodeURIComponent).join('/');
+  }
+
+  private downloadFileName(objectPath: string): string {
+    const extension = objectPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+    return `payment-slip.${extension}`;
   }
 
   private async request(url: string, init: RequestInit): Promise<Response> {

@@ -14,6 +14,7 @@ import {
   TicketCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AdminSlipActions } from "@/components/admin-slip-actions";
 import {
   ApiError,
   getAdminOrganizationEvents,
@@ -345,7 +346,7 @@ function BookingsTab({
           {(visibleRows) => (
             <>
               <thead className="bg-[#faf7fd] text-[11px] font-extrabold uppercase tracking-[.45px] text-[#82788b]">
-                <tr><th className="px-5 py-3">รหัสจอง</th><th className="px-3 py-3">Event / องค์กร</th><th className="px-3 py-3">ร้าน / ผู้จอง</th><th className="px-3 py-3">บูธ</th><th className="px-3 py-3">ราคา</th><th className="px-3 py-3">สถานะ</th><th className="px-5 py-3">วันที่สร้าง</th></tr>
+                <tr><th className="px-5 py-3">รหัสจอง</th><th className="px-3 py-3">Event / องค์กร</th><th className="px-3 py-3">ร้าน / ผู้จอง</th><th className="px-3 py-3">บูธ</th><th className="px-3 py-3">ราคา</th><th className="px-3 py-3">สถานะ</th><th className="px-3 py-3">หลักฐาน</th><th className="px-5 py-3">วันที่สร้าง</th></tr>
               </thead>
               <tbody>
                 {visibleRows.map((booking) => (
@@ -356,6 +357,9 @@ function BookingsTab({
                     <td className="px-3 py-4"><strong className="block text-[#423b4c]">{booking.booth.code}</strong><span className="text-xs text-[#82788b]">โซน {booking.booth.zone.name || booking.booth.zone.code}</span></td>
                     <td className="whitespace-nowrap px-3 py-4 font-extrabold text-[#423b4c]">{formatMoney(booking.boothPrice)}</td>
                     <td className="px-3 py-4"><BookingStatusPill status={booking.status} /></td>
+                    <td className="px-3 py-4">
+                      {booking.isPaymentExempt ? <span className="text-xs text-[#82788b]">ไม่มีสลิป</span> : <AdminSlipActions bookingId={booking.id} />}
+                    </td>
                     <td className="whitespace-nowrap px-5 py-4 text-xs text-[#716675]">{formatDateTime(booking.createdAt)}</td>
                   </tr>
                 ))}
@@ -400,7 +404,7 @@ function PaymentsTab({ refunds, loading, error }: { refunds: SuperAdminRefund[];
           {(visibleRows) => (
             <>
               <thead className="bg-[#faf7fd] text-[11px] font-extrabold uppercase tracking-[.45px] text-[#82788b]">
-                <tr><th className="px-5 py-3">Booking</th><th className="px-3 py-3">Event / องค์กร</th><th className="px-3 py-3">ร้าน / ผู้ขอ</th><th className="px-3 py-3">เหตุผล</th><th className="px-3 py-3">ยอดที่ขอ</th><th className="px-3 py-3">ยอดอนุมัติ</th><th className="px-3 py-3">สถานะ</th><th className="px-5 py-3">วันที่</th></tr>
+                <tr><th className="px-5 py-3">Booking</th><th className="px-3 py-3">Event / องค์กร</th><th className="px-3 py-3">ร้าน / ผู้ขอ</th><th className="px-3 py-3">เหตุผล</th><th className="px-3 py-3">ยอดที่ขอ</th><th className="px-3 py-3">ยอดอนุมัติ</th><th className="px-3 py-3">สถานะ</th><th className="px-3 py-3">สลิปต้นทาง</th><th className="px-5 py-3">วันที่</th></tr>
               </thead>
               <tbody>
                 {visibleRows.map((refund) => (
@@ -412,6 +416,7 @@ function PaymentsTab({ refunds, loading, error }: { refunds: SuperAdminRefund[];
                     <td className="whitespace-nowrap px-3 py-4 font-extrabold text-[#423b4c]">{formatMoney(refund.requestedAmount)}</td>
                     <td className="whitespace-nowrap px-3 py-4 font-extrabold text-[#423b4c]">{refund.approvedAmount === null ? "—" : formatMoney(refund.approvedAmount)}</td>
                     <td className="px-3 py-4"><RefundStatusPill status={refund.status} /></td>
+                    <td className="px-3 py-4"><AdminSlipActions bookingId={refund.bookingId} /></td>
                     <td className="whitespace-nowrap px-5 py-4 text-xs text-[#716675]">{formatDateTime(refund.createdAt)}</td>
                   </tr>
                 ))}
