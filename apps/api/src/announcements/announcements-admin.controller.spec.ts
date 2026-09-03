@@ -1,4 +1,5 @@
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { ParseUUIDPipe } from '@nestjs/common';
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 
 jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn(),
@@ -15,17 +16,19 @@ import { AnnouncementsAdminController } from './announcements-admin.controller';
 import { AnnouncementsService } from './announcements.service';
 
 const findAllAcrossOrganizations = jest.fn();
+const removeAcrossOrganizations = jest.fn();
 const service = {
   findAllAcrossOrganizations,
+  removeAcrossOrganizations,
 } as unknown as AnnouncementsService;
 
-function handler(): object {
+function handler(name: 'findAll' | 'remove'): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     AnnouncementsAdminController.prototype,
-    'findAll',
+    name,
   );
   if (!descriptor) {
-    throw new Error('Missing controller handler: findAll');
+    throw new Error(`Missing controller handler: ${name}`);
   }
   return descriptor.value as object;
 }
@@ -40,17 +43,19 @@ describe('AnnouncementsAdminController', () => {
   });
 
   it('protects the cross-organization route with SUPER_ADMIN only', () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, handler())).toEqual([
-      SupabaseAuthGuard,
-      RolesGuard,
-    ]);
-    expect(Reflect.getMetadata(GUARDS_METADATA, handler())).not.toContain(
-      OrgScopeGuard,
-    );
-    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler())).toBeUndefined();
-    expect(Reflect.getMetadata(ROLES_KEY, handler())).toEqual([
-      UserRole.SUPER_ADMIN,
-    ]);
+    for (const name of ['findAll', 'remove'] as const) {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
+        SupabaseAuthGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).not.toContain(
+        OrgScopeGuard,
+      );
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler(name))).toBeUndefined();
+      expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
+        UserRole.SUPER_ADMIN,
+      ]);
+    }
   });
 
   it('returns announcements across organizations from the service', async () => {
@@ -61,5 +66,31 @@ describe('AnnouncementsAdminController', () => {
 
     expect(findAllAcrossOrganizations).toHaveBeenCalledTimes(1);
     expect(findAllAcrossOrganizations).toHaveBeenCalledWith();
+  });
+
+  it('deletes an announcement across organizations through the service', async () => {
+    const announcement = { id: '00000000-0000-4000-8000-000000000002' };
+    removeAcrossOrganizations.mockResolvedValue(announcement);
+
+    await expect(controller.remove(announcement.id)).resolves.toEqual(
+      announcement,
+    );
+
+    expect(removeAcrossOrganizations).toHaveBeenCalledWith(announcement.id);
+  });
+
+  it('validates the delete announcement id as a UUID', () => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      AnnouncementsAdminController,
+      'remove',
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    const idParameter = Object.values(metadata).find(
+      (parameter) => parameter.data === 'announcementId',
+    );
+
+    expect(idParameter?.pipes).toEqual(
+      expect.arrayContaining([expect.any(ParseUUIDPipe)]),
+    );
   });
 });
