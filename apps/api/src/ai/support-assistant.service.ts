@@ -143,7 +143,7 @@ export class SupportAssistantService {
       };
     } catch (cause) {
       this.logger.warn(
-        `Gemini support assistant failed; using rule-based fallback: ${errorName(cause)}`,
+        `Gemini support assistant failed; using rule-based fallback: ${geminiFailureSummary(cause)}`,
       );
       return this.fallback(question, context, actions);
     }
@@ -365,7 +365,12 @@ export class SupportAssistantService {
         throw new Error(`Gemini returned HTTP ${response.status}`);
       }
 
-      const payload: unknown = await response.json();
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error('Gemini returned invalid JSON');
+      }
       return parseGeminiText(payload);
     } finally {
       clearTimeout(timeout);
@@ -499,6 +504,32 @@ function bookingStatusLabel(status: string): string {
   return labels[status] ?? status;
 }
 
-function errorName(cause: unknown): string {
-  return cause instanceof Error ? cause.name : 'UnknownError';
+/**
+ * Returns an allowlisted diagnostic for production logs.
+ *
+ * Never include an arbitrary error message here: fetch/runtime errors may
+ * contain request details. The API key, response body, prompt and user context
+ * must stay out of logs even when Gemini fails.
+ */
+function geminiFailureSummary(cause: unknown): string {
+  if (cause instanceof Error && cause.name === 'AbortError') {
+    return 'request timed out';
+  }
+
+  if (cause instanceof Error) {
+    const status = /^Gemini returned HTTP ([1-5]\d\d)$/.exec(cause.message);
+    if (status) return `HTTP ${status[1]}`;
+
+    if (cause.message === 'Gemini returned invalid JSON') {
+      return 'invalid JSON response';
+    }
+    if (cause.message === 'Gemini returned a malformed response') {
+      return 'malformed response';
+    }
+    if (cause.message === 'Gemini response did not contain text') {
+      return 'response contained no text';
+    }
+  }
+
+  return 'unexpected error';
 }
