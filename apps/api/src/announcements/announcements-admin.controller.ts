@@ -1,4 +1,11 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
@@ -14,5 +21,12 @@ export class AnnouncementsAdminController {
   @Roles(UserRole.SUPER_ADMIN)
   findAll() {
     return this.announcementsService.findAllAcrossOrganizations();
+  }
+
+  @Delete(':announcementId')
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  remove(@Param('announcementId', new ParseUUIDPipe()) announcementId: string) {
+    return this.announcementsService.removeAcrossOrganizations(announcementId);
   }
 }

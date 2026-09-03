@@ -496,6 +496,12 @@ export type UpdatePlatformBillingConfigInput = Omit<
  * admin projection as the platform overview, already filtered by membership. */
 export type AdminOrganizationBooking = SuperAdminBooking;
 
+export type AdminSlipAccess = {
+  viewUrl: string;
+  downloadUrl: string;
+  expiresInSeconds: number;
+};
+
 export type AdminOrganizationRefund = {
   id: string;
   bookingId: string;
@@ -1419,6 +1425,16 @@ export function getAdminOrganizationBookings(
   );
 }
 
+export function getAdminBookingSlipAccess(
+  bookingId: string,
+  token: string,
+): Promise<AdminSlipAccess> {
+  return getJson<AdminSlipAccess>(
+    `/bookings/${encodeURIComponent(bookingId)}/slip`,
+    { token },
+  );
+}
+
 export function getAdminOrganizationRefunds(
   organizationId: string,
   token: string,
@@ -1613,6 +1629,17 @@ export function getSuperAdminAnnouncements(
     signal,
     token,
   });
+}
+
+export function deleteSuperAdminAnnouncement(
+  announcementId: string,
+  token: string,
+): Promise<SuperAdminAnnouncement> {
+  return deleteJson<SuperAdminAnnouncement>(
+    `/announcements/${encodeURIComponent(announcementId)}`,
+    { token },
+    "ลบประกาศกลางไม่สำเร็จ",
+  );
 }
 
 export function getSuperAdminAuditLogs(

@@ -85,6 +85,26 @@ describe('AnnouncementsService', () => {
     });
   });
 
+  it('deletes an announcement across organizations with organization details', async () => {
+    const announcement = {
+      id: announcementId,
+      organization: { id: organizationId, name: 'ตลาดทดสอบ' },
+    };
+    deleteAnnouncement.mockResolvedValue(announcement);
+
+    await expect(
+      service.removeAcrossOrganizations(announcementId),
+    ).resolves.toEqual(announcement);
+    expect(deleteAnnouncement).toHaveBeenCalledWith({
+      where: { id: announcementId },
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  });
+
   it('creates an active announcement and notifies organization bookers', async () => {
     const dto: CreateAnnouncementDto = {
       title: 'แจ้งเปลี่ยนเวลาเปิดงาน',

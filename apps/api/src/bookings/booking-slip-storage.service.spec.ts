@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   BookingSlipStorageService,
   MAX_SLIP_FILE_SIZE_BYTES,
+  SIGNED_URL_TTL_SECONDS,
 } from './booking-slip-storage.service';
 
 const SUPABASE_URL = 'https://project.supabase.co';
@@ -109,6 +110,28 @@ describe('BookingSlipStorageService', () => {
     );
     expect(signInit.body).toBe(JSON.stringify({ expiresIn: 300 }));
     expect(signInit.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('creates short-lived view and download URLs without persisting either', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ signedUrl: '/signed/path?token=test' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      service.createAdminAccess('vendor-id/booking-id/stored-slip.png'),
+    ).resolves.toEqual({
+      viewUrl: `${SUPABASE_URL}/storage/v1/signed/path?token=test`,
+      downloadUrl: `${SUPABASE_URL}/storage/v1/signed/path?token=test&download=payment-slip.png`,
+      expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+    });
+
+    const [, signInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(signInit.body).toBe(
+      JSON.stringify({ expiresIn: SIGNED_URL_TTL_SECONDS }),
+    );
   });
 
   it('rejects content whose bytes are not JPEG or PNG', async () => {
