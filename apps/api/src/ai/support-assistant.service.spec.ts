@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SupportAssistantMessageDto } from './dto/ask-support-assistant.dto';
@@ -162,6 +163,7 @@ describe('SupportAssistantService', () => {
   });
 
   it('falls back with the signed-in user own booking status when Gemini fails', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     findBookings.mockResolvedValue([
       {
         status: 'CONFIRMED',
@@ -181,7 +183,62 @@ describe('SupportAssistantService', () => {
     expect(result.answer).toContain('งานเกษตร');
     expect(result.answer).toContain('ยืนยันแล้ว');
     expect(result.actions).toEqual(['OPEN_BOOKINGS']);
+    expect(warn).toHaveBeenCalledWith(
+      'Gemini support assistant failed; using rule-based fallback: HTTP 429',
+    );
   });
+
+  it.each([
+    {
+      name: 'a timeout',
+      fetchResult: () => {
+        const error = new Error('request may contain gemini-secret');
+        error.name = 'AbortError';
+        return Promise.reject(error);
+      },
+      expected: 'request timed out',
+    },
+    {
+      name: 'invalid JSON',
+      fetchResult: () =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.reject(new Error('gemini-secret')),
+        }),
+      expected: 'invalid JSON response',
+    },
+    {
+      name: 'a malformed payload',
+      fetchResult: () =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(null) }),
+      expected: 'malformed response',
+    },
+    {
+      name: 'a payload without text',
+      fetchResult: () =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      expected: 'response contained no text',
+    },
+    {
+      name: 'an unexpected error',
+      fetchResult: () => Promise.reject(new Error('gemini-secret')),
+      expected: 'unexpected error',
+    },
+  ])(
+    'logs only a safe diagnostic for $name',
+    async ({ fetchResult, expected }) => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      global.fetch = jest.fn(() => fetchResult()) as unknown as typeof fetch;
+
+      const result = await ask('เริ่มจองบูธอย่างไร');
+
+      expect(result.source).toBe('RULE_BASED');
+      expect(warn).toHaveBeenCalledWith(
+        `Gemini support assistant failed; using rule-based fallback: ${expected}`,
+      );
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('gemini-secret');
+    },
+  );
 
   it('uses the fallback without calling Gemini when rule mode is selected', async () => {
     const fetchMock = jest.fn();
