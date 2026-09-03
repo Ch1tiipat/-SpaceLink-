@@ -7,10 +7,12 @@ import {
   NotificationType,
   PenaltyReason,
   Prisma,
+  UserRole,
   type Penalty,
 } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateAdminPenaltyDto } from './dto/create-admin-penalty.dto';
 import { CreatePenaltyDto } from './dto/create-penalty.dto';
 
 const penaltyOverviewSelect = {
@@ -19,7 +21,9 @@ const penaltyOverviewSelect = {
   description: true,
   points: true,
   issuedAt: true,
-  user: { select: { id: true, email: true, fullName: true } },
+  user: {
+    select: { id: true, email: true, fullName: true, trustScore: true },
+  },
   organization: { select: { id: true, name: true } },
 } satisfies Prisma.PenaltySelect;
 
@@ -27,6 +31,7 @@ const blacklistedUserSelect = {
   id: true,
   email: true,
   fullName: true,
+  trustScore: true,
   blacklistReason: true,
 } satisfies Prisma.UserSelect;
 
@@ -42,8 +47,14 @@ export interface PenaltiesOverviewResponse {
   blacklistedUsers: BlacklistedUserResponse[];
 }
 
-const BLACKLIST_THRESHOLD_POINTS = 3;
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
+const DEFAULT_PENALTY_POINTS: Record<PenaltyReason, number> = {
+  [PenaltyReason.NO_SHOW]: 20,
+  [PenaltyReason.RULE_VIOLATION]: 15,
+  [PenaltyReason.CONTRACT_BREACH]: 30,
+  [PenaltyReason.BAD_REVIEW]: 10,
+  [PenaltyReason.OTHER]: 5,
+};
 const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
   [PenaltyReason.NO_SHOW]: 'ไม่มาตามนัด',
   [PenaltyReason.RULE_VIOLATION]: 'ทำผิดกติกาการใช้พื้นที่',
@@ -72,6 +83,29 @@ export class PenaltiesService {
     organizationId: string,
     createPenaltyDto: CreatePenaltyDto,
   ) {
+    return this.createWithRetry((transaction) =>
+      this.createForBookingWithinTransaction(
+        transaction,
+        bookingId,
+        organizationId,
+        createPenaltyDto,
+      ),
+    );
+  }
+
+  async createForUser(createPenaltyDto: CreateAdminPenaltyDto) {
+    return this.createWithRetry((transaction) =>
+      this.createForUserWithinTransaction(transaction, createPenaltyDto),
+    );
+  }
+
+  private async createWithRetry(
+    operation: (transaction: Prisma.TransactionClient) => Promise<{
+      penalty: Penalty;
+      justBlacklisted: boolean;
+      trustScore: number;
+    }>,
+  ) {
     for (
       let attempt = 1;
       attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
@@ -79,17 +113,11 @@ export class PenaltiesService {
     ) {
       try {
         const result = await this.prisma.$transaction(
-          (transaction) =>
-            this.createWithinTransaction(
-              transaction,
-              bookingId,
-              organizationId,
-              createPenaltyDto,
-            ),
+          (transaction) => operation(transaction),
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         );
 
-        await this.notifyVendor(result.penalty);
+        await this.notifyVendor(result.penalty, result.trustScore);
         return result;
       } catch (error) {
         if (
@@ -108,20 +136,22 @@ export class PenaltiesService {
     throw new ConflictException('มีการออกแต้มโทษพร้อมกัน กรุณาลองใหม่อีกครั้ง');
   }
 
-  private notifyVendor(penalty: Penalty) {
+  private notifyVendor(penalty: Penalty, trustScore: number) {
     const reason = PENALTY_REASON_LABELS[penalty.reason];
     const issuedAt = THAILAND_DATE_TIME_FORMATTER.format(penalty.issuedAt);
 
     return this.notifications.createForUser(penalty.userId, {
       type: NotificationType.PENALTY,
-      title: 'คุณได้รับแต้มโทษ',
-      body: `เหตุผล: ${reason} · ${penalty.points} แต้ม · ${issuedAt}`,
+      title: 'Trust Score ของคุณถูกหัก',
+      body:
+        `เหตุผล: ${reason} · หัก ${penalty.points} คะแนน · ` +
+        `คงเหลือ ${trustScore}/100 · ${issuedAt}`,
       relatedEntityType: 'PENALTY',
       relatedEntityId: penalty.id,
     });
   }
 
-  private async createWithinTransaction(
+  private async createForBookingWithinTransaction(
     transaction: Prisma.TransactionClient,
     bookingId: string,
     organizationId: string,
@@ -131,7 +161,7 @@ export class PenaltiesService {
       where: { id: bookingId, event: { organizationId } },
       select: {
         vendorUserId: true,
-        vendor: { select: { isBlacklisted: true } },
+        vendor: { select: { trustScore: true, isBlacklisted: true } },
       },
     });
 
@@ -139,63 +169,132 @@ export class PenaltiesService {
       throw new NotFoundException('ไม่พบการจอง');
     }
 
-    const penalty = await transaction.penalty.create({
-      data: {
+    return this.createPenaltyWithinTransaction(
+      transaction,
+      {
         organizationId,
         userId: booking.vendorUserId,
         bookingId,
         reason: createPenaltyDto.reason,
+        points: createPenaltyDto.points,
         description: createPenaltyDto.description,
       },
-    });
-    const totals = await transaction.penalty.aggregate({
-      where: { userId: booking.vendorUserId },
-      _sum: { points: true },
-    });
-    const totalPoints = totals._sum.points ?? 0;
-    const justBlacklisted =
-      totalPoints >= BLACKLIST_THRESHOLD_POINTS &&
-      !booking.vendor.isBlacklisted;
+      booking.vendor,
+    );
+  }
 
-    if (justBlacklisted) {
-      await transaction.user.update({
-        where: { id: booking.vendorUserId },
-        data: {
-          isBlacklisted: true,
-          blacklistReason:
-            `สะสมแต้มโทษครบ ${totalPoints} แต้ม ` +
-            `(เกณฑ์ ${BLACKLIST_THRESHOLD_POINTS} แต้ม)`,
-        },
-      });
+  private async createForUserWithinTransaction(
+    transaction: Prisma.TransactionClient,
+    createPenaltyDto: CreateAdminPenaltyDto,
+  ) {
+    const organization = await transaction.organization.findUnique({
+      where: { id: createPenaltyDto.organizationId },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new NotFoundException('ไม่พบองค์กร');
     }
 
-    return { penalty, justBlacklisted, totalPoints };
+    const user = await transaction.user.findFirst({
+      where: { id: createPenaltyDto.userId, role: UserRole.VENDOR },
+      select: { trustScore: true, isBlacklisted: true },
+    });
+    if (!user) {
+      throw new NotFoundException('ไม่พบผู้ขาย');
+    }
+
+    if (createPenaltyDto.bookingId) {
+      const booking = await transaction.booking.findFirst({
+        where: {
+          id: createPenaltyDto.bookingId,
+          vendorUserId: createPenaltyDto.userId,
+          event: { organizationId: createPenaltyDto.organizationId },
+        },
+        select: { id: true },
+      });
+      if (!booking) {
+        throw new NotFoundException('ไม่พบการจอง');
+      }
+    }
+
+    return this.createPenaltyWithinTransaction(
+      transaction,
+      {
+        organizationId: createPenaltyDto.organizationId,
+        userId: createPenaltyDto.userId,
+        bookingId: createPenaltyDto.bookingId,
+        reason: createPenaltyDto.reason,
+        points: createPenaltyDto.points,
+        description: createPenaltyDto.description,
+      },
+      user,
+    );
+  }
+
+  private async createPenaltyWithinTransaction(
+    transaction: Prisma.TransactionClient,
+    data: {
+      organizationId: string;
+      userId: string;
+      bookingId?: string;
+      reason: PenaltyReason;
+      points?: number;
+      description?: string;
+    },
+    user: { trustScore: number; isBlacklisted: boolean },
+  ) {
+    const points = data.points ?? DEFAULT_PENALTY_POINTS[data.reason];
+    const penalty = await transaction.penalty.create({
+      data: {
+        organizationId: data.organizationId,
+        userId: data.userId,
+        bookingId: data.bookingId,
+        reason: data.reason,
+        points,
+        description: data.description,
+      },
+    });
+    const trustScore = Math.max(0, user.trustScore - points);
+    const justBlacklisted = trustScore === 0 && !user.isBlacklisted;
+
+    await transaction.user.update({
+      where: { id: data.userId },
+      data: {
+        trustScore,
+        ...(justBlacklisted
+          ? {
+              isBlacklisted: true,
+              blacklistReason: 'คะแนนความน่าเชื่อถือลดลงเหลือ 0',
+            }
+          : {}),
+      },
+    });
+
+    return { penalty, justBlacklisted, trustScore };
   }
 
   async listForBookingVendor(bookingId: string, organizationId: string) {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, event: { organizationId } },
-      select: { vendorUserId: true },
+      select: {
+        vendorUserId: true,
+        vendor: { select: { trustScore: true, isBlacklisted: true } },
+      },
     });
 
     if (!booking) {
       throw new NotFoundException('ไม่พบการจอง');
     }
 
-    const [penalties, totals] = await Promise.all([
-      this.prisma.penalty.findMany({
-        where: { organizationId, userId: booking.vendorUserId },
-        orderBy: { issuedAt: 'desc' },
-      }),
-      this.prisma.penalty.aggregate({
-        where: { userId: booking.vendorUserId },
-        _sum: { points: true },
-      }),
-    ]);
+    const penalties = await this.prisma.penalty.findMany({
+      where: { organizationId, userId: booking.vendorUserId },
+      orderBy: { issuedAt: 'desc' },
+    });
 
     return {
       penalties,
-      totalPointsAllOrgs: totals._sum.points ?? 0,
+      trustScore: booking.vendor.trustScore,
+      isBlacklisted: booking.vendor.isBlacklisted,
     };
   }
 

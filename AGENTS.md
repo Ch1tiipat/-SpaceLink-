@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03)
 
-The Prisma schema remains frozen except for these five additive changes:
+The Prisma schema remains frozen except for these six additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -61,11 +61,14 @@ The Prisma schema remains frozen except for these five additive changes:
   each event a human-readable public identifier for shareable URLs. Generated automatically from
   the event name (with a random-suffix fallback for names that slugify to empty, e.g. Thai-only
   names) — existing events are backfilled via migration so no row is left null.
+- SCRUM-142: add the `User.trustScore` field
+  (`Int @default(100) @map("trust_score")`) to the existing `User` model, so penalties deduct from
+  a 100-to-0 trust score and reaching zero triggers the existing blacklist state.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the five tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the six tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 
@@ -184,7 +187,9 @@ Prisma and foreign keys cannot express these. Every one must be enforced in a se
 2. **Date range** — booking start/end must fall inside event start/end
 3. **No double-booking** — one active booking per `(event, booth)`, active = `PENDING_PAYMENT` or `CONFIRMED`. Schema has a full `@@unique`, which also blocks a *cancelled* booking from being re-made; the **partial unique index** that replaces it is raw SQL and is not applied yet, so this invariant holds only in service code until someone applies it (§12, "Raw SQL")
 4. **Config authority** — `platform_config` writable by SUPER_ADMIN only; `org_config` by that org's ORG_ADMIN only
-5. **Blacklist** — `app_user.is_blacklisted` is a cache derived from accumulated `penalty.points`; never treat it as the source of truth
+5. **Blacklist** — `app_user.trust_score` starts at 100 and each `penalty.points` value is a
+   deduction. The penalty transaction clamps the score at 0 and sets `is_blacklisted` when the
+   score first reaches 0; never reconstruct the current score by summing penalty rows.
 6. **Quota** — active bookings per vendor per event ≤ `org_config.booking_quota_per_vendor`, falling back to `platform_config.default_booking_quota` (default 2)
 7. **Slip** — `verified_slip.amount` should equal `booking.booth_price`; `trans_ref` must be unique (duplicate-slip protection).
    **Check the status first: the comparison is only meaningful when `slipok_status === VERIFIED`.** A slip that was never read is still persisted, with `amount` set to `Decimal(0)` (`SlipVerificationService`) — so on a zero-price booth, or one that took the payment-exempt path, an amount-only comparison would happily pass for a slip nobody ever verified. Comparing amounts alone is not sufficient; gate on the status before the amounts are compared at all.
@@ -352,10 +357,9 @@ Entry points: **`src/slips/README.md`** and **`src/ai/README.md`**. Read the one
 
 ### Raw SQL (`prisma/sql/`)
 
-Two invariants cannot be expressed in the Prisma schema and need raw SQL:
+One invariant cannot be expressed in the Prisma schema and needs raw SQL:
 
 - the **partial unique index** for double-booking (§6.3.3) — `@@unique` cannot be conditioned on status
-- the **blacklist trigger** (§6.3.5)
 
 The decision: **raw SQL lives in `prisma/sql/*.sql`, is committed to the repository, and is applied by hand** with `psql` against `DIRECT_URL` **after `prisma migrate` completes**. Prisma does not run these files; nothing runs them automatically.
 

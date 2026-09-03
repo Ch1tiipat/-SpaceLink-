@@ -14,18 +14,20 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { PenaltiesAdminController } from './penalties-admin.controller';
 import { PenaltiesService } from './penalties.service';
 
+const createForUser = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const service = {
+  createForUser,
   findAllAcrossOrganizations,
 } as unknown as PenaltiesService;
 
-function handler(): object {
+function handler(name: 'create' | 'findAll'): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     PenaltiesAdminController.prototype,
-    'findAll',
+    name,
   );
   if (!descriptor) {
-    throw new Error('Missing controller handler: findAll');
+    throw new Error(`Missing controller handler: ${name}`);
   }
   return descriptor.value as object;
 }
@@ -35,18 +37,34 @@ describe('PenaltiesAdminController', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('protects the cross-organization list with SUPER_ADMIN only', () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, handler())).toEqual([
-      SupabaseAuthGuard,
-      RolesGuard,
-    ]);
-    expect(Reflect.getMetadata(GUARDS_METADATA, handler())).not.toContain(
-      OrgScopeGuard,
-    );
-    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler())).toBeUndefined();
-    expect(Reflect.getMetadata(ROLES_KEY, handler())).toEqual([
-      UserRole.SUPER_ADMIN,
-    ]);
+  it.each(['create', 'findAll'] as const)(
+    'protects %s with SUPER_ADMIN only and no org scope',
+    (name) => {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
+        SupabaseAuthGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).not.toContain(
+        OrgScopeGuard,
+      );
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler(name))).toBeUndefined();
+      expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
+        UserRole.SUPER_ADMIN,
+      ]);
+    },
+  );
+
+  it('passes the validated direct penalty DTO to the service', async () => {
+    const dto = {
+      organizationId: '22222222-2222-4222-8222-222222222222',
+      userId: '33333333-3333-4333-8333-333333333333',
+      reason: 'NO_SHOW' as const,
+      points: 20,
+    };
+    createForUser.mockResolvedValue({ trustScore: 80 });
+
+    await expect(controller.create(dto)).resolves.toEqual({ trustScore: 80 });
+    expect(createForUser).toHaveBeenCalledWith(dto);
   });
 
   it('returns penalties and blacklisted users from the service', async () => {

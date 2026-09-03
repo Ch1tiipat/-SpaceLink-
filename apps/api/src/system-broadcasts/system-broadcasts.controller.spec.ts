@@ -25,6 +25,7 @@ const CURRENT_USER: User = {
   fullName: 'Super Admin',
   phone: null,
   role: UserRole.SUPER_ADMIN,
+  trustScore: 100,
   isBlacklisted: false,
   blacklistReason: null,
   createdAt: new Date('2026-08-28T00:00:00.000Z'),

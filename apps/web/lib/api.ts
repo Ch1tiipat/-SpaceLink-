@@ -223,18 +223,26 @@ export type PenaltyRecord = {
 
 export type PenaltyHistory = {
   penalties: PenaltyRecord[];
-  totalPointsAllOrgs: number;
+  trustScore: number;
+  isBlacklisted: boolean;
 };
 
 export type CreatePenaltyInput = {
   reason: PenaltyReason;
+  points?: number;
   description?: string;
 };
 
 export type CreatePenaltyResult = {
   penalty: PenaltyRecord;
   justBlacklisted: boolean;
-  totalPoints: number;
+  trustScore: number;
+};
+
+export type CreateSuperAdminPenaltyInput = CreatePenaltyInput & {
+  organizationId: string;
+  userId: string;
+  bookingId?: string;
 };
 
 export type SupportTicketStatus = "OPEN" | "PROCESSING" | "CLOSED";
@@ -360,6 +368,7 @@ export type SuperAdminUserListItem = {
   email: string;
   fullName: string;
   role: UserRole;
+  trustScore: number;
   isBlacklisted: boolean;
 };
 
@@ -588,13 +597,14 @@ export type SuperAdminPenaltiesOverview = {
     description: string | null;
     points: number;
     issuedAt: string;
-    user: { id: string; email: string; fullName: string };
+    user: { id: string; email: string; fullName: string; trustScore: number };
     organization: { id: string; name: string };
   }[];
   blacklistedUsers: {
     id: string;
     email: string;
     fullName: string;
+    trustScore: number;
     blacklistReason: string | null;
   }[];
 };
@@ -607,9 +617,7 @@ export type SuperAdminAuditAction =
   | "PLATFORM_CONFIG_UPDATED";
 
 export type SuperAdminAuditTargetType =
-  | "ORGANIZATION"
-  | "USER"
-  | "PLATFORM_CONFIG";
+  "ORGANIZATION" | "USER" | "PLATFORM_CONFIG";
 
 export type SuperAdminAuditLogFilter = {
   action?: SuperAdminAuditAction;
@@ -1619,6 +1627,18 @@ export function getSuperAdminPenalties(
     signal,
     token,
   });
+}
+
+export function createSuperAdminPenalty(
+  input: CreateSuperAdminPenaltyInput,
+  token: string,
+): Promise<CreatePenaltyResult> {
+  return postJson<CreatePenaltyResult>(
+    "/penalties",
+    input,
+    { token },
+    "ออกบทลงโทษไม่สำเร็จ",
+  );
 }
 
 export function getSuperAdminAnnouncements(

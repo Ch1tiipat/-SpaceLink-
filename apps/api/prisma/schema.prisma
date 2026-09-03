@@ -175,6 +175,7 @@ model User {
   fullName        String   @map("full_name")
   phone           String?
   role            UserRole @default(VENDOR)
+  trustScore      Int      @default(100) @map("trust_score")
   isBlacklisted   Boolean  @default(false) @map("is_blacklisted")
   blacklistReason String?  @map("blacklist_reason")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
