@@ -45,8 +45,17 @@ export const BLACKLISTED_MESSAGE: AuthErrorMessage = {
   text: 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลองค์กรที่คุณจองบูธไว้',
 };
 
-/** Failure to mail a code. `mode` differs on one case only: an address with no
- * account is a dead end on /login, because that screen cannot create one. */
+/**
+ * Failure to mail a code. `mode` differs on one case only: the branch below,
+ * which is reachable on /login and not on /register.
+ *
+ * That branch does **not** say the address has no account (SCRUM-152). Supabase
+ * answers a /login send with `otp_disabled` / "Signups not allowed for otp" for
+ * an account that demonstrably exists and has signed in before, so the old copy
+ * told a returning vendor they had never registered. The cause of the mismatch
+ * is not established, so the copy names neither cause: it says the code did not
+ * go out and offers both ways forward — register if new, retry if not.
+ */
 export function describeSendError(
   error: SupabaseAuthErrorLike,
   mode: 'login' | 'register',
@@ -58,7 +67,7 @@ export function describeSendError(
       /signups? not allowed/i.test(error.message))
   ) {
     return {
-      text: 'อีเมลนี้ยังไม่ได้สมัครสมาชิก',
+      text: 'ส่งรหัสยืนยันไม่สำเร็จ ถ้ายังไม่เคยสมัครสมาชิกกด "สร้างบัญชีใหม่" ด้านล่าง หรือถ้าเคยสมัครแล้วลองกดส่งรหัสอีกครั้งในอีกสักครู่',
       link: { href: '/register', label: 'สร้างบัญชีใหม่' },
     };
   }
