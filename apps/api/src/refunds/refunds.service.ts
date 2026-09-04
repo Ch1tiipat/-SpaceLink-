@@ -29,6 +29,11 @@ const refundSelect = {
   approvedAmount: true,
   status: true,
   evidenceUrls: true,
+  payoutMethod: true,
+  payoutPromptPayId: true,
+  payoutBankName: true,
+  payoutAccountNumber: true,
+  payoutAccountName: true,
   reviewedByUserId: true,
   reviewedAt: true,
   processedAt: true,
@@ -65,6 +70,18 @@ const refundOverviewSelect = {
     },
   },
   requestedBy: { select: { id: true, email: true, fullName: true } },
+} satisfies Prisma.RefundRequestSelect;
+
+const payoutWarningSelect = {
+  requestedBy: { select: { fullName: true } },
+  booking: {
+    select: {
+      slips: {
+        where: { slipokStatus: SlipStatus.VERIFIED },
+        select: { senderName: true },
+      },
+    },
+  },
 } satisfies Prisma.RefundRequestSelect;
 
 type RefundOverviewRecord = Prisma.RefundRequestGetPayload<{
@@ -211,6 +228,14 @@ export class RefundsService {
         reason: dto.reason,
         requestedAmount,
         status: RefundStatus.PENDING,
+        payoutMethod: dto.payoutMethod,
+        payoutAccountName: dto.payoutAccountName,
+        payoutPromptPayId:
+          dto.payoutMethod === 'PROMPTPAY' ? dto.payoutPromptPayId : null,
+        payoutBankName:
+          dto.payoutMethod === 'BANK_TRANSFER' ? dto.payoutBankName : null,
+        payoutAccountNumber:
+          dto.payoutMethod === 'BANK_TRANSFER' ? dto.payoutAccountNumber : null,
       },
       select: refundSelect,
     });
@@ -234,10 +259,23 @@ export class RefundsService {
   async findForOrganization(organizationId: string): Promise<RefundResponse[]> {
     const refunds = await this.prisma.refundRequest.findMany({
       where: { booking: { event: { organizationId } } },
-      select: refundSelect,
+      select: { ...refundSelect, ...payoutWarningSelect },
       orderBy: { createdAt: 'desc' },
     });
-    return refunds.map((refund) => this.toResponse(refund));
+    return refunds.map(({ booking, requestedBy, ...refund }) => ({
+      ...this.toResponse(refund),
+      payoutNameMismatch: this.payoutNameMismatch(
+        refund.payoutAccountName,
+        requestedBy.fullName,
+        booking.slips,
+      ),
+      pendingSince:
+        refund.status === RefundStatus.PENDING
+          ? refund.createdAt
+          : refund.status === RefundStatus.APPROVED
+            ? refund.reviewedAt
+            : null,
+    }));
   }
 
   async findAllAcrossOrganizations(): Promise<RefundOverviewResponse[]> {
@@ -496,6 +534,27 @@ export class RefundsService {
       requestedAmount: requestedAmount.toString(),
       approvedAmount: approvedAmount?.toString() ?? null,
     };
+  }
+
+  private payoutNameMismatch(
+    accountName: string | null,
+    fullName: string,
+    slips: { senderName: string | null }[],
+  ): boolean {
+    if (!accountName) return false;
+    const normalize = (name: string) =>
+      name
+        .normalize('NFKC')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLocaleLowerCase('th');
+    const name = normalize(accountName);
+    return (
+      normalize(fullName) !== name ||
+      slips.some(
+        ({ senderName }) => !!senderName && normalize(senderName) !== name,
+      )
+    );
   }
 
   private toOverviewResponse(

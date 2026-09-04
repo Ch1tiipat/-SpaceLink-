@@ -28,6 +28,9 @@ const BOOTH_PRICE = new Prisma.Decimal('1500');
 const CREATE_DTO = {
   reason: 'ยกเลิกก่อนวันเริ่มงาน',
   requestedAmount: '1200',
+  payoutMethod: 'PROMPTPAY',
+  payoutAccountName: 'Vendor One',
+  payoutPromptPayId: '0123456789',
 };
 const APPROVE_DTO = { approvedAmount: '1000' };
 
@@ -40,6 +43,11 @@ const REFUND = {
   approvedAmount: null,
   status: RefundStatus.PENDING,
   evidenceUrls: null,
+  payoutMethod: null,
+  payoutAccountName: null,
+  payoutPromptPayId: null,
+  payoutBankName: null,
+  payoutAccountNumber: null,
   reviewedByUserId: null,
   reviewedAt: null,
   processedAt: null,
@@ -188,6 +196,11 @@ describe('RefundsService', () => {
           reason: CREATE_DTO.reason,
           requestedAmount: new Prisma.Decimal('1200'),
           status: RefundStatus.PENDING,
+          payoutMethod: CREATE_DTO.payoutMethod,
+          payoutAccountName: CREATE_DTO.payoutAccountName,
+          payoutPromptPayId: CREATE_DTO.payoutPromptPayId,
+          payoutBankName: null,
+          payoutAccountNumber: null,
         },
         select: expect.any(Object) as object,
       });
@@ -315,7 +328,58 @@ describe('RefundsService', () => {
     });
   });
 
+  it('stores only the selected bank payout details', async () => {
+    await service.create(BOOKING_ID, VENDOR_ID, {
+      ...CREATE_DTO,
+      payoutMethod: 'BANK_TRANSFER',
+      payoutBankName: 'Test Bank',
+      payoutAccountNumber: '0012345678',
+    });
+    expect(refundRequestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payoutMethod: 'BANK_TRANSFER',
+          payoutAccountNumber: '0012345678',
+          payoutPromptPayId: null,
+        }) as object,
+      }),
+    );
+  });
+
+  it.each([
+    [null, 'Vendor One', [], false],
+    ['Vendor One', 'Vendor One', [{ senderName: 'Vendor One' }], false],
+    ['Another Name', 'Vendor One', [], true],
+    ['Vendor One', 'Vendor One', [{ senderName: 'Another Name' }], true],
+  ])(
+    'returns an admin-only mismatch flag for %s',
+    async (accountName, fullName, slips, mismatch) => {
+      refundRequestFindMany.mockResolvedValue([
+        {
+          ...REFUND,
+          payoutAccountName: accountName,
+          requestedBy: { fullName },
+          booking: { slips },
+        },
+      ]);
+      const response = await service.findForOrganization(ORGANIZATION_ID);
+      expect(response[0]).toMatchObject({
+        payoutNameMismatch: mismatch,
+        pendingSince: NOW,
+      });
+      expect(response[0]).not.toHaveProperty('booking');
+      expect(response[0]).not.toHaveProperty('requestedBy');
+    },
+  );
+
   it('filters the admin queue through the booking organization', async () => {
+    refundRequestFindMany.mockResolvedValue([
+      {
+        ...REFUND,
+        requestedBy: { fullName: 'Vendor One' },
+        booking: { slips: [] },
+      },
+    ]);
     await service.findForOrganization(ORGANIZATION_ID);
     expect(refundRequestFindMany).toHaveBeenCalledWith({
       where: { booking: { event: { organizationId: ORGANIZATION_ID } } },
@@ -345,6 +409,11 @@ describe('RefundsService', () => {
         approvedAmount: true,
         status: true,
         evidenceUrls: true,
+        payoutMethod: true,
+        payoutAccountName: true,
+        payoutPromptPayId: true,
+        payoutBankName: true,
+        payoutAccountNumber: true,
         reviewedByUserId: true,
         reviewedAt: true,
         processedAt: true,

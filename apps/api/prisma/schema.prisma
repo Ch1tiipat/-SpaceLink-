@@ -520,6 +520,11 @@ model RefundRequest {
   approvedAmount    Decimal?     @map("approved_amount") @db.Decimal(10, 2)
   status            RefundStatus @default(PENDING)
   evidenceUrls      Json?        @map("evidence_urls") @db.JsonB
+  payoutMethod        String?     @map("payout_method")
+  payoutPromptPayId    String?     @map("payout_prompt_pay_id")
+  payoutBankName       String?     @map("payout_bank_name")
+  payoutAccountNumber  String?     @map("payout_account_number")
+  payoutAccountName    String?     @map("payout_account_name")
   reviewedByUserId  String?      @map("reviewed_by_user_id") @db.Uuid
   reviewedAt        DateTime?    @map("reviewed_at") @db.Timestamptz
   processedAt       DateTime?    @map("processed_at") @db.Timestamptz
