@@ -34,6 +34,7 @@ const publish = jest.fn();
 const open = jest.fn();
 const close = jest.fn();
 const remove = jest.fn();
+const update = jest.fn();
 const service = {
   findByOrganization,
   create,
@@ -42,6 +43,7 @@ const service = {
   open,
   close,
   remove,
+  update,
 } as unknown as EventsService;
 
 function handler(
@@ -52,6 +54,7 @@ function handler(
     | 'publish'
     | 'open'
     | 'close'
+    | 'update'
     | 'remove' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -64,9 +67,12 @@ function handler(
   return descriptor.value as object;
 }
 
-function contextFor(request: object): ExecutionContext {
+function contextFor(
+  request: object,
+  name: Parameters<typeof handler>[0] = 'findByOrganization',
+): ExecutionContext {
   return {
-    getHandler: handler,
+    getHandler: () => handler(name),
     getClass: () => OrganizationEventsController,
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
@@ -86,6 +92,7 @@ describe('OrganizationEventsController', () => {
       'open',
       'close',
       'remove',
+      'update',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -149,7 +156,7 @@ describe('OrganizationEventsController', () => {
     expect(remove).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
   });
 
-  it.each(['publish', 'open', 'close', 'remove'] as const)(
+  it.each(['publish', 'open', 'close', 'remove', 'update'] as const)(
     'validates the %s event id by UUID shape',
     (method) => {
       const metadata = Reflect.getMetadata(
@@ -173,38 +180,91 @@ describe('OrganizationEventsController', () => {
     },
   );
 
-  it('answers 404 when an ORG_ADMIN requests another organization', async () => {
-    const warn = jest
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
-    const prisma = {
-      organization: {
-        findUnique: jest.fn().mockResolvedValue({ id: ORGANIZATION_ID }),
-      },
-      orgMembership: { findUnique: jest.fn().mockResolvedValue(null) },
-    };
-    const guard = new OrgScopeGuard(
-      new Reflector(),
-      prisma as unknown as PrismaService,
-    );
-    const request = {
-      params: { organizationId: ORGANIZATION_ID },
-      user: { id: ORG_ADMIN_ID, role: UserRole.ORG_ADMIN } as User,
-    };
-
-    await expect(guard.canActivate(contextFor(request))).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: {
-        organizationId_userId: {
-          organizationId: ORGANIZATION_ID,
-          userId: ORG_ADMIN_ID,
+  it.each(['findByOrganization', 'update'] as const)(
+    'answers 404 when an ORG_ADMIN requests another organization via %s',
+    async (name) => {
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const prisma = {
+        organization: {
+          findUnique: jest.fn().mockResolvedValue({ id: ORGANIZATION_ID }),
         },
-      },
-      select: { id: true },
-    });
-    warn.mockRestore();
+        orgMembership: { findUnique: jest.fn().mockResolvedValue(null) },
+      };
+      const guard = new OrgScopeGuard(
+        new Reflector(),
+        prisma as unknown as PrismaService,
+      );
+      const request = {
+        params: { organizationId: ORGANIZATION_ID },
+        user: { id: ORG_ADMIN_ID, role: UserRole.ORG_ADMIN } as User,
+      };
+
+      await expect(
+        guard.canActivate(contextFor(request, name)),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
+        where: {
+          organizationId_userId: {
+            organizationId: ORGANIZATION_ID,
+            userId: ORG_ADMIN_ID,
+          },
+        },
+        select: { id: true },
+      });
+      warn.mockRestore();
+    },
+  );
+
+  it.each([UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN])(
+    'allows %s to update with the guard-resolved organization',
+    async (role) => {
+      const request = {
+        params: { organizationId: ORGANIZATION_ID },
+        user: { id: ORG_ADMIN_ID, role } as User,
+      };
+      const prisma = {
+        organization: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: ORGANIZATION_ID,
+            status: OrgStatus.ACTIVE,
+          }),
+        },
+        orgMembership: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'membership' }),
+        },
+      };
+      const context = contextFor(request, 'update');
+      const guard = new OrgScopeGuard(
+        new Reflector(),
+        prisma as unknown as PrismaService,
+      );
+      expect(await guard.canActivate(context)).toBe(true);
+      expect(new RolesGuard(new Reflector()).canActivate(context)).toBe(true);
+      const input = { name: 'ชื่องานใหม่' };
+      const result = { id: LEGACY_EVENT_ID, ...input };
+      update.mockResolvedValue(result);
+      await expect(
+        controller.update(ORGANIZATION_ID, LEGACY_EVENT_ID, input),
+      ).resolves.toEqual(result);
+      expect(update).toHaveBeenCalledWith(
+        LEGACY_EVENT_ID,
+        input,
+        ORGANIZATION_ID,
+      );
+    },
+  );
+
+  it('rejects vendors on the update handler', () => {
+    const context = contextFor(
+      { user: { id: ORG_ADMIN_ID, role: UserRole.VENDOR } },
+      'update',
+    );
+    expect(() => new RolesGuard(new Reflector()).canActivate(context)).toThrow(
+      ForbiddenException,
+    );
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('answers 403 when an ORG_ADMIN organization is suspended', async () => {
