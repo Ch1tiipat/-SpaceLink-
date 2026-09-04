@@ -40,34 +40,31 @@ function formatMoney(value: number): string {
 }
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
-  const [data, setData] = useState<EventMap | null>(null);
-  const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    eventId: string;
+    data: EventMap | null;
+    error: string | null;
+  } | null>(null);
+  const data = result?.eventId === eventId ? result.data : null;
+  const error = result?.eventId === eventId ? result.error : null;
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
     getEventMap(eventId, controller.signal)
-      .then(setData)
+      .then((data) => {
+        if (active) setResult({ eventId, data, error: null });
+      })
       .catch((cause: unknown) => {
+        if (!active) return;
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
+        setResult({ eventId, data: null, error: cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ' });
       });
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [eventId]);
-
-  const organizationId = data?.event.organization.id;
-
-  useEffect(() => {
-    if (!organizationId) return;
-    const controller = new AbortController();
-    getPublicAnnouncements(organizationId, controller.signal)
-      .then(setAnnouncements)
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setAnnouncements([]);
-      });
-    return () => controller.abort();
-  }, [organizationId]);
 
   if (!data && !error) {
     return (
@@ -153,17 +150,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           <p className="whitespace-pre-line text-sm leading-7 text-muted">{event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}</p>
         </DetailSection>
 
-        <DetailSection kicker="ANNOUNCEMENT" title="ข่าวสารสำคัญก่อนเข้าร่วมงาน">
-          {announcements.length > 0 ? (
-            <div className="grid gap-3">
-              {announcements.map((announcement) => (
-                <article key={announcement.id} className="rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
-                  <h3 className="text-[13px] font-extrabold">{announcement.title}</h3>
-                  <p className="mt-1.5 whitespace-pre-line text-xs leading-7 text-muted">{announcement.body}</p>
-                </article>
-              ))}
-            </div>
-          ) : <EmptyState text="ยังไม่มีประกาศสำหรับ Event นี้" />}
+        <DetailSection kicker="ANNOUNCEMENT" title="ข่าวสารสำคัญก่อนเข้าร่วมงาน" description={`ประกาศจากผู้จัดงาน: ${event.organization.name}`}>
+          <EventAnnouncements key={`${eventId}:${event.organization.id}`} organizationId={event.organization.id} />
         </DetailSection>
 
         <DetailSection kicker="EVENT ATMOSPHERE" title="บรรยากาศภายในงาน" description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ" count={event.bannerUrl ? '1 รูป' : '0 รูป'}>
@@ -292,6 +280,86 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       </div>
 
     </main>
+  );
+}
+
+type AnnouncementState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; announcements: AdminAnnouncement[] };
+
+function EventAnnouncements({ organizationId }: { organizationId: string }) {
+  const [state, setState] = useState<AnnouncementState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    getPublicAnnouncements(organizationId, controller.signal)
+      .then((announcements) => {
+        if (active) setState({ status: 'ready', announcements });
+      })
+      .catch(() => {
+        if (active) setState({ status: 'error' });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [organizationId, attempt]);
+
+  if (state.status === 'loading') {
+    return <div role="status"><EmptyState text="กำลังโหลดประกาศจากผู้จัดงาน…" /></div>;
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="rounded-[16px] border border-line bg-[#fcfbfd] p-5 text-center">
+        <p role="alert" className="text-sm text-muted">โหลดประกาศไม่สำเร็จ กรุณาลองใหม่</p>
+        <button
+          type="button"
+          className="sl-action-secondary mt-4 text-violet"
+          onClick={() => {
+            setState({ status: 'loading' });
+            setAttempt((value) => value + 1);
+          }}
+        >
+          ลองโหลดประกาศอีกครั้ง
+        </button>
+      </div>
+    );
+  }
+
+  if (state.announcements.length === 0) {
+    return <EmptyState text="ยังไม่มีประกาศจากผู้จัดงาน" />;
+  }
+
+  return (
+    <div className="grid min-w-0 gap-3">
+      {state.announcements.map((announcement) => (
+        <article key={announcement.id} className="min-w-0 rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full bg-[#eee6ff] px-3 py-1.5 font-bold text-violet">ประกาศผู้จัดงาน</span>
+            <AnnouncementDate announcement={announcement} />
+          </div>
+          <h3 className="break-words text-[13px] font-extrabold">{announcement.title}</h3>
+          <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-7 text-muted">{announcement.body}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function AnnouncementDate({ announcement }: { announcement: AdminAnnouncement }) {
+  const value = announcement.publishedAt ?? announcement.createdAt;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return <span className="text-muted">ไม่ระบุวันที่ประกาศ</span>;
+  }
+  return (
+    <time dateTime={date.toISOString()} className="text-muted">
+      {announcement.publishedAt ? 'เผยแพร่' : 'สร้างประกาศ'} {dateFormatter.format(date)}
+    </time>
   );
 }
 
