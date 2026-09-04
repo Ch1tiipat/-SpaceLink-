@@ -15,6 +15,7 @@ import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
 
 @Controller('organizations/:organizationId/events')
@@ -74,6 +75,18 @@ export class OrganizationEventsController {
     @Param('eventId', new LooseUuidPipe()) eventId: string,
   ) {
     return this.eventsService.close(eventId, organizationId);
+  }
+
+  @Patch(':eventId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  update(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: UpdateEventDto,
+  ) {
+    return this.eventsService.update(eventId, input, organizationId);
   }
 
   @Delete(':eventId')
