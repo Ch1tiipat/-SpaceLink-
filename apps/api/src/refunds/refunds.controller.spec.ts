@@ -138,7 +138,13 @@ describe('RefundsController', () => {
   );
 
   it('passes the authenticated vendor when creating and listing', async () => {
-    const dto = { reason: 'ยกเลิกก่อนวันงาน', requestedAmount: '1500' };
+    const dto = {
+      reason: 'ยกเลิกก่อนวันงาน',
+      requestedAmount: '1500',
+      payoutMethod: 'PROMPTPAY',
+      payoutAccountName: 'Vendor',
+      payoutPromptPayId: '0123456789',
+    };
 
     await controller.create(BOOKING_ID, dto, vendor);
     await controller.findMine(vendor);
