@@ -1,280 +1,408 @@
 # SpaceLink
 
-แพลตฟอร์มกลางจองพื้นที่ขายของและจัดกิจกรรม — Multi-tenant SaaS PWA · องค์กร (ตลาด / ห้าง / หน่วยงาน) สมัครเข้ามาเป็นผู้เช่าระบบ ออกแบบผังสถานที่ของตัวเอง เปิดอีเวนต์ แล้วผู้ขายเข้ามาเลือกบูธ จอง แนบสลิป และได้รับการยืนยันอัตโนมัติ
+แพลตฟอร์มกลางจองพื้นที่ขายของและจัดกิจกรรม — Multi-tenant SaaS PWA · องค์กร (ตลาด / ห้าง / หน่วยงาน) สมัครเป็นผู้เช่าระบบ ออกแบบผังสถานที่ เปิดอีเวนต์ แล้วผู้ขายเลือกบูธ จอง แนบสลิป และได้รับการยืนยันอัตโนมัติ
 
 > **โครงงานรายวิชา 1101910 โครงงานเทคโนโลยีดิจิทัล-1** · Software Engineering · 1/2569 · นำเสนอ 12–16 ตุลาคม 2569
-> **สถานะงานปัจจุบันอยู่ที่ Jira** ไม่เก็บไว้ในไฟล์นี้
+> **กติกาการพัฒนาทั้งหมดอยู่ใน [`AGENTS.md`](./AGENTS.md)** · **สถานะงานอยู่ที่ Jira** ไม่เก็บในไฟล์นี้
 
-## โครงสร้างโปรเจกต์
+ไฟล์นี้เป็น **แผนที่ระบบ** — ทุกโฟลเดอร์ ทุก endpoint ทุกหน้าจอ อย่างละบรรทัดเดียว เหตุผลเบื้องหลังกติกาอยู่ใน `AGENTS.md`
+
+---
+
+## 1. โครงสร้างโปรเจกต์
 
 ```
 spacelink/
 ├─ apps/api/                    NestJS + Prisma → Render
 │  ├─ prisma/
-│  │  ├─ schema.prisma          v4 — freeze แล้ว ห้ามแก้โดยไม่ผ่านทีม
-│  │  ├─ seed.ts                ข้อมูลตัวอย่างสำหรับรันในเครื่องตัวเอง (`npm run db:seed`)
-│  │  ├─ migrations/            2 migrations — ปัจจุบัน 27 โมเดล 18 enum
-│  │  └─ sql/                   booking_active_event_booth_unique.sql — partial unique index
-│  │                            กัน double-booking, Prisma ประกาศเองไม่ได้ ต้อง apply เองด้วย
-│  │                            psql หลัง migrate (AGENTS.md §12)
-│  └─ src/                      24 โฟลเดอร์ — รายละเอียด "ทำอะไรได้จริง" แต่ละอันอยู่หัวข้อถัดไป
-│     ├─ auth/                  JWT guard + JIT provisioning · GET /auth/me
-│     ├─ users/                 SUPER_ADMIN: list/detail/last-login/audit trail · ทุก role: PATCH /users/me
-│     ├─ organizations/         CRUD องค์กร + มอบ/ถอนสิทธิ์ ORG_ADMIN (log เข้า audit-logs)
-│     ├─ venues/                CRUD ผังสถานที่ (ORG_ADMIN+)
-│     ├─ zones/                 CRUD โซน (ORG_ADMIN+, ลบไม่ได้ถ้ามีบูธเคยถูกจอง)
-│     ├─ booths/                CRUD บูธ (ORG_ADMIN+, กติกาลบเหมือน zones)
-│     ├─ events/                CRUD อีเวนต์ + /discovery (public) + /map (ผัง+สถานะบูธ+tier)
-│     ├─ categories/            หมวดสินค้า — public, อ่านอย่างเดียว
-│     ├─ bookings/              จองบูธ, auto-confirm ผ่านสลิป, ยกเลิก, ยกเว้นค่าเช่า, hold-expiry cron
-│     ├─ slips/                 internal — เรียก SLIP_VERIFIER แล้วบันทึกผลทุกครั้ง (มี README เอง)
-│     ├─ refunds/               คำร้องคืนเงิน PENDING → APPROVED → PROCESSED / REJECTED
-│     ├─ reviews/               รีวิวหลังจบงาน (ต้องมี booking จริง + เว้น 17 ชม.)
-│     ├─ shops/                 ร้านค้า 1 ร้าน/vendor ไม่ผูกองค์กร
-│     ├─ notifications/         แจ้งเตือนในแอป (ยังไม่มี push จริง)
-│     ├─ announcements/         ประกาศ + fan-out แจ้งเตือนให้ vendor ที่มี booking ในองค์กร
-│     ├─ penalties/             แต้มโทษ + auto-blacklist เมื่อสะสมครบ 3 แต้ม
-│     ├─ support-tickets/       แจ้งปัญหา + ขอยกเว้นโควตา (อนุมัติ = สร้าง booking ให้จริง)
-│     ├─ audit-logs/            SUPER_ADMIN อ่านอย่างเดียว — ปัจจุบัน log แค่ 4 action
-│     ├─ ai/                    แนะนำบูธ — rule-based + Gemini พร้อม fallback (มี README เอง)
-│     ├─ dashboard/             สรุปตัวเลของค์กร (ORG_ADMIN+)
-│     ├─ health/                GET /health, /health/db — ไม่ต้อง auth
-│     ├─ prisma/                PrismaService (lazy connect)
-│     ├─ common/                decorators + exception filter ร่วม (ไม่ใช่ NestJS module)
-│     └─ config/                ตรวจ env ตอน boot (ไม่ใช่ NestJS module)
+│  │  ├─ schema.prisma          v4 — freeze แล้ว 29 โมเดล 18 enum ห้ามแก้โดยไม่ผ่านทีม
+│  │  ├─ seed.ts                typed stub ประกาศลำดับ insert ที่ปลอดภัยกับ FK ยังไม่ใส่ข้อมูล
+│  │  ├─ migrations/            8 migrations
+│  │  └─ sql/                   2 ไฟล์ที่ Prisma ไม่รันให้ ต้อง apply เองด้วย psql (§4)
+│  └─ src/                      27 โฟลเดอร์
+│     ├─ auth/                  guard + JIT provisioning + decorator `@OrgScoped`
+│     ├─ users/                 ผู้ใช้ทั้งระบบ (SUPER_ADMIN) + แก้โปรไฟล์ตัวเอง
+│     ├─ organizations/         องค์กร · สิทธิ์ ORG_ADMIN · โควตา · PromptPay
+│     ├─ venues/                อ่านผังสถานที่ + สร้างโซนใต้ venue
+│     ├─ zones/                 โซนในผัง
+│     ├─ booths/                บูธในโซน
+│     ├─ events/                อีเวนต์ · lifecycle · ใบเสนอราคาค่าบริการ · slug
+│     ├─ categories/            หมวดสินค้า อ่านอย่างเดียว
+│     ├─ bookings/              จอง · สลิป · ยกเลิก · ยกเว้นค่าเช่า · cron หมดเวลา
+│     ├─ slips/                 seam ตรวจสลิป — mock / manual / slipok (มี README เอง)
+│     ├─ refunds/               คำร้องคืนเงิน
+│     ├─ reviews/               รีวิวโซนและร้านค้า
+│     ├─ shops/                 ร้านค้าของผู้ขาย + โลโก้
+│     ├─ notifications/         แจ้งเตือนในแอป + ส่ง web push
+│     ├─ push-subscriptions/    ลงทะเบียน/ถอน subscription ของเบราว์เซอร์
+│     ├─ announcements/         ประกาศระดับองค์กร
+│     ├─ system-broadcasts/     ประกาศกลางถึงผู้ใช้ทุกคน
+│     ├─ penalties/             แต้มโทษ + trust score + แบล็กลิสต์
+│     ├─ support-tickets/       คำร้องช่วยเหลือ + ขอยกเว้นโควตา
+│     ├─ audit-logs/            บันทึกการกระทำของผู้ดูแล
+│     ├─ platform-config/       สูตรราคาค่าบริการอีเวนต์ของแพลตฟอร์ม
+│     ├─ ai/                    seam แนะนำโซน + แชตช่วยเหลือ (มี README เอง)
+│     ├─ dashboard/             สรุปตัวเลของค์กร
+│     ├─ health/                liveness + readiness ของฐานข้อมูล
+│     ├─ prisma/                `PrismaService` — ต่อ DB แบบ lazy ไม่ต่อตอน boot
+│     ├─ common/                decorator · exception filter · pipe · ตัวช่วย Decimal
+│     └─ config/                ตรวจ env ตอน boot (`env.validation.ts`)
 ├─ apps/web/                    Next.js 14 App Router PWA → Vercel
-│  ├─ app/                      layout.tsx · globals.css · page.tsx (หน้าค้นหา Event) — หน้า user ทั่วไป
-│  │  ├─ login/ · register/     เข้าสู่ระบบ / สมัครสมาชิก ด้วย Email OTP
-│  │  ├─ events/[eventId]/      รายละเอียดอีเวนต์ · `/map` ผังโซนและบูธ · `/book` จองบูธ
-│  │  ├─ bookings/              รายการจองของตัวเอง · `[bookingId]` รายละเอียด ·
-│  │  │                         `/payment` อัปโหลดสลิป · `/review` รีวิวหลังจบงาน
-│  │  ├─ notifications/         แจ้งเตือนในแอป
-│  │  ├─ profile/               โปรไฟล์ผู้ขาย + ร้านค้า
-│  │  ├─ help/                  ศูนย์ช่วยเหลือ — แจ้งปัญหา (support ticket)
-│  │  ├─ admin/                 หน้า ORG_ADMIN — คนละ shell คนละ route tree กับ super-admin/
-│  │  │  ├─ dashboard/          สรุปตัวเลขภาพรวมองค์กร
-│  │  │  ├─ organization/       ตั้งค่าองค์กร
-│  │  │  ├─ zones/              จัดการโซน / บูธ
+│  ├─ app/
+│  │  ├─ layout.tsx             ครอบทุกหน้าด้วย `AppShell`
+│  │  ├─ page.tsx               หน้าหลัก — ค้นหา Event + ประกาศสาธารณะ
+│  │  ├─ login/ · register/     Email OTP · เข้าแล้วเด้งตาม role
+│  │  ├─ events/[eventId]/      รายละเอียดอีเวนต์
+│  │  │  ├─ map/                ผังโซนและบูธ
+│  │  │  └─ book/               ฟอร์มจองบูธ
+│  │  ├─ bookings/              การจองของฉัน
+│  │  │  └─ [bookingId]/        รายละเอียด · `payment/` สลิป+QR · `review/` รีวิว
+│  │  ├─ notifications/         แจ้งเตือน + ตัวกรอง
+│  │  ├─ profile/               โปรไฟล์ + ร้านค้า
+│  │  ├─ help/                  FAQ + ส่งคำร้อง
+│  │  ├─ admin/                 ORG_ADMIN — 11 หน้า
+│  │  │  ├─ dashboard/          ตัวเลขภาพรวมองค์กร
+│  │  │  ├─ events/             สร้าง / เผยแพร่ / ปิด / ลบ + ใบเสนอราคา
+│  │  │  ├─ bookings/           รายการจองขององค์กร
+│  │  │  ├─ booking-rescue/     ค้นจากรหัสจอง → ยืนยันยกเว้นค่าเช่า / ออกแต้มโทษ
+│  │  │  ├─ zones/              จัดการโซนและบูธ
 │  │  │  ├─ map-designer/       ออกแบบผังสถานที่
-│  │  │  ├─ bookings/           กู้คืน/จัดการการจองที่ค้าง · ยืนยันแบบยกเว้นค่าเช่า
-│  │  │  └─ announcements/      ประกาศถึงผู้ขาย
-│  │  └─ super-admin/           หน้า SUPER_ADMIN เท่านั้น — SuperAdminShell แยกทั้งชุด (SCRUM-89/PR #66)
-│  │     ├─ page.tsx            ภาพรวม (dashboard ข้ามทุกองค์กร) — ใช้งานได้จริง
-│  │     └─ organizations/      จัดการองค์กรทั้งหมดในระบบ — ใช้งานได้จริง (Phase 1 มีแค่ 2 หน้านี้
-│  │                            ที่เหลือในเมนู SuperAdminShell เป็น placeholder "เร็วๆ นี้")
-│  ├─ components/               ส่วนจอต่อหน้า — auth, booking flow, admin/super-admin screens ฯลฯ
-│  │                            (23 ไฟล์ + components/super-admin/ อีก 3 ไฟล์)
-│  ├─ lib/                      api.ts · supabase.ts · use-auth-state.ts · use-email-otp.ts ·
-│  │                            use-vendor-profile.ts · event-booking-rules.ts
-│  └─ public/                   icon.svg · manifest.webmanifest
-├─ prototype/                   prototype เดิม ใช้อ้างอิงเท่านั้น ห้ามแก้
-├─ .github/                     CI workflow + CODEOWNERS
+│  │  │  ├─ vendors/            ผู้ขายในองค์กร + ประวัติรายคน
+│  │  │  ├─ payments/           การชำระเงิน / คืนเงิน + ดูสลิป
+│  │  │  ├─ reviews/            สรุปคะแนนรีวิว
+│  │  │  ├─ announcements/      ประกาศถึงผู้ขาย
+│  │  │  └─ organization/       โควตา + PromptPay ขององค์กร
+│  │  └─ super-admin/           SUPER_ADMIN — 9 หน้า · shell แยกทั้งชุด
+│  │     ├─ layout.tsx          ครอบด้วย `SuperAdminShell` + guard ของตัวเอง
+│  │     ├─ page.tsx            ภาพรวมข้ามองค์กร + ส่งประกาศกลาง
+│  │     ├─ organizations/      องค์กรทั้งหมด · สถานะ · PromptPay
+│  │     ├─ admins/             แอดมินองค์กร + มอบสิทธิ์แก้โควตา
+│  │     ├─ users/              ผู้ใช้ทั้งหมด + รายละเอียด + last-login
+│  │     ├─ events-bookings/    การจอง / การเงิน (`?tab=bookings|payments`)
+│  │     ├─ support/            เคสช่วยเหลือ / moderation (`?tab=tickets|moderation`)
+│  │     ├─ announcements/      ประกาศข้ามองค์กร + ลบ
+│  │     ├─ audit-logs/         audit log + ตัวกรอง
+│  │     └─ settings/           สูตรราคาค่าบริการของแพลตฟอร์ม
+│  ├─ components/               30 ไฟล์ + `super-admin/` อีก 10 (§6)
+│  ├─ lib/                      8 ไฟล์ (§6)
+│  └─ public/                   icon.svg · manifest.webmanifest · push-sw.js · รูปอ้างอิง 4 ไฟล์
+├─ prototype/                   prototype เดิม ใช้อ้างอิงเท่านั้น ห้ามแก้ ห้าม import
+├─ .github/                     ci.yml · keep-alive.yml · CODEOWNERS · PR template
 └─ AGENTS.md · CLAUDE.md · README.md
 ```
 
-แต่ละ app แยกกันสมบูรณ์ ไม่ใช่ npm workspaces ต้อง `cd` เข้าโฟลเดอร์ก่อนรัน npm ทุกครั้ง
+สอง app แยกกันสมบูรณ์ ไม่ใช่ npm workspaces — `cd` เข้าโฟลเดอร์ก่อนรัน npm ทุกครั้ง ห้ามมี `package.json` ที่ราก
 
-`/admin` (ORG_ADMIN) กับ `/super-admin` (SUPER_ADMIN) เป็น **คนละ route tree คนละ shell กันโดย
-ตั้งใจ** ไม่ใช่ share กัน — `app-shell.tsx` เช็ค `isSuperAdminRoute` แล้ว bypass ตัวเองทันที
-(`if (isSuperAdminRoute) return <>{children}</>`) ปล่อยให้ `super-admin/layout.tsx` ครอบด้วย
-`SuperAdminShell` แยกทั้งชุดแทน ซึ่งมี guard เช็ค `auth.role !== 'SUPER_ADMIN'` ของตัวเอง (เด้งออก
-ถ้าไม่ใช่) มาจาก PR #66 / SCRUM-89 ที่เพิ่ง merge เข้า `main`
-
-แต่ SCRUM-89 Phase 1 ทำแค่ 2 หน้า — ภาพรวม (`/super-admin`) กับจัดการองค์กร
-(`/super-admin/organizations`) — เมนูที่เหลือใน `SuperAdminShell` (ผู้ดูแลองค์กร, ผู้ใช้งาน,
-บทบาทและสิทธิ์, ตั้งค่าแพลตฟอร์ม) เป็น placeholder "เร็วๆ นี้" ไม่มี route จริงข้างหลัง ดังนั้น
-endpoint ฝั่ง backend ที่เป็น SUPER_ADMIN-only แบบข้ามองค์กรส่วนใหญ่ (`users/`, `audit-logs/`,
-และ `GET .../all` ของ penalties, refunds, support-tickets, announcements, bookings)
-**ยังไม่มีหน้าเว็บของตัวเอง** — เรียกได้จาก API โดยตรงเท่านั้นตอนนี้
-
-## โมดูลใน `apps/api/src/` — ทำอะไรได้จริง
-
-สรุปจากการอ่าน controller/service จริงทุกโมดูล ไม่ใช่แค่ endpoint list — กติกาฉบับเต็มอยู่ใน
-[`AGENTS.md`](./AGENTS.md)
-
-### ผู้ใช้และสิทธิ์
-
-- **`auth/`** — endpoint เดียวคือ `GET /auth/me` คืนโปรไฟล์ + ร้านค้า + องค์กรที่เป็นสมาชิก ไม่มี
-  register/login/logout ในนี้ (ผู้ใช้ auth ผ่าน Supabase โดยตรง) `SupabaseAuthGuard` ตรวจ JWT แล้ว
-  **JIT-provision** แถว `app_user` ให้อัตโนมัติในครั้งแรกที่เห็น `auth_user_id` — role เริ่มต้น
-  เป็น VENDOR เสมอ ไม่มีทางตั้งเป็น admin จาก token ได้
-- **`users/`** — SUPER_ADMIN เท่านั้นดูรายชื่อ/รายละเอียดผู้ใช้ทั้งหมดได้ (`GET /users`,
-  `GET /users/:id` พร้อมประวัติการจอง/คืนเงิน/แต้มโทษ/ตั๋วปัญหาของคนนั้น), ดู last-login จริงจาก
-  Supabase Auth Admin API (`GET /users/:id/last-login`) และดู audit log ที่ผู้ใช้คนนั้นเป็นคนทำ
-  (`GET /users/:id/audit-logs`) ทุก role แก้โปรไฟล์ตัวเองได้ผ่าน `PATCH /users/me` เท่านั้น
-
-### แกนหลัก — องค์กร, สถานที่, โซน, บูธ, อีเวนต์
-
-- **`organizations/`** — SUPER_ADMIN สร้าง/แก้/เปลี่ยนสถานะองค์กร และมอบ/ถอนสิทธิ์ ORG_ADMIN ให้
-  ผู้ใช้ได้ การมอบสิทธิ์เปลี่ยน `UserRole` ของผู้ใช้จาก VENDOR เป็น ORG_ADMIN ให้อัตโนมัติ (และ
-  เปลี่ยนกลับเป็น VENDOR เมื่อถอน membership องค์กรสุดท้ายที่เหลือ) ทั้ง 4 การกระทำนี้เป็น 4
-  action เดียวที่ถูกบันทึกลง audit log ในระบบตอนนี้
-- **`venues/`** — CRUD ผังสถานที่ (ORG_ADMIN+) แต่ละ venue ผูกกับ 1 องค์กร ใช้ซ้ำได้หลายอีเวนต์
-- **`zones/`** — CRUD โซนในผัง (ORG_ADMIN+) ลบไม่ได้ถ้ายังมีบูธที่เคยมี booking ผูกอยู่ แม้ booking
-  นั้นจะถูกยกเลิกไปแล้วก็ตาม (กันด้วย FK restrict แล้วแปล error เป็นภาษาไทยให้)
-- **`booths/`** — CRUD บูธ (ORG_ADMIN+) กติกาการลบเหมือน zones ทุกประการ
-- **`events/`** — สร้าง/แก้ไขอีเวนต์ (ORG_ADMIN+) `GET /events/discovery` เป็นหน้ารวมอีเวนต์แบบ
-  public (เฉพาะสถานะ PUBLISHED/ONGOING) `GET /events/:id/map` คืนผังโซน+บูธพร้อมสถานะ
-  AVAILABLE/HELD/BOOKED/UNAVAILABLE ต่อบูธ และคำนวณ tier บูธ (S/A/B/C) จากราคาแบบ derived สด
-  ไม่เก็บลง DB
-- **`categories/`** — หมวดสินค้า public อ่านอย่างเดียว ใช้ตอนสร้างร้านค้าและตอนขอคำแนะนำโซน
-
-### การจองและการชำระเงิน
-
-- **`bookings/`** — หัวใจของระบบ `POST /bookings` ล็อกบูธด้วย serializable transaction (กัน
-  race condition ตอนจองพร้อมกัน retry อัตโนมัติสูงสุด 3 ครั้งถ้าเจอ write conflict) เช็คครบทุก
-  invariant ในทีเดียว — venue ของบูธตรงกับ venue ของอีเวนต์, ช่วงวันที่จองอยู่ในช่วงอีเวนต์, บูธ
-  ว่างจริง, ไม่เกิน quota ต่ออีเวนต์ (อ่านจาก org_config ก่อน ตกไป platform_config), ผู้ใช้ไม่ติด
-  แบล็กลิสต์ — สำเร็จแล้วตั้งสถานะ `PENDING_PAYMENT` พร้อม hold 5 นาที · `POST /bookings/:id/slip`
-  เรียก `SlipVerificationService` แล้ว **auto-confirm เป็น `CONFIRMED` ทันที** ถ้ายอดตรงกับราคาบูธ
-  และสถานะเป็น VERIFIED — ไม่ต้องรอ admin กดอนุมัติ · `PATCH /bookings/:id/cancel` ยกเลิกได้เฉพาะ
-  ก่อนถึงวันเริ่มอีเวนต์ · `PATCH /bookings/:id/confirm-exempt` (ORG_ADMIN+) ยืนยันแบบยกเว้น
-  ค่าเช่าโดยข้าม slip ไปเลย · มี `createForAdmin()` แยกไว้ให้ `support-tickets/` เรียกตอนอนุมัติ
-  quota exception — ข้ามได้แค่ quota อย่างเดียว invariant อื่นทุกตัวยังเช็คครบเหมือนเดิม
-- **`slips/`** — ไม่มี controller ของตัวเอง เป็น internal module ที่ `bookings/` เรียกผ่าน
-  `SlipVerificationService` เท่านั้น หน้าที่เดียวคือเรียก provider ที่ตั้งค่าไว้
-  (`SLIP_VERIFIER=mock|manual|slipok` — **`slipok` เป็น provider จริงที่เรียก SlipOK API ภายนอก
-  แล้ว ไม่ใช่ stub**) แล้วบันทึกผลลง `verified_slip` **ทุกครั้งไม่ว่าผลจะเป็นอะไร** แม้ตรวจไม่ผ่าน
-  ก็บันทึก เพื่อให้ admin เห็นหลักฐานตอน vendor อ้างว่าจ่ายแล้วแต่สลิปไม่ผ่าน
-- **hold-expiry cron (อยู่ใน `bookings/`)** — ทำงานทุกนาทีด้วย `@Cron(EVERY_MINUTE)` ยกเลิก
-  booking ที่ยัง `PENDING_PAYMENT` และ hold หมดอายุแล้วโดยอัตโนมัติ (`cancelledByRole = SYSTEM`)
-  คืนบูธให้ว่างพร้อมแจ้งเตือน vendor เจ้าของ booking
-- **`refunds/`** — vendor ยื่นคำร้องคืนเงินได้เฉพาะ booking ที่ถูกยกเลิกแล้ว, ไม่ใช่แบบยกเว้น
-  ค่าเช่า, และต้องมีสลิปที่ verified แล้วยอดตรงกับราคาบูธเท่านั้น ผ่าน 3 สถานะ: PENDING →
-  APPROVED (admin ระบุยอดอนุมัติ ต้องไม่เกินยอดที่ขอและไม่เกินราคาบูธ) → PROCESSED (ยืนยันว่าโอน
-  คืนแล้วจริง) หรือ REJECTED แจ้งเตือน org admin ทุกคนตอนมีคำร้องใหม่ และแจ้ง vendor ทุกครั้งที่
-  สถานะเปลี่ยน
-- **`reviews/`** — vendor รีวิวได้เฉพาะบูธ/โซนที่เคยมี booking สถานะ CONFIRMED/COMPLETED และ
-  อีเวนต์จบไปแล้วอย่างน้อย 17 ชั่วโมง (นับจาก `bookingEndDate`) รีวิวซ้ำ target เดิมจะอัปเดตของเดิม
-  แทนสร้างใหม่ (1 รีวิวต่อ 1 target ต่อ 1 คน) `GET /reviews/average` เป็น public endpoint
-
-### ผู้ขาย
-
-- **`shops/`** — vendor สร้างร้านได้ 1 ร้านต่อบัญชีเท่านั้น (`POST /shops`) แก้ไขและอัปโหลดโลโก้
-  ผ่าน `/shops/me` ซึ่ง resolve ร้านจาก token ที่ login ไม่รับ id ร้านจาก client เลย ร้านค้าไม่ผูก
-  กับองค์กรใดองค์กรหนึ่ง (เป็นของ vendor โดยตรง)
-
-### แจ้งเตือนและสื่อสาร
-
-- **`notifications/`** — แจ้งเตือนในแอปเท่านั้น (list, unread count, mark-all-read) ถูกยิงจากหลาย
-  module อื่น (booking, penalty, refund, announcement, support ticket) การสร้าง notification เป็น
-  best-effort เสมอ — เขียนไม่สำเร็จก็ไม่ทำให้ flow หลัก (เช่นการจอง) ล้มตาม **ยังไม่มี push
-  notification จริง** — `web-push`/VAPID ที่ระบุไว้ใน tech stack ยังไม่มีโค้ดรองรับเลย
-- **`announcements/`** — ORG_ADMIN+ ประกาศถึงผู้ขาย ประกาศที่ active (ทั้งตอนสร้างและตอนเปลี่ยน
-  จาก draft เป็น active) จะ fan-out เป็น notification ให้ vendor ทุกคนที่มี booking ที่ยังไม่ถูก
-  ยกเลิกและอีเวนต์ยังไม่จบในองค์กรนั้นโดยอัตโนมัติ SUPER_ADMIN ดูข้ามองค์กรได้ที่
-  `GET /announcements/all`
-
-### การกำกับดูแล (governance)
-
-- **`penalties/`** — ORG_ADMIN+ ออกแต้มโทษผูกกับ booking ได้ (เหตุผลให้เลือก: ไม่มาตามนัด, ทำผิด
-  กติกาการใช้พื้นที่, ผิดสัญญา, ได้รีวิวไม่ดี, อื่นๆ) **auto-blacklist ทันทีที่แต้มสะสมของผู้ใช้คน
-  นั้นถึง 3 แต้มรวมทุกองค์กร** (`isBlacklisted` เป็น cache ที่คำนวณใหม่ทุกครั้งที่ออกแต้มโทษ ไม่ใช่
-  source of truth) ผู้ใช้ที่ติดแบล็กลิสต์จองบูธใหม่ไม่ได้ทันที SUPER_ADMIN ดูภาพรวมข้ามองค์กรได้ที่
-  `GET /penalties/all`
-- **`support-tickets/`** — vendor แจ้งปัญหาทั่วไป และเป็นช่องทางขอ "ยกเว้นโควตา" เมื่อจองครบโควตา
-  ต่ออีเวนต์แล้ว (ไม่มี field โครงสร้างสำหรับคำขอนี้โดยเฉพาะ เพราะ schema freeze แล้ว — vendor
-  เขียนอธิบายเป็นข้อความ, admin อ่านแล้วอนุมัติเองโดยระบุ event/booth ที่จะสร้างให้) การอนุมัติเรียก
-  `BookingsService.createForAdmin` สร้าง booking จริงให้ทันที (ข้ามแค่ quota, invariant อื่นเช็ค
-  ครบเหมือน booking ปกติ) SUPER_ADMIN ดูตั๋วข้ามองค์กรได้ที่ `GET /support-tickets/all`
-- **`audit-logs/`** — อ่านได้เฉพาะ SUPER_ADMIN บันทึกแบบ best-effort (เขียนไม่สำเร็จไม่ทำให้ action
-  หลักล้มตาม) **ปัจจุบันมีแค่ 4 action ที่ถูกเรียกจริงในโค้ด ทั้งหมดมาจาก
-  `organizations.service.ts` เพียงไฟล์เดียว**: สร้างองค์กร, เปลี่ยนสถานะองค์กร, มอบสิทธิ์
-  ORG_ADMIN, ถอนสิทธิ์ ORG_ADMIN — โมดูลอื่นทั้งหมดยังไม่มีการเรียกบันทึก audit log เลย
-
-### AI
-
-- **`ai/`** — `POST /events/:eventId/recommendations` แนะนำบูธให้ vendor ตามหมวดสินค้าของร้าน
-  (หรือหมวดที่ระบุเอง ถ้าระบุต้องเป็นหมวดของร้านตัวเองเท่านั้น ห้ามสอดแนมร้านอื่น) มี provider 2
-  แบบเลือกด้วย `ZONE_RECOMMENDER=rule|gemini`: `rule` คำนวณจากหมวดสินค้าที่ตรงกันและราคากลาง
-  ใช้งานออฟไลน์ได้ไม่พึ่งบริการภายนอก, `gemini` ใช้ Flash/Flash-Lite เท่านั้น (ปฏิเสธ Pro ตั้งแต่
-  boot) ส่ง prompt เฉพาะรหัสบูธ/ชื่อโซน/ราคา/หมวดสินค้า ไม่มีข้อมูลส่วนตัวใดๆ
-  `ZoneRecommendationService` ครอบทุก provider ด้วย timeout 5 วินาที + ตรวจรูปแบบผลลัพธ์ +
-  ตรวจว่าบูธที่แนะนำจองได้จริงในอีเวนต์นั้น ผิดเงื่อนไขไหนก็ fallback เป็น rule-based ให้อัตโนมัติ
-  แล้วบันทึกทุกครั้งลง `recommendation_log` พร้อม source ที่ตอบจริง (ไม่ใช่ provider ที่ตั้งค่าไว้)
-
-### Admin overview
-
-- **`dashboard/`** — `GET /organizations/:id/dashboard-summary` (ORG_ADMIN+) สรุปตัวเลของค์กร:
-  จำนวน booking แยกตามสถานะ (รอชำระ/ยืนยันแล้ว/ยกเลิก), จำนวน venue/zone/booth, จำนวนอีเวนต์ที่
-  publish แล้วและที่ยังไม่ถึงวันเริ่ม
-
-### Infrastructure (ไม่มี controller / ไม่ใช่ business module)
-
-- **`prisma/`** — `PrismaService` เชื่อมต่อ DB แบบ lazy (ต่อครั้งแรกที่มี query จริง ไม่ใช่ตอน boot)
-- **`common/`** — decorators ที่ใช้ร่วมกันทั้งระบบ (`@CurrentUser`, `@CurrentOrgId`, `@Roles`) และ
-  exception filter กลางที่แปล Prisma error code เป็น HTTP response
-- **`config/`** — ตรวจ environment variables ให้ครบตอน boot ตาม `env.validation.ts`
-- **`health/`** — `GET /health`, `GET /health/db` — ไม่ต้อง auth (สำหรับ hosting health check)
-
-รายการนี้สรุปพฤติกรรมหลักที่อ่านจากโค้ดวันนี้ ไม่ใช่ spec ฉบับเต็ม — guard/role ที่แท้จริงของแต่ละ
-endpoint ต้องเปิด controller ดูเองก่อนแก้โค้ดเสมอ
-
-## Tech stack
-
-| ส่วน | ใช้อะไร |
-|---|---|
-| Frontend | Next.js 14 (App Router), React, Tailwind CSS, next-pwa, SVG zone map |
-| Backend | NestJS (TypeScript) REST · Prisma · PostgreSQL (Supabase Pro) |
-| Supabase | Auth — Email OTP / magic link (NestJS verify token ด้วย `jose`) · Storage (สลิป, รูปผัง) |
-| บริการภายนอก | Gemini **Flash / Flash-Lite เท่านั้น ห้ามใช้ Pro** · SlipOK (OK BASIC) · web-push |
-| Deploy | Vercel (web) · Render (api) |
-
-## เริ่มต้นใช้งาน
-
-ต้องมี Node.js 20+ และ npm (CI รันบน node 20)
-
-### `apps/api`
-
-```bash
-cd apps/api
-npm install
-cp .env.example .env   # เติมค่าจริงจาก Supabase dashboard (คัดลอกมา ห้ามพิมพ์เอง)
-npx prisma generate
-npm run build          # ต้อง exit 0
-npm run start:dev
-```
-
-ยังไม่มีฐานข้อมูล → endpoint ที่ query จริงจะ error แต่เซิร์ฟเวอร์ต้อง boot ขึ้นได้ตามปกติ
-ตัวตรวจงานคือ 4 gate: `npm run build` · `npx tsc --noEmit` · `npx eslint src prisma` · `npm test`
-
-### `apps/web`
-
-```bash
-cd apps/web
-npm install
-cp .env.example .env.local   # Next.js อ่านไฟล์นี้ ไม่ใช่ .env
-npm run dev                  # http://localhost:3000
-```
-
-`.env.local` มีสามตัวแปร ทั้งหมดขึ้นต้นด้วย `NEXT_PUBLIC_` จึงถูกฝังลงใน bundle ที่ผู้ใช้โหลดได้
-**ห้ามใส่ `SUPABASE_SERVICE_ROLE_KEY` ลงไปเด็ดขาด** — คีย์นั้นข้าม row-level security ทั้งหมดและเป็นของฝั่ง backend เท่านั้น (§7, §14.3)
-
-ไม่ตั้งตัวแปร Supabase ก็ต้อง build ผ่าน — Supabase client ถูกสร้างแบบ lazy ตอนผู้ใช้กดใช้งานจริง ไม่ใช่ตอน import
-CI ตั้งให้แค่ `NEXT_PUBLIC_API_URL` ตัวเดียว ถ้าหน้าไหนพังตอน build เพราะไม่มีตัวแปร แปลว่าโค้ดผิด ไม่ใช่ config ผิด
-
-ตัวตรวจงานฝั่งนี้คือ 3 gate: `npm run build` · `npx tsc --noEmit` · `npx next lint`
-(ไม่มี `npm test` — `apps/web` ไม่มี test script ตาม `.github/workflows/ci.yml` job `web`)
+`/admin` กับ `/super-admin` เป็นคนละ route tree คนละ shell โดยตั้งใจ — `app-shell.tsx` เจอ `/super-admin` แล้ว bypass ตัวเองทันที ปล่อยให้ `SuperAdminShell` ครอบแทน ซึ่งเช็ค `auth.role !== 'SUPER_ADMIN'` ของตัวเอง
 
 ---
 
-ขั้นตอนตั้งค่า Supabase, ตัวแปร environment ทุกตัว, การรัน migration และการ apply ไฟล์ SQL เสริมด้วย `psql` อยู่ใน [`AGENTS.md`](./AGENTS.md) — §9, §12 หัวข้อ "Raw SQL" และ Definition of Done
+## 2. API surface
 
-## สถานะระบบปัจจุบัน
+ทุก path มี prefix `/api` · role คือขั้นต่ำที่เรียกได้ · **ORG_ADMIN+** = ORG_ADMIN ขององค์กรนั้น หรือ SUPER_ADMIN · **ล็อกอิน** = role ไหนก็ได้ที่มี token
 
-สรุป capability ระดับสูงจากการสำรวจ controller/module จริงใน `apps/api/src` และหน้าใน `apps/web/app`
-— ไม่ใช่ % ความคืบหน้าหรือ deadline (ของพวกนั้นอยู่ใน Jira ตามด้านบน)
+| โมดูล | endpoint | สิทธิ์ |
+|---|---|---|
+| `auth` | `GET /auth/me` — โปรไฟล์ + ร้าน + องค์กรที่สังกัด | ล็อกอิน |
+| `users` | `GET /users` · `/:id` · `/:id/last-login` · `/:id/audit-logs` | SUPER_ADMIN |
+| | `PATCH /users/me` — แก้ `phone` อย่างเดียว ไม่มี `:id` | ล็อกอิน |
+| `organizations` | `GET /organizations` · `/:id` | public |
+| | `POST /organizations` · `PATCH /:id/status` · `GET`/`POST`/`DELETE /:id/admins` | SUPER_ADMIN |
+| | `PATCH /:organizationId` · `PATCH /:organizationId/quota` | ORG_ADMIN+ · quota ต้องมี `canEditQuota` |
+| | `GET /admins` · `PATCH /admins/:membershipId/quota-permission` | SUPER_ADMIN |
+| `venues` | `GET /venues` · `/venues/:id` | public |
+| | `POST /venues/:venueId/zones` | ORG_ADMIN+ |
+| `zones` | `GET /zones` · `/zones/:id` | public |
+| | `PATCH`/`DELETE /zones/:zoneId` · `POST /zones/:zoneId/booths` | ORG_ADMIN+ |
+| `booths` | `GET /booths` · `/booths/:id` | public |
+| | `PATCH`/`DELETE /booths/:boothId` | ORG_ADMIN+ |
+| `events` | `GET /events` · `/events/discovery` · `/events/:id/map` · `/events/by-slug/:slug/map` | public |
+| | `POST /organizations/:organizationId/events` · `POST .../events/quote` · `GET` | ORG_ADMIN+ |
+| | `PATCH :eventId/publish` · `/open` · `/close` · `DELETE :eventId` | ORG_ADMIN+ |
+| `categories` | `GET /categories` | public |
+| `bookings` | `POST /bookings` · `POST /:id/slip` · `PATCH /:id/cancel` · `GET /bookings` | VENDOR |
+| | `GET /:bookingId` · `/:bookingId/slip` · `/by-code/:bookingCode` | ORG_ADMIN+ |
+| | `PATCH /:bookingId/confirm-exempt` · `GET /organizations/:id/bookings` | ORG_ADMIN+ |
+| | `GET /bookings/all` | SUPER_ADMIN |
+| `refunds` | `POST /bookings/:bookingId/refunds` · `GET /refunds/mine` | VENDOR |
+| | `PATCH .../approve` · `/reject` · `/process` · `GET /organizations/:id/refunds` | ORG_ADMIN+ |
+| | `GET /refunds/all` | SUPER_ADMIN |
+| `reviews` | `GET /reviews/average` | public |
+| | `POST /reviews` | VENDOR |
+| `shops` | `POST /shops` · `PATCH /shops/me` · `POST /shops/me/logo` (multipart) | VENDOR |
+| `notifications` | `GET /notifications` · `/unread-count` · `PATCH /mark-all-read` · `/:id/read` | ล็อกอิน |
+| `push-subscriptions` | `POST` · `DELETE /push-subscriptions` | ล็อกอิน |
+| `announcements` | `GET /organizations/:id/announcements` | public |
+| | `GET /:id/announcements/admin` · `POST` · `PATCH` · `DELETE` | ORG_ADMIN+ |
+| | `GET /announcements/all` · `DELETE /announcements/:id` ข้ามองค์กร | SUPER_ADMIN |
+| `system-broadcasts` | `GET /system-broadcasts/active` | ล็อกอิน |
+| | `POST /system-broadcasts` — ถึงผู้ใช้ทุกคน | SUPER_ADMIN |
+| `penalties` | `POST` · `GET /bookings/:bookingId/penalties` | ORG_ADMIN+ |
+| | `POST /penalties` (ออกให้ผู้ขายตรง) · `GET /penalties/all` | SUPER_ADMIN |
+| `support-tickets` | `POST /support-tickets` | VENDOR |
+| | `POST /support-tickets/organizations/:id` — คำร้องถึง Super Admin | ORG_ADMIN |
+| | `PATCH /:ticketId/approve-quota-exception` | ORG_ADMIN+ |
+| | `GET /all` · `GET /:ticketId` · `PATCH /:ticketId/status` | SUPER_ADMIN |
+| `audit-logs` | `GET /audit-logs?action=&actorUserId=` | SUPER_ADMIN |
+| `platform-config` | `GET` · `PATCH /platform-config` | SUPER_ADMIN |
+| `ai` | `POST /events/:eventId/recommendations` · `POST /ai/support` | ล็อกอิน |
+| `dashboard` | `GET /organizations/:organizationId/dashboard-summary` | ORG_ADMIN+ |
+| `health` | `GET /health` · `GET /health/db` | ไม่ต้อง auth |
 
-- **Auth / onboarding** — เข้าสู่ระบบด้วย Supabase Auth (Email OTP / magic link), backend ตรวจ JWT ด้วย `jose` แล้ว provision `app_user` ให้อัตโนมัติในครั้งแรกที่เห็น token (role เริ่มต้น VENDOR)
-- **Booking flow** — ครบวงจร: เลือกบูธ → ล็อกบูธทันทีด้วยสถานะ `PENDING_PAYMENT` (hold 5 นาที) → อัปโหลดสลิป → เรียก SlipOK จริง (provider `slipok` implement แล้ว ไม่ใช่ stub) → ยืนยันอัตโนมัติเมื่อสลิปผ่าน → ยกเลิกได้ทั้งฝั่งผู้ขายและ org admin → hold ที่หมดอายุถูกยกเลิกอัตโนมัติทุกนาทีโดย scheduled job → มีเส้นทางยกเว้นค่าเช่าสำหรับ org admin (`isPaymentExempt`)
-- **Admin / super-admin** — จัดการองค์กร (สร้าง, เปลี่ยนสถานะ, มอบ/ถอนสิทธิ์ ORG_ADMIN), venue/zone/booth, event, สรุปตัวเลขภาพรวมองค์กร (dashboard), กู้คืน/จัดการการจองที่ค้าง, อนุมัติคำร้องคืนเงิน, จัดการตั๋วปัญหาและ quota exception, ดูแต้มโทษ/แบล็กลิสต์รวมทุกองค์กร (SUPER_ADMIN)
-- **Audit log** — มีแล้ว (`audit-logs/`, อ่านได้เฉพาะ SUPER_ADMIN) แต่ปัจจุบันบันทึกเฉพาะ 4 การกระทำของ org admin: สร้างองค์กร, เปลี่ยนสถานะองค์กร, มอบสิทธิ์ ORG_ADMIN, ถอนสิทธิ์ ORG_ADMIN
-- **Penalty / blacklist** — สะสมแต้มโทษต่อผู้ขาย แล้ว auto-blacklist เมื่อถึงเกณฑ์ (`isBlacklisted` เป็น cache ที่คำนวณจาก `penalty.points` เสมอ ตาม AGENTS.md §6.3.5)
-- **Review** — ผู้ขายรีวิวได้หลังจบงาน มี endpoint ดูค่าเฉลี่ยแบบ public
-- **Notification** — แจ้งเตือนในแอปเท่านั้น (list, unread count, mark-all-read) — ยังไม่มี push notification จริง (`web-push` + VAPID ที่ระบุใน tech stack ยังไม่ถูกติดตั้งในโค้ด)
-- **AI zone recommendation** — implement แล้วทั้ง rule-based และ Gemini (Flash/Flash-Lite เท่านั้น ปฏิเสธ Pro ตั้งแต่ boot) พร้อม fallback อัตโนมัติกลับไป rule-based เมื่อ Gemini timeout/quota หมด/ตอบผิดรูป และบันทึกทุกครั้งลง `recommendation_log` — แต่ยังไม่ได้ทดสอบ end-to-end กับข้อมูลจริงจาก production
+---
 
-## ทีม
+## 3. กติกาที่บังคับในโค้ด
+
+Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได้ ทุกข้อบังคับใน service — เหตุผลเต็มอยู่ AGENTS.md §6.3
+
+| กฎ | บังคับที่ไหน |
+|---|---|
+| บูธต้องอยู่ใน venue เดียวกับอีเวนต์ | `bookings.service` ในทรานแซกชันสร้าง booking |
+| วันที่จองต้องอยู่ในช่วงอีเวนต์ | เดียวกัน |
+| 1 บูธ 1 อีเวนต์ มี booking ที่ยัง active ได้ใบเดียว | service + **partial unique index ที่ยังไม่ apply** |
+| องค์กรเจ้าของอีเวนต์ต้อง `ACTIVE` | สร้าง booking · หน้า discovery · หน้าผัง · `OrgScopeGuard` |
+| ไม่เกินโควตาต่อผู้ขายต่ออีเวนต์ | `org_config` ก่อน ตกไป `platform_config` (default 2) |
+| ผู้ใช้ที่ติดแบล็กลิสต์จองไม่ได้ | สร้าง booking + เด้งตั้งแต่หน้า login |
+| trust score เริ่ม 100 แต้มโทษ**หัก**ออก clamp ที่ 0 แตะ 0 = แบล็กลิสต์ | `penalties.service` serializable transaction retry 3 |
+| ยอดสลิปต้องตรงราคาบูธ **และ** สถานะต้องเป็น `VERIFIED` ก่อนถึงเทียบยอด | `bookings.service` เทียบ Decimal ด้วย `.equals()` |
+| `trans_ref` ห้ามซ้ำ (กันสลิปซ้ำ) | unique ใน schema |
+| hold 5 นาที หมดแล้วยกเลิกด้วย `cancelledByRole = SYSTEM` | cron ทุกนาทีใน `bookings/` |
+| ยอดคืนเงินที่อนุมัติ ≤ ราคาบูธ และ ≤ ยอดที่ขอ | `refunds.service` |
+| คืนเงินได้เฉพาะ booking ที่ยกเลิกแล้ว ไม่ใช่ exempt และมีสลิป verified ยอดตรง | `refunds.service` |
+| รีวิวได้เมื่ออีเวนต์จบแล้ว **17 ชั่วโมง** และ 1 รีวิวต่อ 1 target ต่อ 1 คน | `reviews.service` |
+| เปลี่ยนโลโก้ร้านได้ **1 ครั้งต่อ 168 ชั่วโมง** | `shops.service` ล็อกแถวด้วย `SELECT … FOR UPDATE` |
+| ลบโซน/บูธไม่ได้ถ้าเคยมี booking ผูกอยู่ (แม้ถูกยกเลิกแล้ว) | FK restrict แล้วแปล error เป็นไทย |
+| ลบอีเวนต์ได้เฉพาะที่ยังไม่เคยมี booking | `events.service` |
+| สถานะคำร้องเดินหน้าอย่างเดียว OPEN → IN_PROGRESS → CLOSED | `support-tickets.service` |
+| `platform_config` เขียนได้เฉพาะ SUPER_ADMIN · `org_config` เฉพาะแอดมินองค์กรนั้น | guard + service |
+
+**คำนวณสด ไม่เก็บเป็นค่าจริง** — tier บูธ (S/A/B/C) จากราคา · badge ร้าน · คะแนนเฉลี่ย
+
+**กฎที่พลาดแล้วไม่มี error ให้เห็น**
+
+- org-scoped route ตอบ **404 ไม่ใช่ 403** — ของที่ไม่มีจริงกับของขององค์กรอื่นต้องแยกไม่ออกจากฝั่ง client
+- `organizationId` มาจาก `OrgMembership` เสมอ ไม่เอาจาก path / query / body
+- role กับ membership อ่านจากฐานข้อมูล **ไม่ใช่จาก JWT claim**
+- ใช้ `@OrgScoped(param)` ตัวเดียว ห้ามแยกเป็น `@OrgScope` + `@UseGuards` (แยกแล้วคอมไพล์ผ่าน เทสต์ผ่าน แต่ไม่บังคับอะไรเลย)
+- เงินเป็น `Decimal(10,2)` คืนออก API ด้วย `.toString()` ห้าม `Float`/`parseFloat`
+- ห้าม `$queryRawUnsafe` / `$executeRawUnsafe`
+- `verified_slip.slipok_raw` มีชื่อและธนาคารผู้โอน — ห้ามคืนให้ผู้ขายและห้าม log
+- `SUPABASE_SERVICE_ROLE_KEY` ห้ามโผล่ใน `apps/web` หรือตัวแปร `NEXT_PUBLIC_*` ใดๆ
+
+---
+
+## 4. ฐานข้อมูลและ migration
+
+- โมเดล = PascalCase · ตาราง/คอลัมน์ = snake_case ผ่าน `@@map` / `@map` · ใน TypeScript ใช้ชื่อของ Prisma เสมอ
+- โมเดล `User` map ไปตาราง **`app_user`** (`user` เป็นคำสงวนของ Postgres)
+- PK เป็น uuid · เวลาเป็น timestamptz · เงินเป็น `Decimal(10,2)`
+- สายความเป็นเจ้าของ: `Organization` → `Venue` → `Zone` → `Booth` → `Booking` · `Event` คือสิ่งที่ถูกจองเข้าไป · `Subscription` คือบิลที่องค์กรจ่ายให้แพลตฟอร์ม (คนละเรื่องกัน)
+- migration รันโดยคน ไม่ใช่ agent · **ห้าม** `migrate reset` / `db push` / `db pull` / `DROP` / `TRUNCATE`
+- `npx prisma generate` และ `npx prisma validate` ปลอดภัยเสมอ
+
+**`prisma/sql/` — ไม่มีอะไรรันให้อัตโนมัติ ต้อง `psql` เองหลัง migrate**
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `booking_active_event_booth_unique.sql` | partial unique index กัน double-booking (`@@unique` เงื่อนไขตามสถานะไม่ได้) |
+| `remove_authenticated_slips_upload_policy.sql` | ถอน policy ที่ยอมให้ client ที่ล็อกอินอัปโหลดเข้าบัคเก็ต `slips` ตรงๆ |
+
+---
+
+## 5. Auth และ role
+
+Supabase Auth เป็นผู้ออก token · NestJS แค่ verify ไม่ได้ออกเอง · ไม่มี `/auth/register`, `/auth/login`, ไม่มี bcrypt, ไม่มี `passwordHash`
+
+1. เบราว์เซอร์เรียก `signInWithOtp({ email })` กับ Supabase โดยตรง ได้ JWT กลับมา
+2. ทุก request แนบ `Authorization: Bearer <supabase_jwt>`
+3. `SupabaseAuthGuard` verify ลายเซ็นแล้วดึง `sub` = `app_user.auth_user_id`
+4. ถ้ายังไม่มีแถว `app_user` → **JIT-provision** ให้ (role เริ่มต้น VENDOR เสมอ)
+5. `RolesGuard` อ่าน `app_user.role` **จากฐานข้อมูล**
+6. `OrgScopeGuard` เช็ค `OrgMembership` **จากฐานข้อมูล** สำหรับ route ที่ผูกองค์กร
+
+`UserRole` = `SUPER_ADMIN | ORG_ADMIN | VENDOR` (ระดับแพลตฟอร์ม) · `OrgMembership.role` = `OWNER | ADMIN` (บอกว่าทำกับองค์กรไหนได้) — ทั้งคู่อยู่ในฐานข้อมูลของเรา **ไม่เคยอยู่ใน JWT**
+
+หลังยืนยัน OTP: SUPER_ADMIN → `/super-admin` · ORG_ADMIN → `/admin/bookings` · VENDOR → `/` · บัญชีที่ติดแบล็กลิสต์ถูก sign out ทันทีโดยไม่บอกเหตุผล
+
+---
+
+## 6. ไฟล์ฝั่งเว็บ
+
+### `lib/`
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `api.ts` | client เดียวของทั้งแอป — ทุก endpoint + type · read สาธารณะไม่แนบ Authorization |
+| `supabase.ts` | Supabase browser client แบบ **lazy** — สร้างตอนใช้จริง ไม่ใช่ตอน import (ไม่งั้น build พังตอนไม่มี env) |
+| `use-auth-state.ts` | สถานะล็อกอิน + role + องค์กร มี `loading` เป็นสถานะของตัวเองกันหน้าจอกระพริบ |
+| `use-email-otp.ts` | flow ส่ง/ยืนยัน OTP + cooldown + เด้งตาม role หลังล็อกอิน |
+| `use-vendor-profile.ts` | โปรไฟล์ + ร้านของผู้ขาย (ผู้ขายมีได้ร้านเดียว จึงยุบ `shops[]` ให้ตรงนี้ที่เดียว) |
+| `auth-errors.ts` | ข้อความ error ของหน้า login/register เก็บที่เดียวกันสองหน้าไม่ให้เพี้ยน |
+| `event-booking-rules.ts` | อีเวนต์นี้ยังจองได้ไหม — เช็คสถานะ + วันที่ตามเวลาไทย |
+| `ux-preview.ts` | โหมดพรีวิว UI **เฉพาะ dev บน localhost** ไม่เคยสร้าง token ที่ API รับ |
+
+### `components/` — ส่วนกลาง
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `app-shell.tsx` | shell ของผู้ขาย/ORG_ADMIN — sidebar · bottom nav · แบนเนอร์ประกาศกลาง · วิดเจ็ต AI |
+| `admin-ui.tsx` | ชิ้นส่วนร่วมของหน้า admin + `useAdminPageAccess` (เลือกองค์กร + เช็คสิทธิ์) |
+| `auth-layout.tsx` | เลย์เอาต์เต็มจอของหน้า login / register |
+| `otp-input.tsx` | ช่องกรอกรหัส 6 หลัก |
+| `select-menu.tsx` · `multi-select-menu.tsx` | dropdown เดี่ยว / หลายค่า ใช้ร่วมทั้งแอป |
+| `zone-map.tsx` | ผังโซนและบูธเป็น inline SVG — โซนต่างกันด้วยน้ำหนักสีม่วง ไม่ใช่คนละสี |
+| `booking-countdown.tsx` | นับถอยหลัง hold 5 นาที |
+| `slip-upload-panel.tsx` | แผงเลือกไฟล์ + อัปโหลดสลิป |
+| `admin-slip-actions.tsx` | ปุ่มดู/ดาวน์โหลดสลิป — ขอ signed URL ตอนกดเท่านั้น |
+
+### `components/` — จอผู้ขาย
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `event-detail-screen.tsx` | รายละเอียดอีเวนต์ + ข้อมูลติดต่อผู้จัด |
+| `event-map-screen.tsx` | ผังบูธ + สถานะว่าง/ถูกจอง + tier |
+| `booking-screen.tsx` | ฟอร์มจอง — เลือกบูธ วันที่ ร้าน |
+| `my-bookings-screen.tsx` | รายการจองของฉัน + PromptPay QR |
+| `booking-detail-screen.tsx` | รายละเอียดการจอง + ยกเลิก |
+| `booking-payment-screen.tsx` | หน้าอัปโหลดสลิปและผลตรวจ |
+| `booking-review-screen.tsx` | ให้คะแนนโซนและร้าน |
+| `profile-shop-screen.tsx` | โปรไฟล์ + ร้าน + โลโก้ (ส่วนร้านแสดงเฉพาะ VENDOR) |
+| `support-ticket-screen.tsx` | ส่งคำร้อง + ดูเธรดข้อความ |
+
+### `components/` — จอ ORG_ADMIN
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `admin-dashboard.tsx` | ตัวเลขภาพรวมองค์กร |
+| `admin-events-screen.tsx` | สร้าง/เผยแพร่/ปิด/ลบอีเวนต์ + ใบเสนอราคาค่าบริการ |
+| `admin-bookings-screen.tsx` | รายการจองขององค์กร |
+| `admin-booking-rescue-screen.tsx` | ค้นจากรหัสจอง → ยืนยันยกเว้นค่าเช่า / ออกแต้มโทษ / ดูประวัติโทษ |
+| `admin-zone-booth-screen.tsx` | จัดการโซนและบูธ |
+| `admin-map-designer.tsx` | วางผังสถานที่ |
+| `admin-vendors-screen.tsx` | ผู้ขายในองค์กร + ประวัติการจองรายคน |
+| `admin-payments-screen.tsx` | การชำระเงิน + คืนเงิน + ดูสลิป |
+| `admin-reviews-screen.tsx` | สรุปคะแนนรีวิวของโซนและร้าน |
+| `admin-announcements-screen.tsx` | ประกาศถึงผู้ขาย |
+| `admin-organization-settings.tsx` | โควตาการจอง + PromptPay ขององค์กร |
+
+### `components/super-admin/`
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `super-admin-shell.tsx` | shell + sidebar + guard + กระดิ่งแจ้งเตือน |
+| `super-admin-dashboard.tsx` | ภาพรวมข้ามองค์กร + ส่งประกาศกลาง |
+| `super-admin-organizations-screen.tsx` | องค์กรทั้งหมด · สร้าง · สถานะ · PromptPay |
+| `super-admin-admins-screen.tsx` | แอดมินองค์กรทั้งระบบ + มอบสิทธิ์แก้โควตา |
+| `super-admin-users-screen.tsx` | ผู้ใช้ทั้งหมด + รายละเอียด + last-login |
+| `super-admin-events-bookings-screen.tsx` | การจองและการเงินข้ามองค์กร |
+| `super-admin-support-screen.tsx` | เคสช่วยเหลือ + แต้มโทษ/แบล็กลิสต์ |
+| `super-admin-announcements-screen.tsx` | ประกาศข้ามองค์กร + ลบ |
+| `super-admin-audit-logs-screen.tsx` | audit log + ตัวกรอง |
+| `super-admin-platform-config-screen.tsx` | สูตรราคาค่าบริการอีเวนต์ |
+
+---
+
+## 7. Tech stack
+
+| ส่วน | ใช้อะไร |
+|---|---|
+| Frontend | Next.js 14 (App Router) · React · Tailwind · next-pwa · inline SVG zone map |
+| Backend | NestJS (TypeScript) REST ไม่ใช่ GraphQL · Prisma · PostgreSQL (Supabase Pro) |
+| Auth | Supabase Auth — Email OTP / magic link · backend verify ด้วย `jose` เท่านั้น |
+| Storage | Supabase Storage — บัคเก็ตสลิปเป็น private เสมอ |
+| AI | Gemini **Flash / Flash-Lite เท่านั้น ห้ามใช้ Pro** พร้อม fallback แบบ rule-based |
+| ตรวจสลิป | SlipOK (OK BASIC, free tier) |
+| ชำระเงิน | PromptPay QR สร้างฝั่ง API ด้วย `promptpay-qr` + `qrcode` |
+| Push | `web-push` + VAPID |
+| Deploy | Vercel (web) · Render (api) |
+
+เพดานงบ ~1,000–1,500 บาท/เดือน — ห้ามเพิ่มบริการที่มีค่าใช้จ่าย
+
+---
+
+## 8. Environment
+
+`.env.example` ของแต่ละ app คือรายการที่เชื่อถือได้ · `src/config/env.validation.ts` คือตัวบังคับตอน boot · **คัดลอกค่าจริงจาก Supabase dashboard ห้ามพิมพ์เอง**
+
+| ตัวแปร (`apps/api`) | หมายเหตุ |
+|---|---|
+| `DATABASE_URL` · `DIRECT_URL` | pooled กับ direct คนละ port คนละ username |
+| `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | backend เท่านั้น key นี้ข้าม RLS ทั้งหมด |
+| `SUPABASE_JWKS_URL` **หรือ** `SUPABASE_JWT_SECRET` | ตั้งได้อันเดียว (`.xor()`) ตั้งทั้งคู่ = boot ไม่ขึ้น โดยตั้งใจ |
+| `VAPID_SUBJECT` · `VAPID_PUBLIC_KEY` · `VAPID_PRIVATE_KEY` | ครบ 3 หรือไม่ตั้งเลย (`.and()`) ไม่ตั้ง = push เงียบ ไม่ error |
+| `SLIP_VERIFIER` | `mock\|manual\|slipok` · **production ไม่มี default ต้องตั้งเอง** |
+| `SLIP_VERIFIER_MODE` | `always-verified\|always-invalid` · บังคับใน production เมื่อ verifier เป็น mock |
+| `SLIPOK_BRANCH_ID` · `SLIPOK_API_KEY` | บังคับเมื่อ `SLIP_VERIFIER=slipok` |
+| `ZONE_RECOMMENDER` · `SUPPORT_ASSISTANT` | `rule\|gemini` (default `rule`) |
+| `GEMINI_API_KEY` | บังคับเมื่อตัวใดตัวหนึ่งข้างบนเป็น `gemini` |
+| `GEMINI_MODEL` · `GEMINI_SUPPORT_MODEL` | regex รับเฉพาะ Flash / Flash-Lite ปฏิเสธ Pro ตั้งแต่ boot |
+| `NODE_ENV` · `PORT` · `CORS_ORIGIN` | `CORS_ORIGIN` คั่นด้วย comma ได้หลายค่า ไม่ตั้ง = สะท้อน origin ที่เรียกมา |
+
+`apps/web/.env.local` มี 4 ตัว ขึ้นต้น `NEXT_PUBLIC_` ทั้งหมด จึงถูกฝังลง bundle: `NEXT_PUBLIC_API_URL` · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` · `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — **ห้ามใส่ service role key ลงไปเด็ดขาด**
+
+ค่า placeholder เป็นเรื่องปกติระหว่างที่ยังไม่มี Supabase จริง — ไม่ใช่ config พัง ไม่ต้องไปแก้
+
+---
+
+## 9. เริ่มต้นใช้งาน
+
+ต้องมี Node.js 20+ และ npm
+
+```bash
+cd apps/api && npm install && cp .env.example .env && npx prisma generate && npm run start:dev
+cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :3000
+```
+
+**ไม่มีฐานข้อมูลก็ต้อง boot ขึ้นได้** — `PrismaService` ต่อแบบ lazy ดังนั้น endpoint ที่ query จริงจะ error แต่เซิร์ฟเวอร์ต้องไม่ล้ม ถามสถานะได้ที่ `GET /api/health/db` (503 = ยังไม่มี DB, 200 = มีแล้ว connection error กลายเป็นบั๊กจริง)
+
+**gate ที่ต้องผ่านทั้งหมด — CI รันทุก PR และ `main` protected**
+
+| app | คำสั่ง |
+|---|---|
+| `apps/api` | `npm run build` · `npx tsc --noEmit` · `npx eslint src prisma` · `npm test` |
+| `apps/web` | `npm run build` · `npx tsc --noEmit` · `npx next lint` |
+
+`tsc --noEmit` ไม่ซ้ำกับ `npm run build` — `tsconfig.build.json` ตัด `prisma/` ออกเพื่อให้ output เป็น `dist/main.js` ผลคือ `prisma/seed.ts` ไม่ถูกคอมไพล์ที่ไหนเลย ต้องอาศัยขั้นนี้ · ใช้ `npx eslint` ไม่ใช่ `npm run lint` เพราะสคริปต์นั้นมี `--fix` (CI ตรวจ ไม่แก้)
+
+`npm run db:seed` เปิดคอนเนกชันจริง — รันในเครื่องตัวเองเท่านั้น ห้ามรันใน CI
+
+**commit message** — งานที่ผู้ใช้เห็นผลต้องมี Jira ticket ขึ้นต้นด้วย `SCRUM-xx:` · งาน maintenance (chore/docs/ci/refactor/test) ใช้ conventional prefix และ **ไม่ต้องเปิด ticket เพื่อให้ผ่านรูปแบบ**
+
+---
+
+## 10. Seam — จุดเสียบของทีม
+
+`SLIP_VERIFIER` กับ `ZONE_RECOMMENDER` เป็นสองที่ที่งานของคนอื่นเสียบเข้ามาหลัง interface ที่โค้ดส่วนอื่นพึ่งอยู่แล้ว
+
+- **interface เปลี่ยนไม่ได้ถ้าไม่ผ่าน PO** — การเพิ่ม field ก็นับว่าเปลี่ยน
+- **provider เป็น adapter ล้วน** — แปลงรูปแบบข้อมูลแล้ว return หรือ throw · ไม่เขียน DB ไม่ fallback เอง ไม่กลืน error
+- **การบันทึกและ fallback อยู่ที่ wrapper** — `SlipVerificationService`, `ZoneRecommendationService`
+- **inject wrapper ไม่ใช่ DI token** — inject token ตรงๆ จะข้าม fallback และข้ามการบันทึก log ซึ่งเป็นความพังที่ไม่มีใครสังเกตเห็น
+- อ่าน `src/slips/README.md` และ `src/ai/README.md` ก่อนเขียน provider
+
+---
+
+## 11. สถานะระบบ
+
+- **จอง** ครบวงจร — เลือกบูธ → `PENDING_PAYMENT` + PromptPay QR → แนบสลิป → SlipOK จริง → ยืนยันอัตโนมัติ · **ไม่มีขั้นตอนอนุมัติด้วยคน** · มีเส้นทางยกเว้นค่าเช่าให้ ORG_ADMIN
+- **อีเวนต์** DRAFT พร้อมใบเสนอราคาที่คิดจาก `platform_config` → เผยแพร่ / ปิด / เปิดใหม่ / ลบ · มี slug สาธารณะสำหรับแชร์ผัง
+- **Admin** 11 หน้า · **Super admin** 9 หน้าที่ต่อ API จริงครบ · เมนู placeholder เหลือ 3 อัน (Package และ Billing · สถานะระบบ · บทบาทและสิทธิ์)
+- **แจ้งเตือน** in-app + **web push จริง** ผ่าน `web-push` + VAPID ทั้งฝั่ง backend และ service worker · SUPER_ADMIN ส่งประกาศกลางถึงทุกคนได้
+- **PWA** — request ที่มี `Authorization` ถูกบังคับ `NetworkOnly` กันข้อมูลข้ามบัญชีบนเครื่องเดียวกัน · precache ตัด chunk ของ admin ออก
+- **AI** สองผิว — แนะนำโซน/บูธ และแชตช่วยเหลือ ทั้งคู่ fallback เป็น rule-based · แชตเห็นเฉพาะข้อมูลของผู้ถามเอง
+- **Audit log** บันทึก 7 action จาก `organizations.service.ts` (6) และ `platform-config.service.ts` (1)
+
+## 12. ข้อจำกัดที่รู้อยู่
+
+- ไฟล์ใน `prisma/sql/` ยังไม่ถูก apply — partial unique index กัน double-booking บังคับด้วย service code อย่างเดียว
+- ไม่มี endpoint สร้าง/แก้/ลบ venue และไม่มี endpoint แก้ไขรายละเอียดอีเวนต์ (เมธอดในเซอร์วิสมี แต่ไม่มี route เรียก)
+- fan-out ของประกาศระดับองค์กรส่งแค่ in-app ไม่ส่ง push
+- สวิตช์ตั้งค่าการแจ้งเตือนในหน้า `/notifications` ยังเป็น UI อย่างเดียว ไม่ได้บันทึกไว้ที่ไหน
+- โมดูลอื่นนอกจาก 2 ไฟล์ข้างบนยังไม่เขียน audit log เลย
+- `prisma/seed.ts` ยังเป็น stub (SCRUM-22) · เทสต์ที่ต้องใช้ token จริงหรือข้อมูล seed ถูกเลื่อนไว้
+- AI ทั้งสองผิวยังไม่ได้ทดสอบ end-to-end กับข้อมูลจริงจาก production
+
+## 13. ทีม
 
 | ชื่อ | รหัส | รับผิดชอบ |
 |---|---|---|
@@ -282,6 +410,6 @@ CI ตั้งให้แค่ `NEXT_PUBLIC_API_URL` ตัวเดียว
 | บุ๊ค — ชิติพัทธ์ สีสุด | B6703271 | Product Owner, Scrum Master, Backend |
 | ปอนด์ — วรรนเรศ ขุมพลกรัง | B6728120 | Backend, Database |
 
-กติกาการพัฒนา, invariants, booking flow, auth flow และกติกาความปลอดภัยทั้งหมดอยู่ใน
-**[`AGENTS.md`](./AGENTS.md)** — อ่านให้จบก่อนเขียนโค้ด เป็นไฟล์เดียวกับที่ AI agent ทุกตัวอ่าน
+`.github/CODEOWNERS` คือรายการที่บอกว่าไฟล์ไหนต้องมีคนรีวิว — schema, auth, config ตอน boot และไฟล์กติกาเอง
+
 เอกสารออกแบบ (Master Spec, ERD, Design System Brief) เก็บนอก repo — ขอได้จาก Product Owner (บุ๊ค)
