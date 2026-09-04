@@ -69,11 +69,12 @@ type ZoneMapProps = {
   readOnly?: boolean;
   keepOverview?: boolean;
   showLegend?: boolean;
+  multiSelect?: boolean;
   boothHref?: (booth: EventBooth) => string;
   mapImageUrl?: string | null;
   zones: EventZone[];
   focusedZoneId: string | null;
-  selectedBoothId: string | null;
+  selectedBoothIds: string[];
   recommendedBoothId: string | null;
   onFocusZone: (zoneId: string) => void;
   onSelectBooth: (booth: EventBooth) => void;
@@ -81,10 +82,10 @@ type ZoneMapProps = {
 
 function boothFill(
   booth: EventBooth,
-  selectedBoothId: string | null,
+  selectedBoothIds: string[],
   recommendedBoothId: string | null,
 ) {
-  if (booth.id === selectedBoothId) return '#201B2E';
+  if (selectedBoothIds.includes(booth.id)) return '#201B2E';
   if (booth.id === recommendedBoothId) return '#7C3AED';
   return statusOf(booth).fill;
 }
@@ -95,10 +96,13 @@ function boothStroke(booth: EventBooth) {
 
 function boothText(
   booth: EventBooth,
-  selectedBoothId: string | null,
+  selectedBoothIds: string[],
   recommendedBoothId: string | null,
 ) {
-  if (booth.id === selectedBoothId || booth.id === recommendedBoothId) {
+  if (
+    selectedBoothIds.includes(booth.id) ||
+    booth.id === recommendedBoothId
+  ) {
     return '#ffffff';
   }
   return statusOf(booth).text;
@@ -161,11 +165,12 @@ export function ZoneMap({
   readOnly = false,
   keepOverview = false,
   showLegend = true,
+  multiSelect = false,
   boothHref,
   mapImageUrl,
   zones,
   focusedZoneId,
-  selectedBoothId,
+  selectedBoothIds,
   recommendedBoothId,
   onFocusZone,
   onSelectBooth,
@@ -194,7 +199,9 @@ export function ZoneMap({
         zones={zones}
         readOnly={readOnly}
         focusedZoneId={focusedZoneId}
+        selectedBoothIds={selectedBoothIds}
         recommendedBoothId={recommendedBoothId}
+        multiSelect={multiSelect}
         boothHref={boothHref}
         onFocusZone={onFocusZone}
         onSelectBooth={onSelectBooth}
@@ -263,7 +270,7 @@ export function ZoneMap({
                 ) % palette.length
               ]
             }
-            selectedBoothId={selectedBoothId}
+            selectedBoothIds={selectedBoothIds}
             recommendedBoothId={recommendedBoothId}
             onSelectBooth={onSelectBooth}
           />
@@ -283,6 +290,9 @@ export function ZoneMap({
                 color={palette[index % palette.length]}
                 selected={focusedZoneId === zone.id}
                 readOnly={readOnly}
+                selectedBoothIds={selectedBoothIds}
+                recommendedBoothId={recommendedBoothId}
+                multiSelect={multiSelect}
                 boothHref={boothHref}
                 onFocusZone={onFocusZone}
                 onSelectBooth={onSelectBooth}
@@ -342,7 +352,9 @@ function OverviewGridMap({
   zones,
   readOnly,
   focusedZoneId,
+  selectedBoothIds,
   recommendedBoothId,
+  multiSelect,
   boothHref,
   onFocusZone,
   onSelectBooth,
@@ -350,7 +362,9 @@ function OverviewGridMap({
   zones: EventZone[];
   readOnly: boolean;
   focusedZoneId: string | null;
+  selectedBoothIds: string[];
   recommendedBoothId: string | null;
+  multiSelect: boolean;
   boothHref?: (booth: EventBooth) => string;
   onFocusZone: (zoneId: string) => void;
   onSelectBooth: (booth: EventBooth) => void;
@@ -452,7 +466,11 @@ function OverviewGridMap({
             <div className="grid grid-cols-3 gap-1">
               {zone.booths.map((booth) => {
                 const unavailable = booth.availability !== 'AVAILABLE';
-                const href = !readOnly && !unavailable ? boothHref?.(booth) : undefined;
+                const href =
+                  !multiSelect && !readOnly && !unavailable
+                    ? boothHref?.(booth)
+                    : undefined;
+                const selected = selectedBoothIds.includes(booth.id);
                 const recommended = booth.id === recommendedBoothId;
                 const shopName = booth.occupant?.name ?? 'จองแล้ว';
                 const shared =
@@ -514,12 +532,13 @@ function OverviewGridMap({
                     key={booth.id}
                     type="button"
                     disabled={readOnly}
+                    aria-pressed={selected}
                     aria-label={`บูธ ${booth.code} AVAILABLE`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelectBooth(booth);
                     }}
-                    className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
+                    className={`${shared} ${selected ? 'border-[#201b2e] bg-[#201b2e] text-white shadow-[0_9px_20px_rgba(32,27,46,.2)]' : 'border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)]'} ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
                   >
                     {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">AI</span> : null}
                     <strong className="text-sm">{booth.code}</strong>
@@ -624,6 +643,9 @@ function OverviewZone({
   color,
   selected,
   readOnly,
+  selectedBoothIds,
+  recommendedBoothId,
+  multiSelect,
   boothHref,
   onFocusZone,
   onSelectBooth,
@@ -634,6 +656,9 @@ function OverviewZone({
   color: (typeof palette)[number];
   selected: boolean;
   readOnly: boolean;
+  selectedBoothIds: string[];
+  recommendedBoothId: string | null;
+  multiSelect: boolean;
   boothHref?: (booth: EventBooth) => string;
   onFocusZone: (zoneId: string) => void;
   onSelectBooth: (booth: EventBooth) => void;
@@ -709,7 +734,10 @@ function OverviewZone({
         const clipId = `overview-logo-${booth.id}`;
 
         const unavailable = booth.availability !== 'AVAILABLE';
-        const href = !readOnly && !unavailable ? boothHref?.(booth) : undefined;
+        const href =
+          !multiSelect && !readOnly && !unavailable
+            ? boothHref?.(booth)
+            : undefined;
 
         return (
           <a
@@ -737,7 +765,7 @@ function OverviewZone({
               width="49"
               height="38"
               rx="7"
-              fill={statusOf(booth).fill}
+              fill={boothFill(booth, selectedBoothIds, recommendedBoothId)}
               stroke={boothStroke(booth)}
               strokeWidth="2"
             />
@@ -783,7 +811,7 @@ function OverviewZone({
                 x={boothX + 24.5}
                 y={boothY + 24}
                 textAnchor="middle"
-                fill={statusOf(booth).text}
+                fill={boothText(booth, selectedBoothIds, recommendedBoothId)}
                 fontSize="11"
                 fontWeight="800"
               >
@@ -802,7 +830,7 @@ function FocusedZone({
   readOnly,
   viewHeight,
   color,
-  selectedBoothId,
+  selectedBoothIds,
   recommendedBoothId,
   onSelectBooth,
 }: {
@@ -810,7 +838,7 @@ function FocusedZone({
   readOnly: boolean;
   viewHeight: number;
   color: (typeof palette)[number];
-  selectedBoothId: string | null;
+  selectedBoothIds: string[];
   recommendedBoothId: string | null;
   onSelectBooth: (booth: EventBooth) => void;
 }) {
@@ -887,7 +915,7 @@ function FocusedZone({
           fallbackY,
         );
         const unavailable = booth.availability !== 'AVAILABLE';
-        const fill = boothFill(booth, selectedBoothId, recommendedBoothId);
+        const fill = boothFill(booth, selectedBoothIds, recommendedBoothId);
         const logoUrl = bookedLogoUrl(booth);
         const clipId = `focused-logo-${booth.id}`;
 
@@ -1001,7 +1029,7 @@ function FocusedZone({
                 x={x + boothWidth / 2}
                 y={booth.availability === 'AVAILABLE' ? y + boothHeight / 2 + 6 : y + 29}
                 textAnchor="middle"
-                fill={boothText(booth, selectedBoothId, recommendedBoothId)}
+                fill={boothText(booth, selectedBoothIds, recommendedBoothId)}
                 fontSize="17"
                 fontWeight="900"
               >
@@ -1013,7 +1041,7 @@ function FocusedZone({
                 x={x + boothWidth / 2}
                 y={y + 50}
                 textAnchor="middle"
-                fill={boothText(booth, selectedBoothId, recommendedBoothId)}
+                fill={boothText(booth, selectedBoothIds, recommendedBoothId)}
                 fontSize="12"
                 opacity="0.86"
               >

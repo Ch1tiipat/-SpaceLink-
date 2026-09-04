@@ -32,6 +32,7 @@ import {
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
@@ -160,6 +161,88 @@ export class BookingsService {
       .catch(() => null);
 
     return booking;
+  }
+
+  async createBatch(
+    createBookingsBatchDto: CreateBookingsBatchDto,
+    vendorUserId: string,
+  ): Promise<BookingResponse[]> {
+    const bookings = await this.createBatchWithRetry(
+      createBookingsBatchDto,
+      vendorUserId,
+    );
+
+    for (const booking of bookings) {
+      await this.notifications
+        .createForUser(vendorUserId, {
+          type: NotificationType.BOOKING_STATUS,
+          title: 'สร้างการจองสำเร็จ',
+          body: `ระบบสร้าง Booking ${booking.bookingCode} แล้ว กรุณาชำระเงินและแนบสลิปภายในเวลาที่กำหนด`,
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: booking.id,
+        })
+        .catch(() => null);
+    }
+
+    return bookings;
+  }
+
+  private async createBatchWithRetry(
+    createBookingsBatchDto: CreateBookingsBatchDto,
+    vendorUserId: string,
+  ): Promise<BookingResponse[]> {
+    for (
+      let attempt = 1;
+      attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (transaction) => {
+            const bookings: BookingResponse[] = [];
+            for (const boothId of createBookingsBatchDto.boothIds) {
+              bookings.push(
+                await this.createWithinTransaction(
+                  transaction,
+                  {
+                    eventId: createBookingsBatchDto.eventId,
+                    boothId,
+                    shopId: createBookingsBatchDto.shopId,
+                  },
+                  vendorUserId,
+                  {},
+                ),
+              );
+            }
+            return bookings;
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS) {
+            continue;
+          }
+          throw new ConflictException(
+            'มีการจองพร้อมกัน กรุณาตรวจสอบรายการจองแล้วลองใหม่',
+          );
+        }
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException('บูธนี้ถูกจองไปแล้ว');
+        }
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'มีการจองพร้อมกัน กรุณาตรวจสอบรายการจองแล้วลองใหม่',
+    );
   }
 
   /**

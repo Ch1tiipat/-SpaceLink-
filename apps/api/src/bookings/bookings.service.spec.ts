@@ -30,6 +30,7 @@ import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
 
 jest.mock('promptpay-qr', () => ({
   __esModule: true,
@@ -45,11 +46,15 @@ jest.mock('qrcode', () => ({
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const BOOTH_ID = '22222222-2222-4222-8222-222222222222';
+const BOOTH_ID_2 = '22222222-2222-4222-8222-222222222223';
+const BOOTH_ID_3 = '22222222-2222-4222-8222-222222222224';
 const SHOP_ID = '33333333-3333-4333-8333-333333333333';
 const VENDOR_ID = '44444444-4444-4444-8444-444444444444';
 const VENUE_ID = '55555555-5555-4555-8555-555555555555';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
 const BOOKING_ID = '77777777-7777-4777-8777-777777777777';
+const BOOKING_ID_2 = '77777777-7777-4777-8777-777777777778';
+const BOOKING_ID_3 = '77777777-7777-4777-8777-777777777779';
 const ADMIN_ID = '99999999-9999-4999-8999-999999999999';
 const BOOKING_CODE = 'BK-0123456789AB';
 const EVENT_START = new Date('2026-09-10T00:00:00.000Z');
@@ -67,6 +72,11 @@ const CREATE_DTO: CreateBookingDto = {
   eventId: EVENT_ID,
   boothId: BOOTH_ID,
   shopId: SHOP_ID,
+};
+const CREATE_BATCH_DTO: CreateBookingsBatchDto = {
+  eventId: EVENT_ID,
+  shopId: SHOP_ID,
+  boothIds: [BOOTH_ID, BOOTH_ID_2, BOOTH_ID_3],
 };
 const CANCEL_DTO: CancelBookingDto = {
   cancelReason: 'ไม่สามารถเข้าร่วมงานได้',
@@ -579,6 +589,170 @@ describe('BookingsService', () => {
       NotFoundException,
     );
     expect(bookingCreate).not.toHaveBeenCalled();
+  });
+
+  describe('createBatch', () => {
+    const batchBookings = [
+      { ...CREATED_BOOKING, id: BOOKING_ID, boothId: BOOTH_ID },
+      {
+        ...CREATED_BOOKING,
+        id: BOOKING_ID_2,
+        bookingCode: 'BK-0123456789AC',
+        boothId: BOOTH_ID_2,
+      },
+      {
+        ...CREATED_BOOKING,
+        id: BOOKING_ID_3,
+        bookingCode: 'BK-0123456789AD',
+        boothId: BOOTH_ID_3,
+      },
+    ];
+
+    function mockBatchCreates() {
+      bookingCreate.mockImplementation(
+        ({ data }: { data: Prisma.BookingUncheckedCreateInput }) => {
+          const booking = batchBookings.find(
+            (candidate) => candidate.boothId === data.boothId,
+          );
+          return Promise.resolve(booking);
+        },
+      );
+    }
+
+    it('creates every booking atomically and notifies after commit', async () => {
+      mockBatchCreates();
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).resolves.toEqual(
+        batchBookings.map((booking) => ({
+          ...booking,
+          boothPrice: '1500',
+        })),
+      );
+
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+      expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+      expect(bookingCreate).toHaveBeenCalledTimes(3);
+      expect(createForUser).toHaveBeenCalledTimes(3);
+      batchBookings.forEach((booking, index) => {
+        expect(createForUser).toHaveBeenNthCalledWith(index + 1, VENDOR_ID, {
+          type: NotificationType.BOOKING_STATUS,
+          title: 'สร้างการจองสำเร็จ',
+          body: `ระบบสร้าง Booking ${booking.bookingCode} แล้ว กรุณาชำระเงินและแนบสลิปภายในเวลาที่กำหนด`,
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: booking.id,
+        });
+      });
+    });
+
+    it('rejects the whole batch when the second booth is already booked', async () => {
+      mockBatchCreates();
+      bookingFindFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: BOOKING_ID_2 });
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
+
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+      expect(bookingCreate).toHaveBeenCalledTimes(1);
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects before creating when the vendor has no quota remaining', async () => {
+      bookingCount.mockResolvedValue(3);
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).rejects.toThrow('คุณจองบูธในงานนี้ครบโควตาแล้ว');
+
+      expect(bookingCreate).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the whole batch when the remaining quota is too small', async () => {
+      mockBatchCreates();
+      eventFindUnique.mockResolvedValue({
+        id: EVENT_ID,
+        status: EventStatus.PUBLISHED,
+        organizationId: ORGANIZATION_ID,
+        venueId: VENUE_ID,
+        startDate: EVENT_START,
+        endDate: EVENT_END,
+        organization: {
+          status: OrgStatus.ACTIVE,
+          orgConfig: { bookingQuotaPerVendor: 2 },
+        },
+      });
+      bookingCount.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).rejects.toThrow('คุณจองบูธในงานนี้ครบโควตาแล้ว');
+
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+      expect(bookingCreate).toHaveBeenCalledTimes(1);
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('retries the entire batch after a serializable transaction conflict', async () => {
+      mockBatchCreates();
+      const serializationError = new Prisma.PrismaClientKnownRequestError(
+        'Transaction write conflict',
+        { code: 'P2034', clientVersion: 'test' },
+      );
+      let attempt = 0;
+      prismaTransaction.mockImplementation(
+        async (
+          operation: (client: Prisma.TransactionClient) => Promise<unknown>,
+        ) => {
+          attempt += 1;
+          const result = await operation(
+            mockPrismaService as unknown as Prisma.TransactionClient,
+          );
+          if (attempt === 1) throw serializationError;
+          return result;
+        },
+      );
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).resolves.toHaveLength(3);
+
+      expect(prismaTransaction).toHaveBeenCalledTimes(2);
+      expect(bookingCreate).toHaveBeenCalledTimes(6);
+      expect(createForUser).toHaveBeenCalledTimes(3);
+    });
+
+    it('translates a create-time P2002 race into a booking conflict', async () => {
+      bookingCreate.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('keeps committed batch bookings when notification delivery fails', async () => {
+      mockBatchCreates();
+      createForUser.mockRejectedValueOnce(
+        new Error('notification unavailable'),
+      );
+
+      await expect(
+        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
+      ).resolves.toHaveLength(3);
+      expect(createForUser).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('createForAdmin', () => {

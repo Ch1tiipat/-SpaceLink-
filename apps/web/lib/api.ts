@@ -1893,6 +1893,19 @@ export function createBooking(
   );
 }
 
+export function createBookingsBatch(
+  input: { eventId: string; shopId: string; boothIds: string[] },
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingRecord[]> {
+  return postJson<BookingRecord[]>(
+    "/bookings/batch",
+    input,
+    { signal, token },
+    "สร้างการจองทั้งชุดไม่สำเร็จ",
+  );
+}
+
 export function getMyBookings(
   token: string,
   signal?: AbortSignal,

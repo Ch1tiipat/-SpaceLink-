@@ -14,6 +14,7 @@ import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
   createBooking,
+  createBookingsBatch,
   getAverageRating,
   getEventMap,
   getEventMapBySlug,
@@ -30,6 +31,7 @@ import { canUseUxPreview } from '@/lib/ux-preview';
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
+const MAX_SELECTED_BOOTHS = 10;
 
 type BoothRatingState =
   | { status: 'idle' }
@@ -51,11 +53,26 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   const searchParams = useSearchParams();
   const requestedZoneCode = searchParams.get('zone');
   const requestedBoothCode = searchParams.get('booth');
+  const requestedBoothsValue = searchParams.get('booths');
+  const multiSelectionMode = requestedBoothsValue !== null;
+  const requestedBoothCodes = useMemo(() => {
+    if (requestedBoothsValue === null) return [];
+    const seen = new Set<string>();
+    return requestedBoothsValue
+      .split(',')
+      .map((code) => code.trim())
+      .filter((code) => {
+        const key = code.toLocaleLowerCase();
+        if (!code || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [requestedBoothsValue]);
   const { state: vendor } = useVendorProfile();
   const [data, setData] = useState<EventMap | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
-  const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
+  const [selectedBooths, setSelectedBooths] = useState<EventBooth[]>([]);
   const [createdBooking, setCreatedBooking] = useState<BookingRecord | null>(
     null,
   );
@@ -89,7 +106,27 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   }, [eventId, router]);
 
   useEffect(() => {
-    if (!data || (!requestedZoneCode && !requestedBoothCode)) return;
+    if (!data) return;
+
+    if (multiSelectionMode) {
+      const availableBooths = data.zones.flatMap((zone) => zone.booths);
+      const requestedBooths = requestedBoothCodes.flatMap((code) => {
+        const booth = availableBooths.find(
+          (candidate) =>
+            candidate.code.toLocaleLowerCase() === code.toLocaleLowerCase() &&
+            candidate.availability === 'AVAILABLE',
+        );
+        return booth ? [booth] : [];
+      });
+      setSelectedBooths(requestedBooths.slice(0, MAX_SELECTED_BOOTHS));
+      const firstZone = data.zones.find((zone) =>
+        zone.booths.some((booth) => booth.id === requestedBooths[0]?.id),
+      );
+      setFocusedZoneId(firstZone?.id ?? null);
+      return;
+    }
+
+    if (!requestedZoneCode && !requestedBoothCode) return;
     const requestedZone = data.zones.find(
       (zone) =>
         zone.code.toLowerCase() === requestedZoneCode?.toLowerCase() ||
@@ -106,11 +143,19 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           booth.code.toLowerCase() === requestedBoothCode.toLowerCase() &&
           booth.availability === 'AVAILABLE',
       );
-      if (requestedBooth) setSelectedBooth(requestedBooth);
+      if (requestedBooth) setSelectedBooths([requestedBooth]);
     }
-  }, [data, requestedBoothCode, requestedZoneCode]);
+  }, [
+    data,
+    multiSelectionMode,
+    requestedBoothCode,
+    requestedBoothCodes,
+    requestedZoneCode,
+  ]);
 
-  const selectedBoothId = selectedBooth?.id ?? null;
+  const selectedBooth = selectedBooths[0] ?? null;
+  const selectedBoothId =
+    selectedBooths.length === 1 ? selectedBooth?.id ?? null : null;
 
   useEffect(() => {
     if (!selectedBoothId) {
@@ -142,6 +187,27 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         zone.booths.some((booth) => booth.id === selectedBooth?.id),
       ) ?? null,
     [data, selectedBooth],
+  );
+  const selectedBoothDetails = useMemo(
+    () =>
+      selectedBooths.map((booth) => ({
+        booth,
+        zone:
+          data?.zones.find((zone) =>
+            zone.booths.some((candidate) => candidate.id === booth.id),
+          ) ?? null,
+      })),
+    [data, selectedBooths],
+  );
+  const selectedTotal = useMemo(
+    () =>
+      Math.round(
+        selectedBooths.reduce((sum, booth) => {
+          const price = Number(booth.boothPrice);
+          return sum + (Number.isFinite(price) ? price : 0);
+        }, 0) * 100,
+      ) / 100,
+    [selectedBooths],
   );
   const focusedZone = useMemo(
     () => data?.zones.find((zone) => zone.id === focusedZoneId) ?? null,
@@ -177,11 +243,37 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           ? `${boothRating.value.average.toFixed(1)} ★ (${boothRating.value.count} รีวิว)`
           : 'ยังไม่มีรีวิว';
 
+  function selectBooth(booth: EventBooth) {
+    if (!multiSelectionMode) {
+      setSelectedBooths([booth]);
+      setActionError(null);
+      return;
+    }
+
+    if (selectedBooths.some((candidate) => candidate.id === booth.id)) {
+      setSelectedBooths((current) =>
+        current.filter((candidate) => candidate.id !== booth.id),
+      );
+      setActionError(null);
+      return;
+    }
+
+    if (selectedBooths.length >= MAX_SELECTED_BOOTHS) {
+      setActionError(
+        `เลือกได้สูงสุด ${MAX_SELECTED_BOOTHS} บูธต่อการยืนยันหนึ่งครั้ง`,
+      );
+      return;
+    }
+
+    setSelectedBooths((current) => [...current, booth]);
+    setActionError(null);
+  }
+
   async function handleCreate() {
     if (
       vendor.status !== 'ready' ||
       !vendor.shop ||
-      !selectedBooth ||
+      selectedBooths.length === 0 ||
       !data ||
       !isEventBookable(data.event)
     ) {
@@ -191,6 +283,23 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     setIsCreating(true);
     setActionError(null);
     try {
+      if (selectedBooths.length > 1) {
+        if (!canUseUxPreview()) {
+          await createBookingsBatch(
+            {
+              eventId: data.event.id,
+              shopId: vendor.shop.id,
+              boothIds: selectedBooths.map((booth) => booth.id),
+            },
+            vendor.token,
+          );
+        }
+        router.push('/bookings?tab=pending');
+        return;
+      }
+
+      const selectedBooth = selectedBooths[0];
+      if (!selectedBooth) return;
       const now = new Date();
       const booking: BookingRecord = canUseUxPreview()
         ? {
@@ -351,13 +460,13 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 <li
                   key={number}
                   className={`flex min-h-[55px] items-center gap-3 rounded-[11px] px-3 py-2 ${
-                    index === 0 && selectedBooth ? 'bg-[#f1faf5] text-[#15794a]' : index <= 1 ? 'bg-violet-tint text-violet' : 'text-muted'
+                    index === 0 && selectedBooths.length > 0 ? 'bg-[#f1faf5] text-[#15794a]' : index <= 1 ? 'bg-violet-tint text-violet' : 'text-muted'
                   }`}
                 >
                   <span
                     className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-sm font-black text-current"
                   >
-                    {index === 0 && selectedBooth ? '✓' : number}
+                    {index === 0 && selectedBooths.length > 0 ? '✓' : number}
                   </span>
                   <div><strong className="block text-sm">{label}</strong><small className="mt-0.5 block text-xs opacity-65">{detail}</small></div>
                 </li>
@@ -407,7 +516,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               onChooseAgain={() => {
                 setCreatedBooking(null);
                 setHoldExpired(false);
-                setSelectedBooth(null);
+                setSelectedBooths([]);
               }}
             />
 
@@ -477,7 +586,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                       aria-pressed={selected}
                       onClick={() => {
                         setFocusedZoneId(zone.id);
-                        setSelectedBooth(null);
+                        if (!multiSelectionMode) setSelectedBooths([]);
                       }}
                       className={`min-h-[88px] rounded-[13px] border p-3 text-left transition ${
                         selected
@@ -505,7 +614,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   value={focusedZoneId ?? ''}
                   onChange={(event) => {
                     setFocusedZoneId(event.target.value || null);
-                    setSelectedBooth(null);
+                    if (!multiSelectionMode) setSelectedBooths([]);
                   }}
                   className="h-10 rounded-[10px] border border-[#ddd3e2] bg-[#fcfbfd] px-3 text-base text-[#493e4e] outline-none focus:border-[#ad8bdd] focus:ring-4 focus:ring-violet/5"
                 >
@@ -524,7 +633,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                       {focusedZone.booths.map((booth) => {
                         const available = booth.availability === 'AVAILABLE';
-                        const selected = booth.id === selectedBooth?.id;
+                        const selected = selectedBooths.some(
+                          (candidate) => candidate.id === booth.id,
+                        );
                         const statusClass = booth.availability === 'BOOKED'
                           ? 'border-[#2a9b67] bg-[#effaf5] text-[#17734e]'
                           : booth.availability === 'HELD'
@@ -542,7 +653,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                             disabled={!available}
                             aria-pressed={selected}
                             aria-label={`Booth ${booth.code} ${booth.availability}`}
-                            onClick={() => setSelectedBooth(booth)}
+                            onClick={() => selectBooth(booth)}
                             className={`min-h-[70px] rounded-[12px] border p-2 text-center transition disabled:cursor-not-allowed ${statusClass}`}
                           >
                             <strong className="block text-sm">{booth.code}</strong>
@@ -571,9 +682,48 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 Booking summary
               </span>
               <h2 className="mt-1 text-lg font-black">
-                {selectedBooth ? `Booth ${selectedBooth.code}` : 'ยังไม่ได้เลือก Booth'}
+                {selectedBooths.length > 1
+                  ? `${selectedBooths.length} Booth ที่เลือก`
+                  : selectedBooth
+                    ? `Booth ${selectedBooth.code}`
+                    : 'ยังไม่ได้เลือก Booth'}
               </h2>
-              {selectedBooth ? (
+              {selectedBooths.length > 1 ? (
+                <div className="mt-3 grid gap-2">
+                  {selectedBoothDetails.map(({ booth, zone }) => (
+                    <div
+                      key={booth.id}
+                      className="flex items-center justify-between gap-3 rounded-[11px] border border-[#dfd2f1] bg-[#faf8ff] px-3 py-2"
+                    >
+                      <div>
+                        <strong className="block text-sm">
+                          Zone {zone?.code ?? '-'} · Booth {booth.code}
+                        </strong>
+                        <span className="text-xs text-muted">
+                          {formatMoney(booth.boothPrice)} บาท
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => selectBooth(booth)}
+                        className="sl-chip min-h-8 px-2 text-xs text-violet"
+                        aria-label={`นำ Booth ${booth.code} ออกจากรายการ`}
+                      >
+                        นำออก
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between border-t border-line pt-3">
+                    <strong className="text-sm">ราคารวม</strong>
+                    <strong className="text-lg text-violet">
+                      {formatMoney(String(selectedTotal))} บาท
+                    </strong>
+                  </div>
+                  <p className="text-xs leading-5 text-muted">
+                    ระบบจะสร้าง Booking และรายการชำระเงินแยกสำหรับทุก Booth
+                  </p>
+                </div>
+              ) : selectedBooth ? (
                 <>
                 <dl className="mt-3 divide-y divide-line rounded-[12px] bg-[#faf8ff] px-3 text-sm">
                   <SummaryRow
@@ -635,14 +785,18 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 <strong className="mt-1 block text-sm">เงื่อนไขก่อนสร้าง Booking</strong>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Event</span><b className="mt-1 block">{eventBookable ? 'เปิดให้จอง' : 'ปิดรับจอง'}</b></div>
-                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Booth</span><b className="mt-1 block">{!eventBookable ? 'ไม่เปิดให้สร้างรายการ' : selectedBooth ? 'พร้อมสร้างรายการ' : 'รอเลือกพื้นที่'}</b></div>
+                  <div className="rounded-[9px] bg-white p-2"><span className="text-muted">Booth</span><b className="mt-1 block">{!eventBookable ? 'ไม่เปิดให้สร้างรายการ' : selectedBooths.length > 1 ? `${selectedBooths.length} Booth พร้อมสร้างรายการ` : selectedBooth ? 'พร้อมสร้างรายการ' : 'รอเลือกพื้นที่'}</b></div>
                 </div>
               </section>
 
               <section className="mt-3 rounded-[12px] border border-[#d9e6dc] bg-[#f8fcf9] p-3">
                 <div className="flex items-start justify-between gap-2"><div><span className="text-xs font-extrabold text-muted">PAYMENT RECEIVER</span><strong className="mt-1 block text-sm">{data.event.organization.name}</strong></div><b className={`rounded-full px-2 py-1 text-xs ${eventBookable ? 'bg-[#e5f7ed] text-[#15794a]' : 'bg-[#f1eef2] text-muted'}`}>{eventBookable ? 'พร้อมรับชำระ' : 'ปิดรับรายการ'}</b></div>
                 <p className="mt-2 text-xs font-bold text-[#4e694f]">{data.event.organization.contactEmail}</p>
-                <small className="mt-1 block text-xs leading-4 text-[#829084]">หลังสร้าง Booking ระบบจะพาไปหน้าชำระเงินและ Hold Booth ตามเวลาที่ระบบกำหนด</small>
+                <small className="mt-1 block text-xs leading-4 text-[#829084]">
+                  {selectedBooths.length > 1
+                    ? 'ระบบจะ Hold แต่ละ Booth แยกกัน และให้ชำระเงินทีละ Booking'
+                    : 'หลังสร้าง Booking ระบบจะพาไปหน้าชำระเงินและ Hold Booth ตามเวลาที่ระบบกำหนด'}
+                </small>
               </section>
 
               {actionError && (
@@ -663,7 +817,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 disabled={
                   isCreating ||
                   !eventBookable ||
-                  !selectedBooth ||
+                  selectedBooths.length === 0 ||
                   vendor.status === 'loading' ||
                   vendor.status === 'signed-out' ||
                   vendor.status === 'error'
@@ -676,7 +830,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                     ? 'Event นี้ปิดรับจองแล้ว'
                   : vendor.status === 'ready' && !shop
                     ? 'เพิ่มข้อมูลร้านค้าก่อนจอง'
-                    : 'สร้าง Booking และไปชำระเงิน →'}
+                    : selectedBooths.length > 1
+                      ? `สร้าง ${selectedBooths.length} Booking →`
+                      : 'สร้าง Booking และไปชำระเงิน →'}
               </button>
             </aside>
           </div>

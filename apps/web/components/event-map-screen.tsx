@@ -22,6 +22,11 @@ function availableCount(zone: EventZone) {
 }
 
 const zoneColors = ['#7c3aed', '#159461', '#e47b00', '#3281c8', '#8b5cf6', '#5b21b6'];
+const MAX_SELECTED_BOOTHS = 10;
+
+const moneyFormatter = new Intl.NumberFormat('th-TH', {
+  maximumFractionDigits: 2,
+});
 
 export function EventMapScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
@@ -31,6 +36,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const [data, setData] = useState<EventMap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedBoothIds, setSelectedBoothIds] = useState<string[]>([]);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [recommendation, setRecommendation] = useState<ZoneRecommendation | null>(null);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationIsEmpty, setRecommendationIsEmpty] = useState(false);
@@ -67,6 +74,28 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const selectedZone = useMemo(
     () => data?.zones.find((zone) => zone.id === selectedZoneId) ?? null,
     [data, selectedZoneId],
+  );
+
+  const selectedBooths = useMemo(() => {
+    if (!data) return [];
+    return selectedBoothIds.flatMap((boothId) => {
+      for (const zone of data.zones) {
+        const booth = zone.booths.find((candidate) => candidate.id === boothId);
+        if (booth) return [{ booth, zone }];
+      }
+      return [];
+    });
+  }, [data, selectedBoothIds]);
+
+  const selectedTotal = useMemo(
+    () =>
+      Math.round(
+        selectedBooths.reduce((sum, item) => {
+          const price = Number(item.booth.boothPrice);
+          return sum + (Number.isFinite(price) ? price : 0);
+        }, 0) * 100,
+      ) / 100,
+    [selectedBooths],
   );
 
   const shop = vendor.status === 'ready' ? vendor.shop : null;
@@ -134,6 +163,35 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     }
   }
 
+  function toggleBooth(booth: EventZone['booths'][number]) {
+    if (booth.availability !== 'AVAILABLE') return;
+    if (selectedBoothIds.includes(booth.id)) {
+      setSelectedBoothIds((current) =>
+        current.filter((boothId) => boothId !== booth.id),
+      );
+      setSelectionError(null);
+      return;
+    }
+    if (selectedBoothIds.length >= MAX_SELECTED_BOOTHS) {
+      setSelectionError(
+        `เลือกได้สูงสุด ${MAX_SELECTED_BOOTHS} บูธต่อการยืนยันหนึ่งครั้ง`,
+      );
+      return;
+    }
+    setSelectedBoothIds((current) => [...current, booth.id]);
+    setSelectionError(null);
+  }
+
+  function continueToBooking() {
+    if (!data || selectedBooths.length === 0) return;
+    const boothCodes = selectedBooths
+      .map(({ booth }) => encodeURIComponent(booth.code))
+      .join(',');
+    router.push(
+      `/events/${encodeURIComponent(data.event.slug)}/book?booths=${boothCodes}`,
+    );
+  }
+
   if (!data && !error) {
     return (
       <main className="sl-page">
@@ -162,11 +220,11 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   const eventBookable = isEventBookable(data.event);
   const bookingAvailabilityText = eventBookable
-    ? 'กด Booth ว่างเพื่อจองได้ทันที'
+    ? 'กด Booth ว่างเพื่อเลือกได้สูงสุด 10 บูธ'
     : 'Event นี้ปิดรับจองแล้ว';
 
   return (
-    <main className="sl-page pb-8">
+    <main className="sl-page pb-32">
       <div className="shell max-w-[1280px] py-4">
         <header className="sl-surface mb-3 flex min-h-[72px] items-center gap-4 p-3 max-md:flex-wrap">
           <div className="min-w-[220px] flex-1 px-2">
@@ -256,24 +314,18 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <div className="[&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
                 <ZoneMap
                   readOnly={!eventBookable}
+                  multiSelect
                   mapImageUrl={data.event.mapImageUrl}
                   zones={data.zones}
                   focusedZoneId={selectedZoneId}
-                  selectedBoothId={null}
+                  selectedBoothIds={selectedBoothIds}
                   recommendedBoothId={recommendation?.boothId ?? null}
                   keepOverview
                   showLegend={false}
-                  boothHref={eventBookable
-                    ? (booth) => {
-                        const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
-                        return `/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
-                      }
-                    : undefined}
                   onFocusZone={setSelectedZoneId}
                   onSelectBooth={(booth) => {
                     if (!eventBookable) return;
-                    const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
-                    router.push(`/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`);
+                    toggleBooth(booth);
                   }}
                 />
               </div>
@@ -316,6 +368,59 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             <div className="mt-3 grid grid-cols-2 gap-2"><Legend color="#fff" border="#7c3aed" label="ว่าง" /><Legend color="#2c8b61" label="จองแล้ว" /><Legend color="#e7a339" label="กำลังจอง" /><Legend color="#cfc8d1" label="ปิดใช้งาน" /></div>
           </article>
         </section>
+
+        {eventBookable ? (
+          <section className="sl-surface sticky bottom-20 z-20 mt-4 border-[#cdb9ec] p-4 shadow-[0_18px_50px_rgba(54,36,91,.2)] md:bottom-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="min-w-[170px]">
+                <span className="text-xs font-extrabold uppercase tracking-[.12em] text-violet">
+                  Selected booths
+                </span>
+                <strong className="mt-1 block text-lg font-black">
+                  เลือกแล้ว {selectedBooths.length} บูธ
+                </strong>
+                <span className="text-sm text-muted">
+                  รวม {moneyFormatter.format(selectedTotal)} บาท
+                </span>
+              </div>
+
+              <div className="flex min-w-[220px] flex-1 flex-wrap gap-2">
+                {selectedBooths.length > 0 ? (
+                  selectedBooths.map(({ booth, zone }) => (
+                    <button
+                      key={booth.id}
+                      type="button"
+                      onClick={() => toggleBooth(booth)}
+                      className="sl-chip min-h-9 gap-2 bg-[#f3edff] text-violet"
+                      aria-label={`นำ Booth ${booth.code} ออกจากรายการ`}
+                    >
+                      Zone {zone.code} · {booth.code}
+                      <span aria-hidden>×</span>
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted">
+                    เลือก Booth ว่างจากแผนผังเพื่อเพิ่มลงรายการ
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={continueToBooking}
+                disabled={selectedBooths.length === 0}
+                className="sl-action-primary min-w-[170px] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ดำเนินการต่อ →
+              </button>
+            </div>
+            {selectionError ? (
+              <p role="alert" className="mt-3 text-sm font-bold text-[#9d620c]">
+                {selectionError}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </main>
   );
