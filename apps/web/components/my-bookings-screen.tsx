@@ -81,6 +81,16 @@ function isExpired(booking: MyBooking): boolean {
   );
 }
 
+function isNearCancelDeadline(booking: MyBooking): boolean {
+  const timeUntilStart =
+    new Date(booking.bookingStartDate).getTime() - Date.now();
+  return (
+    (booking.status === 'PENDING_PAYMENT' || booking.status === 'CONFIRMED') &&
+    timeUntilStart > 0 &&
+    timeUntilStart < 24 * 60 * 60 * 1000
+  );
+}
+
 export function MyBookingsScreen() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
   const [bookings, setBookings] = useState<MyBooking[]>([]);
@@ -443,9 +453,16 @@ export function MyBookingsScreen() {
                 <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}>
-                        {statusLabel[booking.status]}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}>
+                          {statusLabel[booking.status]}
+                        </span>
+                        {isNearCancelDeadline(booking) ? (
+                          <span className="inline-flex rounded-full border border-[#f5d28c] bg-[#fff8e8] px-3 py-1 text-xs font-bold text-[#895b08]">
+                            ใกล้หมดเขตยกเลิก
+                          </span>
+                        ) : null}
+                      </div>
                       <h2 className="mt-3 text-xl font-bold">{booking.event.name}</h2>
                       <p className="mt-1 text-sm text-muted">
                         รหัสการจอง {booking.bookingCode}
