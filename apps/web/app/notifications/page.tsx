@@ -471,11 +471,11 @@ export default function NotificationsPage() {
             ) : null}
 
             <section className="sl-surface overflow-hidden">
-              <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:px-7">
-                <div className="w-full sm:max-w-sm">
+              <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between">
+                <div className="w-full min-w-0 md:order-2 md:w-72 md:shrink-0">
                   <label
                     htmlFor="notification-filter"
-                    className="mb-2 block text-sm font-bold text-ink"
+                    className="sr-only"
                   >
                     กรองการแจ้งเตือน
                   </label>
@@ -486,7 +486,7 @@ export default function NotificationsPage() {
                       onChange={(event) =>
                         setFilter(event.currentTarget.value as NotificationFilter)
                       }
-                      className="min-h-12 w-full appearance-none rounded-2xl border border-line bg-white px-4 pr-11 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                      className="h-11 w-full min-w-0 appearance-none rounded-2xl border border-line bg-white px-4 pr-11 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
                     >
                       {FILTER_OPTIONS.map(({ value, label }) => (
                         <option key={value} value={value}>
@@ -501,14 +501,17 @@ export default function NotificationsPage() {
                   </div>
                 </div>
 
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className="inline-flex items-center gap-2 text-xs font-semibold text-muted sm:self-end"
-                >
-                  <Clock3 className="h-4 w-4" aria-hidden />
-                  แสดง {visibleNotifications.length} รายการ · เรียงจากล่าสุด
-                </span>
+                <div className="min-w-0 md:order-1">
+                  <h2 className="mb-1 text-sm font-bold text-ink">รายการ</h2>
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-muted"
+                  >
+                    <Clock3 className="h-4 w-4 shrink-0" aria-hidden />
+                    แสดง {visibleNotifications.length} รายการ · เรียงจากล่าสุด
+                  </span>
+                </div>
               </div>
 
               {visibleNotifications.length > 0 ? (
