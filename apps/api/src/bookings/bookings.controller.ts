@@ -26,6 +26,7 @@ import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
 
 export const PAYMENT_SLIP_UPLOAD_LIMITS = {
   files: 1,
@@ -49,6 +50,18 @@ export class BookingsController {
     @CurrentUser() currentUser: User,
   ) {
     return this.bookingsService.create(createBookingDto, currentUser.id);
+  }
+
+  @Post('batch')
+  @Roles(UserRole.VENDOR)
+  createBatch(
+    @Body() createBookingsBatchDto: CreateBookingsBatchDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.createBatch(
+      createBookingsBatchDto,
+      currentUser.id,
+    );
   }
 
   @Post(':id/slip')
