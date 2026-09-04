@@ -44,6 +44,36 @@ describe('VenuesController', () => {
     expect(controller).toBeDefined();
   });
 
+  it.each(['update', 'remove'])(
+    'guards %s with venue scope and both admin roles',
+    (name) => {
+      const handler = handlerOf(VenuesController.prototype, name);
+      expect(guardsOn(handler)).toEqual([
+        SupabaseAuthGuard,
+        OrgScopeGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('venueId');
+      expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+        UserRole.SUPER_ADMIN,
+        UserRole.ORG_ADMIN,
+      ]);
+    },
+  );
+
+  it('forwards the resolved organization for both mutations', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'venue' });
+    const remove = jest.fn().mockResolvedValue({ id: 'venue' });
+    const mutations = new VenuesController(
+      { update, remove } as unknown as VenuesService,
+      {} as ZonesService,
+    );
+    await mutations.update('venue', { name: 'ตลาด' }, 'org');
+    await mutations.remove('venue', 'org');
+    expect(update).toHaveBeenCalledWith('venue', { name: 'ตลาด' }, 'org');
+    expect(remove).toHaveBeenCalledWith('venue', 'org');
+  });
+
   it('keeps public reads unguarded', () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, VenuesController),
