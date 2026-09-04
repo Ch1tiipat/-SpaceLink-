@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,6 +13,8 @@ import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
+import { UpdateVenueDto } from './dto/update-venue.dto';
 import { CreateZoneDto } from '../zones/dto/create-zone.dto';
 import { ZonesService } from '../zones/zones.service';
 import { FindAllVenuesDto } from './dto/find-all-venues.dto';
@@ -32,6 +36,28 @@ export class VenuesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.venuesService.findOne(id);
+  }
+
+  // Same mutation guard chain as ZonesController: SupabaseAuthGuard,
+  // OrgScopeGuard, RolesGuard. SUPER_ADMIN must pass both scope and role checks.
+  @Patch(':venueId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('venueId')
+  update(
+    @Param('venueId') venueId: string,
+    @Body() input: UpdateVenueDto,
+    @CurrentOrgId() orgId: string,
+  ) {
+    return this.venuesService.update(venueId, input, orgId);
+  }
+
+  @Delete(':venueId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('venueId')
+  remove(@Param('venueId') venueId: string, @CurrentOrgId() orgId: string) {
+    return this.venuesService.remove(venueId, orgId);
   }
 
   /**
