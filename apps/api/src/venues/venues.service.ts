@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { Prisma, VenueStatus } from '@prisma/client';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { FindAllVenuesDto } from './dto/find-all-venues.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
@@ -9,9 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class VenuesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createVenueDto: CreateVenueDto) {
+  create(createVenueDto: CreateVenueDto, organizationId: string) {
     return this.prisma.venue.create({
-      data: createVenueDto as Prisma.VenueUncheckedCreateInput,
+      // Explicit because the frozen schema defaults to ACTIVE.
+      data: { ...createVenueDto, organizationId, status: VenueStatus.DRAFT },
     });
   }
 
@@ -31,16 +32,28 @@ export class VenuesService {
     });
   }
 
-  update(id: string, updateVenueDto: UpdateVenueDto) {
+  update(id: string, updateVenueDto: UpdateVenueDto, orgId: string) {
     return this.prisma.venue.update({
-      where: { id },
+      where: { id, organizationId: orgId },
       data: updateVenueDto,
     });
   }
 
-  remove(id: string) {
-    return this.prisma.venue.delete({
-      where: { id },
-    });
+  async remove(id: string, orgId: string) {
+    try {
+      return await this.prisma.venue.delete({
+        where: { id, organizationId: orgId },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2003' || error.code === 'P2014')
+      ) {
+        throw new ConflictException(
+          'ไม่สามารถลบสถานที่นี้ได้เนื่องจากยังมีโซนหรือการจองที่เกี่ยวข้องอยู่',
+        );
+      }
+      throw error;
+    }
   }
 }
