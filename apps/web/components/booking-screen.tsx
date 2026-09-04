@@ -16,6 +16,7 @@ import {
   createBooking,
   getAverageRating,
   getEventMap,
+  getEventMapBySlug,
   getMyBookings,
   type BookingRecord,
   type AverageRating,
@@ -23,6 +24,7 @@ import {
   type EventMap,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { isUuid } from '@/lib/route-identifier';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
@@ -66,8 +68,17 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    getEventMap(eventId, controller.signal)
-      .then(setData)
+    const legacyUuid = isUuid(eventId);
+    const request = legacyUuid ? getEventMap : getEventMapBySlug;
+    request(eventId, controller.signal)
+      .then((eventMap) => {
+        setData(eventMap);
+        if (legacyUuid) {
+          router.replace(
+            `/events/${encodeURIComponent(eventMap.event.slug)}/book${window.location.search}`,
+          );
+        }
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setLoadError(
@@ -75,7 +86,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         );
       });
     return () => controller.abort();
-  }, [eventId]);
+  }, [eventId, router]);
 
   useEffect(() => {
     if (!data || (!requestedZoneCode && !requestedBoothCode)) return;
@@ -185,7 +196,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         ? {
             id: 'local-preview-booking',
             bookingCode: 'SL-DEMO-2569',
-            eventId,
+            eventId: data.event.id,
             boothId: selectedBooth.id,
             shopId: vendor.shop.id,
             vendorUserId: vendor.profile.id,
@@ -203,13 +214,17 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             updatedAt: now.toISOString(),
           }
         : await createBooking(
-            { eventId, boothId: selectedBooth.id, shopId: vendor.shop.id },
+            {
+              eventId: data.event.id,
+              boothId: selectedBooth.id,
+              shopId: vendor.shop.id,
+            },
             vendor.token,
           );
       setCreatedBooking(booking);
       setHoldExpired(false);
 
-      router.push(`/bookings/${booking.id}/payment`);
+      router.push(`/bookings/${encodeURIComponent(booking.bookingCode)}/payment`);
     } catch (cause) {
       setActionError(
         cause instanceof Error ? cause.message : 'สร้างการจองไม่สำเร็จ',
@@ -263,8 +278,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         <div className="shell py-20 text-center">
           <h1 className="text-2xl font-bold">เปิดหน้าจองบูธไม่ได้</h1>
           <p className="mt-3 text-muted">{loadError ?? 'ไม่พบข้อมูล Event'}</p>
-          <Link href={`/events/${eventId}`} className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white">
-            กลับหน้ารายละเอียด Event
+          <Link href="/" className="mt-7 inline-flex rounded-xl bg-violet px-5 py-3 font-bold text-white">
+            กลับหน้าค้นหา Event
           </Link>
         </div>
       </main>
@@ -277,7 +292,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     <main className="sl-page pb-16">
       <div className="shell max-w-[1180px] py-6">
         <Link
-          href={`/events/${eventId}/map${requestedZoneCode ? `?zone=${encodeURIComponent(requestedZoneCode)}` : ''}`}
+          href={`/events/${encodeURIComponent(data.event.slug)}/map${requestedZoneCode ? `?zone=${encodeURIComponent(requestedZoneCode)}` : ''}`}
           className="sl-chip min-h-9 px-3 text-sm"
         >
           ← กลับไปแผนผัง Event

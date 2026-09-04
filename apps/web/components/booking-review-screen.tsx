@@ -27,7 +27,7 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
   if (state.status === 'error') return <BookingPageMessage title="เปิดหน้ารีวิวไม่ได้" detail={state.message} />;
 
   const { booking } = state;
-  if (!isBookingReviewEligible(booking)) return <BookingPageMessage title="ยังรีวิวพื้นที่ไม่ได้" detail="สามารถให้คะแนนได้หลังงานสิ้นสุดและรายการอยู่ในสถานะยืนยันหรือเสร็จสิ้น" href={`/bookings/${booking.id}`} action="ดูรายละเอียดการจอง" />;
+  if (!isBookingReviewEligible(booking)) return <BookingPageMessage title="ยังรีวิวพื้นที่ไม่ได้" detail="สามารถให้คะแนนได้หลังงานสิ้นสุดและรายการอยู่ในสถานะยืนยันหรือเสร็จสิ้น" href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} action="ดูรายละเอียดการจอง" />;
   if (success) {
     return (
       <main className="sl-page pb-16">
@@ -47,13 +47,13 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
               </p>
             </div>
             <div className="grid gap-3 border-t border-line p-5 sm:grid-cols-3 sm:p-6">
-              <Link href={`/events/${booking.event.id}`} className="sl-action-secondary">
+              <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary">
                 ดู Event
               </Link>
               <Link href="/bookings?tab=completed" className="sl-action-secondary text-violet">
                 การจองที่เสร็จสิ้น
               </Link>
-              <Link href={`/bookings/${booking.id}`} className="sl-action-primary">
+              <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} className="sl-action-primary">
                 ดูรายละเอียดการจอง
               </Link>
             </div>
@@ -86,7 +86,7 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
   return (
     <main className="sl-page pb-16">
       <div className="shell max-w-3xl py-8">
-        <Link href={`/bookings/${booking.id}`} className="sl-chip">← กลับรายละเอียดการจอง</Link>
+        <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} className="sl-chip">← กลับรายละเอียดการจอง</Link>
         <section className="sl-surface mt-6 overflow-hidden">
           <div className="border-b border-line bg-[linear-gradient(135deg,#fbf8ff,#ffffff)] p-6 sm:p-9">
           <span className="sl-kicker"><MessageSquareText className="h-4 w-4" aria-hidden /> Review</span>

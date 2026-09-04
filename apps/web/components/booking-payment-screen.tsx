@@ -25,10 +25,10 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
 
   const { booking } = state;
   if (previewConfirmed || booking.status === 'CONFIRMED') {
-    return <BookingPageMessage title="ยืนยันการจองเรียบร้อยแล้ว" detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`} href={`/bookings/${booking.id}`} action="ดูรายละเอียดการจอง" />;
+    return <BookingPageMessage title="ยืนยันการจองเรียบร้อยแล้ว" detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`} href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} action="ดูรายละเอียดการจอง" />;
   }
   if (booking.status !== 'PENDING_PAYMENT') {
-    return <BookingPageMessage title="รายการนี้ไม่อยู่ระหว่างรอชำระเงิน" detail={`สถานะปัจจุบันของรหัส ${booking.bookingCode} ไม่รองรับการอัปโหลดสลิป`} href={`/bookings/${booking.id}`} action="ดูรายละเอียดการจอง" />;
+    return <BookingPageMessage title="รายการนี้ไม่อยู่ระหว่างรอชำระเงิน" detail={`สถานะปัจจุบันของรหัส ${booking.bookingCode} ไม่รองรับการอัปโหลดสลิป`} href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} action="ดูรายละเอียดการจอง" />;
   }
 
   const expired = holdExpired || !booking.holdExpiresAt || new Date(booking.holdExpiresAt).getTime() <= Date.now();

@@ -505,22 +505,22 @@ export function MyBookingsScreen() {
                   ) : null}
 
                   <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-5">
-                    <Link href={`/bookings/${booking.id}`} className="sl-action-secondary text-violet">
+                    <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} className="sl-action-secondary text-violet">
                       ดูรายละเอียด
                     </Link>
-                    <Link href={`/events/${booking.event.id}`} className="sl-action-secondary text-violet">
+                    <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary text-violet">
                       ดู Event
                     </Link>
                     {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
-                      <Link href={`/bookings/${booking.id}/payment`} className="sl-action-primary">
+                      <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/payment`} className="sl-action-primary">
                         ชำระเงิน
                       </Link>
                     ) : null}
-                    <Link href={`/events/${booking.event.id}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">
+                    <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">
                       ดู Zone Map
                     </Link>
                     {isBookingReviewEligible(booking) ? (
-                      <Link href={`/bookings/${booking.id}/review`} className="sl-action-secondary text-violet">
+                      <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`} className="sl-action-secondary text-violet">
                         รีวิวพื้นที่
                       </Link>
                     ) : null}

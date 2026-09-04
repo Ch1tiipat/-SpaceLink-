@@ -1,5 +1,6 @@
 export type EventSummary = {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   startDate: string;
@@ -176,7 +177,12 @@ export type BookingRecord = {
 
 export type MyBooking = BookingRecord & {
   paymentQrDataUri: string | null;
-  event: { id: string; name: string };
+  event: {
+    id: string;
+    /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
+    slug?: string;
+    name: string;
+  };
   booth: {
     id: string;
     code: string;
@@ -1306,6 +1312,16 @@ export function getEventMap(
   return getJson<EventMap>(`/events/${encodeURIComponent(eventId)}/map`, {
     signal,
   });
+}
+
+export function getEventMapBySlug(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<EventMap> {
+  return getJson<EventMap>(
+    `/events/by-slug/${encodeURIComponent(slug)}/map`,
+    { signal },
+  );
 }
 
 /**
