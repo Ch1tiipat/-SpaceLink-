@@ -7,12 +7,14 @@ import { Sparkles } from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
 import {
   getEventMap,
+  getEventMapBySlug,
   getZoneRecommendations,
   type EventMap,
   type EventZone,
   type ZoneRecommendation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { isUuid } from '@/lib/route-identifier';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 function availableCount(zone: EventZone) {
@@ -36,14 +38,23 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    getEventMap(eventId, controller.signal)
-      .then(setData)
+    const legacyUuid = isUuid(eventId);
+    const request = legacyUuid ? getEventMap : getEventMapBySlug;
+    request(eventId, controller.signal)
+      .then((eventMap) => {
+        setData(eventMap);
+        if (legacyUuid) {
+          router.replace(
+            `/events/${encodeURIComponent(eventMap.event.slug)}/map${window.location.search}`,
+          );
+        }
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ');
       });
     return () => controller.abort();
-  }, [eventId]);
+  }, [eventId, router]);
 
   useEffect(() => {
     if (!data || !requestedZoneCode) return;
@@ -89,7 +100,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }, [data]);
 
   async function handleRecommendation() {
-    if (vendor.status !== 'ready' || !vendor.shop) return;
+    if (vendor.status !== 'ready' || !vendor.shop || !data) return;
 
     setIsRecommending(true);
     setRecommendation(null);
@@ -98,7 +109,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
     try {
       const recommendations = await getZoneRecommendations(
-        eventId,
+        data.event.id,
         { shopId: vendor.shop.id, limit: 1 },
         vendor.token,
       );
@@ -168,7 +179,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             <SummaryStat label="Booth" value={`${metrics.booths}`} />
             <SummaryStat label="ว่าง" value={`${metrics.available}`} green />
           </div>
-          <Link href={`/events/${eventId}`} className="sl-chip whitespace-nowrap">← กลับ Event</Link>
+          <Link href={`/events/${encodeURIComponent(data.event.slug)}`} className="sl-chip whitespace-nowrap">← กลับ Event</Link>
         </header>
 
         <section className="sl-surface mb-3 flex min-h-[62px] flex-wrap items-center gap-3 border-[#dfd0f0] bg-[linear-gradient(105deg,#fbf8ff_0%,#ffffff_55%,#f2ebff_100%)] px-4 py-3">
@@ -204,7 +215,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
           {recommendedLocation && eventBookable ? (
             <Link
-              href={`/events/${eventId}/book?zone=${encodeURIComponent(recommendedLocation.zone.code)}&booth=${encodeURIComponent(recommendedLocation.booth.code)}`}
+              href={`/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(recommendedLocation.zone.code)}&booth=${encodeURIComponent(recommendedLocation.booth.code)}`}
               className="group flex min-h-10 items-center gap-3 rounded-[12px] border border-[#cbb6f3] bg-white px-3 py-2 shadow-[0_6px_18px_rgba(109,40,217,.08)] transition hover:border-violet"
               aria-label={`จอง Zone ${recommendedLocation.zone.code} Booth ${recommendedLocation.booth.code} ที่ AI แนะนำ`}
             >
@@ -255,14 +266,14 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   boothHref={eventBookable
                     ? (booth) => {
                         const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
-                        return `/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
+                        return `/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`;
                       }
                     : undefined}
                   onFocusZone={setSelectedZoneId}
                   onSelectBooth={(booth) => {
                     if (!eventBookable) return;
                     const zone = data.zones.find((candidate) => candidate.id === booth.zoneId);
-                    router.push(`/events/${eventId}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`);
+                    router.push(`/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(zone?.code ?? '')}&booth=${encodeURIComponent(booth.code)}`);
                   }}
                 />
               </div>
@@ -278,7 +289,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
                 <div><h2 className="text-lg font-black">Zone {selectedZone.code} · {selectedZone.name ?? 'ยังไม่ระบุชื่อโซน'}</h2><p className="mt-1 text-sm text-muted">{availableCount(selectedZone)} จาก {selectedZone.booths.length} Booth ยังว่าง · ดูราคาและรายละเอียดในหน้าเลือก Booth</p></div>
                 {eventBookable ? (
-                  <Link href={`/events/${eventId}/book?zone=${encodeURIComponent(selectedZone.code)}`} className="sl-action-primary">เลือกบูธใน Zone นี้</Link>
+                  <Link href={`/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(selectedZone.code)}`} className="sl-action-primary">เลือกบูธใน Zone นี้</Link>
                 ) : (
                   <span className="sl-chip cursor-not-allowed bg-[#f1eef2] text-muted">Event นี้ปิดรับจองแล้ว</span>
                 )}

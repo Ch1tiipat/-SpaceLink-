@@ -1105,6 +1105,7 @@ describe('BookingsService', () => {
       ...CREATED_BOOKING,
       event: {
         id: EVENT_ID,
+        slug: 'creative-market-abc123',
         name: 'ตลาดนัดสร้างสรรค์',
         organization: { promptpayId: '0812345678' },
       },
@@ -1126,7 +1127,11 @@ describe('BookingsService', () => {
     expect(result[0]?.paymentQrDataUri).toMatch(/^data:image\/png;base64,/);
     expect(result[0]).toEqual({
       ...listedBooking,
-      event: { id: EVENT_ID, name: 'ตลาดนัดสร้างสรรค์' },
+      event: {
+        id: EVENT_ID,
+        slug: 'creative-market-abc123',
+        name: 'ตลาดนัดสร้างสรรค์',
+      },
       boothPrice: '1500',
       paymentQrDataUri: 'data:image/png;base64,cXI=',
     });
@@ -1136,6 +1141,7 @@ describe('BookingsService', () => {
         event: {
           select: {
             id: true,
+            slug: true,
             name: true,
             organization: { select: { promptpayId: true } },
           },
@@ -1166,6 +1172,7 @@ describe('BookingsService', () => {
         ...CREATED_BOOKING,
         event: {
           id: EVENT_ID,
+          slug: 'creative-market-abc123',
           name: 'ตลาดนัดสร้างสรรค์',
           organization: { promptpayId: null },
         },

@@ -1840,7 +1840,7 @@ function FloatingSupport({
                   return (
                     <Link
                       key={recommendation.boothId}
-                      href={`/events/${selectedEvent.id}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ""}`}
+                      href={`/events/${encodeURIComponent(selectedEvent.slug)}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ""}`}
                       className="rounded-xl border border-[#d9cbed] bg-white p-3 text-ink transition hover:border-violet hover:bg-[#faf7ff]"
                     >
                       <span className="flex items-center justify-between gap-2">

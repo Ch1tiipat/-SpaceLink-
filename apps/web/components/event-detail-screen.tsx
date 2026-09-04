@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   CalendarDays,
@@ -17,11 +18,13 @@ import {
 } from 'lucide-react';
 import {
   getEventMap,
+  getEventMapBySlug,
   getPublicAnnouncements,
   type AdminAnnouncement,
   type EventMap,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { isUuid } from '@/lib/route-identifier';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -40,6 +43,7 @@ function formatMoney(value: number): string {
 }
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
+  const router = useRouter();
   const [result, setResult] = useState<{
     eventId: string;
     data: EventMap | null;
@@ -51,9 +55,17 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    getEventMap(eventId, controller.signal)
+    const legacyUuid = isUuid(eventId);
+    const request = legacyUuid ? getEventMap : getEventMapBySlug;
+    request(eventId, controller.signal)
       .then((data) => {
-        if (active) setResult({ eventId, data, error: null });
+        if (!active) return;
+        setResult({ eventId, data, error: null });
+        if (legacyUuid) {
+          router.replace(
+            `/events/${encodeURIComponent(data.event.slug)}${window.location.search}`,
+          );
+        }
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -64,7 +76,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       active = false;
       controller.abort();
     };
-  }, [eventId]);
+  }, [eventId, router]);
 
   if (!data && !error) {
     return (
@@ -129,7 +141,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               {event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
             <div className="mt-7 flex flex-wrap gap-3 max-sm:flex-col">
-              <Link href={`/events/${event.id}/map`} className="inline-flex min-h-[46px] items-center justify-center rounded-[13px] bg-white px-5 font-bold text-violet shadow-lg transition hover:-translate-y-0.5">
+              <Link href={`/events/${encodeURIComponent(event.slug)}/map`} className="inline-flex min-h-[46px] items-center justify-center rounded-[13px] bg-white px-5 font-bold text-violet shadow-lg transition hover:-translate-y-0.5">
                 ดู Zone Map →
               </Link>
               <button type="button" disabled title="ระบบจริงยังไม่มี API สำหรับบันทึก Event" className="inline-flex min-h-[46px] cursor-not-allowed items-center justify-center gap-2 rounded-[13px] border border-white/35 bg-white/10 px-5 font-bold text-white/65">
@@ -187,7 +199,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           description={eventBookable
             ? 'ตรวจสอบ Zone และตำแหน่งบูธก่อนทำการจอง'
             : 'ดูข้อมูล Zone และตำแหน่งบูธได้ แต่ Event นี้ปิดรับจองแล้ว'}
-          action={<Link href={`/events/${event.id}/map`} className="sl-action-secondary text-violet">ดูแผนผัง</Link>}
+          action={<Link href={`/events/${encodeURIComponent(event.slug)}/map`} className="sl-action-secondary text-violet">ดูแผนผัง</Link>}
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <NumberCard label="Zone" value={`${zones.length}`} />
@@ -252,7 +264,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                 <span className="text-sm text-muted">ราคาเริ่มต้น</span>
                 <strong className="mt-1 block text-base text-violet">{startingPrice === null ? 'ยังไม่ระบุ' : `${formatMoney(startingPrice)} บาท`}</strong>
               </div>
-              <Link href={`/events/${event.id}/map`} className="sl-action-primary min-w-[150px]">
+              <Link href={`/events/${encodeURIComponent(event.slug)}/map`} className="sl-action-primary min-w-[150px]">
                 {eventBookable ? 'เลือกพื้นที่ →' : 'ดูแผนผัง →'}
               </Link>
             </div>

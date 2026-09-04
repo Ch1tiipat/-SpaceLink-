@@ -447,7 +447,7 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
   const bookable = isEventBookable(event);
   return (
     <Link
-      href={`/events/${event.id}`}
+      href={`/events/${encodeURIComponent(event.slug)}`}
       className="sl-surface relative block h-full overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
     >
       <div
@@ -519,7 +519,7 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
           return (
             <Link
               key={zone.id}
-              href={`/events/${event.id}/map?zone=${encodeURIComponent(zone.code)}`}
+              href={`/events/${encodeURIComponent(event.slug)}/map?zone=${encodeURIComponent(zone.code)}`}
               className="sl-surface flex items-start gap-[14px] p-5 text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
             >
               <span className="grid h-[43px] min-w-[76px] shrink-0 place-items-center whitespace-nowrap rounded-[13px] bg-[#f3edff] px-2 font-extrabold text-[#6d28d9]">
@@ -568,7 +568,7 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
       description:
         "ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย",
       icon: MapPinned,
-      href: event ? `/events/${event.id}/map` : "#latest-updates",
+      href: event ? `/events/${encodeURIComponent(event.slug)}/map` : "#latest-updates",
       action: "ดูตัวอย่างแผนผัง",
     },
     {

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, MapPinned, ReceiptText, Store } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
@@ -10,6 +11,7 @@ import {
   type BookingStatus,
   type MyBooking,
 } from '@/lib/api';
+import { isUuid } from '@/lib/route-identifier';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview, UX_PREVIEW_SHOP } from '@/lib/ux-preview';
 
@@ -110,7 +112,11 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
     createdAt: new Date(now - 60_000).toISOString(),
     updatedAt: new Date(now - 60_000).toISOString(),
     paymentQrDataUri: null,
-    event: { id: 'demo-event', name: 'งานเกษตร มทส. 2569' },
+    event: {
+      id: 'demo-event',
+      slug: 'demo-event',
+      name: 'งานเกษตร มทส. 2569',
+    },
     booth: {
       id: 'demo-booth-a01',
       code: 'A01',
@@ -132,6 +138,8 @@ export function getPreviewBookings(): MyBooking[] {
 }
 
 export function useBookingDetail(bookingId: string): BookingDetailState {
+  const router = useRouter();
+  const pathname = usePathname();
   const { state: vendor } = useVendorProfile();
   const [booking, setBooking] = useState<MyBooking | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +158,10 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
     setError(null);
 
     if (canUseUxPreview()) {
-      const preview = createPreviewBooking(bookingId);
+      const preview =
+        getPreviewBookings().find(
+          (item) => item.bookingCode === bookingId,
+        ) ?? createPreviewBooking(bookingId);
       setBooking(preview);
       setError(preview ? null : 'ไม่พบรายการจองตัวอย่างนี้');
       setIsLoading(false);
@@ -159,9 +170,24 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
 
     getMyBookings(vendor.token, controller.signal)
       .then((items) => {
-        const match = items.find((item) => item.id === bookingId) ?? null;
+        const legacyUuid = isUuid(bookingId);
+        const match =
+          items.find((item) =>
+            legacyUuid
+              ? item.id === bookingId
+              : item.bookingCode === bookingId,
+          ) ?? null;
         setBooking(match);
         setError(match ? null : 'ไม่พบรายการจอง หรือรายการนี้ไม่ได้เป็นของบัญชีปัจจุบัน');
+        if (match && legacyUuid) {
+          const currentPrefix = `/bookings/${bookingId}`;
+          const suffix = pathname.startsWith(currentPrefix)
+            ? pathname.slice(currentPrefix.length)
+            : '';
+          router.replace(
+            `/bookings/${encodeURIComponent(match.bookingCode)}${suffix}${window.location.search}`,
+          );
+        }
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -170,7 +196,7 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
-  }, [bookingId, reloadCount, vendor]);
+  }, [bookingId, pathname, reloadCount, router, vendor]);
 
   if (vendor.status === 'signed-out') return { status: 'signed-out' };
   if (vendor.status === 'error') return { status: 'error', message: vendor.message };
@@ -254,10 +280,10 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
               <Detail icon={CalendarDays} label="วันสิ้นสุด" value={formatBookingDate(booking.bookingEndDate)} />
             </dl>
             <div className="mt-6 flex flex-wrap gap-3 border-t border-line pt-6">
-              <Link href={`/events/${booking.event.id}`} className="sl-action-secondary text-violet">ดู Event</Link>
-              <Link href={`/events/${booking.event.id}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">ดูตำแหน่งบน Zone Map</Link>
-              {booking.status === 'PENDING_PAYMENT' ? <Link href={`/bookings/${booking.id}/payment`} className="sl-action-primary">ไปหน้าชำระเงิน</Link> : null}
-              {isBookingReviewEligible(booking) ? <Link href={`/bookings/${booking.id}/review`} className="sl-action-primary">เขียนรีวิวพื้นที่</Link> : null}
+              <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary text-violet">ดู Event</Link>
+              <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">ดูตำแหน่งบน Zone Map</Link>
+              {booking.status === 'PENDING_PAYMENT' ? <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/payment`} className="sl-action-primary">ไปหน้าชำระเงิน</Link> : null}
+              {isBookingReviewEligible(booking) ? <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`} className="sl-action-primary">เขียนรีวิวพื้นที่</Link> : null}
             </div>
           </section>
 
