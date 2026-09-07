@@ -11,6 +11,19 @@ const MS_PER_HOUR = 60 * 60 * 1000;
 const REVIEW_ELIGIBLE_OFFSET_HOURS = 17;
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
 
+export function reviewEligibleBookingWhere(
+  now = new Date(),
+): Prisma.BookingWhereInput {
+  return {
+    status: {
+      in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+    },
+    bookingEndDate: {
+      lte: new Date(now.getTime() - REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR),
+    },
+  };
+}
+
 @Injectable()
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -62,16 +75,10 @@ export class ReviewsService {
     userId: string,
     dto: CreateReviewDto,
   ) {
-    const cutoff = new Date(
-      Date.now() - REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR,
-    );
     const eligible = await transaction.booking.findFirst({
       where: {
+        ...reviewEligibleBookingWhere(),
         vendorUserId: userId,
-        status: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
-        },
-        bookingEndDate: { lte: cutoff },
         ...(dto.targetType === 'BOOTH'
           ? { boothId: dto.targetId }
           : { booth: { zoneId: dto.targetId } }),

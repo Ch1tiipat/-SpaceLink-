@@ -55,6 +55,7 @@ type UserNotification = {
   createdAt: string;
   unread: boolean;
   href?: string;
+  actionLabel?: string;
 };
 
 type NotificationAccess =
@@ -127,6 +128,8 @@ const THAILAND_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
 });
 
 function toUserNotification(notification: NotificationRecord): UserNotification {
+  const isReviewInvitation =
+    notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW';
   return {
     id: notification.id,
     kind: KIND_BY_TYPE[notification.type],
@@ -135,10 +138,17 @@ function toUserNotification(notification: NotificationRecord): UserNotification 
     createdAt: notification.createdAt,
     unread: !notification.isRead,
     href: notificationHref(notification),
+    actionLabel: isReviewInvitation ? 'เขียนรีวิวพื้นที่' : undefined,
   };
 }
 
 function notificationHref(notification: NotificationRecord): string | undefined {
+  if (notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW') {
+    return notification.relatedEntityId
+      ? `/bookings/${encodeURIComponent(notification.relatedEntityId)}/review`
+      : '/bookings?tab=completed';
+  }
+
   const relatedBookingId =
     notification.relatedEntityType?.toUpperCase() === 'BOOKING'
       ? notification.relatedEntityId
@@ -199,7 +209,7 @@ function createPreviewNotifications(): UserNotification[] {
     { id: 'preview-payment', kind: 'payment', title: 'การจองกำลังรอชำระเงิน', description: 'อัปโหลดสลิปสำหรับบูธ A01 ภายในเวลาที่กำหนด', createdAt: new Date(now - 8 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-booking/payment' },
     { id: 'preview-confirmed', kind: 'booking', title: 'ยืนยันการจองเรียบร้อยแล้ว', description: 'บูธ A01 ในงานเกษตร มทส. 2569 พร้อมสำหรับร้านของคุณ', createdAt: new Date(now - 65 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-confirmed-booking' },
     { id: 'preview-event', kind: 'event', title: 'ประกาศจากผู้จัดงาน', description: 'ตรวจสอบเวลาเข้าพื้นที่และกฎร้านค้าก่อนวันเริ่มงาน', createdAt: new Date(now - 5 * 3_600_000).toISOString(), unread: false, href: '/events/demo-event' },
-    { id: 'preview-review', kind: 'system', title: 'แชร์ประสบการณ์พื้นที่ของคุณ', description: 'รายการเสร็จสิ้นแล้ว คุณสามารถรีวิวบูธและพื้นที่ได้', createdAt: new Date(now - 2 * 86_400_000).toISOString(), unread: false, href: '/bookings/local-preview-completed-booking/review' },
+    { id: 'preview-review', kind: 'system', title: 'แชร์ประสบการณ์พื้นที่ของคุณ', description: 'รายการเสร็จสิ้นแล้ว คุณสามารถรีวิวบูธและพื้นที่ได้', createdAt: new Date(now - 2 * 86_400_000).toISOString(), unread: false, href: '/bookings/local-preview-completed-booking/review', actionLabel: 'เขียนรีวิวพื้นที่' },
   ];
 }
 
@@ -786,6 +796,11 @@ function NotificationRow({
             {formatRelativeTime(notification.createdAt)}
           </time>
         </span>
+        {notification.actionLabel ? (
+          <span className="mt-3 inline-flex min-h-9 items-center rounded-xl bg-violet px-3.5 text-xs font-extrabold text-white shadow-[0_7px_18px_rgba(124,58,237,.2)]">
+            {notification.actionLabel}
+          </span>
+        ) : null}
       </span>
     </>
   );
