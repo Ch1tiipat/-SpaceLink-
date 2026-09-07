@@ -164,6 +164,13 @@ const NAV_GROUPS: NavGroup[] = [
         icon: UserRound,
         matches: (pathname) => pathname.startsWith("/profile"),
       },
+      {
+        kind: "link",
+        label: "การรีวิวของฉัน",
+        href: "/reviews",
+        icon: Star,
+        matches: (pathname) => pathname.startsWith("/reviews"),
+      },
     ],
   },
 ];
@@ -952,6 +959,7 @@ const UX_REVIEW_ROUTES = [
   ["รายละเอียดจอง", "/bookings/local-preview-confirmed-booking"],
   ["ชำระเงิน", "/bookings/local-preview-booking/payment"],
   ["รีวิว", "/bookings/local-preview-completed-booking/review"],
+  ["รีวิวของฉัน", "/reviews"],
   ["แจ้งเตือน", "/notifications"],
   ["ช่วยเหลือ", "/help"],
   ["โปรไฟล์", "/profile"],

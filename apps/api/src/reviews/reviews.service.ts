@@ -41,6 +41,97 @@ export class ReviewsService {
     };
   }
 
+  async getMine(userId: string, page: number, limit: number) {
+    const where: Prisma.ReviewWhereInput = { reviewerUserId: userId };
+    const [total, reviews] = await Promise.all([
+      this.prisma.review.count({ where }),
+      this.prisma.review.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          targetType: true,
+          targetId: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const boothIds = reviews
+      .filter((review) => review.targetType === ReviewTargetType.BOOTH)
+      .map((review) => review.targetId);
+    const zoneIds = reviews
+      .filter((review) => review.targetType === ReviewTargetType.ZONE)
+      .map((review) => review.targetId);
+    const targetFilters: Prisma.BookingWhereInput[] = [];
+    if (boothIds.length > 0) targetFilters.push({ boothId: { in: boothIds } });
+    if (zoneIds.length > 0) {
+      targetFilters.push({ booth: { zoneId: { in: zoneIds } } });
+    }
+
+    const bookings =
+      targetFilters.length === 0
+        ? []
+        : await this.prisma.booking.findMany({
+            where: {
+              vendorUserId: userId,
+              OR: targetFilters,
+            },
+            orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
+            select: {
+              bookingCode: true,
+              boothId: true,
+              event: { select: { name: true, slug: true } },
+              booth: {
+                select: {
+                  code: true,
+                  zone: { select: { id: true, code: true, name: true } },
+                },
+              },
+            },
+          });
+
+    const contextByTarget = new Map<string, (typeof bookings)[number]>();
+    for (const booking of bookings) {
+      const boothKey = `${ReviewTargetType.BOOTH}:${booking.boothId}`;
+      const zoneKey = `${ReviewTargetType.ZONE}:${booking.booth.zone.id}`;
+      if (!contextByTarget.has(boothKey)) {
+        contextByTarget.set(boothKey, booking);
+      }
+      if (!contextByTarget.has(zoneKey)) {
+        contextByTarget.set(zoneKey, booking);
+      }
+    }
+
+    return {
+      items: reviews.map(({ targetId, ...review }) => {
+        const context = contextByTarget.get(`${review.targetType}:${targetId}`);
+        return {
+          ...review,
+          context: context
+            ? {
+                bookingCode: context.bookingCode,
+                event: context.event,
+                booth: { code: context.booth.code },
+                zone: {
+                  code: context.booth.zone.code,
+                  name: context.booth.zone.name,
+                },
+              }
+            : null,
+        };
+      }),
+      page,
+      limit,
+      total,
+      hasMore: page * limit < total,
+    };
+  }
+
   async create(userId: string, dto: CreateReviewDto) {
     for (
       let attempt = 1;

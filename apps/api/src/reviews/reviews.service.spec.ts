@@ -20,6 +20,9 @@ const bookingFindFirst = jest.fn();
 const reviewFindFirst = jest.fn();
 const reviewCreate = jest.fn();
 const reviewUpdate = jest.fn();
+const reviewCount = jest.fn();
+const reviewFindMany = jest.fn();
+const bookingFindMany = jest.fn();
 const transactionClient = {
   booking: { findFirst: bookingFindFirst },
   review: {
@@ -30,7 +33,8 @@ const transactionClient = {
 };
 const prismaTransaction = jest.fn();
 const mockPrismaService = {
-  review: { aggregate },
+  review: { aggregate, count: reviewCount, findMany: reviewFindMany },
+  booking: { findMany: bookingFindMany },
   $transaction: prismaTransaction,
 };
 
@@ -57,6 +61,9 @@ describe('ReviewsService', () => {
     reviewFindFirst.mockResolvedValue(null);
     reviewCreate.mockResolvedValue({ id: reviewId });
     reviewUpdate.mockResolvedValue({ id: reviewId });
+    reviewCount.mockResolvedValue(0);
+    reviewFindMany.mockResolvedValue([]);
+    bookingFindMany.mockResolvedValue([]);
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(transactionClient as unknown as Prisma.TransactionClient),
@@ -94,6 +101,128 @@ describe('ReviewsService', () => {
       _avg: { rating: true },
       _count: { rating: true },
     });
+  });
+
+  it('lists only the authenticated user reviews with pagination and owned booking context', async () => {
+    const createdAt = new Date('2026-09-05T10:00:00.000Z');
+    reviewCount.mockResolvedValue(3);
+    reviewFindMany.mockResolvedValue([
+      {
+        id: reviewId,
+        targetType: ReviewTargetType.BOOTH,
+        targetId,
+        rating: 5,
+        comment: 'พื้นที่สะอาด',
+        createdAt,
+      },
+    ]);
+    bookingFindMany.mockResolvedValue([
+      {
+        bookingCode: 'BK-REVIEW01',
+        boothId: targetId,
+        event: { name: 'งานทดสอบ', slug: 'review-event' },
+        booth: {
+          code: 'A01',
+          zone: {
+            id: '44444444-4444-4444-8444-444444444444',
+            code: 'ZONE-A',
+            name: 'โซนอาหาร',
+          },
+        },
+      },
+    ]);
+
+    await expect(service.getMine(userId, 2, 1)).resolves.toEqual({
+      items: [
+        {
+          id: reviewId,
+          targetType: ReviewTargetType.BOOTH,
+          rating: 5,
+          comment: 'พื้นที่สะอาด',
+          createdAt,
+          context: {
+            bookingCode: 'BK-REVIEW01',
+            event: { name: 'งานทดสอบ', slug: 'review-event' },
+            booth: { code: 'A01' },
+            zone: {
+              code: 'ZONE-A',
+              name: 'โซนอาหาร',
+            },
+          },
+        },
+      ],
+      page: 2,
+      limit: 1,
+      total: 3,
+      hasMore: true,
+    });
+    expect(reviewFindMany).toHaveBeenCalledWith({
+      where: { reviewerUserId: userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: 1,
+      take: 1,
+      select: {
+        id: true,
+        targetType: true,
+        targetId: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+      },
+    });
+    expect(bookingFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          vendorUserId: userId,
+          OR: [{ boothId: { in: [targetId] } }],
+        },
+      }),
+    );
+  });
+
+  it('does not expose another user booking while resolving review context', async () => {
+    reviewCount.mockResolvedValue(1);
+    reviewFindMany.mockResolvedValue([
+      {
+        id: reviewId,
+        targetType: ReviewTargetType.ZONE,
+        targetId,
+        rating: 4,
+        comment: null,
+        createdAt: new Date('2026-09-05T10:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getMine(userId, 1, 10);
+
+    expect(bookingFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          vendorUserId: userId,
+          OR: [{ booth: { zoneId: { in: [targetId] } } }],
+        },
+      }),
+    );
+    expect(result.items[0].context).toBeNull();
+  });
+
+  it('skips booking lookup for review types without booking context', async () => {
+    reviewCount.mockResolvedValue(1);
+    reviewFindMany.mockResolvedValue([
+      {
+        id: reviewId,
+        targetType: ReviewTargetType.SHOP,
+        targetId,
+        rating: 3,
+        comment: null,
+        createdAt: new Date('2026-09-05T10:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getMine(userId, 1, 10);
+
+    expect(bookingFindMany).not.toHaveBeenCalled();
+    expect(result.items[0].context).toBeNull();
   });
 
   it('creates a booth review through a serializable transaction', async () => {

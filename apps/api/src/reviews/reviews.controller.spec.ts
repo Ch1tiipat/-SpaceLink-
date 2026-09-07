@@ -12,7 +12,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { ReviewsController } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
 
-function handlerOf(name: 'create' | 'getAverage'): object {
+function handlerOf(name: 'create' | 'getAverage' | 'getMine'): object {
   return (ReviewsController.prototype as unknown as Record<string, object>)[
     name
   ];
@@ -29,8 +29,9 @@ const targetId = '22222222-2222-4222-8222-222222222222';
 
 describe('ReviewsController', () => {
   const getAverage = jest.fn();
+  const getMine = jest.fn();
   const create = jest.fn();
-  const service = { getAverage, create } as unknown as ReviewsService;
+  const service = { getAverage, getMine, create } as unknown as ReviewsService;
   const controller = new ReviewsController(service);
 
   beforeEach(() => {
@@ -50,6 +51,13 @@ describe('ReviewsController', () => {
 
   it('guards only create with authentication and the vendor role', () => {
     const handler = handlerOf('create');
+
+    expect(guardsOn(handler)).toEqual([SupabaseAuthGuard, RolesGuard]);
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([UserRole.VENDOR]);
+  });
+
+  it('guards the current-user review list with authentication and the vendor role', () => {
+    const handler = handlerOf('getMine');
 
     expect(guardsOn(handler)).toEqual([SupabaseAuthGuard, RolesGuard]);
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([UserRole.VENDOR]);
@@ -77,5 +85,13 @@ describe('ReviewsController', () => {
     await controller.create(dto, currentUser);
 
     expect(create).toHaveBeenCalledWith(currentUser.id, dto);
+  });
+
+  it('uses the authenticated database user id when listing reviews', async () => {
+    getMine.mockResolvedValue({ items: [], total: 0 });
+
+    await controller.getMine({ page: 2, limit: 5 }, currentUser);
+
+    expect(getMine).toHaveBeenCalledWith(currentUser.id, 2, 5);
   });
 });
