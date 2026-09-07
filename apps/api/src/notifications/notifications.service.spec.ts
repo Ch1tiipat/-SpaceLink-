@@ -3,6 +3,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import {
   BookingStatus,
   NotificationType,
+  Prisma,
+  ReviewTargetType,
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +16,9 @@ const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
 const ORGANIZATION_ID = '33333333-3333-4333-8333-333333333333';
 const OTHER_ORGANIZATION_ID = '44444444-4444-4444-8444-444444444444';
 const NOTIFICATION_ID = '55555555-5555-4555-8555-555555555555';
+const REVIEW_BOOKING_ID = '66666666-6666-4666-8666-666666666666';
+const OLDER_REVIEW_BOOKING_ID = '77777777-7777-4777-8777-777777777777';
+const REVIEW_BOOTH_ID = '88888888-8888-4888-8888-888888888888';
 const CREATED_AT = new Date('2026-08-18T00:00:00.000Z');
 
 const INPUT = {
@@ -35,6 +40,7 @@ const NOTIFICATION: Notification = {
 };
 
 const bookingFindMany = jest.fn();
+const reviewFindMany = jest.fn();
 const userFindMany = jest.fn();
 const notificationCreate = jest.fn();
 const notificationCreateMany = jest.fn();
@@ -43,8 +49,18 @@ const notificationCount = jest.fn();
 const notificationUpdateMany = jest.fn();
 const sendToUser = jest.fn();
 const sendToUsers = jest.fn();
+const prismaTransaction = jest.fn();
+const transactionClient = {
+  booking: { findMany: bookingFindMany },
+  review: { findMany: reviewFindMany },
+  notification: {
+    findMany: notificationFindMany,
+    createMany: notificationCreateMany,
+  },
+};
 const mockPrismaService = {
   booking: { findMany: bookingFindMany },
+  review: { findMany: reviewFindMany },
   user: { findMany: userFindMany },
   notification: {
     create: notificationCreate,
@@ -53,6 +69,7 @@ const mockPrismaService = {
     count: notificationCount,
     updateMany: notificationUpdateMany,
   },
+  $transaction: prismaTransaction,
 };
 const mockPushSenderService = { sendToUser, sendToUsers };
 
@@ -87,6 +104,11 @@ describe('NotificationsService', () => {
     sendToUser.mockResolvedValue(undefined);
     sendToUsers.mockResolvedValue(undefined);
     userFindMany.mockResolvedValue([{ id: USER_ID }, { id: OTHER_USER_ID }]);
+    reviewFindMany.mockResolvedValue([]);
+    prismaTransaction.mockImplementation(
+      (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+        operation(transactionClient as unknown as Prisma.TransactionClient),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -135,6 +157,146 @@ describe('NotificationsService', () => {
       'Failed to create an in-app notification',
     );
     expect(sendToUser).not.toHaveBeenCalled();
+
+    error.mockRestore();
+  });
+
+  it('creates an in-app invitation for the booking owner when review eligibility begins', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        boothId: REVIEW_BOOTH_ID,
+        event: { name: 'งานเกษตร มทส. 2569' },
+        booth: { code: 'A05' },
+      },
+    ]);
+    reviewFindMany.mockResolvedValue([]);
+    notificationFindMany.mockResolvedValue([]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      1,
+    );
+
+    expect(bookingFindMany).toHaveBeenCalledWith({
+      where: {
+        status: {
+          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+        },
+        bookingEndDate: { lte: new Date('2026-08-18T00:30:00.000Z') },
+      },
+      select: {
+        id: true,
+        vendorUserId: true,
+        boothId: true,
+        event: { select: { name: true } },
+        booth: { select: { code: true } },
+      },
+      orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
+    });
+    expect(reviewFindMany).toHaveBeenCalledWith({
+      where: {
+        reviewerUserId: { in: [USER_ID] },
+        targetType: ReviewTargetType.BOOTH,
+        targetId: { in: [REVIEW_BOOTH_ID] },
+      },
+      select: { reviewerUserId: true, targetId: true },
+    });
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          userId: USER_ID,
+          type: NotificationType.SYSTEM,
+          title: 'ถึงเวลารีวิวพื้นที่แล้ว',
+          body: 'งานเกษตร มทส. 2569 · บูธ A05 พร้อมให้คุณแบ่งปันประสบการณ์แล้ว',
+          relatedEntityType: 'BOOKING_REVIEW',
+          relatedEntityId: REVIEW_BOOKING_ID,
+        },
+      ],
+    });
+  });
+
+  it('does not invite a vendor who already reviewed the booth', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        boothId: REVIEW_BOOTH_ID,
+        event: { name: 'งานเกษตร มทส. 2569' },
+        booth: { code: 'A05' },
+      },
+    ]);
+    reviewFindMany.mockResolvedValue([
+      { reviewerUserId: USER_ID, targetId: REVIEW_BOOTH_ID },
+    ]);
+    notificationFindMany.mockResolvedValue([]);
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates retries by the real user-and-booth review unit', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        boothId: REVIEW_BOOTH_ID,
+        event: { name: 'งานใหม่' },
+        booth: { code: 'A05' },
+      },
+      {
+        id: OLDER_REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        boothId: REVIEW_BOOTH_ID,
+        event: { name: 'งานเดิม' },
+        booth: { code: 'A05' },
+      },
+    ]);
+    reviewFindMany.mockResolvedValue([]);
+    notificationFindMany.mockResolvedValue([
+      { userId: USER_ID, relatedEntityId: OLDER_REVIEW_BOOKING_ID },
+    ]);
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('retries a serializable review-notification transaction conflict', async () => {
+    const serializationError = new Prisma.PrismaClientKnownRequestError(
+      'Transaction write conflict',
+      { code: 'P2034', clientVersion: 'test' },
+    );
+    bookingFindMany.mockResolvedValue([]);
+    prismaTransaction
+      .mockRejectedValueOnce(serializationError)
+      .mockImplementationOnce(
+        (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+          operation(transactionClient as unknown as Prisma.TransactionClient),
+      );
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(prismaTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps review notification failures isolated from booking and review writes', async () => {
+    const error = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    prismaTransaction.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(error).toHaveBeenCalledWith(
+      'Failed to create review eligibility notifications',
+    );
 
     error.mockRestore();
   });

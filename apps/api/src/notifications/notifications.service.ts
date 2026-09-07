@@ -1,10 +1,14 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   BookingStatus,
   NotificationType,
+  Prisma,
+  ReviewTargetType,
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { reviewEligibleBookingWhere } from '../reviews/reviews.service';
 import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
@@ -21,6 +25,8 @@ const bangkokDateFormatter = new Intl.DateTimeFormat('en-US', {
   month: '2-digit',
   day: '2-digit',
 });
+const REVIEW_NOTIFICATION_ENTITY_TYPE = 'BOOKING_REVIEW';
+const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
 
 @Injectable()
 export class NotificationsService {
@@ -30,6 +36,43 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly pushSender: PushSenderService,
   ) {}
+
+  @Cron(CronExpression.EVERY_MINUTE, { waitForCompletion: true })
+  async createReviewEligibilityNotifications(): Promise<number> {
+    try {
+      for (
+        let attempt = 1;
+        attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
+        attempt += 1
+      ) {
+        try {
+          return await this.prisma.$transaction(
+            (transaction) =>
+              this.createReviewEligibilityNotificationsWithinTransaction(
+                transaction,
+              ),
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          );
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2034' &&
+            attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS
+          ) {
+            continue;
+          }
+          throw error;
+        }
+      }
+    } catch {
+      // This scheduled reconciliation is intentionally best-effort. Booking
+      // and review writes happen independently and must never be rolled back
+      // because an invitation could not be created.
+      this.logger.error('Failed to create review eligibility notifications');
+    }
+
+    return 0;
+  }
 
   async createForUser(
     userId: string,
@@ -160,6 +203,102 @@ export class NotificationsService {
       where: { userId, isRead: false },
       data: { isRead: true },
     });
+  }
+
+  private async createReviewEligibilityNotificationsWithinTransaction(
+    transaction: Prisma.TransactionClient,
+  ): Promise<number> {
+    const eligibleBookings = await transaction.booking.findMany({
+      where: reviewEligibleBookingWhere(),
+      select: {
+        id: true,
+        vendorUserId: true,
+        boothId: true,
+        event: { select: { name: true } },
+        booth: { select: { code: true } },
+      },
+      orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    if (eligibleBookings.length === 0) return 0;
+
+    const userIds = [
+      ...new Set(eligibleBookings.map(({ vendorUserId }) => vendorUserId)),
+    ];
+    const boothIds = [
+      ...new Set(eligibleBookings.map(({ boothId }) => boothId)),
+    ];
+    const bookingIds = eligibleBookings.map(({ id }) => id);
+
+    const [reviews, existingNotifications] = await Promise.all([
+      transaction.review.findMany({
+        where: {
+          reviewerUserId: { in: userIds },
+          targetType: ReviewTargetType.BOOTH,
+          targetId: { in: boothIds },
+        },
+        select: { reviewerUserId: true, targetId: true },
+      }),
+      transaction.notification.findMany({
+        where: {
+          userId: { in: userIds },
+          relatedEntityType: REVIEW_NOTIFICATION_ENTITY_TYPE,
+          relatedEntityId: { in: bookingIds },
+        },
+        select: { userId: true, relatedEntityId: true },
+      }),
+    ]);
+
+    const eligibilityKey = (userId: string, boothId: string) =>
+      `${userId}:${boothId}`;
+    const reviewedKeys = new Set(
+      reviews.flatMap(({ reviewerUserId, targetId }) =>
+        reviewerUserId ? [eligibilityKey(reviewerUserId, targetId)] : [],
+      ),
+    );
+    const bookingById = new Map(
+      eligibleBookings.map((booking) => [booking.id, booking]),
+    );
+    const invitedKeys = new Set(
+      existingNotifications.flatMap(({ userId, relatedEntityId }) => {
+        const booking = relatedEntityId
+          ? bookingById.get(relatedEntityId)
+          : undefined;
+        return booking && booking.vendorUserId === userId
+          ? [eligibilityKey(userId, booking.boothId)]
+          : [];
+      }),
+    );
+    const selectedKeys = new Set<string>();
+    const invitations = eligibleBookings.flatMap((booking) => {
+      const key = eligibilityKey(booking.vendorUserId, booking.boothId);
+      if (
+        reviewedKeys.has(key) ||
+        invitedKeys.has(key) ||
+        selectedKeys.has(key)
+      ) {
+        return [];
+      }
+
+      selectedKeys.add(key);
+      return [
+        {
+          userId: booking.vendorUserId,
+          type: NotificationType.SYSTEM,
+          title: 'ถึงเวลารีวิวพื้นที่แล้ว',
+          body: `${booking.event.name} · บูธ ${booking.booth.code} พร้อมให้คุณแบ่งปันประสบการณ์แล้ว`,
+          relatedEntityType: REVIEW_NOTIFICATION_ENTITY_TYPE,
+          relatedEntityId: booking.id,
+        },
+      ];
+    });
+
+    if (invitations.length === 0) return 0;
+
+    const created = await transaction.notification.createMany({
+      data: invitations,
+    });
+    return created.count;
   }
 
   /**
