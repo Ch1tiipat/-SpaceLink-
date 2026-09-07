@@ -20,8 +20,10 @@ import {
   getEventMap,
   getEventMapBySlug,
   getPublicAnnouncements,
+  getVenueLocation,
   type AdminAnnouncement,
   type EventMap,
+  type VenueLocation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import { isUuid } from '@/lib/route-identifier';
@@ -113,7 +115,6 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const contactPhone = event.contactPhone ?? event.organization.contactPhone;
   const contactEmail = event.contactEmail ?? event.organization.contactEmail;
   const address = event.venue.address ?? event.venue.name;
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
 
@@ -225,18 +226,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         </DetailSection>
 
         <DetailSection kicker="LOCATION" title="การเดินทางเข้างาน" description={address}>
-          <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-            <div>
-              <TravelRow icon={<MapPin className="h-5 w-5" />} label="สถานที่จัดงาน" value={event.venue.name} />
-              <TravelRow icon={<Navigation className="h-5 w-5" />} label="คำแนะนำการเดินทาง" value="ผู้จัดงานยังไม่ได้ระบุคำแนะนำการเดินทาง" />
-              <TravelRow icon={<ParkingCircle className="h-5 w-5" />} label="ที่จอดรถ" value="ผู้จัดงานยังไม่ได้ระบุข้อมูลที่จอดรถ" />
-              <a href={mapsUrl} target="_blank" rel="noreferrer" className="sl-action-primary mt-3 w-full">เปิดเส้นทางใน Google Maps →</a>
-            </div>
-            <div className="relative grid min-h-[390px] place-items-center overflow-hidden rounded-[18px] border border-[#ded4e5] bg-[linear-gradient(135deg,#f8f5fa,#eff4f2)] px-6 text-center shadow-soft">
-              <div><span className="mx-auto grid h-[46px] w-[46px] place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white"><MapPin className="h-5 w-5" /></span><strong className="mt-3 block text-sm">เปิดดูตำแหน่งบน Google Maps</strong><span className="mt-1 block text-sm text-muted">ระบบ API ปัจจุบันส่งชื่อและที่อยู่สถานที่ โดยยังไม่มีพิกัดสาธารณะ</span></div>
-              <div className="absolute bottom-4 left-4 flex max-w-[calc(100%-32px)] items-center gap-3 rounded-xl border border-white bg-white/95 px-3 py-2.5 text-left shadow-soft"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald ring-4 ring-emerald/15" /><span><strong className="block truncate text-sm">{event.name}</strong><span className="block truncate text-sm text-muted">{address}</span></span></div>
-            </div>
-          </div>
+          <VenueLocationMap
+            key={event.venue.id}
+            venue={event.venue}
+            eventName={event.name}
+          />
         </DetailSection>
 
         <DetailSection kicker="EVENT REVIEWS" title="รีวิวจากผู้เข้าร่วมงาน" count="0.0 ★">
@@ -293,6 +287,200 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
     </main>
   );
+}
+
+type VenueLocationState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; venue: VenueLocation };
+
+function VenueLocationMap({
+  venue,
+  eventName,
+}: {
+  venue: EventMap['event']['venue'];
+  eventName: string;
+}) {
+  const [state, setState] = useState<VenueLocationState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const [mapProviderFailed, setMapProviderFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setState({ status: 'loading' });
+    setMapProviderFailed(false);
+    getVenueLocation(venue.id, controller.signal)
+      .then((location) => {
+        if (active) setState({ status: 'ready', venue: location });
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setState({ status: 'error' });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [attempt, venue.id]);
+
+  const coordinates =
+    state.status === 'ready'
+      ? parseCoordinates(state.venue.latitude, state.venue.longitude)
+      : null;
+  const address = venue.address ?? venue.name;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
+      <div>
+        <TravelRow
+          icon={<MapPin className="h-5 w-5" />}
+          label="สถานที่จัดงาน"
+          value={venue.name}
+        />
+        <TravelRow
+          icon={<Navigation className="h-5 w-5" />}
+          label="คำแนะนำการเดินทาง"
+          value="ผู้จัดงานยังไม่ได้ระบุคำแนะนำการเดินทาง"
+        />
+        <TravelRow
+          icon={<ParkingCircle className="h-5 w-5" />}
+          label="ที่จอดรถ"
+          value="ผู้จัดงานยังไม่ได้ระบุข้อมูลที่จอดรถ"
+        />
+        {coordinates ? (
+          <a
+            href={googleDirectionsUrl(coordinates)}
+            target="_blank"
+            rel="noreferrer"
+            className="sl-action-primary mt-3 w-full"
+          >
+            เปิดเส้นทางใน Google Maps →
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="sl-action-primary mt-3 w-full cursor-not-allowed opacity-50"
+          >
+            ยังไม่มีพิกัดสำหรับนำทาง
+          </button>
+        )}
+      </div>
+
+      <div className="relative min-h-[320px] overflow-hidden rounded-[18px] border border-[#ded4e5] bg-[linear-gradient(135deg,#f8f5fa,#eff4f2)] shadow-soft sm:min-h-[390px]">
+        {state.status === 'loading' ? (
+          <div className="grid min-h-[320px] place-items-center px-6 text-center sm:min-h-[390px]" role="status">
+            <span className="text-sm font-bold text-muted">กำลังโหลดตำแหน่งสถานที่…</span>
+          </div>
+        ) : null}
+        {state.status === 'error' ? (
+          <MapFallback
+            title="โหลดตำแหน่งสถานที่ไม่สำเร็จ"
+            description="กรุณาลองโหลดข้อมูลแผนที่อีกครั้ง"
+            onRetry={() => setAttempt((value) => value + 1)}
+          />
+        ) : null}
+        {state.status === 'ready' && !coordinates ? (
+          <MapFallback
+            title="ยังไม่มีพิกัดสถานที่"
+            description="ผู้จัดงานยังไม่ได้ระบุ Latitude และ Longitude จึงไม่แสดงแผนที่เพื่อป้องกันการปักผิดจุด"
+          />
+        ) : null}
+        {coordinates && mapProviderFailed ? (
+          <MapFallback
+            title="ไม่สามารถแสดงแผนที่ได้"
+            description="Google Maps โหลดไม่สำเร็จ แต่คุณยังเปิดเส้นทางจากปุ่มด้านซ้ายได้"
+          />
+        ) : null}
+        {coordinates && !mapProviderFailed ? (
+          <iframe
+            title={`แผนที่ ${venue.name}`}
+            src={googleEmbedUrl(coordinates)}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="pointer-events-none absolute inset-0 h-full w-full border-0 sm:pointer-events-auto"
+            onError={() => setMapProviderFailed(true)}
+            allowFullScreen
+          />
+        ) : null}
+        {coordinates && !mapProviderFailed ? (
+          <div className="pointer-events-none absolute bottom-4 left-4 flex max-w-[calc(100%-32px)] items-center gap-3 rounded-xl border border-white bg-white/95 px-3 py-2.5 text-left shadow-soft">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald ring-4 ring-emerald/15" />
+            <span className="min-w-0">
+              <strong className="block truncate text-sm">{eventName}</strong>
+              <span className="block truncate text-sm text-muted">{address}</span>
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MapFallback({
+  title,
+  description,
+  onRetry,
+}: {
+  title: string;
+  description: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="grid min-h-[320px] place-items-center px-6 text-center sm:min-h-[390px]">
+      <div>
+        <span className="mx-auto grid h-[46px] w-[46px] place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">
+          <MapPin className="h-5 w-5" />
+        </span>
+        <strong className="mt-3 block text-sm">{title}</strong>
+        <span className="mt-1 block max-w-md text-sm leading-6 text-muted">
+          {description}
+        </span>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="sl-action-secondary mt-4 text-violet"
+          >
+            ลองโหลดแผนที่อีกครั้ง
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+type Coordinates = { latitude: number; longitude: number };
+
+function parseCoordinates(
+  latitude: string | null,
+  longitude: string | null,
+): Coordinates | null {
+  if (latitude === null || longitude === null) return null;
+  const parsed = { latitude: Number(latitude), longitude: Number(longitude) };
+  if (
+    !Number.isFinite(parsed.latitude) ||
+    !Number.isFinite(parsed.longitude) ||
+    parsed.latitude < -90 ||
+    parsed.latitude > 90 ||
+    parsed.longitude < -180 ||
+    parsed.longitude > 180
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+function googleEmbedUrl({ latitude, longitude }: Coordinates): string {
+  const destination = encodeURIComponent(`${latitude},${longitude}`);
+  return `https://www.google.com/maps?q=${destination}&z=16&output=embed`;
+}
+
+function googleDirectionsUrl({ latitude, longitude }: Coordinates): string {
+  const destination = encodeURIComponent(`${latitude},${longitude}`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
 }
 
 type AnnouncementState =
