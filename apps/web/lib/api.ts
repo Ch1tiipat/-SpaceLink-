@@ -694,6 +694,16 @@ export type AdminVenue = {
   updatedAt: string;
 };
 
+export type VenueLocation = Pick<
+  AdminVenue,
+  'id' | 'name' | 'address' | 'latitude' | 'longitude'
+>;
+
+export type UpdateAdminVenueLocationInput = {
+  latitude: string;
+  longitude: string;
+};
+
 export type AdminZone = {
   id: string;
   venueId: string;
@@ -1061,6 +1071,29 @@ export function getAdminVenues(
   signal?: AbortSignal,
 ): Promise<AdminVenue[]> {
   return getJson<AdminVenue[]>("/venues", { signal, token });
+}
+
+export function getVenueLocation(
+  venueId: string,
+  signal?: AbortSignal,
+): Promise<VenueLocation> {
+  return getJson<VenueLocation>(
+    "/venues/" + encodeURIComponent(venueId),
+    { signal },
+  );
+}
+
+export function updateAdminVenueLocation(
+  venueId: string,
+  input: UpdateAdminVenueLocationInput,
+  token: string,
+): Promise<AdminVenue> {
+  return patchJson<AdminVenue>(
+    "/venues/" + encodeURIComponent(venueId),
+    input,
+    { token },
+    "ไม่สามารถบันทึกพิกัดสถานที่ได้",
+  );
 }
 
 export function getAdminZones(

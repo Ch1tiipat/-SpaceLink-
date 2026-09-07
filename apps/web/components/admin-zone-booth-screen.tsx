@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Edit3,
   Loader2,
+  MapPin,
   Plus,
   Save,
   Trash2,
@@ -24,6 +25,7 @@ import {
   getAdminZones,
   getMe,
   updateAdminBooth,
+  updateAdminVenueLocation,
   updateAdminZone,
   type AdminBooth,
   type AdminBoothStatus,
@@ -37,6 +39,11 @@ import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied';
 type EditorMode = 'create' | 'edit';
+
+type VenueLocationDraft = {
+  latitude: string;
+  longitude: string;
+};
 
 type ZoneDraft = {
   code: string;
@@ -76,6 +83,11 @@ const EMPTY_BOOTH: BoothDraft = {
   status: 'AVAILABLE',
 };
 
+const EMPTY_VENUE_LOCATION: VenueLocationDraft = {
+  latitude: '',
+  longitude: '',
+};
+
 const STATUS_LABELS: Record<AdminBoothStatus, string> = {
   AVAILABLE: 'ว่างพร้อมจอง',
   BOOKED: 'จองแล้ว',
@@ -97,12 +109,15 @@ export function AdminZoneBoothScreen() {
   const [loadingZones, setLoadingZones] = useState(false);
   const [loadingBooths, setLoadingBooths] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingVenue, setSavingVenue] = useState(false);
   const [zoneMode, setZoneMode] = useState<EditorMode>('create');
   const [boothMode, setBoothMode] = useState<EditorMode>('create');
   const [editingZoneId, setEditingZoneId] = useState('');
   const [editingBoothId, setEditingBoothId] = useState('');
   const [zoneDraft, setZoneDraft] = useState<ZoneDraft>(EMPTY_ZONE);
   const [boothDraft, setBoothDraft] = useState<BoothDraft>(EMPTY_BOOTH);
+  const [venueLocationDraft, setVenueLocationDraft] =
+    useState<VenueLocationDraft>(EMPTY_VENUE_LOCATION);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -169,6 +184,18 @@ export function AdminZoneBoothScreen() {
 
     return () => controller.abort();
   }, [access, selectedOrganizationId, token]);
+
+  useEffect(() => {
+    const selectedVenue = venues.find((venue) => venue.id === venueId);
+    setVenueLocationDraft(
+      selectedVenue
+        ? {
+            latitude: selectedVenue.latitude ?? '',
+            longitude: selectedVenue.longitude ?? '',
+          }
+        : EMPTY_VENUE_LOCATION,
+    );
+  }, [venueId, venues]);
 
   useEffect(() => {
     if (!token || !venueId) {
@@ -319,6 +346,43 @@ export function AdminZoneBoothScreen() {
     }
   }
 
+  async function submitVenueLocation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const latitude = venueLocationDraft.latitude.trim();
+    const longitude = venueLocationDraft.longitude.trim();
+
+    if (!venueId) {
+      setError('กรุณาเลือกสถานที่จัดงาน');
+      return;
+    }
+    if (!isCoordinate(latitude, -90, 90)) {
+      setError('Latitude ต้องอยู่ระหว่าง -90 ถึง 90 และมีทศนิยมไม่เกิน 6 ตำแหน่ง');
+      return;
+    }
+    if (!isCoordinate(longitude, -180, 180)) {
+      setError('Longitude ต้องอยู่ระหว่าง -180 ถึง 180 และมีทศนิยมไม่เกิน 6 ตำแหน่ง');
+      return;
+    }
+
+    setSavingVenue(true);
+    clearFeedback();
+    try {
+      const saved = await updateAdminVenueLocation(
+        venueId,
+        { latitude, longitude },
+        token,
+      );
+      setVenues((current) =>
+        current.map((venue) => (venue.id === saved.id ? saved : venue)),
+      );
+      setSuccess('บันทึกพิกัดสถานที่เรียบร้อยแล้ว');
+    } catch (cause) {
+      setError(describeError(cause, 'ไม่สามารถบันทึกพิกัดสถานที่ได้'));
+    } finally {
+      setSavingVenue(false);
+    }
+  }
+
   async function submitBooth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!zoneId || !boothDraft.code.trim() || !isMoney(boothDraft.boothPrice)) {
@@ -449,6 +513,48 @@ export function AdminZoneBoothScreen() {
           <p className="mt-3 text-xs leading-5 text-muted">
             รายการสถานที่มาจาก Public Discovery API การสร้างและแก้ไขจะสำเร็จเฉพาะสถานที่ที่บัญชีนี้มีสิทธิ์ดูแล
           </p>
+          <form
+            onSubmit={submitVenueLocation}
+            className="mt-5 border-t border-line pt-5"
+          >
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
+                <MapPin className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h2 className="font-black text-ink">พิกัดแผนที่สถานที่</h2>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  กรอกพิกัดจริงจาก Google Maps เพื่อแสดงตำแหน่งในหน้า Event
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid max-w-xl gap-3 sm:grid-cols-2">
+              <Field
+                label="Latitude *"
+                value={venueLocationDraft.latitude}
+                onChange={(latitude) =>
+                  setVenueLocationDraft((current) => ({ ...current, latitude }))
+                }
+                placeholder="เช่น 14.882936"
+              />
+              <Field
+                label="Longitude *"
+                value={venueLocationDraft.longitude}
+                onChange={(longitude) =>
+                  setVenueLocationDraft((current) => ({ ...current, longitude }))
+                }
+                placeholder="เช่น 102.018120"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={savingVenue || !venueId}
+              className="mt-4 flex items-center gap-2 rounded-xl bg-violet px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" aria-hidden />
+              {savingVenue ? 'กำลังบันทึก...' : 'บันทึกพิกัดสถานที่'}
+            </button>
+          </form>
           {error && <Feedback tone="error">{error}</Feedback>}
           {success && <Feedback tone="success">{success}</Feedback>}
         </section>
@@ -776,6 +882,12 @@ function optionalNumber<Key extends string>(key: Key, value: string): Partial<Re
 
 function isMoney(value: string): boolean {
   return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value.trim());
+}
+
+function isCoordinate(value: string, min: number, max: number): boolean {
+  if (!/^-?\d{1,3}(\.\d{1,6})?$/.test(value)) return false;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max;
 }
 
 function describeError(cause: unknown, fallback: string): string {
