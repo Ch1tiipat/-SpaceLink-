@@ -6,6 +6,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AverageRatingQueryDto } from './dto/average-rating-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { MyReviewsQueryDto } from './dto/my-reviews-query.dto';
 import { ReviewsService } from './reviews.service';
 
 @Controller('reviews')
@@ -16,6 +17,13 @@ export class ReviewsController {
   @Get('average')
   getAverage(@Query() query: AverageRatingQueryDto) {
     return this.reviewsService.getAverage(query.targetType, query.targetId);
+  }
+
+  @Get('me')
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  getMine(@Query() query: MyReviewsQueryDto, @CurrentUser() currentUser: User) {
+    return this.reviewsService.getMine(currentUser.id, query.page, query.limit);
   }
 
   @Post()

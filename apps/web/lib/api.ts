@@ -212,6 +212,28 @@ export type CreateReviewInput = {
   reviewerDisplayName?: string;
 };
 
+export type MyReview = {
+  id: string;
+  targetType: ReviewTargetType;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  context: {
+    bookingCode: string;
+    event: { name: string; slug: string };
+    booth: { code: string };
+    zone: { code: string; name: string | null };
+  } | null;
+};
+
+export type MyReviewsPage = {
+  items: MyReview[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+};
+
 export type PenaltyReason =
   "NO_SHOW" | "RULE_VIOLATION" | "CONTRACT_BREACH" | "BAD_REVIEW" | "OTHER";
 
@@ -1932,6 +1954,18 @@ export function createReview(
   token: string,
 ): Promise<unknown> {
   return postJson("/reviews", input, { token }, "ไม่สามารถบันทึกคะแนนได้");
+}
+
+export function getMyReviews(
+  token: string,
+  page = 1,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<MyReviewsPage> {
+  return getJson<MyReviewsPage>(
+    `/reviews/me?page=${page}&limit=${limit}`,
+    { signal, token },
+  );
 }
 
 export function getPenaltyHistory(
