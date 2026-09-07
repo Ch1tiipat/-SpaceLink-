@@ -11,6 +11,7 @@ import {
   Layers3,
   LoaderCircle,
   Mail,
+  MessageSquareText,
   Package,
   Phone,
   Star,
@@ -190,7 +191,15 @@ export function ProfileShopScreen() {
                 : 'ข้อมูลนี้จะถูกดึงไปใช้ในการจองและแสดงบนบูธ'}
             </p>
           </div>
-
+          {ready && isVendor && (
+            <Link
+              href="/reviews"
+              className="sl-action-secondary inline-flex items-center gap-2 self-start"
+            >
+              <MessageSquareText className="h-4 w-4" aria-hidden />
+              การรีวิวของฉัน
+            </Link>
+          )}
         </div>
 
         {state.status === 'loading' && (
