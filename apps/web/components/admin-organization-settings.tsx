@@ -2,11 +2,20 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { BadgeCheck, Building2, Gauge, Landmark, ShieldCheck } from 'lucide-react';
+import {
+  BadgeCheck,
+  Building2,
+  Gauge,
+  Landmark,
+  Link2,
+  MessageCircle,
+  ShieldCheck,
+} from 'lucide-react';
 import {
   getMe,
   updateOrganizationBookingQuota,
   updateOrganizationPromptPay,
+  updateOrganizationSocialLinks,
   type CurrentUser,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -15,6 +24,15 @@ import { useAdminOrganizationSelection } from '@/components/app-shell';
 type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
 
 const PROMPTPAY_PATTERN = /^(\d{10}|\d{13}|\d{15})$/;
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export function AdminOrganizationSettings() {
   const router = useRouter();
@@ -28,16 +46,21 @@ export function AdminOrganizationSettings() {
   const [organizationId, setOrganizationId] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [promptpayId, setPromptpayId] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [lineUrl, setLineUrl] = useState('');
   const [currentBookingQuota, setCurrentBookingQuota] = useState<number | null>(
     null,
   );
   const [bookingQuotaInput, setBookingQuotaInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [quotaSaving, setQuotaSaving] = useState(false);
+  const [socialSaving, setSocialSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [quotaSuccess, setQuotaSuccess] = useState<string | null>(null);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [socialSuccess, setSocialSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,6 +115,8 @@ export function AdminOrganizationSettings() {
     setOrganizationId(organization.id);
     setOrganizationName(organization.name);
     setPromptpayId(organization.promptpayId ?? '');
+    setFacebookUrl(organization.facebookUrl ?? '');
+    setLineUrl(organization.lineUrl ?? '');
     setCurrentBookingQuota(organization.bookingQuotaPerVendor);
     setBookingQuotaInput(
       organization.bookingQuotaPerVendor?.toString() ?? '',
@@ -103,6 +128,8 @@ export function AdminOrganizationSettings() {
     setSuccess(null);
     setQuotaError(null);
     setQuotaSuccess(null);
+    setSocialError(null);
+    setSocialSuccess(null);
   }, [selectedOrganizationId]);
 
   const selectedOrganization = organizations.find(
@@ -188,6 +215,57 @@ export function AdminOrganizationSettings() {
       );
     } finally {
       setQuotaSaving(false);
+    }
+  }
+
+  async function handleSocialSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSocialError(null);
+    setSocialSuccess(null);
+
+    const normalizedFacebookUrl = facebookUrl.trim();
+    const normalizedLineUrl = lineUrl.trim();
+    if (normalizedFacebookUrl && !isHttpUrl(normalizedFacebookUrl)) {
+      setSocialError('ลิงก์ Facebook ต้องขึ้นต้นด้วย http:// หรือ https://');
+      return;
+    }
+    if (normalizedLineUrl && !isHttpUrl(normalizedLineUrl)) {
+      setSocialError('ลิงก์ LINE ต้องขึ้นต้นด้วย http:// หรือ https://');
+      return;
+    }
+
+    setSocialSaving(true);
+    try {
+      const updated = await updateOrganizationSocialLinks(
+        organizationId,
+        {
+          facebookUrl: normalizedFacebookUrl || null,
+          lineUrl: normalizedLineUrl || null,
+        },
+        token,
+      );
+      setFacebookUrl(updated.facebookUrl ?? '');
+      setLineUrl(updated.lineUrl ?? '');
+      setOrganizations((current) =>
+        current.map((organization) =>
+          organization.id === organizationId
+            ? {
+                ...organization,
+                facebookUrl: updated.facebookUrl,
+                lineUrl: updated.lineUrl,
+              }
+            : organization,
+        ),
+      );
+      setSocialSuccess('บันทึกช่องทางติดต่อขององค์กรเรียบร้อยแล้ว');
+    } catch (cause) {
+      setSocialError(
+        cause instanceof Error
+          ? cause.message
+          : 'บันทึกช่องทางติดต่อขององค์กรไม่สำเร็จ',
+      );
+    } finally {
+      setSocialSaving(false);
     }
   }
 
@@ -298,6 +376,103 @@ export function AdminOrganizationSettings() {
             >
               {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
             </button>
+            </form>
+
+            <form
+              className="sl-surface p-6 sm:p-8"
+              onSubmit={handleSocialSubmit}
+            >
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
+                  <MessageCircle className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-xl font-black">ช่องทางติดต่อผู้จัดงาน</h2>
+                  <p className="text-sm text-muted">
+                    แสดง Facebook และ LINE ขององค์กรในหน้า Event
+                  </p>
+                </div>
+              </div>
+
+              <label
+                className="mt-7 block text-sm font-bold"
+                htmlFor="organization-facebook-url"
+              >
+                ลิงก์ Facebook Page
+              </label>
+              <div className="relative mt-2">
+                <Link2
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                  aria-hidden
+                />
+                <input
+                  id="organization-facebook-url"
+                  name="facebookUrl"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                  value={facebookUrl}
+                  onChange={(event) => {
+                    setFacebookUrl(event.target.value);
+                    setSocialError(null);
+                    setSocialSuccess(null);
+                  }}
+                  placeholder="https://www.facebook.com/your-page"
+                />
+              </div>
+
+              <label
+                className="mt-5 block text-sm font-bold"
+                htmlFor="organization-line-url"
+              >
+                ลิงก์ LINE
+              </label>
+              <div className="relative mt-2">
+                <Link2
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                  aria-hidden
+                />
+                <input
+                  id="organization-line-url"
+                  name="lineUrl"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                  value={lineUrl}
+                  onChange={(event) => {
+                    setLineUrl(event.target.value);
+                    setSocialError(null);
+                    setSocialSuccess(null);
+                  }}
+                  placeholder="https://line.me/R/ti/p/@your-account"
+                />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted">
+                ไม่บังคับกรอก เมื่อลบค่าแล้วบันทึก ปุ่มช่องทางนั้นจะไม่แสดงในหน้า Event
+              </p>
+
+              <div aria-live="polite">
+                {socialError ? (
+                  <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {socialError}
+                  </p>
+                ) : null}
+                {socialSuccess ? (
+                  <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                    {socialSuccess}
+                  </p>
+                ) : null}
+              </div>
+
+              <button
+                type="submit"
+                disabled={socialSaving}
+                className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {socialSaving ? 'กำลังบันทึก...' : 'บันทึกช่องทางติดต่อ'}
+              </button>
             </form>
 
             {canEditBookingQuota ? (
