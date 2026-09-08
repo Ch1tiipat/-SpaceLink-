@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Bell,
@@ -10,60 +10,60 @@ import {
   Megaphone,
   RefreshCw,
   ShieldAlert,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   type NotificationRecord,
   type NotificationType,
-} from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { getSuperAdminNotificationHref } from "@/lib/super-admin-notifications";
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { getSuperAdminNotificationHref } from '@/lib/super-admin-notifications';
 
-const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Bangkok",
+const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Bangkok',
 });
 
 const TYPE_META = {
   ANNOUNCEMENT: {
-    label: "ประกาศ",
+    label: 'ประกาศ',
     icon: Megaphone,
-    tone: "bg-[#fff5e9] text-[#b35c00]",
+    tone: 'bg-[#fff5e9] text-[#b35c00]',
   },
   BOOKING_STATUS: {
-    label: "การจอง",
+    label: 'การจอง',
     icon: CalendarCheck2,
-    tone: "bg-[#f0eaff] text-[#6d28d9]",
+    tone: 'bg-[#f0eaff] text-[#6d28d9]',
   },
   SUPPORT_TICKET: {
-    label: "เคสช่วยเหลือ",
+    label: 'เคสช่วยเหลือ',
     icon: LifeBuoy,
-    tone: "bg-[#eef8ff] text-[#1769aa]",
+    tone: 'bg-[#eef8ff] text-[#1769aa]',
   },
   PENALTY: {
-    label: "ความปลอดภัย",
+    label: 'ความปลอดภัย',
     icon: ShieldAlert,
-    tone: "bg-[#fff0f0] text-[#b42318]",
+    tone: 'bg-[#fff0f0] text-[#b42318]',
   },
   PAYMENT: {
-    label: "การชำระเงิน",
+    label: 'การชำระเงิน',
     icon: CreditCard,
-    tone: "bg-[#edf6ff] text-[#1d67a8]",
+    tone: 'bg-[#edf6ff] text-[#1d67a8]',
   },
   REFUND: {
-    label: "คืนเงิน",
+    label: 'คืนเงิน',
     icon: CreditCard,
-    tone: "bg-[#ebfaf3] text-[#13795b]",
+    tone: 'bg-[#ebfaf3] text-[#13795b]',
   },
   SYSTEM: {
-    label: "ระบบ",
+    label: 'ระบบ',
     icon: Bell,
-    tone: "bg-[#f2edf8] text-[#716675]",
+    tone: 'bg-[#f2edf8] text-[#716675]',
   },
 } satisfies Record<
   NotificationType,
@@ -74,14 +74,14 @@ export default function SuperAdminNotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     setLoading(true);
-    setError("");
+    setError('');
 
     void (async () => {
       try {
@@ -89,7 +89,7 @@ export default function SuperAdminNotificationsPage() {
         const rows = await getMyNotifications(token, controller.signal);
         if (active) setNotifications(rows);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active) setError(errorMessage(cause));
       } finally {
@@ -162,7 +162,7 @@ export default function SuperAdminNotificationsPage() {
             disabled={loading}
             className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] disabled:opacity-55"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             โหลดข้อมูลใหม่
           </button>
           <button
@@ -182,11 +182,11 @@ export default function SuperAdminNotificationsPage() {
           <div>
             <h2 className="text-sm font-black text-[#242032]">รายการล่าสุด</h2>
             <p className="mt-1 text-xs text-[#82788b]">
-              ยังไม่ได้อ่าน {unreadCount.toLocaleString("th-TH")} รายการ
+              ยังไม่ได้อ่าน {unreadCount.toLocaleString('th-TH')} รายการ
             </p>
           </div>
           <span className="rounded-full bg-[#f1eaff] px-3 py-1 text-xs font-extrabold text-[#6d28d9]">
-            {notifications.length.toLocaleString("th-TH")} รายการ
+            {notifications.length.toLocaleString('th-TH')} รายการ
           </span>
         </div>
 
@@ -227,7 +227,7 @@ export default function SuperAdminNotificationsPage() {
                   type="button"
                   onClick={() => void openNotification(notification)}
                   className={`flex w-full items-start gap-4 px-5 py-4 text-left transition hover:bg-[#faf7ff] ${
-                    notification.isRead ? "bg-white" : "bg-[#fbf8ff]"
+                    notification.isRead ? 'bg-white' : 'bg-[#fbf8ff]'
                   }`}
                 >
                   <span
@@ -276,14 +276,14 @@ async function getAccessToken() {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new Error("ไม่พบเซสชัน Super Admin กรุณาเข้าสู่ระบบใหม่");
+  if (!token) throw new Error('ไม่พบเซสชัน Super Admin กรุณาเข้าสู่ระบบใหม่');
   return token;
 }
 
 function errorMessage(cause: unknown) {
   return cause instanceof Error && cause.message
     ? cause.message
-    : "โหลดการแจ้งเตือนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+    : 'โหลดการแจ้งเตือนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
 }
 
 function formatDate(value: string) {
