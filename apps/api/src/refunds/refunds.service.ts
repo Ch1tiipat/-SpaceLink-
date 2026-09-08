@@ -144,6 +144,13 @@ export class RefundsService {
           result.bookingCode,
           result.refund,
         );
+        await this.notifications.createForRole(UserRole.SUPER_ADMIN, {
+          type: NotificationType.REFUND,
+          title: 'มีคำร้องขอคืนเงินใหม่',
+          body: `การจอง ${result.bookingCode} ขอคืนเงิน ${result.refund.requestedAmount.toString()} บาท`,
+          relatedEntityType: 'REFUND_REQUEST',
+          relatedEntityId: result.refund.id,
+        });
         return this.toResponse(result.refund);
       } catch (error) {
         if (

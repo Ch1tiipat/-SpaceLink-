@@ -11,6 +11,7 @@ import {
   Prisma,
   RefundStatus,
   SlipStatus,
+  UserRole,
 } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -88,6 +89,7 @@ const refundRequestUpdateMany = jest.fn();
 const orgMembershipFindMany = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
+const createForRole = jest.fn();
 
 const mockPrismaService = {
   booking: { findFirst: bookingFindFirst },
@@ -101,7 +103,7 @@ const mockPrismaService = {
   $transaction: prismaTransaction,
 };
 
-const mockNotificationsService = { createForUser };
+const mockNotificationsService = { createForUser, createForRole };
 
 function eligibleBooking() {
   return {
@@ -148,6 +150,7 @@ describe('RefundsService', () => {
       { userId: OTHER_ADMIN_ID },
     ]);
     createForUser.mockResolvedValue(null);
+    createForRole.mockResolvedValue(1);
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
@@ -209,7 +212,7 @@ describe('RefundsService', () => {
       });
     });
 
-    it('notifies only organization admins after the request commits', async () => {
+    it('notifies organization admins and super admins after the request commits', async () => {
       await service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO);
 
       expect(orgMembershipFindMany).toHaveBeenCalledWith({
@@ -227,8 +230,18 @@ describe('RefundsService', () => {
         relatedEntityType: 'REFUND_REQUEST',
         relatedEntityId: REFUND_ID,
       });
+      expect(createForRole).toHaveBeenCalledWith(UserRole.SUPER_ADMIN, {
+        type: NotificationType.REFUND,
+        title: 'มีคำร้องขอคืนเงินใหม่',
+        body: 'การจอง BK-REFUND-001 ขอคืนเงิน 1200 บาท',
+        relatedEntityType: 'REFUND_REQUEST',
+        relatedEntityId: REFUND_ID,
+      });
       expect(refundRequestCreate.mock.invocationCallOrder[0]).toBeLessThan(
         createForUser.mock.invocationCallOrder[0],
+      );
+      expect(refundRequestCreate.mock.invocationCallOrder[0]).toBeLessThan(
+        createForRole.mock.invocationCallOrder[0],
       );
     });
 

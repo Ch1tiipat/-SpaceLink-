@@ -5,6 +5,7 @@ import {
   NotificationType,
   Prisma,
   ReviewTargetType,
+  UserRole,
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -94,6 +95,39 @@ export class NotificationsService {
       // here: they can contain user-visible details that do not belong in logs.
       this.logger.error('Failed to create an in-app notification');
       return null;
+    }
+  }
+
+  /**
+   * Creates one notification for every current user with the requested
+   * platform role. Role-based fan-out is used for platform queues that every
+   * SUPER_ADMIN may act on, independently of organization membership.
+   */
+  async createForRole(
+    role: UserRole,
+    input: CreateNotificationInput,
+  ): Promise<number> {
+    try {
+      const recipients = await this.prisma.user.findMany({
+        where: { role },
+        select: { id: true },
+      });
+
+      if (recipients.length === 0) return 0;
+
+      const userIds = recipients.map(({ id }) => id);
+      const created = await this.prisma.notification.createMany({
+        data: userIds.map((userId) => ({ userId, ...input })),
+      });
+
+      void this.pushSender
+        .sendToUsers(userIds, { title: input.title, body: input.body ?? '' })
+        .catch(() => undefined);
+
+      return created.count;
+    } catch {
+      this.logger.error('Failed to create role-based notifications');
+      return 0;
     }
   }
 

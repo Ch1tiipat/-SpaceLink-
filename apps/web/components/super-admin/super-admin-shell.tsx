@@ -1,11 +1,10 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
-  BadgeDollarSign,
   Bell,
   Building2,
   CalendarCheck2,
@@ -27,16 +26,17 @@ import {
   WalletCards,
   X,
   type LucideIcon,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   getMyNotifications,
   getUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
   type NotificationRecord,
-} from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
-import { useAuthState } from '@/lib/use-auth-state';
+} from "@/lib/api";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { getSuperAdminNotificationHref } from "@/lib/super-admin-notifications";
+import { useAuthState } from "@/lib/use-auth-state";
 
 type NavigationItem = {
   label: string;
@@ -52,88 +52,87 @@ type NavigationGroup = {
 
 const NAVIGATION: NavigationGroup[] = [
   {
-    label: 'SUPER ADMIN',
+    label: "SUPER ADMIN",
     items: [
-      { label: 'ภาพรวม', icon: LayoutDashboard, href: '/super-admin' },
+      { label: "ภาพรวม", icon: LayoutDashboard, href: "/super-admin" },
       {
-        label: 'องค์กรทั้งหมด',
+        label: "องค์กรทั้งหมด",
         icon: Building2,
-        href: '/super-admin/organizations',
+        href: "/super-admin/organizations",
       },
       {
-        label: 'แอดมินบริษัท',
+        label: "แอดมินบริษัท",
         icon: ShieldCheck,
-        href: '/super-admin/admins',
+        href: "/super-admin/admins",
       },
     ],
   },
   {
-    label: 'USERS & TRANSACTIONS',
+    label: "USERS & TRANSACTIONS",
     items: [
-      { label: 'ผู้ใช้ทั้งหมด', icon: UsersRound, href: '/super-admin/users' },
+      { label: "ผู้ใช้ทั้งหมด", icon: UsersRound, href: "/super-admin/users" },
       {
-        label: 'การจองทั้งหมด',
+        label: "การจองทั้งหมด",
         icon: CalendarCheck2,
-        href: '/super-admin/events-bookings?tab=bookings',
+        href: "/super-admin/events-bookings?tab=bookings",
       },
       {
-        label: 'การเงินและคืนเงิน',
+        label: "การเงินและคืนเงิน",
         icon: WalletCards,
-        href: '/super-admin/events-bookings?tab=payments',
+        href: "/super-admin/events-bookings?tab=payments",
       },
     ],
   },
   {
-    label: 'CONTROL CENTER',
+    label: "CONTROL CENTER",
     items: [
       {
-        label: 'เคสช่วยเหลือ',
+        label: "เคสช่วยเหลือ",
         icon: LifeBuoy,
-        href: '/super-admin/support?tab=tickets',
+        href: "/super-admin/support?tab=tickets",
       },
       {
-        label: 'รายงานและความปลอดภัย',
+        label: "รายงานและความปลอดภัย",
         icon: ShieldAlert,
-        href: '/super-admin/support?tab=moderation',
+        href: "/super-admin/support?tab=moderation",
       },
       {
-        label: 'Audit logs',
+        label: "Audit logs",
         icon: ScrollText,
-        href: '/super-admin/audit-logs',
+        href: "/super-admin/audit-logs",
       },
     ],
   },
   {
-    label: 'PLATFORM',
+    label: "PLATFORM",
     collapsible: true,
     items: [
       {
-        label: 'ประกาศกลาง',
+        label: "ประกาศกลาง",
         icon: Megaphone,
-        href: '/super-admin/announcements',
+        href: "/super-admin/announcements",
       },
-      { label: 'Package และ Billing', icon: BadgeDollarSign },
-      { label: 'สถานะระบบ', icon: Activity },
-      { label: 'บทบาทและสิทธิ์', icon: KeyRound },
+      { label: "สถานะระบบ", icon: Activity },
+      { label: "บทบาทและสิทธิ์", icon: KeyRound },
       {
-        label: 'ตั้งค่าระบบ',
+        label: "ตั้งค่าระบบ",
         icon: Settings2,
-        href: '/super-admin/settings',
+        href: "/super-admin/settings",
       },
     ],
   },
 ];
 
-const THAI_DATE = new Intl.DateTimeFormat('th-TH', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Asia/Bangkok',
+const THAI_DATE = new Intl.DateTimeFormat("th-TH", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Bangkok",
 });
-const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-  timeZone: 'Asia/Bangkok',
+const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "Asia/Bangkok",
 });
 const NOTIFICATION_PREVIEW_LIMIT = 6;
 
@@ -155,11 +154,11 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notificationToken, setNotificationToken] = useState('');
+  const [notificationToken, setNotificationToken] = useState("");
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [notificationLoading, setNotificationLoading] = useState(false);
-  const [notificationError, setNotificationError] = useState('');
+  const [notificationError, setNotificationError] = useState("");
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -167,54 +166,76 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   }, [pathname, queryString]);
 
   useEffect(() => {
-    setNotificationToken('');
+    setNotificationToken("");
     setNotifications([]);
     setUnreadCount(null);
-    setNotificationError('');
-    if (auth.status !== 'signed-in' || auth.role !== 'SUPER_ADMIN') return;
+    setNotificationError("");
+    if (auth.status !== "signed-in" || auth.role !== "SUPER_ADMIN") return;
 
-    const controller = new AbortController();
     let active = true;
-    void (async () => {
+    let controller: AbortController | null = null;
+    const refreshUnreadCount = async () => {
+      controller?.abort();
+      controller = new AbortController();
       try {
         const token = await getSessionToken();
         if (!active) return;
         setNotificationToken(token);
-        const result = await getUnreadNotificationCount(token, controller.signal);
-        if (active) setUnreadCount(result.count);
+        const result = await getUnreadNotificationCount(
+          token,
+          controller.signal,
+        );
+        if (active) {
+          setUnreadCount(result.count);
+          setNotificationError("");
+        }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === "AbortError")
+          return;
         if (active) setNotificationError(notificationErrorMessage(cause));
       }
-    })();
+    };
+
+    void refreshUnreadCount();
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshUnreadCount();
+    }, 30_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshUnreadCount();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       active = false;
-      controller.abort();
+      controller?.abort();
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [auth]);
 
   useEffect(() => {
     if (!drawerOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDrawerOpen(false);
+      if (event.key === "Escape") setDrawerOpen(false);
     };
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', closeOnEscape);
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', closeOnEscape);
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
     };
   }, [drawerOpen]);
 
   useEffect(() => {
-    if (auth.status === 'signed-out') router.replace('/login');
-    if (auth.status === 'signed-in' && auth.role !== 'SUPER_ADMIN') {
-      router.replace('/');
+    if (auth.status === "signed-out") router.replace("/login");
+    if (auth.status === "signed-in" && auth.role !== "SUPER_ADMIN") {
+      router.replace("/");
     }
   }, [auth, router]);
 
-  if (auth.status !== 'signed-in' || auth.role !== 'SUPER_ADMIN') {
+  if (auth.status !== "signed-in" || auth.role !== "SUPER_ADMIN") {
     return (
       <main className="grid min-h-screen place-items-center bg-[#fbfaff] px-6">
         <div className="text-center">
@@ -229,13 +250,15 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
 
   async function loadNotifications() {
     setNotificationLoading(true);
-    setNotificationError('');
+    setNotificationError("");
     try {
-      const token = notificationToken || await getSessionToken();
+      const token = notificationToken || (await getSessionToken());
       setNotificationToken(token);
       const rows = await getMyNotifications(token);
       setNotifications(rows);
-      setUnreadCount(rows.filter((notification) => !notification.isRead).length);
+      setUnreadCount(
+        rows.filter((notification) => !notification.isRead).length,
+      );
     } catch (cause) {
       setNotificationError(notificationErrorMessage(cause));
     } finally {
@@ -252,10 +275,16 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   async function readNotification(notification: NotificationRecord) {
     const previous = notifications;
     if (!notification.isRead) {
-      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, isRead: true } : item));
-      setUnreadCount((current) => current === null ? null : Math.max(0, current - 1));
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id ? { ...item, isRead: true } : item,
+        ),
+      );
+      setUnreadCount((current) =>
+        current === null ? null : Math.max(0, current - 1),
+      );
       try {
-        const token = notificationToken || await getSessionToken();
+        const token = notificationToken || (await getSessionToken());
         await markNotificationRead(notification.id, token);
       } catch (cause) {
         setNotifications(previous);
@@ -264,21 +293,25 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
       }
     }
     setNotificationOpen(false);
-    router.push(superAdminNotificationHref(notification));
+    router.push(getSuperAdminNotificationHref(notification));
   }
 
   async function readAllNotifications() {
     if (!notifications.some((notification) => !notification.isRead)) return;
     const previous = notifications;
-    setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
+    setNotifications((current) =>
+      current.map((notification) => ({ ...notification, isRead: true })),
+    );
     setUnreadCount(0);
-    setNotificationError('');
+    setNotificationError("");
     try {
-      const token = notificationToken || await getSessionToken();
+      const token = notificationToken || (await getSessionToken());
       await markAllNotificationsRead(token);
     } catch (cause) {
       setNotifications(previous);
-      setUnreadCount(previous.filter((notification) => !notification.isRead).length);
+      setUnreadCount(
+        previous.filter((notification) => !notification.isRead).length,
+      );
       setNotificationError(notificationErrorMessage(cause));
     }
   }
@@ -298,15 +331,15 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
     <div
       className={`min-h-screen bg-[#fbfaff] transition-[grid-template-columns] duration-200 lg:grid ${
         collapsed
-          ? 'lg:grid-cols-[0_minmax(0,1fr)]'
-          : 'lg:grid-cols-[254px_minmax(0,1fr)]'
+          ? "lg:grid-cols-[0_minmax(0,1fr)]"
+          : "lg:grid-cols-[254px_minmax(0,1fr)]"
       }`}
     >
       <aside
         className={`sticky top-0 hidden h-screen w-[254px] flex-col overflow-y-auto overflow-x-hidden border-r border-[#ebe4ef] bg-[linear-gradient(180deg,#fff_0%,#fdfbff_72%,#faf7ff_100%)] px-[13px] pb-[14px] pt-[18px] transition duration-200 lg:flex ${
           collapsed
-            ? 'pointer-events-none -translate-x-3 opacity-0'
-            : 'translate-x-0 opacity-100'
+            ? "pointer-events-none -translate-x-3 opacity-0"
+            : "translate-x-0 opacity-100"
         }`}
       >
         {sidebar}
@@ -347,16 +380,16 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => {
-              if (window.matchMedia('(min-width: 1024px)').matches) {
+              if (window.matchMedia("(min-width: 1024px)").matches) {
                 setCollapsed(false);
               } else {
                 setDrawerOpen(true);
               }
             }}
             className={`h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] ${
-              collapsed ? 'lg:absolute lg:left-5 lg:grid' : 'lg:hidden'
+              collapsed ? "lg:absolute lg:left-5 lg:grid" : "lg:hidden"
             } grid`}
-            aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
+            aria-label={collapsed ? "เปิดแถบเมนู" : "เปิดเมนู"}
           >
             <Menu className="h-[18px] w-[18px]" />
           </button>
@@ -364,8 +397,40 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
             ข้อมูลล่าสุด {THAI_DATE.format(new Date())}
           </span>
           <div className="relative">
-            <button type="button" onClick={toggleNotifications} className="relative grid h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] transition hover:border-[#d8c9ed] hover:bg-[#faf7ff] hover:text-[#6d28d9]" aria-label={`การแจ้งเตือน${unreadCount ? ` ยังไม่ได้อ่าน ${unreadCount} รายการ` : ''}`} aria-expanded={notificationOpen} aria-haspopup="dialog"><Bell className="h-[18px] w-[18px]" />{unreadCount && unreadCount > 0 ? <span className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-white bg-[#ef4444] px-1 text-[9px] font-extrabold leading-none text-white">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}</button>
-            {notificationOpen ? <><button type="button" className="fixed inset-0 z-30 cursor-default" onClick={() => setNotificationOpen(false)} aria-label="ปิดรายการแจ้งเตือน" /><NotificationMenu notifications={notifications} loading={notificationLoading} error={notificationError} unreadCount={unreadCount ?? 0} onRead={readNotification} onReadAll={readAllNotifications} onClose={() => setNotificationOpen(false)} /></> : null}
+            <button
+              type="button"
+              onClick={toggleNotifications}
+              className="relative grid h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] transition hover:border-[#d8c9ed] hover:bg-[#faf7ff] hover:text-[#6d28d9]"
+              aria-label={`การแจ้งเตือน${unreadCount ? ` ยังไม่ได้อ่าน ${unreadCount} รายการ` : ""}`}
+              aria-expanded={notificationOpen}
+              aria-haspopup="dialog"
+            >
+              <Bell className="h-[18px] w-[18px]" />
+              {unreadCount && unreadCount > 0 ? (
+                <span className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-white bg-[#ef4444] px-1 text-[9px] font-extrabold leading-none text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </button>
+            {notificationOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-30 cursor-default"
+                  onClick={() => setNotificationOpen(false)}
+                  aria-label="ปิดรายการแจ้งเตือน"
+                />
+                <NotificationMenu
+                  notifications={notifications}
+                  loading={notificationLoading}
+                  error={notificationError}
+                  unreadCount={unreadCount ?? 0}
+                  onRead={readNotification}
+                  onReadAll={readAllNotifications}
+                  onClose={() => setNotificationOpen(false)}
+                />
+              </>
+            ) : null}
           </div>
           <span className="flex items-center gap-2 rounded-xl bg-[#f2eaff] px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4]">
             <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white">
@@ -384,26 +449,121 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   );
 }
 
-function NotificationMenu({ notifications, loading, error, unreadCount, onRead, onReadAll, onClose }: { notifications: NotificationRecord[]; loading: boolean; error: string; unreadCount: number; onRead: (notification: NotificationRecord) => Promise<void>; onReadAll: () => Promise<void>; onClose: () => void }) {
+function NotificationMenu({
+  notifications,
+  loading,
+  error,
+  unreadCount,
+  onRead,
+  onReadAll,
+  onClose,
+}: {
+  notifications: NotificationRecord[];
+  loading: boolean;
+  error: string;
+  unreadCount: number;
+  onRead: (notification: NotificationRecord) => Promise<void>;
+  onReadAll: () => Promise<void>;
+  onClose: () => void;
+}) {
   const latest = notifications.slice(0, NOTIFICATION_PREVIEW_LIMIT);
-  return <section role="dialog" aria-label="รายการแจ้งเตือน Super Admin" className="absolute right-0 top-12 z-40 w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)]"><header className="flex items-start justify-between gap-3 border-b border-[#eee8f3] bg-[linear-gradient(135deg,#fff,#faf7ff)] px-4 py-4"><div><span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#7c3aed]">Notification center</span><h2 className="mt-1 text-base font-black text-[#242032]">การแจ้งเตือน</h2><p className="mt-1 text-[11px] text-[#82788b]">ยังไม่ได้อ่าน {unreadCount.toLocaleString('th-TH')} รายการ</p></div><button type="button" onClick={() => void onReadAll()} disabled={unreadCount === 0 || loading} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#ded3ec] bg-white px-2.5 text-[11px] font-extrabold text-[#6d28d9] disabled:opacity-45"><CheckCheck className="h-3.5 w-3.5" />อ่านทั้งหมด</button></header>{loading ? <div className="grid gap-2 p-4">{[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-[#f2edf8]" />)}</div> : error ? <div className="p-5 text-center"><p role="alert" className="text-xs font-bold text-[#b42318]">{error}</p></div> : latest.length === 0 ? <div className="p-7 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#f1eaff] text-[#6d28d9]"><Bell className="h-5 w-5" /></span><p className="mt-3 text-sm font-bold text-[#242032]">ยังไม่มีการแจ้งเตือน</p></div> : <div className="max-h-[390px] divide-y divide-[#f0ebf4] overflow-y-auto">{latest.map((notification) => <button key={notification.id} type="button" onClick={() => void onRead(notification)} className={`block w-full px-4 py-3.5 text-left transition hover:bg-[#faf7ff] ${notification.isRead ? 'bg-white' : 'bg-[#fbf8ff]'}`}><div className="flex items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${notification.isRead ? 'bg-[#ddd5e3]' : 'bg-[#7c3aed]'}`} /><div className="min-w-0 flex-1"><strong className="block truncate text-xs text-[#2c2534]">{notification.title}</strong>{notification.body ? <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#746a7d]">{notification.body}</p> : null}<time dateTime={notification.createdAt} className="mt-1.5 block text-[10px] text-[#978e9e]">{formatNotificationDate(notification.createdAt)}</time></div></div></button>)}</div>}<footer className="border-t border-[#eee8f3] bg-[#fcfaff] p-3"><Link href="/notifications" onClick={onClose} className="block rounded-lg py-2 text-center text-xs font-extrabold text-[#6d28d9] hover:bg-[#f2eaff]">ดูการแจ้งเตือนทั้งหมด</Link></footer></section>;
-}
-
-function superAdminNotificationHref(notification: NotificationRecord) {
-  switch (notification.type) {
-    case 'PAYMENT':
-    case 'REFUND':
-      return '/super-admin/events-bookings?tab=payments';
-    case 'BOOKING_STATUS':
-      return '/super-admin/events-bookings?tab=bookings';
-    case 'SUPPORT_TICKET':
-      return '/super-admin/support?tab=tickets';
-    case 'PENALTY':
-      return '/super-admin/support?tab=moderation';
-    case 'ANNOUNCEMENT':
-    case 'SYSTEM':
-      return '/super-admin/announcements';
-  }
+  return (
+    <section
+      role="dialog"
+      aria-label="รายการแจ้งเตือน Super Admin"
+      className="absolute right-0 top-12 z-40 w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)]"
+    >
+      <header className="flex items-start justify-between gap-3 border-b border-[#eee8f3] bg-[linear-gradient(135deg,#fff,#faf7ff)] px-4 py-4">
+        <div>
+          <span className="text-[10px] font-extrabold uppercase tracking-[.12em] text-[#7c3aed]">
+            Notification center
+          </span>
+          <h2 className="mt-1 text-base font-black text-[#242032]">
+            การแจ้งเตือน
+          </h2>
+          <p className="mt-1 text-[11px] text-[#82788b]">
+            ยังไม่ได้อ่าน {unreadCount.toLocaleString("th-TH")} รายการ
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void onReadAll()}
+          disabled={unreadCount === 0 || loading}
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#ded3ec] bg-white px-2.5 text-[11px] font-extrabold text-[#6d28d9] disabled:opacity-45"
+        >
+          <CheckCheck className="h-3.5 w-3.5" />
+          อ่านทั้งหมด
+        </button>
+      </header>
+      {loading ? (
+        <div className="grid gap-2 p-4">
+          {[1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className="h-16 animate-pulse rounded-xl bg-[#f2edf8]"
+            />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="p-5 text-center">
+          <p role="alert" className="text-xs font-bold text-[#b42318]">
+            {error}
+          </p>
+        </div>
+      ) : latest.length === 0 ? (
+        <div className="p-7 text-center">
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#f1eaff] text-[#6d28d9]">
+            <Bell className="h-5 w-5" />
+          </span>
+          <p className="mt-3 text-sm font-bold text-[#242032]">
+            ยังไม่มีการแจ้งเตือน
+          </p>
+        </div>
+      ) : (
+        <div className="max-h-[390px] divide-y divide-[#f0ebf4] overflow-y-auto">
+          {latest.map((notification) => (
+            <button
+              key={notification.id}
+              type="button"
+              onClick={() => void onRead(notification)}
+              className={`block w-full px-4 py-3.5 text-left transition hover:bg-[#faf7ff] ${notification.isRead ? "bg-white" : "bg-[#fbf8ff]"}`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${notification.isRead ? "bg-[#ddd5e3]" : "bg-[#7c3aed]"}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <strong className="block truncate text-xs text-[#2c2534]">
+                    {notification.title}
+                  </strong>
+                  {notification.body ? (
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#746a7d]">
+                      {notification.body}
+                    </p>
+                  ) : null}
+                  <time
+                    dateTime={notification.createdAt}
+                    className="mt-1.5 block text-[10px] text-[#978e9e]"
+                  >
+                    {formatNotificationDate(notification.createdAt)}
+                  </time>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      <footer className="border-t border-[#eee8f3] bg-[#fcfaff] p-3">
+        <Link
+          href="/super-admin/notifications"
+          onClick={onClose}
+          className="block rounded-lg py-2 text-center text-xs font-extrabold text-[#6d28d9] hover:bg-[#f2eaff]"
+        >
+          ดูการแจ้งเตือนทั้งหมด
+        </Link>
+      </footer>
+    </section>
+  );
 }
 
 function formatNotificationDate(value: string) {
@@ -415,12 +575,12 @@ async function getSessionToken() {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new Error('ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่');
+  if (!token) throw new Error("ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่");
   return token;
 }
 
 function notificationErrorMessage(cause: unknown) {
-  return cause instanceof Error ? cause.message : 'โหลดการแจ้งเตือนไม่สำเร็จ';
+  return cause instanceof Error ? cause.message : "โหลดการแจ้งเตือนไม่สำเร็จ";
 }
 
 function ShellFallback() {
@@ -528,7 +688,7 @@ function NavigationSection({
         >
           {group.label}
           <ChevronDown
-            className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`}
+            className={`h-4 w-4 transition ${expanded ? "rotate-180" : ""}`}
           />
         </button>
       ) : (
@@ -568,8 +728,8 @@ function NavigationLink({
     : false;
   const className = `flex min-h-9 items-center gap-[11px] rounded-[9px] px-[11px] py-[7px] text-sm whitespace-nowrap transition ${
     active
-      ? 'bg-[#f2eaff] font-bold text-[#6d28d9] shadow-[inset_3px_0_0_#7c3aed]'
-      : 'text-[#716675] hover:translate-x-[3px] hover:bg-[#faf7ff] hover:text-[#6d28d9]'
+      ? "bg-[#f2eaff] font-bold text-[#6d28d9] shadow-[inset_3px_0_0_#7c3aed]"
+      : "text-[#716675] hover:translate-x-[3px] hover:bg-[#faf7ff] hover:text-[#6d28d9]"
   }`;
 
   if (!item.href) {
@@ -589,7 +749,11 @@ function NavigationLink({
   }
 
   return (
-    <Link href={item.href} className={className} aria-current={active ? 'page' : undefined}>
+    <Link
+      href={item.href}
+      className={className}
+      aria-current={active ? "page" : undefined}
+    >
       <Icon className="h-[17px] w-[17px] shrink-0" />
       {item.label}
     </Link>
@@ -601,8 +765,8 @@ function isNavigationActive(
   pathname: string,
   queryString: string,
 ) {
-  const [targetPath, targetQuery = ''] = href.split('?');
-  if (targetPath === '/super-admin') return pathname === targetPath;
+  const [targetPath, targetQuery = ""] = href.split("?");
+  if (targetPath === "/super-admin") return pathname === targetPath;
   if (pathname !== targetPath && !pathname.startsWith(`${targetPath}/`)) {
     return false;
   }
@@ -617,5 +781,5 @@ function isNavigationActive(
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  return (parts[0]?.charAt(0) ?? 'S') + (parts[1]?.charAt(0) ?? 'A');
+  return (parts[0]?.charAt(0) ?? "S") + (parts[1]?.charAt(0) ?? "A");
 }
