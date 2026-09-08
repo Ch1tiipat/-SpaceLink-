@@ -22,7 +22,7 @@ const generateEventSlugMock = jest.mocked(generateEventSlug);
 
 const findUnique = jest.fn();
 const findFirst = jest.fn();
-const eventFindMany = jest.fn();
+const eventFindMany = jest.fn<Promise<unknown[]>, [Prisma.EventFindManyArgs]>();
 const eventUpdate = jest.fn();
 const eventUpdateMany = jest.fn();
 const eventDelete = jest.fn();
@@ -309,6 +309,7 @@ describe('EventsService', () => {
       eventFindMany.mockResolvedValue([
         {
           id: 'event-1',
+          slug: 'future-tech-expo-abc123',
           name: 'Future Tech Expo',
           description: null,
           startDate: new Date('2026-09-10'),
@@ -353,9 +354,11 @@ describe('EventsService', () => {
       ]);
 
       const result = await service.findDiscovery();
+      const discoveryQuery = eventFindMany.mock.calls[0]?.[0];
 
       expect(result[0]).toMatchObject({
         id: 'event-1',
+        slug: 'future-tech-expo-abc123',
         organization: { id: 'org-1', name: 'SpaceLink University' },
         venue: {
           id: 'venue-1',
@@ -373,6 +376,7 @@ describe('EventsService', () => {
           },
         }),
       );
+      expect(discoveryQuery?.select?.slug).toBe(true);
     });
 
     it('filters discovery to active organizations', async () => {
