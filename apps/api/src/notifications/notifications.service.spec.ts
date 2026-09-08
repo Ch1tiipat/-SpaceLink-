@@ -5,6 +5,7 @@ import {
   NotificationType,
   Prisma,
   ReviewTargetType,
+  UserRole,
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -157,6 +158,54 @@ describe('NotificationsService', () => {
       'Failed to create an in-app notification',
     );
     expect(sendToUser).not.toHaveBeenCalled();
+
+    error.mockRestore();
+  });
+
+  it('fans out an actionable notification to every user with the requested role', async () => {
+    await expect(
+      service.createForRole(UserRole.SUPER_ADMIN, INPUT),
+    ).resolves.toBe(2);
+
+    expect(userFindMany).toHaveBeenCalledWith({
+      where: { role: UserRole.SUPER_ADMIN },
+      select: { id: true },
+    });
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        { userId: USER_ID, ...INPUT },
+        { userId: OTHER_USER_ID, ...INPUT },
+      ],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([USER_ID, OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
+  it('does not write role notifications when no matching user exists', async () => {
+    userFindMany.mockResolvedValue([]);
+
+    await expect(
+      service.createForRole(UserRole.SUPER_ADMIN, INPUT),
+    ).resolves.toBe(0);
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+    expect(sendToUsers).not.toHaveBeenCalled();
+  });
+
+  it('keeps role notification fan-out best-effort', async () => {
+    const error = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    notificationCreateMany.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      service.createForRole(UserRole.SUPER_ADMIN, INPUT),
+    ).resolves.toBe(0);
+    expect(sendToUsers).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      'Failed to create role-based notifications',
+    );
 
     error.mockRestore();
   });

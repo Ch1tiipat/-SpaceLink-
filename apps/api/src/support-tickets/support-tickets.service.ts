@@ -11,6 +11,7 @@ import {
   Prisma,
   TicketStatus,
   TicketType,
+  UserRole,
 } from '@prisma/client';
 import { BookingsService } from '../bookings/bookings.service';
 import type { BookingResponse } from '../bookings/bookings.service';
@@ -338,6 +339,14 @@ export class SupportTicketsService {
       });
 
       return created;
+    });
+
+    await this.notifications.createForRole(UserRole.SUPER_ADMIN, {
+      type: NotificationType.SUPPORT_TICKET,
+      title: 'มีคำร้องจากผู้ดูแลองค์กรใหม่',
+      body: createSupportTicketDto.subject,
+      relatedEntityType: 'SUPPORT_TICKET',
+      relatedEntityId: ticket.id,
     });
 
     return this.toResponse(ticket);
