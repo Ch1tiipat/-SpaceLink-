@@ -22,7 +22,11 @@ import {
 } from '@prisma/client';
 import generatePromptPayPayload from 'promptpay-qr';
 import QRCode from 'qrcode';
-import { NotificationsService } from '../notifications/notifications.service';
+import {
+  type CreateNotificationInput,
+  NotificationsService,
+  type OrganizationNotificationPermission,
+} from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
 import {
@@ -161,6 +165,18 @@ export class BookingsService {
       })
       .catch(() => null);
 
+    await this.notifyOrganizationAdminsForEvent(
+      createBookingDto.eventId,
+      'zones',
+      {
+        type: NotificationType.BOOKING_STATUS,
+        title: 'มีการจองใหม่',
+        body: `Booking ${booking.bookingCode} รอการชำระเงิน`,
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: booking.id,
+      },
+    );
+
     return booking;
   }
 
@@ -184,6 +200,18 @@ export class BookingsService {
         })
         .catch(() => null);
     }
+
+    await this.notifyOrganizationAdminsForEvent(
+      createBookingsBatchDto.eventId,
+      'zones',
+      {
+        type: NotificationType.BOOKING_STATUS,
+        title: `มีการจองใหม่ ${bookings.length} รายการ`,
+        body: `Booking ${bookings.map(({ bookingCode }) => bookingCode).join(', ')} รอการชำระเงิน`,
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: bookings[0]?.id,
+      },
+    );
 
     return bookings;
   }
@@ -494,7 +522,9 @@ export class BookingsService {
         boothPrice: true,
         holdExpiresAt: true,
         confirmedAt: true,
-        event: { select: { status: true, endDate: true } },
+        event: {
+          select: { status: true, endDate: true, organizationId: true },
+        },
         booth: { select: { status: true } },
       },
     });
@@ -629,9 +659,39 @@ export class BookingsService {
           relatedEntityId: booking.id,
         })
         .catch(() => null);
+      await this.notifications
+        .createForOrganizationAdmins(booking.event.organizationId, 'payments', {
+          type: NotificationType.PAYMENT,
+          title: 'มีการชำระเงินการจองใหม่',
+          body: `Booking ${booking.bookingCode} ชำระเงินและยืนยันแล้ว`,
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: booking.id,
+        })
+        .catch(() => 0);
     }
 
     return response;
+  }
+
+  private async notifyOrganizationAdminsForEvent(
+    eventId: string,
+    permission: OrganizationNotificationPermission,
+    input: CreateNotificationInput,
+  ): Promise<void> {
+    try {
+      const event = await this.prisma.event.findUnique({
+        where: { id: eventId },
+        select: { organizationId: true },
+      });
+      if (!event) return;
+      await this.notifications.createForOrganizationAdmins(
+        event.organizationId,
+        permission,
+        input,
+      );
+    } catch {
+      // The booking is already committed. Notification delivery is best-effort.
+    }
   }
 
   async findAll(vendorUserId: string): Promise<BookingListResponse[]> {

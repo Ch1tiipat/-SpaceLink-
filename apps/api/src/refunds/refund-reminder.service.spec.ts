@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { RefundStatus } from '@prisma/client';
+import { MembershipRole, RefundStatus, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RefundReminderService } from './refund-reminder.service';
@@ -51,6 +51,15 @@ describe('RefundReminderService', () => {
     await service.remindOverdue();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][0]).toBe('admin');
+    expect(tx.orgMembership.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org',
+        role: MembershipRole.ADMIN,
+        canManagePayments: true,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
     expect(supers).not.toHaveBeenCalled();
     const calls = prisma.refundRequest.findMany.mock.calls as unknown as [
       {
@@ -63,6 +72,24 @@ describe('RefundReminderService', () => {
     expect(
       where.OR[1].reviewedAt.lt.getTime() - where.OR[0].createdAt.lt.getTime(),
     ).toBe(-86400000);
+  });
+  it('falls back to the organization owner when no finance admin is delegated', async () => {
+    tx.orgMembership.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ userId: 'owner' }]);
+
+    await service.remindOverdue();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toBe('owner');
+    expect(tx.orgMembership.findMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        organizationId: 'org',
+        role: MembershipRole.OWNER,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
   });
   it('escalates approved refunds to super admins without exposing payout details', async () => {
     findFirst.mockResolvedValue({

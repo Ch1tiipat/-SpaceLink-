@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   BookingStatus,
+  MembershipRole,
   NotificationType,
   Prisma,
   ReviewTargetType,
@@ -19,6 +20,8 @@ export interface CreateNotificationInput {
   relatedEntityType?: string;
   relatedEntityId?: string;
 }
+
+export type OrganizationNotificationPermission = 'payments' | 'zones';
 
 const bangkokDateFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Asia/Bangkok',
@@ -127,6 +130,60 @@ export class NotificationsService {
       return created.count;
     } catch {
       this.logger.error('Failed to create role-based notifications');
+      return 0;
+    }
+  }
+
+  /**
+   * Sends an organization-scoped notification to delegated ADMIN members.
+   * When nobody has the requested permission, the organization's OWNER is
+   * used as the fallback so actionable work is never left without a recipient.
+   */
+  async createForOrganizationAdmins(
+    organizationId: string,
+    permission: OrganizationNotificationPermission,
+    input: CreateNotificationInput,
+  ): Promise<number> {
+    try {
+      const permissionFilter =
+        permission === 'payments'
+          ? { canManagePayments: true }
+          : { canManageZones: true };
+      let recipients = await this.prisma.orgMembership.findMany({
+        where: {
+          organizationId,
+          role: MembershipRole.ADMIN,
+          ...permissionFilter,
+          user: { role: UserRole.ORG_ADMIN },
+        },
+        select: { userId: true },
+      });
+
+      if (recipients.length === 0) {
+        recipients = await this.prisma.orgMembership.findMany({
+          where: {
+            organizationId,
+            role: MembershipRole.OWNER,
+            user: { role: UserRole.ORG_ADMIN },
+          },
+          select: { userId: true },
+        });
+      }
+
+      if (recipients.length === 0) return 0;
+
+      const userIds = recipients.map(({ userId }) => userId);
+      const created = await this.prisma.notification.createMany({
+        data: userIds.map((userId) => ({ userId, ...input })),
+      });
+
+      void this.pushSender
+        .sendToUsers(userIds, { title: input.title, body: input.body ?? '' })
+        .catch(() => undefined);
+
+      return created.count;
+    } catch {
+      this.logger.error('Failed to create organization admin notifications');
       return 0;
     }
   }
