@@ -4,13 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import {
-  Activity,
   Bell,
   Building2,
   CalendarCheck2,
   CheckCheck,
   ChevronDown,
-  KeyRound,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -112,8 +110,6 @@ const NAVIGATION: NavigationGroup[] = [
         icon: Megaphone,
         href: '/super-admin/announcements',
       },
-      { label: 'สถานะระบบ', icon: Activity },
-      { label: 'บทบาทและสิทธิ์', icon: KeyRound },
       {
         label: 'ตั้งค่าระบบ',
         icon: Settings2,

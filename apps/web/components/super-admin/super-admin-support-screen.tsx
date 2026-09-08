@@ -16,6 +16,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -407,13 +408,16 @@ function TicketsTab({
           </PagedTable>
         )}
       </Panel>
-      {selectedTicketId ? (
-        <TicketDetailDrawer
-          ticketId={selectedTicketId}
-          onClose={() => setSelectedTicketId(null)}
-          onTicketUpdated={onTicketUpdated}
-        />
-      ) : null}
+      {selectedTicketId
+        ? createPortal(
+            <TicketDetailDrawer
+              ticketId={selectedTicketId}
+              onClose={() => setSelectedTicketId(null)}
+              onTicketUpdated={onTicketUpdated}
+            />,
+            document.body,
+          )
+        : null}
     </>
   );
 }
