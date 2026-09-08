@@ -68,6 +68,8 @@ export type EventMap = {
       name: string;
       contactEmail: string;
       contactPhone: string | null;
+      facebookUrl: string | null;
+      lineUrl: string | null;
       logoUrl: string | null;
     };
     venue: { id: string; name: string; address: string | null };
@@ -347,6 +349,8 @@ export type CurrentUser = {
     id: string;
     name: string;
     promptpayId: string | null;
+    facebookUrl: string | null;
+    lineUrl: string | null;
     membershipRole: "OWNER" | "ADMIN";
     canEditQuota: boolean;
     bookingQuotaPerVendor: number | null;
@@ -359,6 +363,8 @@ export type OrganizationSettings = {
   description: string | null;
   contactEmail: string;
   contactPhone: string | null;
+  facebookUrl: string | null;
+  lineUrl: string | null;
   logoUrl: string | null;
   status: string;
   promptpayId: string | null;
@@ -372,6 +378,8 @@ export type SuperAdminOrganization = {
   description: string | null;
   contactEmail: string;
   contactPhone: string | null;
+  facebookUrl: string | null;
+  lineUrl: string | null;
   logoUrl: string | null;
   status: SuperAdminOrganizationStatus;
 };
@@ -1763,6 +1771,20 @@ export function updateOrganizationPromptPay(
     { promptpayId },
     { signal, token },
     "บันทึกหมายเลข PromptPay ไม่สำเร็จ",
+  );
+}
+
+export function updateOrganizationSocialLinks(
+  organizationId: string,
+  input: { facebookUrl: string | null; lineUrl: string | null },
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSettings> {
+  return patchJson<OrganizationSettings>(
+    "/organizations/" + encodeURIComponent(organizationId),
+    input,
+    { signal, token },
+    "บันทึกช่องทางติดต่อขององค์กรไม่สำเร็จ",
   );
 }
 

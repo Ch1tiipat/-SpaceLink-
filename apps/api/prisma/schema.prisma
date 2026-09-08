@@ -150,6 +150,8 @@ model Organization {
   description  String?
   contactEmail String    @map("contact_email")
   contactPhone String?   @map("contact_phone")
+  facebookUrl  String?   @map("facebook_url")
+  lineUrl      String?   @map("line_url")
   promptpayId  String?   @map("promptpay_id")
   logoUrl      String?   @map("logo_url")
   status       OrgStatus @default(ACTIVE)

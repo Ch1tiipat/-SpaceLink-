@@ -22,6 +22,8 @@ export const PUBLIC_ORGANIZATION_SELECT = {
   description: true,
   contactEmail: true,
   contactPhone: true,
+  facebookUrl: true,
+  lineUrl: true,
   logoUrl: true,
   status: true,
 } satisfies Prisma.OrganizationSelect;

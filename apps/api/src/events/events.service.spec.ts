@@ -402,6 +402,8 @@ describe('EventsService', () => {
           name: 'SUT',
           contactEmail: 'contact@example.com',
           contactPhone: null,
+          facebookUrl: 'https://www.facebook.com/sut',
+          lineUrl: 'https://line.me/R/ti/p/@sut',
           logoUrl: null,
           orgConfig: null,
         },
@@ -452,6 +454,8 @@ describe('EventsService', () => {
           name: 'SUT',
           contactEmail: 'contact@example.com',
           contactPhone: null,
+          facebookUrl: 'https://www.facebook.com/sut',
+          lineUrl: 'https://line.me/R/ti/p/@sut',
           logoUrl: null,
           orgConfig: {
             tierThresholds: { S: 2000, A: 1500, B: 1000 },
@@ -531,6 +535,23 @@ describe('EventsService', () => {
             },
           },
         ],
+      });
+      expect(result.event.organization).toMatchObject({
+        facebookUrl: 'https://www.facebook.com/sut',
+        lineUrl: 'https://line.me/R/ti/p/@sut',
+      });
+      const [eventQuery] = findFirst.mock.calls[0] as [
+        {
+          include: {
+            organization: {
+              select: { facebookUrl: boolean; lineUrl: boolean };
+            };
+          };
+        },
+      ];
+      expect(eventQuery.include.organization.select).toMatchObject({
+        facebookUrl: true,
+        lineUrl: true,
       });
       expect(result.zones[0].booths[1]).not.toHaveProperty('bookings');
     });

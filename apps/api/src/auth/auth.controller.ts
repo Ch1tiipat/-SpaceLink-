@@ -45,6 +45,8 @@ export class AuthController {
               id: true,
               name: true,
               promptpayId: true,
+              facebookUrl: true,
+              lineUrl: true,
               orgConfig: { select: { bookingQuotaPerVendor: true } },
             },
           },
@@ -70,6 +72,8 @@ export class AuthController {
           id: organization.id,
           name: organization.name,
           promptpayId: organization.promptpayId,
+          facebookUrl: organization.facebookUrl,
+          lineUrl: organization.lineUrl,
           membershipRole: role,
           canEditQuota,
           bookingQuotaPerVendor:

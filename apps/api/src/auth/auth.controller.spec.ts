@@ -106,6 +106,8 @@ describe('AuthController', () => {
           id: '00000000-0000-4000-8000-000000000030',
           name: 'SpaceLink Organizer',
           promptpayId: '0812345678',
+          facebookUrl: 'https://www.facebook.com/spacelink-organizer',
+          lineUrl: 'https://line.me/R/ti/p/@spacelink',
           orgConfig: { bookingQuotaPerVendor: 3 },
         },
       },
@@ -116,6 +118,8 @@ describe('AuthController', () => {
           id: '00000000-0000-4000-8000-000000000031',
           name: 'Second Organizer',
           promptpayId: null,
+          facebookUrl: null,
+          lineUrl: null,
           orgConfig: null,
         },
       },
@@ -132,6 +136,8 @@ describe('AuthController', () => {
           canEditQuota: boolean;
           organization: {
             select: {
+              facebookUrl: boolean;
+              lineUrl: boolean;
               orgConfig: { select: { bookingQuotaPerVendor: boolean } };
             };
           };
@@ -139,6 +145,8 @@ describe('AuthController', () => {
       },
     ];
     expect(membershipQuery.select.canEditQuota).toBe(true);
+    expect(membershipQuery.select.organization.select.facebookUrl).toBe(true);
+    expect(membershipQuery.select.organization.select.lineUrl).toBe(true);
     expect(
       membershipQuery.select.organization.select.orgConfig.select
         .bookingQuotaPerVendor,
@@ -148,6 +156,8 @@ describe('AuthController', () => {
         id: '00000000-0000-4000-8000-000000000030',
         name: 'SpaceLink Organizer',
         promptpayId: '0812345678',
+        facebookUrl: 'https://www.facebook.com/spacelink-organizer',
+        lineUrl: 'https://line.me/R/ti/p/@spacelink',
         membershipRole: 'ADMIN',
         canEditQuota: true,
         bookingQuotaPerVendor: 3,
@@ -156,6 +166,8 @@ describe('AuthController', () => {
         id: '00000000-0000-4000-8000-000000000031',
         name: 'Second Organizer',
         promptpayId: null,
+        facebookUrl: null,
+        lineUrl: null,
         membershipRole: 'ADMIN',
         canEditQuota: false,
         bookingQuotaPerVendor: null,

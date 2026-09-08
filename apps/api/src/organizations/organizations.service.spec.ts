@@ -173,6 +173,30 @@ describe('OrganizationsService', () => {
     });
   });
 
+  it('updates organization social links only on the guard-resolved organization', async () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const socialLinks = {
+      facebookUrl: 'https://www.facebook.com/spacelink',
+      lineUrl: 'https://line.me/R/ti/p/@spacelink',
+    };
+    organizationUpdate.mockResolvedValue({ id, ...socialLinks });
+
+    await service.update(id, socialLinks);
+
+    expect(organizationUpdate).toHaveBeenCalledWith({
+      where: { id },
+      data: socialLinks,
+      select: {
+        ...PUBLIC_ORGANIZATION_SELECT,
+        promptpayId: true,
+      },
+    });
+    expect(PUBLIC_ORGANIZATION_SELECT).toMatchObject({
+      facebookUrl: true,
+      lineUrl: true,
+    });
+  });
+
   it('updates organization status with the public response shape', async () => {
     const id = '00000000-0000-4000-8000-000000000001';
     organizationUpdate.mockResolvedValue({
