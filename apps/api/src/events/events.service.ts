@@ -203,6 +203,7 @@ export class EventsService {
       orderBy: [{ startDate: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
+        slug: true,
         name: true,
         description: true,
         startDate: true,
