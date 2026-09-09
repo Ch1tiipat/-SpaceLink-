@@ -276,6 +276,37 @@ describe('NotificationsService', () => {
     });
   });
 
+  it('preserves notifications for legacy admins when the organization has no owner', async () => {
+    orgMembershipFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ userId: USER_ID }, { userId: OTHER_USER_ID }]);
+    notificationCreateMany.mockResolvedValue({ count: 2 });
+
+    await expect(
+      service.createForOrganizationAdmins(ORGANIZATION_ID, 'payments', INPUT),
+    ).resolves.toBe(2);
+
+    expect(orgMembershipFindMany).toHaveBeenNthCalledWith(3, {
+      where: {
+        organizationId: ORGANIZATION_ID,
+        role: MembershipRole.ADMIN,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        { userId: USER_ID, ...INPUT },
+        { userId: OTHER_USER_ID, ...INPUT },
+      ],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([USER_ID, OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
   it('keeps organization notification routing best-effort', async () => {
     const error = jest
       .spyOn(Logger.prototype, 'error')
