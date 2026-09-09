@@ -11,11 +11,13 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { BoothsService } from '../booths/booths.service';
 import { CreateBoothDto } from '../booths/dto/create-booth.dto';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import { FindAllZonesDto } from './dto/find-all-zones.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { ZonesService } from './zones.service';
@@ -46,8 +48,9 @@ export class ZonesController {
   // OrgScoped in org-scoped.decorator.ts for why RolesGuard can't literally
   // sit between the other two.
   @Patch(':zoneId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('zoneId')
   update(
     @Param('zoneId') zoneId: string,
@@ -58,8 +61,9 @@ export class ZonesController {
   }
 
   @Delete(':zoneId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('zoneId')
   remove(@Param('zoneId') zoneId: string, @CurrentOrgId() orgId: string) {
     return this.zonesService.remove(zoneId, orgId);
@@ -73,8 +77,9 @@ export class ZonesController {
    * (AGENTS.md §14.2).
    */
   @Post(':zoneId/booths')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('zoneId')
   createBooth(
     @Param('zoneId') zoneId: string,

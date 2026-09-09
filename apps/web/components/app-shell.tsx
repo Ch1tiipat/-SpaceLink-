@@ -446,11 +446,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const hasPrivateNavigation = auth.status === "signed-in";
+  const selectedOrganization = organizations.find(
+    (organization) => organization.id === selectedOrganizationId,
+  );
+  const visibleAdminItems = ADMIN_NAV_GROUP.items.filter((item) => {
+    if (selectedOrganization?.membershipRole === "OWNER") return true;
+    if (item.kind !== "link") return true;
+    if (["/admin/bookings", "/admin/payments"].includes(item.href)) {
+      return selectedOrganization?.canManagePayments === true;
+    }
+    if (["/admin/zones", "/admin/map-designer"].includes(item.href)) {
+      return selectedOrganization?.canManageZones === true;
+    }
+    return true;
+  });
+  const visibleAdminNavGroup = { ...ADMIN_NAV_GROUP, items: visibleAdminItems };
   const navGroups = isAdmin
-    ? [NAV_GROUPS[0], ADMIN_NAV_GROUP, ADMIN_MY_SPACE_NAV_GROUP]
+    ? [NAV_GROUPS[0], visibleAdminNavGroup, ADMIN_MY_SPACE_NAV_GROUP]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
-    ? [NAV_GROUPS[0].items[0], ...ADMIN_NAV_GROUP.items, BOTTOM_NAV[2]]
+    ? [NAV_GROUPS[0].items[0], ...visibleAdminItems, BOTTOM_NAV[2]]
     : BOTTOM_NAV;
 
   return (

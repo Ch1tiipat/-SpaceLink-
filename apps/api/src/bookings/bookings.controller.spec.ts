@@ -13,6 +13,7 @@ import { UserRole, type User } from '@prisma/client';
 import type { Server } from 'node:http';
 import request from 'supertest';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
@@ -222,6 +223,7 @@ describe('BookingsController', () => {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
         SupabaseAuthGuard,
         OrgScopeGuard,
+        OrgPermissionGuard,
       ]);
     },
   );

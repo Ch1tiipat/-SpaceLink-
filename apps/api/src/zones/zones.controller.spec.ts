@@ -16,6 +16,7 @@ import { UserRole } from '@prisma/client';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { BoothsService } from '../booths/booths.service';
@@ -82,6 +83,7 @@ describe('ZonesController', () => {
         SupabaseAuthGuard,
         OrgScopeGuard,
         RolesGuard,
+        OrgPermissionGuard,
       ]);
       expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('zoneId');
       expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([

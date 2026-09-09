@@ -16,8 +16,11 @@ const userFindUnique = jest.fn();
 const userUpdate = jest.fn();
 const orgMembershipFindMany = jest.fn();
 const orgMembershipFindUnique = jest.fn();
+const orgMembershipFindFirst = jest.fn();
 const orgMembershipCreate = jest.fn();
+const orgMembershipUpsert = jest.fn();
 const orgMembershipUpdate = jest.fn();
+const orgMembershipUpdateMany = jest.fn();
 const orgMembershipDelete = jest.fn();
 const orgMembershipCount = jest.fn();
 const orgConfigFindUnique = jest.fn();
@@ -39,8 +42,11 @@ const mockPrismaService = {
   orgMembership: {
     findMany: orgMembershipFindMany,
     findUnique: orgMembershipFindUnique,
+    findFirst: orgMembershipFindFirst,
     create: orgMembershipCreate,
+    upsert: orgMembershipUpsert,
     update: orgMembershipUpdate,
+    updateMany: orgMembershipUpdateMany,
     delete: orgMembershipDelete,
     count: orgMembershipCount,
   },
@@ -63,6 +69,8 @@ const MEMBERSHIP = {
   userId: USER_ID,
   role: MembershipRole.ADMIN,
   canEditQuota: false,
+  canManagePayments: false,
+  canManageZones: false,
   joinedAt: JOINED_AT,
 };
 
@@ -78,9 +86,18 @@ describe('OrganizationsService', () => {
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
     );
     orgMembershipFindMany.mockResolvedValue([]);
-    orgMembershipFindUnique.mockResolvedValue({ canEditQuota: true });
+    orgMembershipFindUnique.mockResolvedValue({
+      role: MembershipRole.OWNER,
+      canEditQuota: true,
+    });
+    orgMembershipFindFirst.mockResolvedValue({
+      id: MEMBERSHIP_ID,
+      role: MembershipRole.ADMIN,
+    });
     orgMembershipCreate.mockResolvedValue(MEMBERSHIP);
+    orgMembershipUpsert.mockResolvedValue(MEMBERSHIP);
     orgMembershipUpdate.mockResolvedValue(MEMBERSHIP);
+    orgMembershipUpdateMany.mockResolvedValue({ count: 1 });
     orgMembershipDelete.mockResolvedValue(MEMBERSHIP);
     orgMembershipCount.mockResolvedValue(0);
     orgConfigFindUnique.mockResolvedValue(null);
@@ -224,7 +241,10 @@ describe('OrganizationsService', () => {
     const admins = [
       {
         id: MEMBERSHIP_ID,
+        role: MembershipRole.ADMIN,
         canEditQuota: false,
+        canManagePayments: false,
+        canManageZones: false,
         joinedAt: JOINED_AT,
         user: {
           id: USER_ID,
@@ -240,11 +260,14 @@ describe('OrganizationsService', () => {
     expect(orgMembershipFindMany).toHaveBeenCalledWith({
       where: {
         organizationId: ORGANIZATION_ID,
-        role: MembershipRole.ADMIN,
       },
+      orderBy: [{ role: 'desc' }, { joinedAt: 'asc' }],
       select: {
         id: true,
+        role: true,
         canEditQuota: true,
+        canManagePayments: true,
+        canManageZones: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -261,7 +284,10 @@ describe('OrganizationsService', () => {
     const admins = [
       {
         id: MEMBERSHIP_ID,
+        role: MembershipRole.ADMIN,
         canEditQuota: true,
+        canManagePayments: false,
+        canManageZones: false,
         joinedAt: JOINED_AT,
         user: {
           id: USER_ID,
@@ -279,10 +305,12 @@ describe('OrganizationsService', () => {
     await expect(service.listAllAdmins()).resolves.toEqual(admins);
 
     expect(orgMembershipFindMany).toHaveBeenCalledWith({
-      where: { role: MembershipRole.ADMIN },
       select: {
         id: true,
+        role: true,
         canEditQuota: true,
+        canManagePayments: true,
+        canManageZones: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -360,7 +388,7 @@ describe('OrganizationsService', () => {
           userId: USER_ID,
         },
       },
-      select: { canEditQuota: true },
+      select: { role: true, canEditQuota: true },
     });
     expect(orgConfigFindUnique).toHaveBeenCalledWith({
       where: { organizationId: ORGANIZATION_ID },
@@ -421,7 +449,7 @@ describe('OrganizationsService', () => {
           userId: USER_ID,
         },
       },
-      select: { canEditQuota: true },
+      select: { role: true, canEditQuota: true },
     });
   });
 
@@ -488,12 +516,19 @@ describe('OrganizationsService', () => {
       where: { email: USER_EMAIL },
     });
     expect(prismaTransaction).toHaveBeenCalledTimes(1);
-    expect(orgMembershipCreate).toHaveBeenCalledWith({
-      data: {
+    expect(orgMembershipUpsert).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: {
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        },
+      },
+      create: {
         organizationId: ORGANIZATION_ID,
         userId: USER_ID,
         role: MembershipRole.ADMIN,
       },
+      update: { role: MembershipRole.ADMIN },
     });
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: USER_ID },
@@ -522,7 +557,7 @@ describe('OrganizationsService', () => {
       service.grantAdmin(ORGANIZATION_ID, USER_EMAIL, ACTOR_USER_ID),
     ).resolves.toEqual(MEMBERSHIP);
 
-    expect(orgMembershipCreate).toHaveBeenCalledTimes(1);
+    expect(orgMembershipUpsert).toHaveBeenCalledTimes(1);
     expect(userUpdate).not.toHaveBeenCalled();
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -541,6 +576,98 @@ describe('OrganizationsService', () => {
     expect(prismaTransaction).not.toHaveBeenCalled();
     expect(orgMembershipCreate).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('lets an OWNER update an ADMIN payment and zone permissions', async () => {
+    orgMembershipUpdate.mockResolvedValue({
+      ...MEMBERSHIP,
+      canManagePayments: true,
+      canManageZones: true,
+    });
+
+    await expect(
+      service.updateAdminPermissions(
+        ORGANIZATION_ID,
+        MEMBERSHIP_ID,
+        { canManagePayments: true, canManageZones: true },
+        ACTOR_USER_ID,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        canManagePayments: true,
+        canManageZones: true,
+      }),
+    );
+
+    expect(orgMembershipFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: MEMBERSHIP_ID,
+        organizationId: ORGANIZATION_ID,
+        role: MembershipRole.ADMIN,
+      },
+      select: { id: true },
+    });
+    expect(record).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      action: 'ORG_ADMIN_PERMISSIONS_UPDATED',
+      targetType: 'ORG_MEMBERSHIP',
+      targetId: MEMBERSHIP_ID,
+      metadata: {
+        organizationId: ORGANIZATION_ID,
+        canManagePayments: true,
+        canManageZones: true,
+      },
+    });
+  });
+
+  it('rejects team changes from an ADMIN membership', async () => {
+    orgMembershipFindUnique.mockResolvedValue({ role: MembershipRole.ADMIN });
+
+    await expect(
+      service.updateAdminPermissions(
+        ORGANIZATION_ID,
+        MEMBERSHIP_ID,
+        { canManagePayments: true, canManageZones: false },
+        ACTOR_USER_ID,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(orgMembershipUpdate).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('replaces the organization OWNER and records the change', async () => {
+    orgMembershipUpsert.mockResolvedValue({
+      ...MEMBERSHIP,
+      role: MembershipRole.OWNER,
+    });
+
+    await service.setOwner(ORGANIZATION_ID, USER_EMAIL, ACTOR_USER_ID);
+
+    expect(orgMembershipUpdateMany).toHaveBeenCalledWith({
+      where: { organizationId: ORGANIZATION_ID, role: MembershipRole.OWNER },
+      data: { role: MembershipRole.ADMIN },
+    });
+    expect(orgMembershipUpsert).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: {
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        },
+      },
+      create: {
+        organizationId: ORGANIZATION_ID,
+        userId: USER_ID,
+        role: MembershipRole.OWNER,
+      },
+      update: { role: MembershipRole.OWNER },
+    });
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ORGANIZATION_OWNER_ASSIGNED',
+        targetType: 'ORG_MEMBERSHIP',
+      }),
+    );
   });
 
   it('revokes the last membership and resets ORG_ADMIN to VENDOR', async () => {

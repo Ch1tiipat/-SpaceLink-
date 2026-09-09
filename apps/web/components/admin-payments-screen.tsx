@@ -30,7 +30,8 @@ import {
 } from '@/lib/api';
 
 export function AdminPaymentsScreen() {
-  const { access, token, organizationId, organization } = useAdminPageAccess();
+  const { access, token, organizationId, organization } =
+    useAdminPageAccess('payments');
   const [bookings, setBookings] = useState<AdminOrganizationBooking[]>([]);
   const [refunds, setRefunds] = useState<AdminOrganizationRefund[]>([]);
   const [query, setQuery] = useState('');

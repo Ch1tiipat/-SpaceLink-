@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import {
 } from '../audit-logs/audit-logs.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { UpdateAdminPermissionsDto } from './dto/update-admin-permissions.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const PUBLIC_ORGANIZATION_SELECT = {
@@ -101,10 +103,14 @@ export class OrganizationsService {
 
   async listAdmins(organizationId: string) {
     return this.prisma.orgMembership.findMany({
-      where: { organizationId, role: MembershipRole.ADMIN },
+      where: { organizationId },
+      orderBy: [{ role: 'desc' }, { joinedAt: 'asc' }],
       select: {
         id: true,
+        role: true,
         canEditQuota: true,
+        canManagePayments: true,
+        canManageZones: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -115,10 +121,12 @@ export class OrganizationsService {
 
   async listAllAdmins() {
     return this.prisma.orgMembership.findMany({
-      where: { role: MembershipRole.ADMIN },
       select: {
         id: true,
+        role: true,
         canEditQuota: true,
+        canManagePayments: true,
+        canManageZones: true,
         joinedAt: true,
         user: {
           select: { id: true, email: true, fullName: true },
@@ -167,9 +175,12 @@ export class OrganizationsService {
                 userId: currentUser.id,
               },
             },
-            select: { canEditQuota: true },
+            select: { role: true, canEditQuota: true },
           });
-          if (!membership?.canEditQuota) {
+          if (
+            membership?.role !== MembershipRole.OWNER &&
+            !membership?.canEditQuota
+          ) {
             throw new ForbiddenException(
               'คุณไม่มีสิทธิ์แก้ไขโควตาการจองขององค์กรนี้',
             );
@@ -213,12 +224,26 @@ export class OrganizationsService {
 
     const { membership, roleChanged } = await this.prisma.$transaction(
       async (transaction) => {
-        const membership = await transaction.orgMembership.create({
-          data: {
+        await this.assertOwner(transaction, organizationId, actorUserId);
+
+        const existing = await transaction.orgMembership.findFirst({
+          where: { organizationId, userId: user.id },
+          select: { role: true },
+        });
+        if (existing?.role === MembershipRole.OWNER) {
+          throw new BadRequestException(
+            'ไม่สามารถเปลี่ยน OWNER เป็น ADMIN ได้',
+          );
+        }
+
+        const membership = await transaction.orgMembership.upsert({
+          where: { organizationId_userId: { organizationId, userId: user.id } },
+          create: {
             organizationId,
             userId: user.id,
             role: MembershipRole.ADMIN,
           },
+          update: { role: MembershipRole.ADMIN },
         });
 
         let roleChanged = false;
@@ -251,10 +276,18 @@ export class OrganizationsService {
     actorUserId: string,
   ) {
     const roleChanged = await this.prisma.$transaction(async (transaction) => {
+      await this.assertOwner(transaction, organizationId, actorUserId);
+
+      const membership = await transaction.orgMembership.findFirst({
+        where: { organizationId, userId },
+        select: { role: true },
+      });
+      if (!membership || membership.role !== MembershipRole.ADMIN) {
+        throw new NotFoundException('Organization admin not found');
+      }
+
       await transaction.orgMembership.delete({
-        where: {
-          organizationId_userId: { organizationId, userId },
-        },
+        where: { organizationId_userId: { organizationId, userId } },
       });
 
       const remainingMemberships = await transaction.orgMembership.count({
@@ -283,6 +316,103 @@ export class OrganizationsService {
       targetId: userId,
       metadata: { organizationId, roleChanged },
     });
+  }
+
+  async updateAdminPermissions(
+    organizationId: string,
+    membershipId: string,
+    input: UpdateAdminPermissionsDto,
+    actorUserId: string,
+  ) {
+    const membership = await this.prisma.$transaction(async (transaction) => {
+      await this.assertOwner(transaction, organizationId, actorUserId);
+
+      const target = await transaction.orgMembership.findFirst({
+        where: { id: membershipId, organizationId, role: MembershipRole.ADMIN },
+        select: { id: true },
+      });
+      if (!target) {
+        throw new NotFoundException('Organization admin not found');
+      }
+
+      return transaction.orgMembership.update({
+        where: { id: membershipId },
+        data: input,
+        select: {
+          id: true,
+          role: true,
+          canManagePayments: true,
+          canManageZones: true,
+        },
+      });
+    });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORG_ADMIN_PERMISSIONS_UPDATED,
+      targetType: AUDIT_TARGET_TYPES.ORG_MEMBERSHIP,
+      targetId: membershipId,
+      metadata: {
+        organizationId,
+        canManagePayments: input.canManagePayments,
+        canManageZones: input.canManageZones,
+      },
+    });
+
+    return membership;
+  }
+
+  async setOwner(organizationId: string, email: string, actorUserId: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const membership = await this.prisma.$transaction(async (transaction) => {
+      await transaction.orgMembership.updateMany({
+        where: { organizationId, role: MembershipRole.OWNER },
+        data: { role: MembershipRole.ADMIN },
+      });
+
+      const saved = await transaction.orgMembership.upsert({
+        where: { organizationId_userId: { organizationId, userId: user.id } },
+        create: { organizationId, userId: user.id, role: MembershipRole.OWNER },
+        update: { role: MembershipRole.OWNER },
+      });
+
+      if (user.role === UserRole.VENDOR) {
+        await transaction.user.update({
+          where: { id: user.id },
+          data: { role: UserRole.ORG_ADMIN },
+        });
+      }
+
+      return saved;
+    });
+
+    await this.recordAuditLogSafely({
+      actorUserId,
+      action: AUDIT_LOG_ACTIONS.ORGANIZATION_OWNER_ASSIGNED,
+      targetType: AUDIT_TARGET_TYPES.ORG_MEMBERSHIP,
+      targetId: membership.id,
+      metadata: { organizationId, userId: user.id },
+    });
+
+    return membership;
+  }
+
+  private async assertOwner(
+    transaction: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const owner = await transaction.orgMembership.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { role: true },
+    });
+    if (owner?.role !== MembershipRole.OWNER) {
+      throw new ForbiddenException('เฉพาะเจ้าขององค์กรเท่านั้นที่จัดการทีมได้');
+    }
   }
 
   private async recordAuditLogSafely(

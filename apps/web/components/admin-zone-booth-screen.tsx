@@ -141,6 +141,17 @@ export function AdminZoneBoothScreen() {
           setAccess('denied');
           return;
         }
+        const membership = me.organizations.find(
+          (organization) => organization.id === selectedOrganizationId,
+        );
+        if (
+          me.role === 'ORG_ADMIN' &&
+          membership?.membershipRole !== 'OWNER' &&
+          membership?.canManageZones !== true
+        ) {
+          setAccess('denied');
+          return;
+        }
 
         setToken(accessToken);
         setAccess('allowed');
@@ -154,7 +165,7 @@ export function AdminZoneBoothScreen() {
       active = false;
       controller.abort();
     };
-  }, [router]);
+  }, [router, selectedOrganizationId]);
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !selectedOrganizationId) return;

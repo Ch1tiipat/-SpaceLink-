@@ -13,13 +13,17 @@ import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GrantAdminDto } from './dto/grant-admin.dto';
 import { UpdateBookingQuotaDto } from './dto/update-booking-quota.dto';
 import { UpdateOrganizationStatusDto } from './dto/update-organization-status.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { SetOwnerDto } from './dto/set-owner.dto';
+import { UpdateAdminPermissionsDto } from './dto/update-admin-permissions.dto';
 import { OrganizationsService } from './organizations.service';
 
 @Controller('organizations')
@@ -51,7 +55,7 @@ export class OrganizationsController {
 
   @Get(':organizationId/admins')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
   @OrgScoped('organizationId')
   listAdmins(@Param('organizationId') organizationId: string) {
     return this.organizationsService.listAdmins(organizationId);
@@ -59,7 +63,7 @@ export class OrganizationsController {
 
   @Post(':organizationId/admins')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ORG_ADMIN)
   @OrgScoped('organizationId')
   grantAdmin(
     @Param('organizationId') organizationId: string,
@@ -76,7 +80,7 @@ export class OrganizationsController {
   @Delete(':organizationId/admins/:userId')
   @HttpCode(204)
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ORG_ADMIN)
   @OrgScoped('organizationId')
   revokeAdmin(
     @Param('organizationId') organizationId: string,
@@ -86,6 +90,40 @@ export class OrganizationsController {
     return this.organizationsService.revokeAdmin(
       organizationId,
       userId,
+      currentUser.id,
+    );
+  }
+
+  @Patch(':organizationId/admins/:membershipId/permissions')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  updateAdminPermissions(
+    @Param('organizationId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() input: UpdateAdminPermissionsDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.organizationsService.updateAdminPermissions(
+      organizationId,
+      membershipId,
+      input,
+      currentUser.id,
+    );
+  }
+
+  @Patch(':organizationId/owner')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  setOwner(
+    @Param('organizationId') organizationId: string,
+    @Body() input: SetOwnerDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.organizationsService.setOwner(
+      organizationId,
+      input.email,
       currentUser.id,
     );
   }
@@ -108,8 +146,9 @@ export class OrganizationsController {
   }
 
   @Patch(':organizationId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('organizationId')
   update(
     @Param('organizationId') organizationId: string,

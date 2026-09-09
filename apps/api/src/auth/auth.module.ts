@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { OrgScopeGuard } from './guards/org-scope.guard';
+import { OrgPermissionGuard } from './guards/org-permission.guard';
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
 import { SupabaseTokenService } from './supabase-token.service';
 import { UserProvisioningService } from './user-provisioning.service';
@@ -20,12 +21,14 @@ import { UserProvisioningService } from './user-provisioning.service';
     UserProvisioningService,
     SupabaseAuthGuard,
     OrgScopeGuard,
+    OrgPermissionGuard,
   ],
   exports: [
     SupabaseTokenService,
     UserProvisioningService,
     SupabaseAuthGuard,
     OrgScopeGuard,
+    OrgPermissionGuard,
   ],
 })
 export class AuthModule {}

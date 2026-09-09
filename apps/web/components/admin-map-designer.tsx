@@ -96,6 +96,18 @@ export function AdminMapDesigner() {
           return;
         }
 
+        const membership = me.organizations.find(
+          (organization) => organization.id === selectedOrganizationId,
+        );
+        if (
+          me.role === 'ORG_ADMIN' &&
+          membership?.membershipRole !== 'OWNER' &&
+          membership?.canManageZones !== true
+        ) {
+          setAccess('denied');
+          return;
+        }
+
         const organizationId = me.organizations.some(
           (organization) => organization.id === selectedOrganizationId,
         )

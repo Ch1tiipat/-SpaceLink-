@@ -13,11 +13,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import {
   MAX_SLIP_FILE_SIZE_BYTES,
   type UploadedSlipFile,
@@ -123,7 +125,9 @@ export class BookingsController {
   }
 
   @Get(':bookingId/slip')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   getAdminSlip(
     @Param('bookingId') bookingId: string,
@@ -142,7 +146,9 @@ export class BookingsController {
   // forbids outright, or dropping the class-level guards, which would touch every
   // other route in this controller.
   @Patch(':bookingId/confirm-exempt')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   confirmExempt(
     @Param('bookingId') bookingId: string,
@@ -157,7 +163,9 @@ export class BookingsController {
   }
 
   @Get(':bookingId')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   findOne(
     @Param('bookingId') bookingId: string,

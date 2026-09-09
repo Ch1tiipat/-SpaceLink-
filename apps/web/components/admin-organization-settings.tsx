@@ -20,6 +20,7 @@ import {
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
+import { AdminTeamManagement } from '@/components/admin-team-management';
 
 type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
 
@@ -136,7 +137,13 @@ export function AdminOrganizationSettings() {
     ({ id }) => id === organizationId,
   );
   const canEditBookingQuota =
-    userRole === 'ORG_ADMIN' && selectedOrganization?.canEditQuota === true;
+    userRole === 'ORG_ADMIN' &&
+    (selectedOrganization?.membershipRole === 'OWNER' ||
+      selectedOrganization?.canEditQuota === true);
+  const canManageOrganizationFinance =
+    userRole === 'SUPER_ADMIN' ||
+    selectedOrganization?.membershipRole === 'OWNER' ||
+    selectedOrganization?.canManagePayments === true;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -330,6 +337,8 @@ export function AdminOrganizationSettings() {
           </aside>
 
           <div className="grid gap-6">
+            {canManageOrganizationFinance ? (
+              <>
             <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
@@ -474,6 +483,8 @@ export function AdminOrganizationSettings() {
                 {socialSaving ? 'กำลังบันทึก...' : 'บันทึกช่องทางติดต่อ'}
               </button>
             </form>
+              </>
+            ) : null}
 
             {canEditBookingQuota ? (
               <form
@@ -552,6 +563,7 @@ export function AdminOrganizationSettings() {
             ) : null}
           </div>
         </section>
+        <AdminTeamManagement />
       </div>
     </main>
   );

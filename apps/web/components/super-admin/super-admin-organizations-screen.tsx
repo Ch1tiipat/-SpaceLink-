@@ -3,6 +3,7 @@
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Building2,
+  Crown,
   ChevronLeft,
   ChevronRight,
   PencilLine,
@@ -16,6 +17,7 @@ import {
   createSuperAdminOrganization,
   getSuperAdminCompanyAdmins,
   getSuperAdminOrganizations,
+  setSuperAdminOrganizationOwner,
   updateSuperAdminOrganizationPromptPay,
   updateSuperAdminOrganizationStatus,
   type CreateSuperAdminOrganizationInput,
@@ -109,6 +111,16 @@ export function SuperAdminOrganizationsScreen() {
     return result;
   }, [admins]);
 
+  const ownersByOrganization = useMemo(
+    () =>
+      new Map(
+        admins
+          .filter((admin) => admin.role === 'OWNER')
+          .map((owner) => [owner.organization.id, owner]),
+      ),
+    [admins],
+  );
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('th-TH');
     return organizations.filter((organization) => {
@@ -181,6 +193,26 @@ export function SuperAdminOrganizationsScreen() {
     setToast(`บันทึก PromptPay ของ ${organization.name} แล้ว`);
   }
 
+  async function assignOwner(organization: SuperAdminOrganization) {
+    const email = window.prompt(
+      `กรอกอีเมล OWNER ของ ${organization.name}`,
+      ownersByOrganization.get(organization.id)?.user.email ?? '',
+    );
+    if (!email?.trim()) return;
+
+    setSavingId(organization.id);
+    try {
+      const token = await getAccessToken();
+      await setSuperAdminOrganizationOwner(organization.id, email.trim(), token);
+      setToast(`กำหนด OWNER ของ ${organization.name} แล้ว`);
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setToast(errorMessage(cause, 'กำหนด OWNER ไม่สำเร็จ'));
+    } finally {
+      setSavingId('');
+    }
+  }
+
   const hasFilters = query.trim().length > 0 || status !== 'ALL';
 
   return (
@@ -199,7 +231,7 @@ export function SuperAdminOrganizationsScreen() {
 
       <section className="mb-[18px] flex flex-col gap-2 rounded-[11px] border border-[#e1d5ef] bg-[#fbf8ff] px-3.5 py-3 text-xs text-[#675d70] sm:flex-row sm:items-center">
         <span className="w-fit shrink-0 rounded-full bg-[#eee5fb] px-2.5 py-1 text-[11px] font-extrabold text-[#6d28d9]">Backend พร้อมใช้</span>
-        <p className="m-0">รองรับรายชื่อ สร้าง แก้ PromptPay และเปลี่ยนสถานะองค์กร · ทุก action ตรวจ SUPER_ADMIN ฝั่ง Server</p>
+        <p className="m-0">รองรับรายชื่อ สร้าง กำหนด OWNER แก้ PromptPay และเปลี่ยนสถานะองค์กร · ทุก action ตรวจ SUPER_ADMIN ฝั่ง Server</p>
       </section>
 
       <section className="mb-[18px] grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
@@ -243,15 +275,15 @@ export function SuperAdminOrganizationsScreen() {
             <p className="px-[17px] pt-2.5 text-[11px] font-bold text-[#6d28d9] md:hidden">← เลื่อนตารางเพื่อดูข้อมูลเพิ่มเติม →</p>
             <div className="overflow-x-auto px-[17px] pb-2.5">
               <table className="w-full min-w-[820px] border-collapse text-left">
-                <thead><tr className="border-b border-[#ebe4ef] text-[11px] tracking-[.35px] text-[#948a98]"><th className="px-[7px] py-3.5">Organization</th><th className="px-[7px] py-3.5">Contact</th><th className="px-[7px] py-3.5">สถานะ</th><th className="px-[7px] py-3.5">Admins</th><th className="px-[7px] py-3.5">Action</th></tr></thead>
+                <thead><tr className="border-b border-[#ebe4ef] text-[11px] tracking-[.35px] text-[#948a98]"><th className="px-[7px] py-3.5">Organization</th><th className="px-[7px] py-3.5">Contact</th><th className="px-[7px] py-3.5">สถานะ</th><th className="px-[7px] py-3.5">Team / OWNER</th><th className="px-[7px] py-3.5">Action</th></tr></thead>
                 <tbody className="divide-y divide-[#f0ecf3]">
                   {visibleRows.map((organization) => (
                     <tr key={organization.id} className="text-[13px] text-[#423b4c] transition hover:translate-x-0.5 hover:bg-[#fdfbff]">
                       <td className="px-[7px] py-[13px]"><div className="flex items-center gap-2.5"><OrganizationLogo organization={organization} /><div className="min-w-0"><strong className="block max-w-[260px] truncate text-[13px]">{organization.name}</strong><small className="mt-0.5 block max-w-[260px] truncate text-[11px] text-[#82788b]">{organization.id}</small></div></div></td>
                       <td className="px-[7px] py-[13px]">{organization.contactEmail}<small className="mt-0.5 block text-[11px] text-[#82788b]">{organization.contactPhone || '—'}</small></td>
                       <td className="px-[7px] py-[13px]"><StatusPill status={organization.status} /></td>
-                      <td className="px-[7px] py-[13px] font-bold">{adminCounts.get(organization.id) ?? 0} คน</td>
-                      <td className="px-[7px] py-[13px]"><div className="flex items-center gap-2"><StatusSelect organization={organization} disabled={savingId === organization.id} onChange={updateStatus} /><button type="button" onClick={() => setEditingOrganization(organization)} className="inline-flex min-h-8 items-center gap-1 rounded-[7px] border border-[#dac8f3] bg-white px-2 text-[11px] font-bold text-[#6d28d9] hover:bg-[#f8f3ff]" aria-label={`แก้ PromptPay ของ ${organization.name}`}><PencilLine className="h-3.5 w-3.5" />แก้ PromptPay</button></div></td>
+                      <td className="px-[7px] py-[13px] font-bold">{adminCounts.get(organization.id) ?? 0} คน<small className="mt-0.5 block max-w-[210px] truncate text-[11px] font-medium text-[#82788b]">OWNER: {ownersByOrganization.get(organization.id)?.user.email ?? 'ยังไม่ได้กำหนด'}</small></td>
+                      <td className="px-[7px] py-[13px]"><div className="flex flex-wrap items-center gap-2"><StatusSelect organization={organization} disabled={savingId === organization.id} onChange={updateStatus} /><button type="button" disabled={savingId === organization.id} onClick={() => void assignOwner(organization)} className="inline-flex min-h-8 items-center gap-1 rounded-[7px] border border-[#dac8f3] bg-white px-2 text-[11px] font-bold text-[#6d28d9] hover:bg-[#f8f3ff] disabled:opacity-50" aria-label={`กำหนด OWNER ของ ${organization.name}`}><Crown className="h-3.5 w-3.5" />OWNER</button><button type="button" onClick={() => setEditingOrganization(organization)} className="inline-flex min-h-8 items-center gap-1 rounded-[7px] border border-[#dac8f3] bg-white px-2 text-[11px] font-bold text-[#6d28d9] hover:bg-[#f8f3ff]" aria-label={`แก้ PromptPay ของ ${organization.name}`}><PencilLine className="h-3.5 w-3.5" />แก้ PromptPay</button></div></td>
                     </tr>
                   ))}
                 </tbody>

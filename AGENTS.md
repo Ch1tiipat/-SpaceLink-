@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09)
 
-The Prisma schema remains frozen except for these eight additive changes:
+The Prisma schema remains frozen except for these nine additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -74,11 +74,16 @@ The Prisma schema remains frozen except for these eight additive changes:
   following the same pattern as `contactEmail`/`contactPhone`/`logoUrl`, so each organization's
   event pages can show its own Facebook Page and LINE contact link. Organization-level only — no
   Event-level field and no fallback logic are authorized.
+- SCRUM-166: add `OrgMembership.canManagePayments` and `OrgMembership.canManageZones` (both
+  `Boolean @default(false)` with `@map("can_manage_payments")` / `@map("can_manage_zones")`) to
+  the existing `OrgMembership` model. An organization `OWNER` may delegate these permissions to
+  that organization's `ADMIN` memberships; `SUPER_ADMIN` may appoint or replace the `OWNER` but
+  must not manage these two granular permissions.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the eight tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the nine tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 

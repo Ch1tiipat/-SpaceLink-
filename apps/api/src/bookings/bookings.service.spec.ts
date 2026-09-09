@@ -9,6 +9,7 @@ import {
   BoothStatus,
   CancelledByRole,
   EventStatus,
+  MembershipRole,
   NotificationType,
   OrgStatus,
   Prisma,
@@ -1472,7 +1473,17 @@ describe('BookingsService', () => {
         where: {
           bookingCode: BOOKING_CODE,
           event: {
-            organization: { memberships: { some: { userId: ADMIN_ID } } },
+            organization: {
+              memberships: {
+                some: {
+                  userId: ADMIN_ID,
+                  OR: [
+                    { role: MembershipRole.OWNER },
+                    { canManagePayments: true },
+                  ],
+                },
+              },
+            },
           },
         },
       });
