@@ -297,6 +297,42 @@ export default function NotificationsPage() {
     };
   }, [auth.status, reloadVersion]);
 
+  useEffect(() => {
+    if (access.status !== 'ready' || access.token === UX_PREVIEW_TOKEN) return;
+
+    const token = access.token;
+    let active = true;
+    let controller: AbortController | null = null;
+
+    async function refreshNotifications() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const rows = await getMyNotifications(token, controller.signal);
+        if (active) setNotifications(rows.map(toUserNotification));
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      }
+    }
+
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshNotifications();
+    }, 30_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshNotifications();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(refreshInterval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [access]);
+
   const visibleNotifications = useMemo(
     () => {
       if (filter === 'unread') {

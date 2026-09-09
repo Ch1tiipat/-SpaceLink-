@@ -2,6 +2,7 @@ import { Logger, NotFoundException } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
   BookingStatus,
+  MembershipRole,
   NotificationType,
   Prisma,
   ReviewTargetType,
@@ -43,6 +44,7 @@ const NOTIFICATION: Notification = {
 const bookingFindMany = jest.fn();
 const reviewFindMany = jest.fn();
 const userFindMany = jest.fn();
+const orgMembershipFindMany = jest.fn();
 const notificationCreate = jest.fn();
 const notificationCreateMany = jest.fn();
 const notificationFindMany = jest.fn();
@@ -63,6 +65,7 @@ const mockPrismaService = {
   booking: { findMany: bookingFindMany },
   review: { findMany: reviewFindMany },
   user: { findMany: userFindMany },
+  orgMembership: { findMany: orgMembershipFindMany },
   notification: {
     create: notificationCreate,
     createMany: notificationCreateMany,
@@ -105,6 +108,10 @@ describe('NotificationsService', () => {
     sendToUser.mockResolvedValue(undefined);
     sendToUsers.mockResolvedValue(undefined);
     userFindMany.mockResolvedValue([{ id: USER_ID }, { id: OTHER_USER_ID }]);
+    orgMembershipFindMany.mockResolvedValue([
+      { userId: USER_ID },
+      { userId: OTHER_USER_ID },
+    ]);
     reviewFindMany.mockResolvedValue([]);
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
@@ -205,6 +212,83 @@ describe('NotificationsService', () => {
     expect(sendToUsers).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith(
       'Failed to create role-based notifications',
+    );
+
+    error.mockRestore();
+  });
+
+  it('routes payment work only to delegated admins in the requested organization', async () => {
+    await expect(
+      service.createForOrganizationAdmins(ORGANIZATION_ID, 'payments', INPUT),
+    ).resolves.toBe(2);
+
+    expect(orgMembershipFindMany).toHaveBeenCalledTimes(1);
+    expect(orgMembershipFindMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: ORGANIZATION_ID,
+        role: MembershipRole.ADMIN,
+        canManagePayments: true,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        { userId: USER_ID, ...INPUT },
+        { userId: OTHER_USER_ID, ...INPUT },
+      ],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([USER_ID, OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
+  it('falls back to the organization owner when no zone admin is delegated', async () => {
+    orgMembershipFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ userId: USER_ID }]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.createForOrganizationAdmins(ORGANIZATION_ID, 'zones', INPUT),
+    ).resolves.toBe(1);
+
+    expect(orgMembershipFindMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        organizationId: ORGANIZATION_ID,
+        role: MembershipRole.ADMIN,
+        canManageZones: true,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
+    expect(orgMembershipFindMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        organizationId: ORGANIZATION_ID,
+        role: MembershipRole.OWNER,
+        user: { role: UserRole.ORG_ADMIN },
+      },
+      select: { userId: true },
+    });
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [{ userId: USER_ID, ...INPUT }],
+    });
+  });
+
+  it('keeps organization notification routing best-effort', async () => {
+    const error = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    orgMembershipFindMany.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      service.createForOrganizationAdmins(ORGANIZATION_ID, 'payments', INPUT),
+    ).resolves.toBe(0);
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+    expect(sendToUsers).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      'Failed to create organization admin notifications',
     );
 
     error.mockRestore();

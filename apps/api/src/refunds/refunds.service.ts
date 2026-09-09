@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -110,8 +109,6 @@ const adminRefundSelect = {
 
 @Injectable()
 export class RefundsService {
-  private readonly logger = new Logger(RefundsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
@@ -494,29 +491,15 @@ export class RefundsService {
     bookingCode: string,
     refund: RefundRecord,
   ): Promise<void> {
-    try {
-      const admins = await this.prisma.orgMembership.findMany({
-        where: {
-          organizationId,
-          user: { role: UserRole.ORG_ADMIN },
-        },
-        select: { userId: true },
-      });
-      await Promise.all(
-        admins.map(({ userId }) =>
-          this.notifications.createForUser(userId, {
-            type: NotificationType.REFUND,
-            title: 'มีคำร้องขอคืนเงินใหม่',
-            body: `การจอง ${bookingCode} ขอคืนเงิน ${refund.requestedAmount.toString()} บาท`,
-            relatedEntityType: 'REFUND_REQUEST',
-            relatedEntityId: refund.id,
-          }),
-        ),
-      );
-    } catch {
-      // The refund is already committed. Notification fan-out is best-effort.
-      this.logger.error('Failed to notify organization refund reviewers');
-    }
+    await this.notifications
+      .createForOrganizationAdmins(organizationId, 'payments', {
+        type: NotificationType.REFUND,
+        title: 'มีคำร้องขอคืนเงินใหม่',
+        body: `การจอง ${bookingCode} ขอคืนเงิน ${refund.requestedAmount.toString()} บาท`,
+        relatedEntityType: 'REFUND_REQUEST',
+        relatedEntityId: refund.id,
+      })
+      .catch(() => 0);
   }
 
   private notifyVendor(
