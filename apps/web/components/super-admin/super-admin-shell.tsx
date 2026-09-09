@@ -4,13 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import {
-  Activity,
   Bell,
   Building2,
   CalendarCheck2,
   CheckCheck,
   ChevronDown,
-  KeyRound,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -112,8 +110,6 @@ const NAVIGATION: NavigationGroup[] = [
         icon: Megaphone,
         href: '/super-admin/announcements',
       },
-      { label: 'สถานะระบบ', icon: Activity },
-      { label: 'บทบาทและสิทธิ์', icon: KeyRound },
       {
         label: 'ตั้งค่าระบบ',
         icon: Settings2,
@@ -432,14 +428,18 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               </>
             ) : null}
           </div>
-          <span className="flex items-center gap-2 rounded-xl bg-[#f2eaff] px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4]">
+          <Link
+            href="/profile"
+            aria-label="ดูข้อมูลส่วนตัว"
+            className="flex items-center gap-2 rounded-xl bg-[#f2eaff] px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4] transition hover:bg-[#e9ddff] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#e9ddff]"
+          >
             <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white">
               {initials(auth.fullName)}
             </span>
             <span className="hidden max-w-[180px] truncate sm:inline">
               {auth.fullName}
             </span>
-          </span>
+          </Link>
         </header>
         <main className="min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-72px)]">
           {children}
