@@ -12,6 +12,7 @@ import {
   Mail,
   MessageCircleQuestion,
   RefreshCw,
+  Search,
   ShieldAlert,
   UserRound,
   X,
@@ -788,7 +789,7 @@ function PenaltyForm({
   bookings: SuperAdminBooking[];
   onCreated: () => void;
 }) {
-  const vendors = users.filter((user) => user.role === "VENDOR");
+  const [userQuery, setUserQuery] = useState("");
   const [userId, setUserId] = useState("");
   const [organizationId, setOrganizationId] = useState("");
   const [bookingId, setBookingId] = useState("");
@@ -801,20 +802,38 @@ function PenaltyForm({
     text: string;
   } | null>(null);
 
+  const normalizedUserQuery = userQuery.trim().toLocaleLowerCase("th-TH");
+  const visibleUsers = useMemo(
+    () =>
+      users.filter(
+        (user) =>
+          !normalizedUserQuery ||
+          user.fullName
+            .toLocaleLowerCase("th-TH")
+            .includes(normalizedUserQuery) ||
+          user.email.toLocaleLowerCase("th-TH").includes(normalizedUserQuery) ||
+          user.id.toLocaleLowerCase("th-TH").includes(normalizedUserQuery),
+      ),
+    [normalizedUserQuery, users],
+  );
+  const selectedUser = users.find((user) => user.id === userId) ?? null;
+  const selectedVendor =
+    selectedUser?.role === "VENDOR" ? selectedUser : null;
+
   const matchingBookings = bookings.filter(
     (booking) =>
-      booking.vendor.id === userId &&
+      selectedVendor !== null &&
+      booking.vendor.id === selectedVendor.id &&
       booking.event.organizationId === organizationId,
   );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userId || !organizationId || submitting) return;
+    if (!selectedVendor || !organizationId || submitting) return;
 
-    const vendor = vendors.find((item) => item.id === userId);
     if (
       !window.confirm(
-        `ยืนยันหัก ${points} คะแนนจาก Trust Score ของ ${vendor?.fullName ?? "ผู้ขายรายนี้"}?`,
+        `ยืนยันหัก ${points} คะแนนจาก Trust Score ของ ${selectedVendor.fullName}?`,
       )
     ) {
       return;
@@ -856,22 +875,38 @@ function PenaltyForm({
   return (
     <Panel
       title="ออกบทลงโทษ"
-      description="เลือกผู้ขายและองค์กร กำหนดคะแนนที่จะหักจาก Trust Score โดยผูกการจองได้ถ้ามี"
+      description="ค้นหาผู้ใช้ทุกบทบาทได้ โดยการออกบทลงโทษยังจำกัดเฉพาะผู้ขายและต้องเลือกองค์กร"
       controls={null}
     >
       <form onSubmit={submit} className="grid gap-4 p-5 lg:grid-cols-2">
+        <label className="flex min-h-10 items-center gap-2 rounded-[9px] border border-[#ded5e7] bg-white px-3 text-[#82788b] focus-within:border-[#9b6be1] focus-within:ring-4 focus-within:ring-[#f0e7ff] lg:col-span-2">
+          <Search className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="sr-only">ค้นหาผู้ใช้</span>
+          <input
+            type="search"
+            value={userQuery}
+            onChange={(event) => {
+              setUserQuery(event.target.value);
+              setUserId("");
+              setBookingId("");
+            }}
+            placeholder="ค้นหาชื่อ อีเมล หรือ User ID โดยไม่ต้องเลือกองค์กร"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[#28202f] outline-none"
+          />
+        </label>
         <Select
           value={userId}
           onChange={(value) => {
             setUserId(value);
             setBookingId("");
           }}
-          label="เลือกผู้ขาย"
+          label="เลือกผู้ใช้"
         >
-          <option value="">เลือกผู้ขาย</option>
-          {vendors.map((user) => (
+          <option value="">เลือกผู้ใช้</option>
+          {visibleUsers.map((user) => (
             <option key={user.id} value={user.id}>
-              {user.fullName} — Trust Score {user.trustScore}/100
+              {user.fullName} — {userRoleLabel(user.role)} — Trust Score{" "}
+              {user.trustScore}/100
             </option>
           ))}
         </Select>
@@ -890,6 +925,15 @@ function PenaltyForm({
             </option>
           ))}
         </Select>
+        {selectedUser && !selectedVendor ? (
+          <p
+            role="status"
+            className="rounded-lg bg-[#f2eaff] px-3 py-2 text-xs font-bold leading-5 text-[#6331c4] lg:col-span-2"
+          >
+            บัญชี {userRoleLabel(selectedUser.role)} สามารถค้นหาและเลือกได้
+            แต่การออกบทลงโทษในระบบนี้รองรับเฉพาะผู้ขายเท่านั้น
+          </p>
+        ) : null}
         <Select value={bookingId} onChange={setBookingId} label="เลือกการจอง">
           <option value="">ไม่ผูกกับการจอง</option>
           {matchingBookings.map((booking) => (
@@ -941,7 +985,7 @@ function PenaltyForm({
         <div className="lg:col-span-2">
           <button
             type="submit"
-            disabled={!userId || !organizationId || submitting}
+            disabled={!selectedVendor || !organizationId || submitting}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#6d28d9] px-4 text-sm font-extrabold text-white disabled:opacity-50"
           >
             <Gavel className="h-4 w-4" />
@@ -1479,6 +1523,14 @@ function penaltyReasonLabel(reason: PenaltyReason) {
     BAD_REVIEW: "ได้รับรีวิวไม่ดี",
     OTHER: "อื่นๆ",
   }[reason];
+}
+
+function userRoleLabel(role: SuperAdminUserListItem["role"]) {
+  return {
+    SUPER_ADMIN: "Super Admin",
+    ORG_ADMIN: "แอดมินบริษัท",
+    VENDOR: "ผู้ขาย",
+  }[role];
 }
 
 function formatDateTime(value: string) {
