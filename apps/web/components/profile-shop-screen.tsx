@@ -22,6 +22,10 @@ import {
 import { MultiSelectMenu } from '@/components/multi-select-menu';
 import type { SelectMenuOption } from '@/components/select-menu';
 import {
+  PushRegistrationTimeoutError,
+  resolvePushRegistration,
+} from '@/lib/push-registration';
+import {
   ApiError,
   createPushSubscription,
   createShop,
@@ -490,7 +494,8 @@ type PushAvailability =
   | 'ready'
   | 'denied'
   | 'unsupported'
-  | 'unconfigured';
+  | 'unconfigured'
+  | 'error';
 
 function urlBase64ToUint8Array(value: string) {
   const padding = '='.repeat((4 - (value.length % 4)) % 4);
@@ -515,9 +520,12 @@ function PushNotificationCard({ token }: { token: string }) {
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [checkAttempt, setCheckAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setAvailability('checking');
+    setMessage(null);
 
     void (async () => {
       if (
@@ -539,10 +547,9 @@ function PushNotificationCard({ token }: { token: string }) {
         return;
       }
 
-      let registration = await navigator.serviceWorker.getRegistration();
-      if (!registration && process.env.NODE_ENV === 'production') {
-        registration = await navigator.serviceWorker.ready;
-      }
+      const registration = await resolvePushRegistration(navigator.serviceWorker, {
+        waitForReady: process.env.NODE_ENV === 'production',
+      });
       if (!active) return;
       if (!registration) {
         setAvailability('unsupported');
@@ -553,14 +560,20 @@ function PushNotificationCard({ token }: { token: string }) {
       if (!active) return;
       setSubscribed(Boolean(subscription));
       setAvailability('ready');
-    })().catch(() => {
-      if (active) setAvailability('unsupported');
+    })().catch((cause) => {
+      if (!active) return;
+      setAvailability('error');
+      setMessage(
+        cause instanceof PushRegistrationTimeoutError
+          ? 'ระบบใช้เวลาตรวจสอบการแจ้งเตือนนานเกินไป กรุณาลองอีกครั้ง'
+          : 'ตรวจสอบการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ กรุณาลองอีกครั้ง',
+      );
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [checkAttempt]);
 
   async function handleToggle() {
     if (availability !== 'ready' || busy) return;
@@ -568,7 +581,12 @@ function PushNotificationCard({ token }: { token: string }) {
     setMessage(null);
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await resolvePushRegistration(navigator.serviceWorker, {
+        waitForReady: true,
+      });
+      if (!registration) {
+        throw new Error('ไม่พบ Service Worker สำหรับการแจ้งเตือน กรุณาลองอีกครั้ง');
+      }
       const existing = await registration.pushManager.getSubscription();
 
       if (subscribed) {
@@ -700,8 +718,20 @@ function PushNotificationCard({ token }: { token: string }) {
           ระบบยังไม่ได้ตั้งค่ากุญแจ Web Push กรุณาแจ้งผู้ดูแลระบบ
         </p>
       ) : null}
+      {availability === 'error' ? (
+        <button
+          type="button"
+          onClick={() => setCheckAttempt((attempt) => attempt + 1)}
+          className="mt-3 rounded-xl border border-violet px-4 py-2 text-sm font-bold text-violet transition hover:bg-violet-tint"
+        >
+          ลองตรวจสอบอีกครั้ง
+        </button>
+      ) : null}
       {message ? (
-        <p role="status" className="mt-3 text-sm font-bold text-violet">
+        <p
+          role={availability === 'error' ? 'alert' : 'status'}
+          className={`mt-3 text-sm font-bold ${availability === 'error' ? 'text-[#b42318]' : 'text-violet'}`}
+        >
           {message}
         </p>
       ) : null}
