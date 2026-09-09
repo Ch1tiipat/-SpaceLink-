@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UploadedFile,
@@ -64,6 +65,15 @@ export class BookingsController {
       createBookingsBatchDto,
       currentUser.id,
     );
+  }
+
+  @Get('quota/:eventId')
+  @Roles(UserRole.VENDOR)
+  getQuotaContext(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.getQuotaContext(eventId, currentUser.id);
   }
 
   @Post(':id/slip')
