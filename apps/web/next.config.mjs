@@ -8,6 +8,7 @@ const runtimeCaching = [
     urlPattern: ({ request }) => request.headers.has('authorization'),
     handler: 'NetworkOnly',
     method: 'GET',
+    options: {},
   },
   ...defaultRuntimeCaching,
 ];
@@ -23,6 +24,12 @@ const withPWA = withPWAInit({
   ],
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
+  // Navigation requests must stay inside the branded application when the
+  // network and route cache are both unavailable. This page contains no
+  // account data; authenticated API requests remain NetworkOnly above.
+  fallbacks: {
+    document: '/offline',
+  },
   importScripts: ['/push-sw.js'],
   // These large reference images are not used by the current UI. Keep them
   // deployable, but do not make every PWA installation download them upfront.
