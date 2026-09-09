@@ -51,6 +51,18 @@ function formatDateRange(event: DiscoveryEvent) {
   )}`;
 }
 
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function isEventEnded(endDate: string, now = new Date()) {
+  const eventEnd = new Date(endDate);
+  if (Number.isNaN(eventEnd.getTime())) return false;
+
+  const bangkokDay = (date: Date) =>
+    Math.floor((date.getTime() + BANGKOK_OFFSET_MS) / DAY_MS);
+  return bangkokDay(eventEnd) < bangkokDay(now);
+}
+
 export default function DiscoveryPage() {
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
@@ -125,7 +137,7 @@ export default function DiscoveryPage() {
   const filters = useMemo(
     () => ({
       events: uniqueOptions(
-        events.map((event) => ({
+        events.filter((event) => !isEventEnded(event.endDate)).map((event) => ({
           value: event.name,
           label: event.name,
           hint: event.venue.name,
@@ -133,6 +145,7 @@ export default function DiscoveryPage() {
       ),
       areas: uniqueOptions(
         events
+          .filter((event) => !isEventEnded(event.endDate))
           .filter((event) => event.venue.address)
           .map((event) => {
             const province = provinceFromAddress(event.venue.address ?? "");
@@ -140,7 +153,7 @@ export default function DiscoveryPage() {
           }),
       ),
       categories: uniqueOptions(
-        events.flatMap((event) =>
+        events.filter((event) => !isEventEnded(event.endDate)).flatMap((event) =>
           event.categories.map((category) => ({
             value: category.id,
             label: category.name,
@@ -154,6 +167,7 @@ export default function DiscoveryPage() {
   const visibleEvents = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("th");
     return events.filter((event) => {
+      if (isEventEnded(event.endDate)) return false;
       const searchable =
         `${event.name} ${event.description ?? ""} ${event.organization.name} ${event.venue.name}`.toLocaleLowerCase(
           "th",
@@ -173,7 +187,9 @@ export default function DiscoveryPage() {
     }
 
     return [
-      ...events.map((event): Update => ({ kind: "event", event })),
+      ...events
+        .filter((event) => !isEventEnded(event.endDate))
+        .map((event): Update => ({ kind: "event", event })),
       ...announcements.map((announcement): Update => ({
         kind: "announcement",
         announcement,
@@ -400,9 +416,11 @@ export default function DiscoveryPage() {
         )}
       </section>
 
-      {events[0] && <PopularAreaRecommendations event={events[0]} />}
+      {visibleEvents[0] && (
+        <PopularAreaRecommendations event={visibleEvents[0]} />
+      )}
 
-      <BookingJourney event={events[0]} />
+      <BookingJourney event={visibleEvents[0]} />
       <PlatformBenefits />
       <HomepageCallToAction />
     </main>

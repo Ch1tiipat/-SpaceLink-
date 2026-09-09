@@ -66,6 +66,27 @@ const STATUS_STYLES: Record<AdminOrganizationEvent['status'], string> = {
   CANCELLED: 'bg-[#fff0ef] text-[#b42318]',
 };
 
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function displayEventStatus(
+  event: AdminOrganizationEvent,
+  now = new Date(),
+): AdminOrganizationEvent['status'] {
+  if (event.status !== 'PUBLISHED' && event.status !== 'ONGOING') {
+    return event.status;
+  }
+
+  const eventEnd = new Date(event.endDate);
+  if (Number.isNaN(eventEnd.getTime())) return event.status;
+
+  const bangkokDay = (date: Date) =>
+    Math.floor((date.getTime() + BANGKOK_OFFSET_MS) / DAY_MS);
+  return bangkokDay(eventEnd) < bangkokDay(now)
+    ? 'COMPLETED'
+    : event.status;
+}
+
 export function AdminEventsScreen() {
   const { access, token, organizationId, organization } = useAdminPageAccess();
   const [events, setEvents] = useState<AdminOrganizationEvent[]>([]);
@@ -132,7 +153,8 @@ export function AdminEventsScreen() {
   const visibleEvents = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('th-TH');
     return events.filter((event) => {
-      const matchesStatus = status === 'ALL' || event.status === status;
+      const matchesStatus =
+        status === 'ALL' || displayEventStatus(event) === status;
       const matchesQuery =
         !normalized ||
         event.name.toLocaleLowerCase('th-TH').includes(normalized) ||
@@ -142,7 +164,9 @@ export function AdminEventsScreen() {
   }, [events, query, status]);
 
   const activeCount = events.filter(
-    (event) => event.status === 'PUBLISHED' || event.status === 'ONGOING',
+    (event) =>
+      displayEventStatus(event) === 'PUBLISHED' ||
+      displayEventStatus(event) === 'ONGOING',
   ).length;
   const upcomingCount = events.filter(
     (event) => new Date(event.startDate).getTime() > Date.now(),
@@ -352,16 +376,18 @@ export function AdminEventsScreen() {
             />
           ) : (
             <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleEvents.map((event) => (
-                <article
+              {visibleEvents.map((event) => {
+                const displayedStatus = displayEventStatus(event);
+                return (
+                  <article
                   key={event.id}
                   className="rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff] p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_STYLES[event.status]}`}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_STYLES[displayedStatus]}`}
                     >
-                      {STATUS_LABELS[event.status]}
+                      {STATUS_LABELS[displayedStatus]}
                     </span>
                     <span className="text-[11px] font-bold text-muted">
                       {event.venue.name}
@@ -401,7 +427,7 @@ export function AdminEventsScreen() {
                         : 'Event เดิม · ไม่มีบิล'}
                     </strong>
                   </div>
-                  {event.status === 'DRAFT' ? (
+                  {displayedStatus === 'DRAFT' ? (
                     <button
                       type="button"
                       onClick={() => void publishEvent(event)}
@@ -414,15 +440,15 @@ export function AdminEventsScreen() {
                         : 'เผยแพร่อีเวนต์'}
                     </button>
                   ) : null}
-                  {event.status === 'PUBLISHED' ||
-                  event.status === 'ONGOING' ||
-                  event.status === 'CANCELLED' ? (
+                  {displayedStatus === 'PUBLISHED' ||
+                  displayedStatus === 'ONGOING' ||
+                  displayedStatus === 'CANCELLED' ? (
                     <button
                       type="button"
                       onClick={() =>
                         void setEventOpenState(
                           event,
-                          event.status === 'CANCELLED' ? 'open' : 'close',
+                          displayedStatus === 'CANCELLED' ? 'open' : 'close',
                         )
                       }
                       disabled={Boolean(busyAction)}
@@ -432,7 +458,7 @@ export function AdminEventsScreen() {
                       {busyAction === `open:${event.id}` ||
                       busyAction === `close:${event.id}`
                         ? 'กำลังบันทึก...'
-                        : event.status === 'CANCELLED'
+                        : displayedStatus === 'CANCELLED'
                           ? 'เปิดอีเวนต์อีกครั้ง'
                           : 'ปิดอีเวนต์'}
                     </button>
@@ -448,8 +474,9 @@ export function AdminEventsScreen() {
                       ? 'กำลังลบ...'
                       : 'ลบอีเวนต์'}
                   </button>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </AdminPanel>
