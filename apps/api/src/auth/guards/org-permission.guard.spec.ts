@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrgPermissionGuard } from './org-permission.guard';
 
 const findUnique = jest.fn();
+const findFirst = jest.fn();
 
 function contextFor(request: object): ExecutionContext {
   return {
@@ -23,7 +24,7 @@ describe('OrgPermissionGuard', () => {
     getAllAndOverride: jest.fn(),
   } as unknown as Reflector;
   const prisma = {
-    orgMembership: { findUnique },
+    orgMembership: { findFirst, findUnique },
   } as unknown as PrismaService;
   const guard = new OrgPermissionGuard(reflector, prisma);
 
@@ -69,6 +70,43 @@ describe('OrgPermissionGuard', () => {
     ).resolves.toBe(true);
 
     (reflector.getAllAndOverride as jest.Mock).mockReturnValue('zones');
+    findFirst.mockResolvedValue({ id: 'owner-membership-1' });
+    await expect(
+      guard.canActivate(
+        contextFor({
+          organizationId: 'organization-1',
+          user: { id: 'user-1', role: UserRole.ORG_ADMIN },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('preserves legacy ADMIN access while the organization has no OWNER', async () => {
+    findUnique.mockResolvedValue({
+      role: MembershipRole.ADMIN,
+      canManagePayments: false,
+      canManageZones: false,
+    });
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      guard.canActivate(
+        contextFor({
+          organizationId: 'organization-1',
+          user: { id: 'user-1', role: UserRole.ORG_ADMIN },
+        }),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('enforces delegated permissions after an OWNER is assigned', async () => {
+    findUnique.mockResolvedValue({
+      role: MembershipRole.ADMIN,
+      canManagePayments: false,
+      canManageZones: false,
+    });
+    findFirst.mockResolvedValue({ id: 'owner-membership-1' });
+
     await expect(
       guard.canActivate(
         contextFor({

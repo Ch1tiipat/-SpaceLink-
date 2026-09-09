@@ -67,14 +67,24 @@ export class OrgPermissionGuard implements CanActivate {
       permission === 'payments'
         ? membership?.canManagePayments
         : membership?.canManageZones;
-    if (!allowed) {
-      throw new ForbiddenException(
-        permission === 'payments'
-          ? 'คุณไม่มีสิทธิ์ดูแลงานการเงินขององค์กรนี้'
-          : 'คุณไม่มีสิทธิ์ดูแลโซนขององค์กรนี้',
-      );
-    }
+    if (allowed) return true;
 
-    return true;
+    // Existing organizations may predate delegated permissions and have no
+    // OWNER yet. Preserve their ADMIN access until a SUPER_ADMIN assigns one;
+    // after that, the explicit permission flags become authoritative.
+    const owner = await this.prisma.orgMembership.findFirst({
+      where: {
+        organizationId: request.organizationId,
+        role: MembershipRole.OWNER,
+      },
+      select: { id: true },
+    });
+    if (!owner && membership?.role === MembershipRole.ADMIN) return true;
+
+    throw new ForbiddenException(
+      permission === 'payments'
+        ? 'คุณไม่มีสิทธิ์ดูแลงานการเงินขององค์กรนี้'
+        : 'คุณไม่มีสิทธิ์ดูแลโซนขององค์กรนี้',
+    );
   }
 }
