@@ -137,7 +137,8 @@ export class NotificationsService {
   /**
    * Sends an organization-scoped notification to delegated ADMIN members.
    * When nobody has the requested permission, the organization's OWNER is
-   * used as the fallback so actionable work is never left without a recipient.
+   * used as the fallback. Legacy organizations without an OWNER temporarily
+   * notify every ADMIN until ownership and delegated permissions are assigned.
    */
   async createForOrganizationAdmins(
     organizationId: string,
@@ -164,6 +165,17 @@ export class NotificationsService {
           where: {
             organizationId,
             role: MembershipRole.OWNER,
+            user: { role: UserRole.ORG_ADMIN },
+          },
+          select: { userId: true },
+        });
+      }
+
+      if (recipients.length === 0) {
+        recipients = await this.prisma.orgMembership.findMany({
+          where: {
+            organizationId,
+            role: MembershipRole.ADMIN,
             user: { role: UserRole.ORG_ADMIN },
           },
           select: { userId: true },
