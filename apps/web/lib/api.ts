@@ -168,6 +168,8 @@ export type BookingRecord = {
   boothId: string;
   shopId: string;
   vendorUserId: string;
+  /** Null for the legacy single-booking payment flow. */
+  paymentGroupId?: string | null;
   bookingStartDate: string;
   bookingEndDate: string;
   boothPrice: string;
@@ -327,6 +329,48 @@ export type SlipUploadResponse = {
     confirmedAt: string | null;
     holdExpiresAt: string;
   };
+  verification: {
+    status: SlipVerificationStatus;
+    message: string;
+  };
+};
+
+export type PaymentGroupStatus =
+  | "PENDING_PAYMENT"
+  | "CONFIRMED"
+  | "CANCELLED";
+
+export type PaymentGroupRecord = {
+  id: string;
+  paymentCode: string;
+  vendorUserId: string;
+  shopId: string;
+  eventId: string;
+  organizationId: string;
+  totalAmount: string;
+  status: PaymentGroupStatus;
+  holdExpiresAt: string | null;
+  confirmedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  bookings: BookingRecord[];
+  paymentQrDataUri: string | null;
+};
+
+export type PaymentGroupSlipUploadResponse = {
+  paymentGroup: {
+    id: string;
+    status: PaymentGroupStatus;
+    confirmedAt: string | null;
+    holdExpiresAt: string | null;
+  };
+  bookings: Array<{
+    id: string;
+    status: BookingStatus;
+    confirmedAt: string | null;
+    holdExpiresAt: string | null;
+  }>;
   verification: {
     status: SlipVerificationStatus;
     message: string;
@@ -2059,12 +2103,23 @@ export function createBookingsBatch(
   input: { eventId: string; shopId: string; boothIds: string[] },
   token: string,
   signal?: AbortSignal,
-): Promise<BookingRecord[]> {
-  return postJson<BookingRecord[]>(
+): Promise<PaymentGroupRecord> {
+  return postJson<PaymentGroupRecord>(
     "/bookings/batch",
     input,
     { signal, token },
     "สร้างการจองทั้งชุดไม่สำเร็จ",
+  );
+}
+
+export function getPaymentGroup(
+  paymentGroupId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<PaymentGroupRecord> {
+  return getJson<PaymentGroupRecord>(
+    `/bookings/payment-groups/${encodeURIComponent(paymentGroupId)}`,
+    { signal, token },
   );
 }
 
@@ -2267,6 +2322,34 @@ export async function uploadBookingSlip(
   token: string,
   signal?: AbortSignal,
 ): Promise<SlipUploadResponse> {
+  return uploadSlip<SlipUploadResponse>(
+    `/bookings/${encodeURIComponent(bookingId)}/slip`,
+    file,
+    token,
+    signal,
+  );
+}
+
+export async function uploadPaymentGroupSlip(
+  paymentGroupId: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<PaymentGroupSlipUploadResponse> {
+  return uploadSlip<PaymentGroupSlipUploadResponse>(
+    `/bookings/payment-groups/${encodeURIComponent(paymentGroupId)}/slip`,
+    file,
+    token,
+    signal,
+  );
+}
+
+async function uploadSlip<TResponse>(
+  path: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<TResponse> {
   if (!API_BASE_URL) {
     throw new ApiError(
       "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
@@ -2280,7 +2363,7 @@ export async function uploadBookingSlip(
   let response: Response;
   try {
     response = await fetch(
-      `${API_BASE_URL}/bookings/${encodeURIComponent(bookingId)}/slip`,
+      `${API_BASE_URL}${path}`,
       {
         method: "POST",
         signal,
@@ -2323,5 +2406,5 @@ export async function uploadBookingSlip(
     );
   }
 
-  return (await response.json()) as SlipUploadResponse;
+  return (await response.json()) as TResponse;
 }

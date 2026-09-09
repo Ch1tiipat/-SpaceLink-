@@ -10,8 +10,10 @@ import {
 
 import {
   ApiError,
+  PaymentGroupSlipUploadResponse,
   SlipUploadResponse,
   uploadBookingSlip,
+  uploadPaymentGroupSlip,
 } from '@/lib/api';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -25,22 +27,44 @@ type SlipUploadPanelProps = {
   onConfirmed?: (response: SlipUploadResponse) => void;
 };
 
+type PaymentGroupSlipUploadPanelProps = {
+  paymentGroupId: string;
+  token: string;
+  disabled?: boolean;
+  onResult?: (response: PaymentGroupSlipUploadResponse) => void;
+  onConfirmed?: (response: PaymentGroupSlipUploadResponse) => void;
+};
+
+type VerificationResponse = {
+  verification: { message: string };
+};
+
+type SlipUploadFormProps<TResponse extends VerificationResponse> = {
+  targetId: string;
+  disabled: boolean;
+  upload: (file: File) => Promise<TResponse>;
+  isConfirmed: (response: TResponse) => boolean;
+  onResult?: (response: TResponse) => void;
+  onConfirmed?: (response: TResponse) => void;
+};
+
 function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function SlipUploadPanel({
-  bookingId,
-  token,
-  disabled = false,
+function SlipUploadForm<TResponse extends VerificationResponse>({
+  targetId,
+  disabled,
+  upload,
+  isConfirmed: getIsConfirmed,
   onResult,
   onConfirmed,
-}: SlipUploadPanelProps) {
+}: SlipUploadFormProps<TResponse>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SlipUploadResponse | null>(null);
+  const [result, setResult] = useState<TResponse | null>(null);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
@@ -78,11 +102,11 @@ export function SlipUploadPanel({
     setResult(null);
 
     try {
-      const response = await uploadBookingSlip(bookingId, file, token);
+      const response = await upload(file);
       setResult(response);
       onResult?.(response);
 
-      if (response.booking.status === 'CONFIRMED') {
+      if (getIsConfirmed(response)) {
         onConfirmed?.(response);
       }
 
@@ -99,7 +123,7 @@ export function SlipUploadPanel({
     }
   };
 
-  const isConfirmed = result?.booking.status === 'CONFIRMED';
+  const isConfirmed = result ? getIsConfirmed(result) : false;
 
   return (
     <section className="sl-surface p-5 sm:p-6">
@@ -132,14 +156,14 @@ export function SlipUploadPanel({
         <div>
           <label
             className="mb-2 block text-sm font-medium text-ink"
-            htmlFor={`slip-${bookingId}`}
+            htmlFor={`slip-${targetId}`}
           >
             รูปสลิปการโอนเงิน
           </label>
           <div className="rounded-[20px] border border-dashed border-[#cfc3e8] bg-[#faf8ff] p-3 transition focus-within:border-violet focus-within:bg-white">
             <input
               ref={inputRef}
-              id={`slip-${bookingId}`}
+              id={`slip-${targetId}`}
               type="file"
               accept="image/jpeg,image/png"
               disabled={disabled || isUploading}
@@ -206,5 +230,45 @@ export function SlipUploadPanel({
         </p>
       </form>
     </section>
+  );
+}
+
+export function SlipUploadPanel({
+  bookingId,
+  token,
+  disabled = false,
+  onResult,
+  onConfirmed,
+}: SlipUploadPanelProps) {
+  return (
+    <SlipUploadForm
+      targetId={bookingId}
+      disabled={disabled}
+      upload={(file) => uploadBookingSlip(bookingId, file, token)}
+      isConfirmed={(response) => response.booking.status === 'CONFIRMED'}
+      onResult={onResult}
+      onConfirmed={onConfirmed}
+    />
+  );
+}
+
+export function PaymentGroupSlipUploadPanel({
+  paymentGroupId,
+  token,
+  disabled = false,
+  onResult,
+  onConfirmed,
+}: PaymentGroupSlipUploadPanelProps) {
+  return (
+    <SlipUploadForm
+      targetId={`group-${paymentGroupId}`}
+      disabled={disabled}
+      upload={(file) => uploadPaymentGroupSlip(paymentGroupId, file, token)}
+      isConfirmed={(response) =>
+        response.paymentGroup.status === 'CONFIRMED'
+      }
+      onResult={onResult}
+      onConfirmed={onConfirmed}
+    />
   );
 }

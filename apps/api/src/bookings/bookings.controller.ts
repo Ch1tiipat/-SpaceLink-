@@ -76,6 +76,40 @@ export class BookingsController {
     return this.bookingsService.getQuotaContext(eventId, currentUser.id);
   }
 
+  @Get('payment-groups/:paymentGroupId')
+  @Roles(UserRole.VENDOR)
+  findPaymentGroup(
+    @Param('paymentGroupId', new ParseUUIDPipe()) paymentGroupId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.findPaymentGroup(
+      paymentGroupId,
+      currentUser.id,
+    );
+  }
+
+  @Post('payment-groups/:paymentGroupId/slip')
+  @Roles(UserRole.VENDOR)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: PAYMENT_SLIP_UPLOAD_LIMITS,
+    }),
+  )
+  uploadPaymentGroupSlip(
+    @Param('paymentGroupId', new ParseUUIDPipe()) paymentGroupId: string,
+    @UploadedFile() file: UploadedSlipFile | undefined,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (!file) {
+      throw new BadRequestException('กรุณาแนบไฟล์สลิป');
+    }
+    return this.bookingsService.uploadPaymentGroupSlip(
+      paymentGroupId,
+      file,
+      currentUser.id,
+    );
+  }
+
   @Post(':id/slip')
   @Roles(UserRole.VENDOR)
   @UseInterceptors(

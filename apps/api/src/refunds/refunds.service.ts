@@ -7,6 +7,7 @@ import {
 import {
   BookingStatus,
   NotificationType,
+  PaymentGroupStatus,
   Prisma,
   RefundStatus,
   SlipStatus,
@@ -66,6 +67,7 @@ const refundOverviewSelect = {
         },
       },
       shop: { select: { id: true, name: true } },
+      paymentGroup: { select: { paymentCode: true } },
     },
   },
   requestedBy: { select: { id: true, email: true, fullName: true } },
@@ -78,6 +80,14 @@ const payoutWarningSelect = {
       slips: {
         where: { slipokStatus: SlipStatus.VERIFIED },
         select: { senderName: true },
+      },
+      paymentGroup: {
+        select: {
+          slips: {
+            where: { slipokStatus: SlipStatus.VERIFIED },
+            select: { senderName: true },
+          },
+        },
       },
     },
   },
@@ -103,9 +113,15 @@ const adminRefundSelect = {
     select: {
       boothPrice: true,
       vendorUserId: true,
+      paymentGroupId: true,
+      paymentGroup: { select: { totalAmount: true } },
     },
   },
 } satisfies Prisma.RefundRequestSelect;
+
+type AdminRefundRecord = Prisma.RefundRequestGetPayload<{
+  select: typeof adminRefundSelect;
+}>;
 
 @Injectable()
 export class RefundsService {
@@ -182,6 +198,16 @@ export class RefundsService {
         isPaymentExempt: true,
         status: true,
         event: { select: { organizationId: true } },
+        paymentGroup: {
+          select: {
+            status: true,
+            totalAmount: true,
+            slips: {
+              where: { slipokStatus: SlipStatus.VERIFIED },
+              select: { amount: true },
+            },
+          },
+        },
         slips: {
           where: { slipokStatus: SlipStatus.VERIFIED },
           select: { amount: true },
@@ -201,9 +227,14 @@ export class RefundsService {
     if (booking.isPaymentExempt) {
       throw new ConflictException('การจองนี้ไม่มีการชำระเงินให้คืน');
     }
-    if (
-      !booking.slips.some(({ amount }) => amount.equals(booking.boothPrice))
-    ) {
+    const paymentGroup = booking.paymentGroup;
+    const hasVerifiedPayment = paymentGroup
+      ? paymentGroup.status === PaymentGroupStatus.CONFIRMED &&
+        paymentGroup.slips.some(({ amount }) =>
+          amount.equals(paymentGroup.totalAmount),
+        )
+      : booking.slips.some(({ amount }) => amount.equals(booking.boothPrice));
+    if (!hasVerifiedPayment) {
       throw new ConflictException(
         'ไม่พบการชำระเงินที่ตรวจสอบแล้วสำหรับการจองนี้',
       );
@@ -266,20 +297,23 @@ export class RefundsService {
       select: { ...refundSelect, ...payoutWarningSelect },
       orderBy: { createdAt: 'desc' },
     });
-    return refunds.map(({ booking, requestedBy, ...refund }) => ({
-      ...this.toResponse(refund),
-      payoutNameMismatch: this.payoutNameMismatch(
-        refund.payoutAccountName,
-        requestedBy.fullName,
-        booking.slips,
-      ),
-      pendingSince:
-        refund.status === RefundStatus.PENDING
-          ? refund.createdAt
-          : refund.status === RefundStatus.APPROVED
-            ? refund.reviewedAt
-            : null,
-    }));
+    return refunds.map(({ booking, requestedBy, ...refund }) => {
+      const slips = [...booking.slips, ...(booking.paymentGroup?.slips ?? [])];
+      return {
+        ...this.toResponse(refund),
+        payoutNameMismatch: this.payoutNameMismatch(
+          refund.payoutAccountName,
+          requestedBy.fullName,
+          slips,
+        ),
+        pendingSince:
+          refund.status === RefundStatus.PENDING
+            ? refund.createdAt
+            : refund.status === RefundStatus.APPROVED
+              ? refund.reviewedAt
+              : null,
+      };
+    });
   }
 
   async findAllAcrossOrganizations(): Promise<RefundOverviewResponse[]> {
@@ -297,10 +331,63 @@ export class RefundsService {
     reviewerUserId: string,
     dto: ApproveRefundRequestDto,
   ): Promise<RefundResponse> {
+    for (
+      let attempt = 1;
+      attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        const { refund, response } = await this.prisma.$transaction(
+          (transaction) =>
+            this.approveWithinTransaction(
+              transaction,
+              bookingId,
+              refundId,
+              organizationId,
+              reviewerUserId,
+              dto,
+            ),
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+        await this.notifyVendor(
+          refund.requestedByUserId,
+          response,
+          'คำร้องคืนเงินได้รับการอนุมัติแล้ว',
+          `อนุมัติคืนเงิน ${response.approvedAmount ?? '0'} บาท`,
+        );
+        return response;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS) continue;
+          throw new ConflictException(
+            'มีการอนุมัติคืนเงินพร้อมกัน กรุณาลองใหม่อีกครั้ง',
+          );
+        }
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'มีการอนุมัติคืนเงินพร้อมกัน กรุณาลองใหม่อีกครั้ง',
+    );
+  }
+
+  private async approveWithinTransaction(
+    transaction: Prisma.TransactionClient,
+    bookingId: string,
+    refundId: string,
+    organizationId: string,
+    reviewerUserId: string,
+    dto: ApproveRefundRequestDto,
+  ): Promise<{ refund: AdminRefundRecord; response: RefundResponse }> {
     const refund = await this.findAdminRefund(
       bookingId,
       refundId,
       organizationId,
+      transaction,
     );
     if (refund.status !== RefundStatus.PENDING) {
       throw new ConflictException('คำร้องนี้ไม่อยู่ในสถานะรอตรวจสอบ');
@@ -319,8 +406,30 @@ export class RefundsService {
       );
     }
 
+    if (refund.booking.paymentGroupId && refund.booking.paymentGroup) {
+      const aggregate = await transaction.refundRequest.aggregate({
+        where: {
+          id: { not: refundId },
+          booking: { paymentGroupId: refund.booking.paymentGroupId },
+          status: { in: [RefundStatus.APPROVED, RefundStatus.PROCESSED] },
+        },
+        _sum: { approvedAmount: true },
+      });
+      const approvedForGroup =
+        aggregate._sum.approvedAmount ?? new Prisma.Decimal(0);
+      if (
+        approvedForGroup
+          .plus(approvedAmount)
+          .greaterThan(refund.booking.paymentGroup.totalAmount)
+      ) {
+        throw new BadRequestException(
+          'ยอดคืนเงินรวมต้องไม่เกินยอดที่ชำระของกลุ่มการจอง',
+        );
+      }
+    }
+
     const reviewedAt = new Date();
-    const updated = await this.prisma.refundRequest.updateMany({
+    const updated = await transaction.refundRequest.updateMany({
       where: {
         id: refundId,
         bookingId,
@@ -342,14 +451,9 @@ export class RefundsService {
       bookingId,
       refundId,
       organizationId,
+      transaction,
     );
-    await this.notifyVendor(
-      refund.requestedByUserId,
-      response,
-      'คำร้องคืนเงินได้รับการอนุมัติแล้ว',
-      `อนุมัติคืนเงิน ${response.approvedAmount ?? '0'} บาท`,
-    );
-    return response;
+    return { refund, response };
   }
 
   async reject(
@@ -450,8 +554,9 @@ export class RefundsService {
     bookingId: string,
     refundId: string,
     organizationId: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    const refund = await this.prisma.refundRequest.findFirst({
+    const refund = await client.refundRequest.findFirst({
       where: {
         id: refundId,
         bookingId,
@@ -471,8 +576,9 @@ export class RefundsService {
     bookingId: string,
     refundId: string,
     organizationId: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<RefundResponse> {
-    const refund = await this.prisma.refundRequest.findFirst({
+    const refund = await client.refundRequest.findFirst({
       where: {
         id: refundId,
         bookingId,

@@ -4,6 +4,7 @@ import {
   BookingStatus,
   CancelledByRole,
   NotificationType,
+  PaymentGroupStatus,
 } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,8 +19,78 @@ export class BookingHoldExpiryService {
   @Cron(CronExpression.EVERY_MINUTE)
   async cancelExpiredHolds(): Promise<number> {
     const cancelledAt = new Date();
+    const expiredGroups = await this.prisma.bookingPaymentGroup.findMany({
+      where: {
+        status: PaymentGroupStatus.PENDING_PAYMENT,
+        holdExpiresAt: { lt: cancelledAt },
+      },
+      select: {
+        id: true,
+        paymentCode: true,
+        vendorUserId: true,
+        bookings: {
+          where: { status: BookingStatus.PENDING_PAYMENT },
+          select: { id: true },
+        },
+      },
+    });
+
+    let cancelledCount = 0;
+
+    for (const group of expiredGroups) {
+      const groupCancelledCount = await this.prisma.$transaction(
+        async (transaction) => {
+          const updatedGroup = await transaction.bookingPaymentGroup.updateMany(
+            {
+              where: {
+                id: group.id,
+                status: PaymentGroupStatus.PENDING_PAYMENT,
+                holdExpiresAt: { lt: cancelledAt },
+                bookings: {
+                  every: { status: BookingStatus.PENDING_PAYMENT },
+                },
+              },
+              data: {
+                status: PaymentGroupStatus.CANCELLED,
+                cancelledAt,
+              },
+            },
+          );
+          if (updatedGroup.count !== 1) return 0;
+
+          const updatedBookings = await transaction.booking.updateMany({
+            where: {
+              paymentGroupId: group.id,
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { lt: cancelledAt },
+            },
+            data: {
+              status: BookingStatus.CANCELLED,
+              cancelledByRole: CancelledByRole.SYSTEM,
+              cancelledAt,
+            },
+          });
+          if (updatedBookings.count !== group.bookings.length) {
+            throw new Error('Payment group hold members changed during expiry');
+          }
+          return updatedBookings.count;
+        },
+      );
+      if (groupCancelledCount === 0) continue;
+
+      cancelledCount += groupCancelledCount;
+      await this.notifications.createForUser(group.vendorUserId, {
+        type: NotificationType.PAYMENT,
+        title: 'กลุ่มการจองถูกยกเลิกเพราะไม่ชำระเงินทันเวลา',
+        body: `${group.paymentCode} หมดเวลาชำระเงิน ระบบคืนบูธ ${groupCancelledCount} รายการให้ผู้ใช้อื่นแล้ว`,
+        relatedEntityType: 'PAYMENT_GROUP',
+        relatedEntityId: group.id,
+      });
+    }
+
     const expiredBookings = await this.prisma.booking.findMany({
       where: {
+        paymentGroupId: null,
         status: BookingStatus.PENDING_PAYMENT,
         holdExpiresAt: { lt: cancelledAt },
       },
@@ -29,12 +100,11 @@ export class BookingHoldExpiryService {
       },
     });
 
-    let cancelledCount = 0;
-
     for (const booking of expiredBookings) {
       const result = await this.prisma.booking.updateMany({
         where: {
           id: booking.id,
+          paymentGroupId: null,
           status: BookingStatus.PENDING_PAYMENT,
           holdExpiresAt: { lt: cancelledAt },
         },

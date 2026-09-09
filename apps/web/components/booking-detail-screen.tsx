@@ -227,6 +227,7 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
     ? { ...state.booking, status: 'CANCELLED' as const, cancelReason }
     : state.booking;
   const cancellable =
+    (!booking.paymentGroupId || booking.status === 'CONFIRMED') &&
     (booking.status === 'PENDING_PAYMENT' || booking.status === 'CONFIRMED') &&
     new Date(booking.bookingStartDate).getTime() > Date.now();
   const pastCancelDeadline =
@@ -282,7 +283,18 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
             <div className="mt-6 flex flex-wrap gap-3 border-t border-line pt-6">
               <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary text-violet">ดู Event</Link>
               <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">ดูตำแหน่งบน Zone Map</Link>
-              {booking.status === 'PENDING_PAYMENT' ? <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/payment`} className="sl-action-primary">ไปหน้าชำระเงิน</Link> : null}
+              {booking.status === 'PENDING_PAYMENT' ? (
+                <Link
+                  href={
+                    booking.paymentGroupId
+                      ? `/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`
+                      : `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`
+                  }
+                  className="sl-action-primary"
+                >
+                  ไปหน้าชำระเงิน
+                </Link>
+              ) : null}
               {isBookingReviewEligible(booking) ? <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`} className="sl-action-primary">เขียนรีวิวพื้นที่</Link> : null}
             </div>
           </section>
@@ -301,6 +313,14 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
                 <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="เหตุผลที่ต้องการยกเลิก" className="mt-4 w-full rounded-xl border border-line px-4 py-3 text-base outline-none focus:border-violet" />
                 {cancelError ? <p role="alert" className="mt-2 text-sm text-danger">{cancelError}</p> : null}
                 <button type="button" onClick={() => void handleCancel()} disabled={isCancelling} className="mt-3 w-full rounded-xl border border-danger px-4 py-2.5 text-sm font-bold text-danger disabled:opacity-50">{isCancelling ? 'กำลังยกเลิก…' : 'ยืนยันยกเลิกการจอง'}</button>
+              </section>
+            ) : booking.paymentGroupId &&
+              booking.status === 'PENDING_PAYMENT' ? (
+              <section className="sl-surface p-5">
+                <h2 className="font-black">การจองแบบชำระรวม</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  รายการนี้อยู่ในกลุ่มชำระเงินเดียวกัน จึงไม่สามารถยกเลิกแยกราย Booking ได้
+                </p>
               </section>
             ) : pastCancelDeadline ? (
               <section className="sl-surface p-5">

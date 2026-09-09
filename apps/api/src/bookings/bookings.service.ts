@@ -14,10 +14,12 @@ import {
   MembershipRole,
   NotificationType,
   OrgStatus,
+  PaymentGroupStatus,
   Prisma,
   SlipStatus,
   UserRole,
   type Booking,
+  type BookingPaymentGroup,
   type User,
 } from '@prisma/client';
 import generatePromptPayPayload from 'promptpay-qr';
@@ -146,6 +148,75 @@ export interface BookingSlipResponse {
   };
 }
 
+export interface PaymentGroupResponse extends Omit<
+  BookingPaymentGroup,
+  'totalAmount'
+> {
+  totalAmount: string;
+  bookings: BookingResponse[];
+  paymentQrDataUri: string | null;
+}
+
+interface CreatedPaymentGroup {
+  group: BookingPaymentGroup;
+  bookings: BookingResponse[];
+  promptpayId: string | null;
+}
+
+const paymentGroupLookupInclude = {
+  bookings: true,
+  event: {
+    select: { organization: { select: { promptpayId: true } } },
+  },
+} satisfies Prisma.BookingPaymentGroupInclude;
+
+type PaymentGroupLookup = Prisma.BookingPaymentGroupGetPayload<{
+  include: typeof paymentGroupLookupInclude;
+}>;
+
+const paymentGroupSlipSelect = {
+  id: true,
+  paymentCode: true,
+  vendorUserId: true,
+  organizationId: true,
+  totalAmount: true,
+  status: true,
+  holdExpiresAt: true,
+  confirmedAt: true,
+  event: { select: { status: true, endDate: true } },
+  bookings: {
+    select: {
+      id: true,
+      bookingCode: true,
+      status: true,
+      holdExpiresAt: true,
+      confirmedAt: true,
+      booth: { select: { status: true } },
+    },
+  },
+} satisfies Prisma.BookingPaymentGroupSelect;
+
+type PaymentGroupForSlip = Prisma.BookingPaymentGroupGetPayload<{
+  select: typeof paymentGroupSlipSelect;
+}>;
+
+export interface PaymentGroupSlipResponse {
+  paymentGroup: Pick<
+    PaymentGroupForSlip,
+    'id' | 'status' | 'confirmedAt' | 'holdExpiresAt'
+  >;
+  bookings: Array<
+    Pick<
+      PaymentGroupForSlip['bookings'][number],
+      'id' | 'status' | 'confirmedAt' | 'holdExpiresAt'
+    >
+  >;
+  verification: {
+    status: SlipStatus;
+    message: string;
+  };
+}
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -193,13 +264,13 @@ export class BookingsService {
   async createBatch(
     createBookingsBatchDto: CreateBookingsBatchDto,
     vendorUserId: string,
-  ): Promise<BookingResponse[]> {
-    const bookings = await this.createBatchWithRetry(
+  ): Promise<PaymentGroupResponse> {
+    const created = await this.createBatchWithRetry(
       createBookingsBatchDto,
       vendorUserId,
     );
 
-    for (const booking of bookings) {
+    for (const booking of created.bookings) {
       await this.notifications
         .createForUser(vendorUserId, {
           type: NotificationType.BOOKING_STATUS,
@@ -216,14 +287,18 @@ export class BookingsService {
       'zones',
       {
         type: NotificationType.BOOKING_STATUS,
-        title: `มีการจองใหม่ ${bookings.length} รายการ`,
-        body: `Booking ${bookings.map(({ bookingCode }) => bookingCode).join(', ')} รอการชำระเงิน`,
+        title: `มีการจองใหม่ ${created.bookings.length} รายการ`,
+        body: `Booking ${created.bookings.map(({ bookingCode }) => bookingCode).join(', ')} รอการชำระเงิน`,
         relatedEntityType: 'BOOKING',
-        relatedEntityId: bookings[0]?.id,
+        relatedEntityId: created.bookings[0]?.id,
       },
     );
 
-    return bookings;
+    return this.toPaymentGroupResponse(
+      created.group,
+      created.bookings,
+      created.promptpayId,
+    );
   }
 
   async getQuotaContext(
@@ -276,7 +351,7 @@ export class BookingsService {
   private async createBatchWithRetry(
     createBookingsBatchDto: CreateBookingsBatchDto,
     vendorUserId: string,
-  ): Promise<BookingResponse[]> {
+  ): Promise<CreatedPaymentGroup> {
     for (
       let attempt = 1;
       attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
@@ -300,7 +375,53 @@ export class BookingsService {
                 ),
               );
             }
-            return bookings;
+            const event = await transaction.event.findUnique({
+              where: { id: createBookingsBatchDto.eventId },
+              select: {
+                organizationId: true,
+                organization: { select: { promptpayId: true } },
+              },
+            });
+            if (!event || bookings.length === 0) {
+              throw new NotFoundException('ไม่พบอีเวนต์');
+            }
+
+            const holdExpiresAt = bookings[0].holdExpiresAt;
+            if (!holdExpiresAt) {
+              throw new ConflictException('ไม่สามารถกำหนดเวลาชำระเงินได้');
+            }
+            const totalAmount = bookings.reduce(
+              (total, booking) => total.plus(booking.boothPrice),
+              new Prisma.Decimal(0),
+            );
+            const group = await transaction.bookingPaymentGroup.create({
+              data: {
+                paymentCode: this.createPaymentGroupCode(),
+                vendorUserId,
+                shopId: createBookingsBatchDto.shopId,
+                eventId: createBookingsBatchDto.eventId,
+                organizationId: event.organizationId,
+                totalAmount,
+                holdExpiresAt,
+              },
+            });
+            const attached = await transaction.booking.updateMany({
+              where: { id: { in: bookings.map(({ id }) => id) } },
+              data: { paymentGroupId: group.id, holdExpiresAt },
+            });
+            if (attached.count !== bookings.length) {
+              throw new ConflictException('สร้างกลุ่มการชำระเงินไม่สำเร็จ');
+            }
+
+            return {
+              group,
+              bookings: bookings.map((booking) => ({
+                ...booking,
+                paymentGroupId: group.id,
+                holdExpiresAt,
+              })),
+              promptpayId: event.organization.promptpayId,
+            };
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         );
@@ -575,6 +696,7 @@ export class BookingsService {
       select: {
         id: true,
         bookingCode: true,
+        paymentGroupId: true,
         status: true,
         boothPrice: true,
         holdExpiresAt: true,
@@ -588,6 +710,9 @@ export class BookingsService {
 
     if (!booking) {
       throw new NotFoundException('ไม่พบการจอง');
+    }
+    if (booking.paymentGroupId) {
+      throw new ConflictException('การจองนี้ต้องชำระเงินผ่านกลุ่มการชำระเงิน');
     }
     if (booking.status !== BookingStatus.PENDING_PAYMENT) {
       throw new ConflictException('การจองนี้ไม่อยู่ในสถานะรอชำระเงิน');
@@ -730,6 +855,217 @@ export class BookingsService {
     return response;
   }
 
+  async findPaymentGroup(
+    paymentGroupId: string,
+    vendorUserId: string,
+  ): Promise<PaymentGroupResponse> {
+    const group = await this.prisma.bookingPaymentGroup.findFirst({
+      where: { id: paymentGroupId, vendorUserId },
+      include: paymentGroupLookupInclude,
+    });
+    if (!group) {
+      // Unknown and another vendor's group intentionally share one answer.
+      throw new NotFoundException('ไม่พบกลุ่มการชำระเงิน');
+    }
+
+    return this.toPaymentGroupResponse(
+      group,
+      group.bookings.map((booking) => this.toResponse(booking)),
+      group.event.organization.promptpayId,
+    );
+  }
+
+  async uploadPaymentGroupSlip(
+    paymentGroupId: string,
+    file: UploadedSlipFile,
+    vendorUserId: string,
+  ): Promise<PaymentGroupSlipResponse> {
+    const group = await this.prisma.bookingPaymentGroup.findFirst({
+      where: { id: paymentGroupId, vendorUserId },
+      select: paymentGroupSlipSelect,
+    });
+    if (!group) {
+      throw new NotFoundException('ไม่พบกลุ่มการชำระเงิน');
+    }
+    if (group.status !== PaymentGroupStatus.PENDING_PAYMENT) {
+      throw new ConflictException('กลุ่มนี้ไม่อยู่ในสถานะรอชำระเงิน');
+    }
+    if (!BOOKABLE_EVENT_STATUSES.includes(group.event.status)) {
+      throw new ConflictException('อีเวนต์นี้ไม่เปิดรับการจองแล้ว');
+    }
+    if (
+      this.thailandDateKey(group.event.endDate) <
+      this.thailandDateKey(new Date())
+    ) {
+      throw new ConflictException('อีเวนต์นี้สิ้นสุดแล้ว');
+    }
+    if (group.bookings.length === 0) {
+      throw new ConflictException('กลุ่มการชำระเงินไม่มีรายการจอง');
+    }
+    if (
+      group.bookings.some(
+        (booking) =>
+          booking.status !== BookingStatus.PENDING_PAYMENT ||
+          booking.booth.status !== BoothStatus.AVAILABLE,
+      )
+    ) {
+      throw new ConflictException('รายการจองในกลุ่มไม่พร้อมสำหรับการชำระเงิน');
+    }
+
+    const checkedAt = new Date();
+    if (
+      group.holdExpiresAt <= checkedAt ||
+      group.bookings.some(
+        ({ holdExpiresAt }) => !holdExpiresAt || holdExpiresAt <= checkedAt,
+      )
+    ) {
+      throw new ConflictException('หมดเวลาชำระเงินสำหรับกลุ่มนี้แล้ว');
+    }
+
+    const anchorBooking = group.bookings[0];
+    const storedSlip = await this.slipStorage.uploadForVerification(
+      file,
+      anchorBooking.id,
+      vendorUserId,
+    );
+    let response: PaymentGroupSlipResponse;
+
+    try {
+      response = await this.prisma.$transaction(async (transaction) => {
+        const result = await this.slipVerification.verify(
+          {
+            bookingId: anchorBooking.id,
+            paymentGroupId: group.id,
+            slipImageUrl: storedSlip.verificationUrl,
+            storedObjectPath: storedSlip.objectPath,
+            expectedAmount: group.totalAmount,
+          },
+          transaction,
+        );
+
+        if (
+          result.status === SlipStatus.VERIFIED &&
+          result.amount?.equals(group.totalAmount) === true
+        ) {
+          const confirmedAt = new Date();
+          const updatedGroup = await transaction.bookingPaymentGroup.updateMany(
+            {
+              where: {
+                id: group.id,
+                vendorUserId,
+                status: PaymentGroupStatus.PENDING_PAYMENT,
+                holdExpiresAt: { gt: confirmedAt },
+              },
+              data: {
+                status: PaymentGroupStatus.CONFIRMED,
+                confirmedAt,
+              },
+            },
+          );
+          if (updatedGroup.count !== 1) {
+            throw new ConflictException(
+              'กลุ่มการชำระเงินหมดเวลาหรือสถานะเปลี่ยนไปแล้ว',
+            );
+          }
+
+          const updatedBookings = await transaction.booking.updateMany({
+            where: {
+              paymentGroupId: group.id,
+              vendorUserId,
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { gt: confirmedAt },
+            },
+            data: {
+              status: BookingStatus.CONFIRMED,
+              confirmedAt,
+            },
+          });
+          if (updatedBookings.count !== group.bookings.length) {
+            throw new ConflictException(
+              'รายการจองในกลุ่มหมดเวลาหรือสถานะเปลี่ยนไปแล้ว',
+            );
+          }
+
+          return this.toPaymentGroupSlipResponse(
+            {
+              ...group,
+              status: PaymentGroupStatus.CONFIRMED,
+              confirmedAt,
+              bookings: group.bookings.map((booking) => ({
+                ...booking,
+                status: BookingStatus.CONFIRMED,
+                confirmedAt,
+              })),
+            },
+            SlipStatus.VERIFIED,
+            'ตรวจสอบสลิปสำเร็จ',
+          );
+        }
+
+        if (result.status === SlipStatus.VERIFIED) {
+          return this.toPaymentGroupSlipResponse(
+            group,
+            SlipStatus.INVALID,
+            'ยอดเงินในสลิปไม่ตรงกับยอดรวมที่ต้องชำระ',
+          );
+        }
+        return this.toPaymentGroupSlipResponse(
+          group,
+          result.status,
+          this.safeSlipMessage(result.status),
+        );
+      });
+    } catch (error) {
+      await this.slipStorage
+        .removeObject(storedSlip.objectPath)
+        .catch(() => undefined);
+
+      if (error instanceof ConflictException) throw error;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        response = this.toPaymentGroupSlipResponse(
+          group,
+          SlipStatus.DUPLICATE,
+          'สลิปนี้ถูกใช้แล้ว',
+        );
+      } else {
+        response = this.toPaymentGroupSlipResponse(
+          group,
+          SlipStatus.ERROR,
+          'ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่',
+        );
+      }
+    }
+
+    if (
+      response.paymentGroup.status === PaymentGroupStatus.CONFIRMED &&
+      response.verification.status === SlipStatus.VERIFIED
+    ) {
+      await this.notifications
+        .createForUser(vendorUserId, {
+          type: NotificationType.PAYMENT,
+          title: 'ชำระเงินสำเร็จ',
+          body: `ระบบตรวจสอบการชำระเงิน ${group.paymentCode} เรียบร้อยแล้ว การจอง ${group.bookings.length} รายการได้รับการยืนยัน`,
+          relatedEntityType: 'PAYMENT_GROUP',
+          relatedEntityId: group.id,
+        })
+        .catch(() => null);
+      await this.notifications
+        .createForOrganizationAdmins(group.organizationId, 'payments', {
+          type: NotificationType.PAYMENT,
+          title: 'มีการชำระเงินกลุ่มการจองใหม่',
+          body: `${group.paymentCode} ชำระเงินและยืนยัน ${group.bookings.length} รายการแล้ว`,
+          relatedEntityType: 'PAYMENT_GROUP',
+          relatedEntityId: group.id,
+        })
+        .catch(() => 0);
+    }
+
+    return response;
+  }
+
   private async notifyOrganizationAdminsForEvent(
     eventId: string,
     permission: OrganizationNotificationPermission,
@@ -785,8 +1121,18 @@ export class BookingsService {
   ): Promise<AdminSlipAccess> {
     const slip = await this.prisma.verifiedSlip.findFirst({
       where: {
-        bookingId,
-        booking: { event: { organizationId } },
+        OR: [
+          {
+            bookingId,
+            booking: { event: { organizationId } },
+          },
+          {
+            paymentGroup: {
+              organizationId,
+              bookings: { some: { id: bookingId } },
+            },
+          },
+        ],
       },
       select: { slipImageUrl: true },
       orderBy: { createdAt: 'desc' },
@@ -810,6 +1156,7 @@ export class BookingsService {
       where: { id: bookingId, vendorUserId },
       select: {
         id: true,
+        paymentGroupId: true,
         status: true,
         holdExpiresAt: true,
         bookingStartDate: true,
@@ -821,6 +1168,14 @@ export class BookingsService {
     }
     if (!ACTIVE_BOOKING_STATUSES.includes(booking.status)) {
       throw new ConflictException('การจองนี้ไม่สามารถยกเลิกได้');
+    }
+    if (
+      booking.status === BookingStatus.PENDING_PAYMENT &&
+      booking.paymentGroupId
+    ) {
+      throw new ConflictException(
+        'ไม่สามารถยกเลิกรายการเดียวระหว่างรอชำระเงินแบบกลุ่ม',
+      );
     }
 
     const cancelledAt = new Date();
@@ -988,6 +1343,7 @@ export class BookingsService {
       where: { id: bookingId, event: { organizationId: orgId } },
       select: {
         id: true,
+        paymentGroupId: true,
         status: true,
         vendor: { select: { isBlacklisted: true } },
       },
@@ -999,6 +1355,11 @@ export class BookingsService {
     if (booking.vendor.isBlacklisted) {
       throw new ForbiddenException(
         'บัญชีนี้ถูกระงับสิทธิ์การจอง กรุณาติดต่อผู้ดูแลระบบ',
+      );
+    }
+    if (booking.paymentGroupId) {
+      throw new ConflictException(
+        'ไม่สามารถยืนยันยกเว้นการชำระเงินเฉพาะรายการในกลุ่มได้',
       );
     }
     if (booking.status !== BookingStatus.PENDING_PAYMENT) {
@@ -1062,6 +1423,11 @@ export class BookingsService {
     return `BK-${token}`;
   }
 
+  private createPaymentGroupCode(): string {
+    const token = randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+    return `PG-${token}`;
+  }
+
   private thailandDateKey(value: Date): string {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Bangkok',
@@ -1086,7 +1452,7 @@ export class BookingsService {
     const promptpayId = event.organization.promptpayId;
 
     let paymentQrDataUri: string | null = null;
-    if (promptpayId) {
+    if (promptpayId && !rest.paymentGroupId) {
       // The QR encoder requires a JavaScript number. Conversion happens only
       // at this external-library boundary; every API money field remains a
       // Decimal-backed string.
@@ -1113,6 +1479,42 @@ export class BookingsService {
     return { ...rest, boothPrice: boothPrice.toString() };
   }
 
+  private async toPaymentGroupResponse(
+    group: BookingPaymentGroup | PaymentGroupLookup,
+    bookings: BookingResponse[],
+    promptpayId: string | null,
+  ): Promise<PaymentGroupResponse> {
+    let paymentQrDataUri: string | null = null;
+    if (promptpayId) {
+      const payload = generatePromptPayPayload(promptpayId, {
+        amount: group.totalAmount.toNumber(),
+      });
+      paymentQrDataUri = await QRCode.toDataURL(payload, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 320,
+      });
+    }
+
+    return {
+      id: group.id,
+      paymentCode: group.paymentCode,
+      vendorUserId: group.vendorUserId,
+      shopId: group.shopId,
+      eventId: group.eventId,
+      organizationId: group.organizationId,
+      totalAmount: group.totalAmount.toString(),
+      status: group.status,
+      holdExpiresAt: group.holdExpiresAt,
+      confirmedAt: group.confirmedAt,
+      cancelledAt: group.cancelledAt,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+      bookings,
+      paymentQrDataUri,
+    };
+  }
+
   private toSlipResponse(
     booking: SlipBooking,
     status: SlipStatus,
@@ -1125,6 +1527,28 @@ export class BookingsService {
         confirmedAt: booking.confirmedAt,
         holdExpiresAt: booking.holdExpiresAt,
       },
+      verification: { status, message },
+    };
+  }
+
+  private toPaymentGroupSlipResponse(
+    group: PaymentGroupForSlip,
+    status: SlipStatus,
+    message: string,
+  ): PaymentGroupSlipResponse {
+    return {
+      paymentGroup: {
+        id: group.id,
+        status: group.status,
+        confirmedAt: group.confirmedAt,
+        holdExpiresAt: group.holdExpiresAt,
+      },
+      bookings: group.bookings.map((booking) => ({
+        id: booking.id,
+        status: booking.status,
+        confirmedAt: booking.confirmedAt,
+        holdExpiresAt: booking.holdExpiresAt,
+      })),
       verification: { status, message },
     };
   }
