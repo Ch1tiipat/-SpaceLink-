@@ -25,6 +25,7 @@ import {
   markNotificationRead,
   type NotificationRecord,
   type NotificationType,
+  type UserRole,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { useAuthState } from '@/lib/use-auth-state';
@@ -127,7 +128,10 @@ const THAILAND_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('th-TH', {
   timeStyle: 'short',
 });
 
-function toUserNotification(notification: NotificationRecord): UserNotification {
+function toUserNotification(
+  notification: NotificationRecord,
+  role?: UserRole,
+): UserNotification {
   const isReviewInvitation =
     notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW';
   return {
@@ -137,12 +141,15 @@ function toUserNotification(notification: NotificationRecord): UserNotification 
     description: notification.body ?? '',
     createdAt: notification.createdAt,
     unread: !notification.isRead,
-    href: notificationHref(notification),
+    href: notificationHref(notification, role),
     actionLabel: isReviewInvitation ? 'เขียนรีวิวพื้นที่' : undefined,
   };
 }
 
-function notificationHref(notification: NotificationRecord): string | undefined {
+function notificationHref(
+  notification: NotificationRecord,
+  role?: UserRole,
+): string | undefined {
   if (notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW') {
     return notification.relatedEntityId
       ? `/bookings/${encodeURIComponent(notification.relatedEntityId)}/review`
@@ -153,6 +160,16 @@ function notificationHref(notification: NotificationRecord): string | undefined 
     notification.relatedEntityType?.toUpperCase() === 'BOOKING'
       ? notification.relatedEntityId
       : null;
+
+  if (role === 'ORG_ADMIN') {
+    switch (notification.type) {
+      case 'PAYMENT':
+      case 'REFUND':
+        return '/admin/payments';
+      case 'BOOKING_STATUS':
+        return '/admin/bookings';
+    }
+  }
 
   switch (notification.type) {
     case 'ANNOUNCEMENT':
@@ -215,6 +232,7 @@ function createPreviewNotifications(): UserNotification[] {
 
 export default function NotificationsPage() {
   const { auth } = useAuthState();
+  const signedInRole = auth.status === 'signed-in' ? auth.role : undefined;
   const [access, setAccess] = useState<NotificationAccess>({
     status: 'loading',
   });
@@ -274,7 +292,11 @@ export default function NotificationsPage() {
 
         const rows = await getMyNotifications(token, controller.signal);
         if (!active) return;
-        setNotifications(rows.map(toUserNotification));
+        setNotifications(
+          rows.map((notification) =>
+            toUserNotification(notification, signedInRole),
+          ),
+        );
         setAccess({ status: 'ready', token });
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -295,7 +317,7 @@ export default function NotificationsPage() {
       active = false;
       controller.abort();
     };
-  }, [auth.status, reloadVersion]);
+  }, [auth.status, reloadVersion, signedInRole]);
 
   useEffect(() => {
     if (access.status !== 'ready' || access.token === UX_PREVIEW_TOKEN) return;
@@ -309,7 +331,13 @@ export default function NotificationsPage() {
       controller = new AbortController();
       try {
         const rows = await getMyNotifications(token, controller.signal);
-        if (active) setNotifications(rows.map(toUserNotification));
+        if (active) {
+          setNotifications(
+            rows.map((notification) =>
+              toUserNotification(notification, signedInRole),
+            ),
+          );
+        }
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
       }
@@ -331,7 +359,7 @@ export default function NotificationsPage() {
       window.removeEventListener('focus', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [access]);
+  }, [access, signedInRole]);
 
   const visibleNotifications = useMemo(
     () => {
