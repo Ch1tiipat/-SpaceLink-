@@ -196,6 +196,20 @@ describe('ZoneRecommendationService', () => {
     ]);
   });
 
+  it('returns nothing and writes no log when every booth is booked but the provider returns a stale booth', async () => {
+    configured.recommend.mockResolvedValue(GEMINI_RESULT);
+    ruleBased.candidateBooths.mockResolvedValue([]);
+    ruleBased.recommend.mockResolvedValue([]);
+
+    await expect(createService().recommend(INPUT)).resolves.toEqual([]);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not bookable at this event') as string,
+    );
+    expect(ruleBased.recommend).toHaveBeenCalledWith(INPUT);
+    expect(prisma.recommendationLog.createMany).not.toHaveBeenCalled();
+  });
+
   // Validating the fallback's own output would be a round trip to confirm that
   // booths it just queried are booths.
   it('does not re-check the rule-based engine against its own candidate set', async () => {

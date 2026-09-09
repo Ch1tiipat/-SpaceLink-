@@ -79,6 +79,7 @@ type SafeAssistantContext = {
 
 type GeminiResponse = {
   candidates?: {
+    finishReason?: unknown;
     content?: {
       parts?: { text?: unknown }[];
     };
@@ -89,6 +90,7 @@ const PLATFORM_KNOWLEDGE = `
 SpaceLink เป็นแพลตฟอร์มค้นหางานแฟร์และอีเวนต์ เลือกโซน ดูแผนผังบูธ จองบูธ ชำระเงิน และติดตามสถานะการจอง
 ผู้ขายเริ่มจากเลือก Event เปิดแผนผัง เลือกบูธว่าง ตรวจสอบรายละเอียด แล้วสร้างการจองซึ่งจะรอชำระเงินตามเวลาที่กำหนด
 ผู้ขายอัปโหลดหลักฐานการชำระเงินจากหน้ารายละเอียดการจอง และติดตามสถานะได้จากหน้าการจองของฉัน
+ระบบตรวจสลิปด้วย SlipOK และเมื่อผลเป็น VERIFIED จะยืนยันการจองอัตโนมัติ ไม่มีขั้นตอนรอผู้จัดงานหรือแอดมินอนุมัติการชำระเงิน
 หน้าโปรไฟล์ใช้แก้ข้อมูลติดต่อ ข้อมูลร้าน หมวดสินค้า และโลโก้ร้าน
 AI แนะนำโซนช่วยเปรียบเทียบหมวดสินค้าของร้านกับโซนและบูธว่าง แต่ผู้ขายเป็นผู้เลือกบูธสุดท้าย
 SpaceLink ใช้ Email OTP สำหรับเข้าสู่ระบบ ไม่มีรหัสผ่านถาวร
@@ -132,7 +134,7 @@ export class SupportAssistantService {
     const actions = suggestedActions(question);
 
     if (this.mode !== 'gemini' || !this.apiKey) {
-      return this.fallback(question, context, actions);
+      return this.fallback(question, history, context, actions);
     }
 
     try {
@@ -145,7 +147,7 @@ export class SupportAssistantService {
       this.logger.warn(
         `Gemini support assistant failed; using rule-based fallback: ${geminiFailureSummary(cause)}`,
       );
-      return this.fallback(question, context, actions);
+      return this.fallback(question, history, context, actions);
     }
   }
 
@@ -355,7 +357,7 @@ export class SupportAssistantService {
                 ],
               },
             ],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1200 },
           }),
           signal: controller.signal,
         },
@@ -379,11 +381,12 @@ export class SupportAssistantService {
 
   private fallback(
     question: string,
+    history: SupportAssistantMessageDto[],
     context: SafeAssistantContext,
     actions: SupportAssistantAction[],
   ): SupportAssistantAnswer {
     return {
-      answer: fallbackAnswer(question, context),
+      answer: fallbackAnswer(question, history, context),
       source: 'RULE_BASED',
       actions,
     };
@@ -396,19 +399,53 @@ function parseGeminiText(value: unknown): string {
   }
 
   const payload = value as GeminiResponse;
-  const text = payload.candidates?.[0]?.content?.parts
+  const candidate = payload.candidates?.[0];
+  if (
+    typeof candidate?.finishReason === 'string' &&
+    candidate.finishReason !== 'STOP'
+  ) {
+    throw new Error('Gemini returned an incomplete response');
+  }
+  const text = candidate?.content?.parts
     ?.map((part) => part.text)
     .find((part): part is string => typeof part === 'string')
     ?.trim();
 
   if (!text) throw new Error('Gemini response did not contain text');
+  if (!isSafeAssistantAnswer(text)) {
+    throw new Error('Gemini returned an unsafe response');
+  }
   return text.slice(0, 2400);
 }
 
-function fallbackAnswer(
+/**
+ * The assistant is required to answer in Thai. A response with no Thai text is
+ * not useful to this UI and, in live testing, proved to be a fragment of model
+ * safety instructions rather than an answer. Explicit internal markers are
+ * rejected too, even if the surrounding response contains Thai text.
+ */
+function isSafeAssistantAnswer(text: string): boolean {
+  return (
+    /[\u0E00-\u0E7F]/u.test(text) &&
+    !/<\/?untrusted_runtime_data>|system\s*prompt|x-goog-api-key|GEMINI_API_KEY|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY/i.test(
+      text,
+    ) &&
+    !/รอการตรวจสอบ|(?:ผู้จัดงาน|แอดมิน|เจ้าหน้าที่).*(?:ตรวจสอบ|อนุมัติ|ยืนยัน).*(?:สลิป|ยอดเงิน|การชำระเงิน)/i.test(
+      text,
+    )
+  );
+}
+
+/**
+ * Matches a single question against a known SpaceLink topic. Returns null
+ * (instead of a generic catch-all) when nothing matches, so the caller can
+ * decide whether to fall back to conversation history or to the generic
+ * closing message.
+ */
+function matchTopicAnswer(
   question: string,
   context: SafeAssistantContext,
-): string {
+): string | null {
   if (/ของฉัน|สถานะ.*จอง|จอง.*สถานะ/i.test(question)) {
     if (context.ownBookings.length === 0) {
       return 'ยังไม่พบรายการจองของคุณครับ สามารถเริ่มเลือกงานและบูธได้จากหน้าหลัก';
@@ -453,6 +490,33 @@ function fallbackAnswer(
   if (/โปรไฟล์|โลโก้/i.test(question)) {
     return 'เปิดหน้า “โปรไฟล์” เพื่อแก้ข้อมูลติดต่อ ข้อมูลร้าน หมวดสินค้า และโลโก้ร้านครับ';
   }
+  return null;
+}
+
+/**
+ * Rule-based answer for a single question. When the latest question alone
+ * doesn't match a known topic (e.g. a short follow-up like "แล้วมันอยู่ตรงไหน"
+ * with no topic keyword of its own), walks backward through the recent
+ * conversation history and reuses the most recent user question that did
+ * match, so a follow-up still lands on the same topic instead of the
+ * generic closing message. Falls back to the generic message only when
+ * neither the current question nor any recent history matches anything.
+ */
+function fallbackAnswer(
+  question: string,
+  history: SupportAssistantMessageDto[],
+  context: SafeAssistantContext,
+): string {
+  const direct = matchTopicAnswer(question, context);
+  if (direct) return direct;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message.role !== 'user') continue;
+    const carried = matchTopicAnswer(message.text, context);
+    if (carried) return carried;
+  }
+
   return 'ผมช่วยตอบเรื่อง Event โซนและบูธ การจอง การชำระเงิน โปรไฟล์ร้าน และข้อมูลของคุณใน SpaceLink ได้ครับ ลองถามรายละเอียดที่ต้องการได้เลย';
 }
 
@@ -528,6 +592,12 @@ function geminiFailureSummary(cause: unknown): string {
     }
     if (cause.message === 'Gemini response did not contain text') {
       return 'response contained no text';
+    }
+    if (cause.message === 'Gemini returned an unsafe response') {
+      return 'unsafe response';
+    }
+    if (cause.message === 'Gemini returned an incomplete response') {
+      return 'incomplete response';
     }
   }
 
