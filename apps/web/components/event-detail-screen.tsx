@@ -44,6 +44,18 @@ function formatMoney(value: number): string {
   return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(value);
 }
 
+function safeHttpUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [result, setResult] = useState<{
@@ -114,6 +126,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const categories = [...new Set(zones.flatMap((zone) => zone.categories.map((category) => category.name)))];
   const contactPhone = event.contactPhone ?? event.organization.contactPhone;
   const contactEmail = event.contactEmail ?? event.organization.contactEmail;
+  const facebookUrl = safeHttpUrl(event.organization.facebookUrl);
+  const lineUrl = safeHttpUrl(event.organization.lineUrl);
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
@@ -276,10 +290,14 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               <InfoItem label="ผู้จัดงาน" value={event.organization.name} />
               <InfoItem label="เบอร์ติดต่อ" value={contactPhone ?? 'ยังไม่ระบุ'} />
               <InfoItem label="Email" value={contactEmail ?? 'ยังไม่ระบุ'} />
+              <InfoItem label="Facebook" value={facebookUrl ? 'Facebook Page' : 'ยังไม่ระบุ'} />
+              <InfoItem label="LINE" value={lineUrl ? 'LINE ผู้จัดงาน' : 'ยังไม่ระบุ'} />
             </dl>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {contactPhone ? <a href={`tel:${contactPhone.replace(/\s/g, '')}`} className="sl-action-primary">โทรหาผู้จัดงาน</a> : <button disabled className="sl-action-primary cursor-not-allowed opacity-50">ยังไม่มีเบอร์ติดต่อ</button>}
               {contactEmail ? <a href={`mailto:${contactEmail}`} className="sl-action-secondary text-violet">ส่ง Email</a> : <button disabled className="sl-action-secondary cursor-not-allowed text-muted opacity-60">ยังไม่มี Email</button>}
+              {facebookUrl ? <a href={facebookUrl} target="_blank" rel="noreferrer" className="sl-action-secondary text-violet">เปิด Facebook ผู้จัดงาน</a> : null}
+              {lineUrl ? <a href={lineUrl} target="_blank" rel="noreferrer" className="sl-action-secondary text-violet">เปิด LINE ผู้จัดงาน</a> : null}
             </div>
           </article>
         </section>

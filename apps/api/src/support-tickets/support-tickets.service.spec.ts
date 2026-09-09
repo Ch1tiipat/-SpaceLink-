@@ -11,6 +11,7 @@ import {
   Prisma,
   TicketStatus,
   TicketType,
+  UserRole,
 } from '@prisma/client';
 import { BookingsService } from '../bookings/bookings.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -89,6 +90,7 @@ const shopFindFirst = jest.fn();
 const prismaTransaction = jest.fn();
 const createForAdmin = jest.fn();
 const createForUser = jest.fn();
+const createForRole = jest.fn();
 
 const mockPrismaService = {
   booking: { findMany: bookingFindMany, findFirst: bookingFindFirst },
@@ -106,7 +108,7 @@ const mockPrismaService = {
   $transaction: prismaTransaction,
 };
 const mockBookingsService = { createForAdmin };
-const mockNotificationsService = { createForUser };
+const mockNotificationsService = { createForUser, createForRole };
 
 describe('SupportTicketsService', () => {
   let service: SupportTicketsService;
@@ -155,6 +157,7 @@ describe('SupportTicketsService', () => {
     shopFindFirst.mockResolvedValue({ id: SHOP_ID });
     createForAdmin.mockResolvedValue(CREATED_BOOKING);
     createForUser.mockResolvedValue(null);
+    createForRole.mockResolvedValue(1);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -441,6 +444,7 @@ describe('SupportTicketsService', () => {
       );
       expect(supportTicketCreate).not.toHaveBeenCalled();
       expect(ticketMessageCreate).not.toHaveBeenCalled();
+      expect(createForRole).not.toHaveBeenCalled();
     });
 
     it('returns 404 when the requested booth is outside the selected zone', async () => {
@@ -594,6 +598,16 @@ describe('SupportTicketsService', () => {
         },
       });
       expect(prismaTransaction).toHaveBeenCalledTimes(1);
+      expect(createForRole).toHaveBeenCalledWith(UserRole.SUPER_ADMIN, {
+        type: NotificationType.SUPPORT_TICKET,
+        title: 'มีคำร้องจากผู้ดูแลองค์กรใหม่',
+        body: ADMIN_ISSUE_DTO.subject,
+        relatedEntityType: 'SUPPORT_TICKET',
+        relatedEntityId: TICKET_ID,
+      });
+      expect(supportTicketCreate.mock.invocationCallOrder[0]).toBeLessThan(
+        createForRole.mock.invocationCallOrder[0],
+      );
     });
 
     it('rejects the vendor-only quota request type', async () => {
@@ -607,6 +621,7 @@ describe('SupportTicketsService', () => {
 
       expect(supportTicketCreate).not.toHaveBeenCalled();
       expect(ticketMessageCreate).not.toHaveBeenCalled();
+      expect(createForRole).not.toHaveBeenCalled();
     });
   });
 

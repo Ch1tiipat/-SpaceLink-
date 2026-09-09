@@ -203,6 +203,7 @@ export class EventsService {
       orderBy: [{ startDate: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
+        slug: true,
         name: true,
         description: true,
         startDate: true,
@@ -289,6 +290,8 @@ export class EventsService {
             name: true,
             contactEmail: true,
             contactPhone: true,
+            facebookUrl: true,
+            lineUrl: true,
             logoUrl: true,
             orgConfig: {
               select: { tierThresholds: true },
@@ -374,6 +377,8 @@ export class EventsService {
           name: organization.name,
           contactEmail: organization.contactEmail,
           contactPhone: organization.contactPhone,
+          facebookUrl: organization.facebookUrl,
+          lineUrl: organization.lineUrl,
           logoUrl: organization.logoUrl,
         },
       },
