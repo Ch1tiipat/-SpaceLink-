@@ -77,6 +77,7 @@ const findAll = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const findByCode = jest.fn();
 const findOne = jest.fn();
+const getQuotaContext = jest.fn();
 const createAdminSlipAccess = jest.fn();
 const uploadSlip = jest.fn();
 const mockBookingsService = {
@@ -87,6 +88,7 @@ const mockBookingsService = {
   findAllAcrossOrganizations,
   findByCode,
   findOne,
+  getQuotaContext,
   createAdminSlipAccess,
   uploadSlip,
 };
@@ -111,6 +113,7 @@ function controllerHandler(
     | 'findAllAcrossOrganizations'
     | 'findByCode'
     | 'findOne'
+    | 'getQuotaContext'
     | 'getAdminSlip'
     | 'uploadSlip',
 ): object {
@@ -179,6 +182,9 @@ describe('BookingsController', () => {
     );
     expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('findAll')),
+    ).toEqual([UserRole.VENDOR]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, controllerHandler('getQuotaContext')),
     ).toEqual([UserRole.VENDOR]);
     expect(
       Reflect.getMetadata(
@@ -252,6 +258,14 @@ describe('BookingsController', () => {
     await controller.findAll(CURRENT_USER);
 
     expect(findAll).toHaveBeenCalledWith(VENDOR_ID);
+  });
+
+  it('passes only the route event and authenticated vendor to quota lookup', async () => {
+    getQuotaContext.mockResolvedValue({ effectiveSelectionLimit: 2 });
+
+    await controller.getQuotaContext(CREATE_DTO.eventId, CURRENT_USER);
+
+    expect(getQuotaContext).toHaveBeenCalledWith(CREATE_DTO.eventId, VENDOR_ID);
   });
 
   it('lists every organization without accepting a client scope', async () => {

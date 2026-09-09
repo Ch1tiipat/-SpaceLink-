@@ -37,7 +37,10 @@ import {
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
+import {
+  CreateBookingsBatchDto,
+  MAX_BOOKINGS_PER_BATCH,
+} from './dto/create-bookings-batch.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
@@ -108,6 +111,13 @@ type AdminBookingRecord = Prisma.BookingGetPayload<{
 export type AdminBookingResponse = Omit<AdminBookingRecord, 'boothPrice'> & {
   boothPrice: string;
 };
+
+export interface BookingQuotaContext {
+  configuredQuota: number;
+  activeBookingCount: number;
+  remainingQuota: number;
+  effectiveSelectionLimit: number;
+}
 
 /**
  * The admin create path may waive only the quota. Its required organization
@@ -214,6 +224,53 @@ export class BookingsService {
     );
 
     return bookings;
+  }
+
+  async getQuotaContext(
+    eventId: string,
+    vendorUserId: string,
+  ): Promise<BookingQuotaContext> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        organization: {
+          select: {
+            orgConfig: { select: { bookingQuotaPerVendor: true } },
+          },
+        },
+      },
+    });
+    if (!event) {
+      throw new NotFoundException('ไม่พบอีเวนต์');
+    }
+
+    const orgQuota =
+      event.organization.orgConfig?.bookingQuotaPerVendor ?? null;
+    const [activeBookingCount, platformConfig] = await Promise.all([
+      this.prisma.booking.count({
+        where: {
+          eventId,
+          vendorUserId,
+          status: { in: ACTIVE_BOOKING_STATUSES },
+        },
+      }),
+      orgQuota === null
+        ? this.prisma.platformConfig.findFirst({
+            orderBy: { updatedAt: 'desc' },
+            select: { defaultBookingQuota: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    const configuredQuota =
+      orgQuota ?? platformConfig?.defaultBookingQuota ?? DEFAULT_BOOKING_QUOTA;
+    const remainingQuota = Math.max(configuredQuota - activeBookingCount, 0);
+
+    return {
+      configuredQuota,
+      activeBookingCount,
+      remainingQuota,
+      effectiveSelectionLimit: Math.min(remainingQuota, MAX_BOOKINGS_PER_BATCH),
+    };
   }
 
   private async createBatchWithRetry(

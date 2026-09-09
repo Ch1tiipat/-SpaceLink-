@@ -82,6 +82,13 @@ export type EventMap = {
   zones: EventZone[];
 };
 
+export type BookingQuotaContext = {
+  configuredQuota: number;
+  activeBookingCount: number;
+  remainingQuota: number;
+  effectiveSelectionLimit: number;
+};
+
 export type VendorShop = {
   id: string;
   name: string;
@@ -2058,6 +2065,17 @@ export function createBookingsBatch(
     input,
     { signal, token },
     "สร้างการจองทั้งชุดไม่สำเร็จ",
+  );
+}
+
+export function getBookingQuotaContext(
+  eventId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<BookingQuotaContext> {
+  return getJson<BookingQuotaContext>(
+    `/bookings/quota/${encodeURIComponent(eventId)}`,
+    { signal, token },
   );
 }
 

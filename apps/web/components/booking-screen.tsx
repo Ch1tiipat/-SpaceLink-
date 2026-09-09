@@ -26,12 +26,12 @@ import {
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import { isUuid } from '@/lib/route-identifier';
+import { useBookingQuota } from '@/lib/use-booking-quota';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
 const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
-const MAX_SELECTED_BOOTHS = 10;
 
 type BoothRatingState =
   | { status: 'idle' }
@@ -82,6 +82,12 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   const [boothRating, setBoothRating] = useState<BoothRatingState>({
     status: 'idle',
   });
+  const vendorToken = vendor.status === 'ready' ? vendor.token : null;
+  const { state: quota, refresh: refreshQuota } = useBookingQuota(
+    data?.event.id ?? null,
+    vendorToken,
+    canUseUxPreview(),
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,6 +113,10 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     if (!data) return;
+    if (vendor.status === 'ready' && quota.status !== 'ready') return;
+
+    const selectionLimit =
+      quota.status === 'ready' ? quota.value.effectiveSelectionLimit : 0;
 
     if (multiSelectionMode) {
       const availableBooths = data.zones.flatMap((zone) => zone.booths);
@@ -118,9 +128,17 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         );
         return booth ? [booth] : [];
       });
-      setSelectedBooths(requestedBooths.slice(0, MAX_SELECTED_BOOTHS));
+      const limitedBooths = requestedBooths.slice(0, selectionLimit);
+      setSelectedBooths(limitedBooths);
+      if (requestedBooths.length > selectionLimit) {
+        setActionError(
+          selectionLimit === 0
+            ? 'คุณใช้โควตาการจองสำหรับงานนี้ครบแล้ว'
+            : `ระบบปรับรายการให้เหลือ ${selectionLimit} บูธตามโควตาคงเหลือ`,
+        );
+      }
       const firstZone = data.zones.find((zone) =>
-        zone.booths.some((booth) => booth.id === requestedBooths[0]?.id),
+        zone.booths.some((booth) => booth.id === limitedBooths[0]?.id),
       );
       setFocusedZoneId(firstZone?.id ?? null);
       return;
@@ -143,7 +161,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           booth.code.toLowerCase() === requestedBoothCode.toLowerCase() &&
           booth.availability === 'AVAILABLE',
       );
-      if (requestedBooth) setSelectedBooths([requestedBooth]);
+      if (requestedBooth && selectionLimit > 0) {
+        setSelectedBooths([requestedBooth]);
+      }
     }
   }, [
     data,
@@ -151,6 +171,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     requestedBoothCode,
     requestedBoothCodes,
     requestedZoneCode,
+    quota,
+    vendor.status,
   ]);
 
   const selectedBooth = selectedBooths[0] ?? null;
@@ -244,12 +266,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           : 'ยังไม่มีรีวิว';
 
   function selectBooth(booth: EventBooth) {
-    if (!multiSelectionMode) {
-      setSelectedBooths([booth]);
-      setActionError(null);
-      return;
-    }
-
     if (selectedBooths.some((candidate) => candidate.id === booth.id)) {
       setSelectedBooths((current) =>
         current.filter((candidate) => candidate.id !== booth.id),
@@ -258,9 +274,26 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       return;
     }
 
-    if (selectedBooths.length >= MAX_SELECTED_BOOTHS) {
+    if (quota.status === 'loading' || quota.status === 'idle') {
+      setActionError('กำลังตรวจสอบโควตาคงเหลือ กรุณารอสักครู่');
+      return;
+    }
+    if (quota.status === 'error') {
+      setActionError('ตรวจสอบโควตาไม่สำเร็จ กรุณาลองใหม่');
+      return;
+    }
+    if (quota.value.effectiveSelectionLimit === 0) {
+      setActionError('คุณใช้โควตาการจองสำหรับงานนี้ครบแล้ว');
+      return;
+    }
+    if (!multiSelectionMode) {
+      setSelectedBooths([booth]);
+      setActionError(null);
+      return;
+    }
+    if (selectedBooths.length >= quota.value.effectiveSelectionLimit) {
       setActionError(
-        `เลือกได้สูงสุด ${MAX_SELECTED_BOOTHS} บูธต่อการยืนยันหนึ่งครั้ง`,
+        `เลือกได้สูงสุด ${quota.value.effectiveSelectionLimit} บูธตามโควตาคงเหลือ`,
       );
       return;
     }
@@ -275,7 +308,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       !vendor.shop ||
       selectedBooths.length === 0 ||
       !data ||
-      !isEventBookable(data.event)
+      !isEventBookable(data.event) ||
+      quota.status !== 'ready' ||
+      selectedBooths.length > quota.value.effectiveSelectionLimit
     ) {
       return;
     }
@@ -650,7 +685,13 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                           <button
                             key={booth.id}
                             type="button"
-                            disabled={!available}
+                            disabled={
+                              !available ||
+                              (!selected &&
+                                (quota.status !== 'ready' ||
+                                  selectedBooths.length >=
+                                    quota.value.effectiveSelectionLimit))
+                            }
                             aria-pressed={selected}
                             aria-label={`Booth ${booth.code} ${booth.availability}`}
                             onClick={() => selectBooth(booth)}
@@ -780,6 +821,38 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 )}
               </section>
 
+              <section className="mt-3 rounded-[12px] border border-[#dfd2f1] bg-[#faf8ff] p-3">
+                <span className="text-xs font-extrabold tracking-[.1em] text-violet">BOOKING QUOTA</span>
+                {quota.status === 'ready' ? (
+                  <>
+                    <strong className="mt-1 block text-sm">
+                      เหลือ {quota.value.remainingQuota} จาก {quota.value.configuredQuota} บูธใน Event นี้
+                    </strong>
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      รอบนี้เลือกพร้อมกันได้สูงสุด {quota.value.effectiveSelectionLimit} บูธ
+                    </p>
+                    {quota.value.remainingQuota === 0 ? (
+                      <Link href="/help" className="mt-2 inline-flex text-xs font-bold text-violet underline">
+                        ส่งคำร้องขอเพิ่มโควตา
+                      </Link>
+                    ) : null}
+                  </>
+                ) : quota.status === 'error' ? (
+                  <div className="mt-1 text-xs text-[#b42318]">
+                    <p role="alert">{quota.message}</p>
+                    <button type="button" onClick={refreshQuota} className="mt-1 font-bold underline">
+                      ลองตรวจสอบอีกครั้ง
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted">
+                    {vendor.status === 'ready'
+                      ? 'กำลังตรวจสอบโควตาคงเหลือ…'
+                      : 'เข้าสู่ระบบเพื่อดูโควตาคงเหลือ'}
+                  </p>
+                )}
+              </section>
+
               <section className="mt-3 rounded-[12px] border border-[#e8e0ec] bg-[#fcfbfd] p-3">
                 <span className="text-xs font-extrabold tracking-[.1em] text-violet">BOOKING POLICY</span>
                 <strong className="mt-1 block text-sm">เงื่อนไขก่อนสร้าง Booking</strong>
@@ -820,7 +893,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   selectedBooths.length === 0 ||
                   vendor.status === 'loading' ||
                   vendor.status === 'signed-out' ||
-                  vendor.status === 'error'
+                  vendor.status === 'error' ||
+                  quota.status !== 'ready' ||
+                  selectedBooths.length > quota.value.effectiveSelectionLimit
                 }
                 className="sl-action-primary mt-3 w-full text-sm"
               >
@@ -828,6 +903,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   ? 'กำลังสร้างการจอง…'
                   : !eventBookable
                     ? 'Event นี้ปิดรับจองแล้ว'
+                  : quota.status !== 'ready'
+                    ? 'กำลังตรวจสอบโควตา…'
                   : vendor.status === 'ready' && !shop
                     ? 'เพิ่มข้อมูลร้านค้าก่อนจอง'
                     : selectedBooths.length > 1

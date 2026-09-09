@@ -581,6 +581,80 @@ describe('BookingsService', () => {
     expect(bookingCreate).not.toHaveBeenCalled();
   });
 
+  describe('getQuotaContext', () => {
+    it('returns the remaining organization quota for only the authenticated vendor', async () => {
+      eventFindUnique.mockResolvedValue({
+        organization: {
+          orgConfig: { bookingQuotaPerVendor: 2 },
+        },
+      });
+      bookingCount.mockResolvedValue(1);
+
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).resolves.toEqual({
+        configuredQuota: 2,
+        activeBookingCount: 1,
+        remainingQuota: 1,
+        effectiveSelectionLimit: 1,
+      });
+      expect(bookingCount).toHaveBeenCalledWith({
+        where: {
+          eventId: EVENT_ID,
+          vendorUserId: VENDOR_ID,
+          status: {
+            in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+          },
+        },
+      });
+      expect(platformConfigFindFirst).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the platform quota and caps the batch selection limit', async () => {
+      eventFindUnique.mockResolvedValue({
+        organization: { orgConfig: null },
+      });
+      platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 12 });
+      bookingCount.mockResolvedValue(1);
+
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).resolves.toEqual({
+        configuredQuota: 12,
+        activeBookingCount: 1,
+        remainingQuota: 11,
+        effectiveSelectionLimit: 10,
+      });
+    });
+
+    it('clamps the remaining quota at zero', async () => {
+      eventFindUnique.mockResolvedValue({
+        organization: {
+          orgConfig: { bookingQuotaPerVendor: 0 },
+        },
+      });
+      bookingCount.mockResolvedValue(0);
+
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).resolves.toEqual({
+        configuredQuota: 0,
+        activeBookingCount: 0,
+        remainingQuota: 0,
+        effectiveSelectionLimit: 0,
+      });
+    });
+
+    it('returns 404 for an unknown event without reading booking counts', async () => {
+      eventFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(bookingCount).not.toHaveBeenCalled();
+    });
+  });
+
   it('falls back to the platform quota when the organization has none', async () => {
     eventFindUnique.mockResolvedValue({
       id: EVENT_ID,
