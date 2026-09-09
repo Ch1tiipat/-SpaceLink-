@@ -15,14 +15,15 @@ import {
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import { isUuid } from '@/lib/route-identifier';
+import { useBookingQuota } from '@/lib/use-booking-quota';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
+import { canUseUxPreview } from '@/lib/ux-preview';
 
 function availableCount(zone: EventZone) {
   return zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length;
 }
 
 const zoneColors = ['#7c3aed', '#159461', '#e47b00', '#3281c8', '#8b5cf6', '#5b21b6'];
-const MAX_SELECTED_BOOTHS = 10;
 
 const moneyFormatter = new Intl.NumberFormat('th-TH', {
   maximumFractionDigits: 2,
@@ -42,6 +43,12 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationIsEmpty, setRecommendationIsEmpty] = useState(false);
   const [isRecommending, setIsRecommending] = useState(false);
+  const vendorToken = vendor.status === 'ready' ? vendor.token : null;
+  const { state: quota, refresh: refreshQuota } = useBookingQuota(
+    data?.event.id ?? null,
+    vendorToken,
+    canUseUxPreview(),
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,6 +107,21 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   const shop = vendor.status === 'ready' ? vendor.shop : null;
   const shopId = shop?.id ?? null;
+
+  useEffect(() => {
+    if (
+      quota.status !== 'ready' ||
+      selectedBoothIds.length <= quota.value.effectiveSelectionLimit
+    ) {
+      return;
+    }
+    setSelectedBoothIds((current) =>
+      current.slice(0, quota.value.effectiveSelectionLimit),
+    );
+    setSelectionError(
+      `โควตาคงเหลือล่าสุดเลือกเพิ่มได้ ${quota.value.effectiveSelectionLimit} บูธ`,
+    );
+  }, [quota, selectedBoothIds.length]);
 
   useEffect(() => {
     setRecommendation(null);
@@ -172,9 +194,23 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       setSelectionError(null);
       return;
     }
-    if (selectedBoothIds.length >= MAX_SELECTED_BOOTHS) {
+    if (vendor.status !== 'ready') {
+      setSelectionError('กรุณาเข้าสู่ระบบก่อนเลือกบูธ');
+      return;
+    }
+    if (quota.status === 'loading' || quota.status === 'idle') {
+      setSelectionError('กำลังตรวจสอบโควตาคงเหลือ กรุณารอสักครู่');
+      return;
+    }
+    if (quota.status === 'error') {
+      setSelectionError('ตรวจสอบโควตาไม่สำเร็จ กรุณาลองใหม่');
+      return;
+    }
+    if (selectedBoothIds.length >= quota.value.effectiveSelectionLimit) {
       setSelectionError(
-        `เลือกได้สูงสุด ${MAX_SELECTED_BOOTHS} บูธต่อการยืนยันหนึ่งครั้ง`,
+        quota.value.remainingQuota === 0
+          ? 'คุณใช้โควตาการจองสำหรับงานนี้ครบแล้ว'
+          : `เลือกได้สูงสุด ${quota.value.effectiveSelectionLimit} บูธตามโควตาคงเหลือ`,
       );
       return;
     }
@@ -184,6 +220,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   function continueToBooking() {
     if (!data || selectedBooths.length === 0) return;
+    if (
+      quota.status !== 'ready' ||
+      selectedBooths.length > quota.value.effectiveSelectionLimit
+    ) {
+      setSelectionError('กรุณารอให้ระบบตรวจสอบโควตาก่อนดำเนินการต่อ');
+      return;
+    }
     const boothCodes = selectedBooths
       .map(({ booth }) => encodeURIComponent(booth.code))
       .join(',');
@@ -220,7 +263,11 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   const eventBookable = isEventBookable(data.event);
   const bookingAvailabilityText = eventBookable
-    ? 'กด Booth ว่างเพื่อเลือกได้สูงสุด 10 บูธ'
+    ? quota.status === 'ready'
+      ? `กด Booth ว่างเพื่อเลือกได้อีก ${quota.value.effectiveSelectionLimit} บูธ`
+      : vendor.status === 'ready'
+        ? 'กำลังตรวจสอบโควตาคงเหลือ…'
+        : 'เข้าสู่ระบบเพื่อดูโควตาคงเหลือ'
     : 'Event นี้ปิดรับจองแล้ว';
 
   return (
@@ -382,6 +429,13 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                 <span className="text-sm text-muted">
                   รวม {moneyFormatter.format(selectedTotal)} บาท
                 </span>
+                {quota.status === 'ready' ? (
+                  <span className="mt-1 block text-xs font-bold text-violet">
+                    โควตาคงเหลือ {quota.value.remainingQuota} จาก {quota.value.configuredQuota} บูธ
+                  </span>
+                ) : quota.status === 'loading' ? (
+                  <span className="mt-1 block text-xs text-muted">กำลังตรวจสอบโควตา…</span>
+                ) : null}
               </div>
 
               <div className="flex min-w-[220px] flex-1 flex-wrap gap-2">
@@ -408,7 +462,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <button
                 type="button"
                 onClick={continueToBooking}
-                disabled={selectedBooths.length === 0}
+                disabled={selectedBooths.length === 0 || quota.status !== 'ready'}
                 className="sl-action-primary min-w-[170px] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ดำเนินการต่อ →
@@ -418,6 +472,19 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <p role="alert" className="mt-3 text-sm font-bold text-[#9d620c]">
                 {selectionError}
               </p>
+            ) : null}
+            {quota.status === 'error' ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-[#b42318]">
+                <span role="alert">{quota.message}</span>
+                <button type="button" onClick={refreshQuota} className="font-bold underline">
+                  ลองตรวจสอบอีกครั้ง
+                </button>
+              </div>
+            ) : null}
+            {quota.status === 'ready' && quota.value.remainingQuota === 0 ? (
+              <Link href="/help" className="mt-3 inline-flex text-sm font-bold text-violet underline">
+                ส่งคำร้องขอเพิ่มโควตา
+              </Link>
             ) : null}
           </section>
         ) : null}
