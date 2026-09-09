@@ -330,10 +330,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     setUnreadNotificationCount(null);
     if (auth.status !== "signed-in") return;
 
-    const controller = new AbortController();
     let active = true;
+    let controller: AbortController | null = null;
 
-    void (async () => {
+    async function refreshUnreadCount() {
+      controller?.abort();
+      controller = new AbortController();
       try {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getSession();
@@ -356,11 +358,31 @@ export function AppShell({ children }: { children: ReactNode }) {
           return;
         if (active) setUnreadNotificationCount(null);
       }
-    })();
+    }
+
+    void refreshUnreadCount();
+    if (pathname.startsWith("/notifications")) {
+      return () => {
+        active = false;
+        controller?.abort();
+      };
+    }
+
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshUnreadCount();
+    }, 30_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshUnreadCount();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       active = false;
-      controller.abort();
+      controller?.abort();
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [auth.status, pathname]);
 

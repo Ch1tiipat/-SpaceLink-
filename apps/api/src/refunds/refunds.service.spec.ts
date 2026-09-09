@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -19,7 +18,6 @@ import { RefundsService } from './refunds.service';
 
 const VENDOR_ID = '11111111-1111-4111-8111-111111111111';
 const ADMIN_ID = '22222222-2222-4222-8222-222222222222';
-const OTHER_ADMIN_ID = '33333333-3333-4333-8333-333333333333';
 const BOOKING_ID = '44444444-4444-4444-8444-444444444444';
 const REFUND_ID = '55555555-5555-4555-8555-555555555555';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
@@ -86,10 +84,10 @@ const refundRequestFindFirst = jest.fn();
 const refundRequestFindMany = jest.fn();
 const refundRequestCreate = jest.fn();
 const refundRequestUpdateMany = jest.fn();
-const orgMembershipFindMany = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 const createForRole = jest.fn();
+const createForOrganizationAdmins = jest.fn();
 
 const mockPrismaService = {
   booking: { findFirst: bookingFindFirst },
@@ -99,11 +97,14 @@ const mockPrismaService = {
     create: refundRequestCreate,
     updateMany: refundRequestUpdateMany,
   },
-  orgMembership: { findMany: orgMembershipFindMany },
   $transaction: prismaTransaction,
 };
 
-const mockNotificationsService = { createForUser, createForRole };
+const mockNotificationsService = {
+  createForUser,
+  createForRole,
+  createForOrganizationAdmins,
+};
 
 function eligibleBooking() {
   return {
@@ -145,12 +146,9 @@ describe('RefundsService', () => {
     refundRequestFindMany.mockResolvedValue([REFUND]);
     refundRequestCreate.mockResolvedValue(REFUND);
     refundRequestUpdateMany.mockResolvedValue({ count: 1 });
-    orgMembershipFindMany.mockResolvedValue([
-      { userId: ADMIN_ID },
-      { userId: OTHER_ADMIN_ID },
-    ]);
     createForUser.mockResolvedValue(null);
     createForRole.mockResolvedValue(1);
+    createForOrganizationAdmins.mockResolvedValue(2);
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
@@ -215,21 +213,17 @@ describe('RefundsService', () => {
     it('notifies organization admins and super admins after the request commits', async () => {
       await service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO);
 
-      expect(orgMembershipFindMany).toHaveBeenCalledWith({
-        where: {
-          organizationId: ORGANIZATION_ID,
-          user: { role: 'ORG_ADMIN' },
+      expect(createForOrganizationAdmins).toHaveBeenCalledWith(
+        ORGANIZATION_ID,
+        'payments',
+        {
+          type: NotificationType.REFUND,
+          title: 'มีคำร้องขอคืนเงินใหม่',
+          body: 'การจอง BK-REFUND-001 ขอคืนเงิน 1200 บาท',
+          relatedEntityType: 'REFUND_REQUEST',
+          relatedEntityId: REFUND_ID,
         },
-        select: { userId: true },
-      });
-      expect(createForUser).toHaveBeenCalledTimes(2);
-      expect(createForUser).toHaveBeenCalledWith(ADMIN_ID, {
-        type: NotificationType.REFUND,
-        title: 'มีคำร้องขอคืนเงินใหม่',
-        body: 'การจอง BK-REFUND-001 ขอคืนเงิน 1200 บาท',
-        relatedEntityType: 'REFUND_REQUEST',
-        relatedEntityId: REFUND_ID,
-      });
+      );
       expect(createForRole).toHaveBeenCalledWith(UserRole.SUPER_ADMIN, {
         type: NotificationType.REFUND,
         title: 'มีคำร้องขอคืนเงินใหม่',
@@ -238,28 +232,21 @@ describe('RefundsService', () => {
         relatedEntityId: REFUND_ID,
       });
       expect(refundRequestCreate.mock.invocationCallOrder[0]).toBeLessThan(
-        createForUser.mock.invocationCallOrder[0],
+        createForOrganizationAdmins.mock.invocationCallOrder[0],
       );
       expect(refundRequestCreate.mock.invocationCallOrder[0]).toBeLessThan(
         createForRole.mock.invocationCallOrder[0],
       );
     });
 
-    it('keeps a committed request successful if admin notification lookup fails', async () => {
-      const error = jest
-        .spyOn(Logger.prototype, 'error')
-        .mockImplementation(() => undefined);
-      orgMembershipFindMany.mockRejectedValue(
-        new Error('database unavailable'),
+    it('keeps a committed request successful if admin notification delivery fails', async () => {
+      createForOrganizationAdmins.mockRejectedValue(
+        new Error('notification unavailable'),
       );
 
       await expect(
         service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO),
       ).resolves.toMatchObject({ id: REFUND_ID });
-      expect(error).toHaveBeenCalledWith(
-        'Failed to notify organization refund reviewers',
-      );
-      error.mockRestore();
     });
 
     it('returns the same 404 for an unknown or another vendor booking', async () => {

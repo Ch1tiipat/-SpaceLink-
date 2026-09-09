@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
+  MembershipRole,
   NotificationType,
   Prisma,
   RefundStatus,
@@ -61,13 +62,25 @@ export class RefundReminderService {
                 },
               });
               if (!refund) return;
-              const admins = await tx.orgMembership.findMany({
+              let admins = await tx.orgMembership.findMany({
                 where: {
                   organizationId: refund.booking.event.organizationId,
+                  role: MembershipRole.ADMIN,
+                  canManagePayments: true,
                   user: { role: UserRole.ORG_ADMIN },
                 },
                 select: { userId: true },
               });
+              if (admins.length === 0) {
+                admins = await tx.orgMembership.findMany({
+                  where: {
+                    organizationId: refund.booking.event.organizationId,
+                    role: MembershipRole.OWNER,
+                    user: { role: UserRole.ORG_ADMIN },
+                  },
+                  select: { userId: true },
+                });
+              }
               const recipients = new Set(admins.map(({ userId }) => userId));
               if (refund.status === RefundStatus.APPROVED) {
                 const superAdmins = await tx.user.findMany({

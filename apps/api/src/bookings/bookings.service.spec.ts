@@ -172,6 +172,7 @@ const removeObject = jest.fn();
 const createAdminAccess = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
+const createForOrganizationAdmins = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -196,7 +197,10 @@ const mockSlipStorageService = {
   removeObject,
   uploadForVerification,
 };
-const mockNotificationsService = { createForUser };
+const mockNotificationsService = {
+  createForUser,
+  createForOrganizationAdmins,
+};
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
@@ -205,7 +209,11 @@ const PENDING_SLIP_BOOKING = {
   boothPrice: BOOTH_PRICE,
   holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
   confirmedAt: null,
-  event: { status: EventStatus.PUBLISHED, endDate: EVENT_END },
+  event: {
+    status: EventStatus.PUBLISHED,
+    endDate: EVENT_END,
+    organizationId: ORGANIZATION_ID,
+  },
   booth: { status: BoothStatus.AVAILABLE },
 };
 
@@ -273,6 +281,7 @@ describe('BookingsService', () => {
     });
     removeObject.mockResolvedValue(undefined);
     createForUser.mockResolvedValue(null);
+    createForOrganizationAdmins.mockResolvedValue(1);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -336,6 +345,17 @@ describe('BookingsService', () => {
       relatedEntityType: 'BOOKING',
       relatedEntityId: BOOKING_ID,
     });
+    expect(createForOrganizationAdmins).toHaveBeenCalledWith(
+      ORGANIZATION_ID,
+      'zones',
+      {
+        type: NotificationType.BOOKING_STATUS,
+        title: 'มีการจองใหม่',
+        body: `Booking ${BOOKING_CODE} รอการชำระเงิน`,
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: BOOKING_ID,
+      },
+    );
   });
 
   it('keeps booking creation successful when notification delivery fails', async () => {
@@ -647,6 +667,18 @@ describe('BookingsService', () => {
           relatedEntityId: booking.id,
         });
       });
+      expect(createForOrganizationAdmins).toHaveBeenCalledTimes(1);
+      expect(createForOrganizationAdmins).toHaveBeenCalledWith(
+        ORGANIZATION_ID,
+        'zones',
+        {
+          type: NotificationType.BOOKING_STATUS,
+          title: 'มีการจองใหม่ 3 รายการ',
+          body: 'Booking BK-0123456789AB, BK-0123456789AC, BK-0123456789AD รอการชำระเงิน',
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: BOOKING_ID,
+        },
+      );
     });
 
     it('rejects the whole batch when the second booth is already booked', async () => {
@@ -878,7 +910,9 @@ describe('BookingsService', () => {
           boothPrice: true,
           holdExpiresAt: true,
           confirmedAt: true,
-          event: { select: { status: true, endDate: true } },
+          event: {
+            select: { status: true, endDate: true, organizationId: true },
+          },
           booth: { select: { status: true } },
         },
       });
@@ -1021,6 +1055,17 @@ describe('BookingsService', () => {
         relatedEntityType: 'BOOKING',
         relatedEntityId: BOOKING_ID,
       });
+      expect(createForOrganizationAdmins).toHaveBeenCalledWith(
+        ORGANIZATION_ID,
+        'payments',
+        {
+          type: NotificationType.PAYMENT,
+          title: 'มีการชำระเงินการจองใหม่',
+          body: `Booking ${BOOKING_CODE} ชำระเงินและยืนยันแล้ว`,
+          relatedEntityType: 'BOOKING',
+          relatedEntityId: BOOKING_ID,
+        },
+      );
     });
 
     it('keeps confirmation successful when notification delivery fails', async () => {
