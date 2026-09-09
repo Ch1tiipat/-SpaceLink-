@@ -9,11 +9,13 @@ import {
 } from '@nestjs/common';
 import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
 import { CreateRefundRequestDto } from './dto/create-refund-request.dto';
 import { RefundsService } from './refunds.service';
@@ -51,14 +53,18 @@ export class RefundsController {
   }
 
   @Get('organizations/:organizationId/refunds')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('organizationId')
   findForOrganization(@CurrentOrgId() organizationId: string) {
     return this.refundsService.findForOrganization(organizationId);
   }
 
   @Patch('bookings/:bookingId/refunds/:refundId/approve')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   approve(
     @Param('bookingId') bookingId: string,
@@ -77,7 +83,9 @@ export class RefundsController {
   }
 
   @Patch('bookings/:bookingId/refunds/:refundId/reject')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   reject(
     @Param('bookingId') bookingId: string,
@@ -94,7 +102,9 @@ export class RefundsController {
   }
 
   @Patch('bookings/:bookingId/refunds/:refundId/process')
+  @UseGuards(OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
   @OrgScoped('bookingId')
   process(
     @Param('bookingId') bookingId: string,

@@ -353,6 +353,8 @@ export type CurrentUser = {
     lineUrl: string | null;
     membershipRole: "OWNER" | "ADMIN";
     canEditQuota: boolean;
+    canManagePayments: boolean;
+    canManageZones: boolean;
     bookingQuotaPerVendor: number | null;
   }[];
 };
@@ -393,10 +395,23 @@ export type CreateSuperAdminOrganizationInput = {
 
 export type SuperAdminCompanyAdmin = {
   id: string;
+  role: "OWNER" | "ADMIN";
   canEditQuota: boolean;
+  canManagePayments: boolean;
+  canManageZones: boolean;
   joinedAt: string;
   user: { id: string; email: string; fullName: string };
   organization: { id: string; name: string };
+};
+
+export type OrganizationTeamMember = {
+  id: string;
+  role: "OWNER" | "ADMIN";
+  canEditQuota: boolean;
+  canManagePayments: boolean;
+  canManageZones: boolean;
+  joinedAt: string;
+  user: { id: string; email: string; fullName: string };
 };
 
 export type SuperAdminUserListItem = {
@@ -1600,11 +1615,74 @@ export function updateSuperAdminOrganizationPromptPay(
   );
 }
 
+export function setSuperAdminOrganizationOwner(
+  organizationId: string,
+  email: string,
+  token: string,
+): Promise<OrganizationTeamMember> {
+  return patchJson<OrganizationTeamMember>(
+    `/organizations/${encodeURIComponent(organizationId)}/owner`,
+    { email },
+    { token },
+    "กำหนด OWNER ไม่สำเร็จ",
+  );
+}
+
 export function getSuperAdminCompanyAdmins(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminCompanyAdmin[]> {
   return getJson<SuperAdminCompanyAdmin[]>("/admins", { signal, token });
+}
+
+export function getOrganizationTeam(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationTeamMember[]> {
+  return getJson<OrganizationTeamMember[]>(
+    `/organizations/${encodeURIComponent(organizationId)}/admins`,
+    { signal, token },
+  );
+}
+
+export function addOrganizationAdmin(
+  organizationId: string,
+  email: string,
+  token: string,
+): Promise<OrganizationTeamMember> {
+  return postJson<OrganizationTeamMember>(
+    `/organizations/${encodeURIComponent(organizationId)}/admins`,
+    { email },
+    { token },
+    "เพิ่มผู้ดูแลไม่สำเร็จ",
+  );
+}
+
+export function updateOrganizationAdminPermissions(
+  organizationId: string,
+  membershipId: string,
+  input: { canManagePayments: boolean; canManageZones: boolean },
+  token: string,
+): Promise<OrganizationTeamMember> {
+  return patchJson<OrganizationTeamMember>(
+    `/organizations/${encodeURIComponent(organizationId)}/admins/${encodeURIComponent(membershipId)}/permissions`,
+    input,
+    { token },
+    "เปลี่ยนสิทธิ์ผู้ดูแลไม่สำเร็จ",
+  );
+}
+
+export function removeOrganizationAdmin(
+  organizationId: string,
+  userId: string,
+  token: string,
+): Promise<void> {
+  return deleteJson<void>(
+    `/organizations/${encodeURIComponent(organizationId)}/admins/${encodeURIComponent(userId)}`,
+    { token },
+    "ถอดผู้ดูแลไม่สำเร็จ",
+  );
 }
 
 export function updateSuperAdminQuotaPermission(

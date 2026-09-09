@@ -16,6 +16,7 @@ jest.mock('jose', () => ({
 }));
 
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
@@ -53,6 +54,7 @@ describe('Venue mutation authorization', () => {
       SupabaseAuthGuard,
       OrgScopeGuard,
       RolesGuard,
+      OrgPermissionGuard,
     ]);
     expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([

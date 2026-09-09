@@ -11,6 +11,7 @@ import {
   BoothStatus,
   CancelledByRole,
   EventStatus,
+  MembershipRole,
   NotificationType,
   OrgStatus,
   Prisma,
@@ -821,7 +822,17 @@ export class BookingsService {
           ? {}
           : {
               event: {
-                organization: { memberships: { some: { userId: user.id } } },
+                organization: {
+                  memberships: {
+                    some: {
+                      userId: user.id,
+                      OR: [
+                        { role: MembershipRole.OWNER },
+                        { canManagePayments: true },
+                      ],
+                    },
+                  },
+                },
               },
             }),
       },

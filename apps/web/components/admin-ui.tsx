@@ -20,7 +20,9 @@ export type AdminAccessState =
 
 type Organization = CurrentUser['organizations'][number];
 
-export function useAdminPageAccess(): {
+export function useAdminPageAccess(
+  requiredPermission?: 'payments' | 'zones',
+): {
   access: AdminAccessState;
   token: string;
   organizationId: string;
@@ -32,6 +34,7 @@ export function useAdminPageAccess(): {
   const [token, setToken] = useState('');
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [organizationId, setOrganizationId] = useState('');
+  const [userRole, setUserRole] = useState<CurrentUser['role'] | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,6 +62,7 @@ export function useAdminPageAccess(): {
         }
 
         setToken(accessToken);
+        setUserRole(me.role);
         setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
@@ -83,12 +87,24 @@ export function useAdminPageAccess(): {
     setOrganizationId(nextId);
   }, [access, organizations, selectedOrganizationId]);
 
+  const organization =
+    organizations.find((item) => item.id === organizationId) ?? null;
+  const hasRequiredPermission =
+    !requiredPermission ||
+    userRole === 'SUPER_ADMIN' ||
+    organization?.membershipRole === 'OWNER' ||
+    (requiredPermission === 'payments'
+      ? organization?.canManagePayments === true
+      : organization?.canManageZones === true);
+
   return {
-    access,
+    access:
+      access === 'allowed' && organization && !hasRequiredPermission
+        ? 'denied'
+        : access,
     token,
     organizationId,
-    organization:
-      organizations.find((item) => item.id === organizationId) ?? null,
+    organization,
   };
 }
 

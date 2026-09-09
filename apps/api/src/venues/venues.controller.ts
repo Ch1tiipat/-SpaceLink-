@@ -11,8 +11,10 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { CreateZoneDto } from '../zones/dto/create-zone.dto';
@@ -41,8 +43,9 @@ export class VenuesController {
   // Same mutation guard chain as ZonesController: SupabaseAuthGuard,
   // OrgScopeGuard, RolesGuard. SUPER_ADMIN must pass both scope and role checks.
   @Patch(':venueId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('venueId')
   update(
     @Param('venueId') venueId: string,
@@ -53,8 +56,9 @@ export class VenuesController {
   }
 
   @Delete(':venueId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('venueId')
   remove(@Param('venueId') venueId: string, @CurrentOrgId() orgId: string) {
     return this.venuesService.remove(venueId, orgId);
@@ -67,8 +71,9 @@ export class VenuesController {
    * venueId in the body (AGENTS.md §14.2).
    */
   @Post(':venueId/zones')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('venueId')
   createZone(
     @Param('venueId') venueId: string,

@@ -7,6 +7,7 @@ jest.mock('jose', () => ({
 
 import { UserRole } from '@prisma/client';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
@@ -68,6 +69,7 @@ describe('OrganizationsController', () => {
       SupabaseAuthGuard,
       OrgScopeGuard,
       RolesGuard,
+      OrgPermissionGuard,
     ]);
     expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
     expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
@@ -132,8 +134,18 @@ describe('OrganizationsController', () => {
     ]);
   });
 
-  it.each(['listAdmins', 'grantAdmin', 'revokeAdmin'])(
-    'protects %s with org scope and SUPER_ADMIN only',
+  it('lets both admin roles list the organization team', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).listAdmins;
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+      UserRole.ORG_ADMIN,
+    ]);
+  });
+
+  it.each(['grantAdmin', 'revokeAdmin', 'updateAdminPermissions'])(
+    'reserves %s for an organization admin whose OWNER membership is checked in the service',
     (name) => {
       const handler = (
         OrganizationsController.prototype as unknown as Record<string, object>
@@ -148,10 +160,20 @@ describe('OrganizationsController', () => {
         'organizationId',
       );
       expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
-        UserRole.SUPER_ADMIN,
+        UserRole.ORG_ADMIN,
       ]);
     },
   );
+
+  it('reserves owner assignment for SUPER_ADMIN', () => {
+    const handler = (
+      OrganizationsController.prototype as unknown as Record<string, object>
+    ).setOwner;
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+  });
 
   it('returns 204 after revoking an organization admin', () => {
     const handler = (

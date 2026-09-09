@@ -10,9 +10,11 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
+import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
 import { FindAllBoothsDto } from './dto/find-all-booths.dto';
 import { UpdateBoothDto } from './dto/update-booth.dto';
 import { BoothsService } from './booths.service';
@@ -40,8 +42,9 @@ export class BoothsController {
   // OrgScoped in org-scoped.decorator.ts for why RolesGuard can't literally
   // sit between the other two.
   @Patch(':boothId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('boothId')
   update(
     @Param('boothId') boothId: string,
@@ -52,8 +55,9 @@ export class BoothsController {
   }
 
   @Delete(':boothId')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, OrgPermissionGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('zones')
   @OrgScoped('boothId')
   remove(@Param('boothId') boothId: string, @CurrentOrgId() orgId: string) {
     return this.boothsService.remove(boothId, orgId);

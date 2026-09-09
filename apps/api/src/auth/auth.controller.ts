@@ -40,6 +40,8 @@ export class AuthController {
         select: {
           role: true,
           canEditQuota: true,
+          canManagePayments: true,
+          canManageZones: true,
           organization: {
             select: {
               id: true,
@@ -68,7 +70,13 @@ export class AuthController {
         categories: shop.categories.map(({ category }) => category),
       })),
       organizations: memberships.map(
-        ({ role, canEditQuota, organization }) => ({
+        ({
+          role,
+          canEditQuota,
+          canManagePayments,
+          canManageZones,
+          organization,
+        }) => ({
           id: organization.id,
           name: organization.name,
           promptpayId: organization.promptpayId,
@@ -76,6 +84,8 @@ export class AuthController {
           lineUrl: organization.lineUrl,
           membershipRole: role,
           canEditQuota,
+          canManagePayments,
+          canManageZones,
           bookingQuotaPerVendor:
             organization.orgConfig?.bookingQuotaPerVendor ?? null,
         }),
