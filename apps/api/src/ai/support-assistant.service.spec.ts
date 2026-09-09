@@ -240,6 +240,43 @@ describe('SupportAssistantService', () => {
     },
   );
 
+  it('SCRUM-169: rule-based fallback carries the previous topic across a context-free follow-up question', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 503 }) as typeof fetch;
+
+    const firstTurn = await ask('ฉันต้องอัปโหลดสลิปที่ไหน');
+    expect(firstTurn.source).toBe('RULE_BASED');
+    expect(firstTurn.answer).toContain('อัปโหลดหลักฐาน');
+
+    const followUp = await ask('แล้วมันอยู่ตรงไหน', [
+      { role: 'user', text: 'ฉันต้องอัปโหลดสลิปที่ไหน' },
+      { role: 'assistant', text: firstTurn.answer },
+    ]);
+
+    expect(followUp.source).toBe('RULE_BASED');
+    expect(followUp.answer).toContain('การจองของฉัน');
+    expect(followUp.answer).toContain('อัปโหลดหลักฐาน');
+    expect(followUp.answer).not.toBe(
+      'ผมช่วยตอบเรื่อง Event โซนและบูธ การจอง การชำระเงิน โปรไฟล์ร้าน และข้อมูลของคุณใน SpaceLink ได้ครับ ลองถามรายละเอียดที่ต้องการได้เลย',
+    );
+  });
+
+  it('SCRUM-169: fallback ignores assistant-authored history and still returns the generic answer when no user question matched', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 503 }) as typeof fetch;
+
+    const result = await ask('แล้วมันอยู่ตรงไหน', [
+      { role: 'assistant', text: 'สลิปอัปโหลดที่หน้าการจองของฉันครับ' },
+    ]);
+
+    expect(result.source).toBe('RULE_BASED');
+    expect(result.answer).toBe(
+      'ผมช่วยตอบเรื่อง Event โซนและบูธ การจอง การชำระเงิน โปรไฟล์ร้าน และข้อมูลของคุณใน SpaceLink ได้ครับ ลองถามรายละเอียดที่ต้องการได้เลย',
+    );
+  });
+
   it('uses the fallback without calling Gemini when rule mode is selected', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as typeof fetch;

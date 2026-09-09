@@ -132,7 +132,7 @@ export class SupportAssistantService {
     const actions = suggestedActions(question);
 
     if (this.mode !== 'gemini' || !this.apiKey) {
-      return this.fallback(question, context, actions);
+      return this.fallback(question, history, context, actions);
     }
 
     try {
@@ -145,7 +145,7 @@ export class SupportAssistantService {
       this.logger.warn(
         `Gemini support assistant failed; using rule-based fallback: ${geminiFailureSummary(cause)}`,
       );
-      return this.fallback(question, context, actions);
+      return this.fallback(question, history, context, actions);
     }
   }
 
@@ -379,11 +379,12 @@ export class SupportAssistantService {
 
   private fallback(
     question: string,
+    history: SupportAssistantMessageDto[],
     context: SafeAssistantContext,
     actions: SupportAssistantAction[],
   ): SupportAssistantAnswer {
     return {
-      answer: fallbackAnswer(question, context),
+      answer: fallbackAnswer(question, history, context),
       source: 'RULE_BASED',
       actions,
     };
@@ -405,10 +406,16 @@ function parseGeminiText(value: unknown): string {
   return text.slice(0, 2400);
 }
 
-function fallbackAnswer(
+/**
+ * Matches a single question against a known SpaceLink topic. Returns null
+ * (instead of a generic catch-all) when nothing matches, so the caller can
+ * decide whether to fall back to conversation history or to the generic
+ * closing message.
+ */
+function matchTopicAnswer(
   question: string,
   context: SafeAssistantContext,
-): string {
+): string | null {
   if (/ของฉัน|สถานะ.*จอง|จอง.*สถานะ/i.test(question)) {
     if (context.ownBookings.length === 0) {
       return 'ยังไม่พบรายการจองของคุณครับ สามารถเริ่มเลือกงานและบูธได้จากหน้าหลัก';
@@ -453,6 +460,33 @@ function fallbackAnswer(
   if (/โปรไฟล์|โลโก้/i.test(question)) {
     return 'เปิดหน้า “โปรไฟล์” เพื่อแก้ข้อมูลติดต่อ ข้อมูลร้าน หมวดสินค้า และโลโก้ร้านครับ';
   }
+  return null;
+}
+
+/**
+ * Rule-based answer for a single question. When the latest question alone
+ * doesn't match a known topic (e.g. a short follow-up like "แล้วมันอยู่ตรงไหน"
+ * with no topic keyword of its own), walks backward through the recent
+ * conversation history and reuses the most recent user question that did
+ * match, so a follow-up still lands on the same topic instead of the
+ * generic closing message. Falls back to the generic message only when
+ * neither the current question nor any recent history matches anything.
+ */
+function fallbackAnswer(
+  question: string,
+  history: SupportAssistantMessageDto[],
+  context: SafeAssistantContext,
+): string {
+  const direct = matchTopicAnswer(question, context);
+  if (direct) return direct;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (message.role !== 'user') continue;
+    const carried = matchTopicAnswer(message.text, context);
+    if (carried) return carried;
+  }
+
   return 'ผมช่วยตอบเรื่อง Event โซนและบูธ การจอง การชำระเงิน โปรไฟล์ร้าน และข้อมูลของคุณใน SpaceLink ได้ครับ ลองถามรายละเอียดที่ต้องการได้เลย';
 }
 
