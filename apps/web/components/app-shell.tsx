@@ -1226,6 +1226,17 @@ function FloatingSupport({
     }
 
     const archivedEntry = archiveCurrentExchange();
+    if (assistantMode === "zone") {
+      setAssistantMode("help");
+      setZoneStep("idle");
+      setAssistantEvents([]);
+      setSelectedEvent(null);
+      setSelectedMap(null);
+      setSelectedZoneId("");
+      setSelectedFacilities([]);
+      setSelectedShop(null);
+      setRecommendations([]);
+    }
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
