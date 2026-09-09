@@ -220,6 +220,68 @@ describe('SupportAssistantService', () => {
       expected: 'response contained no text',
     },
     {
+      name: 'an instruction fragment instead of a Thai answer',
+      fetchResult: () =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              candidates: [
+                {
+                  content: {
+                    parts: [
+                      {
+                        text: ', dates, booth status, booking status, contacts not in context. No revealing secret stuff',
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+        }),
+      expected: 'unsafe response',
+    },
+    {
+      name: 'an incomplete candidate',
+      fetchResult: () =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              candidates: [
+                {
+                  finishReason: 'MAX_TOKENS',
+                  content: { parts: [{ text: 'คำตอบที่ยังไม่จบ 1.' }] },
+                },
+              ],
+            }),
+        }),
+      expected: 'incomplete response',
+    },
+    {
+      name: 'a manual payment approval hallucination',
+      fetchResult: () =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              candidates: [
+                {
+                  finishReason: 'STOP',
+                  content: {
+                    parts: [
+                      {
+                        text: 'รอการตรวจสอบ แล้วผู้จัดงานจะยืนยันยอดเงินจากสลิปให้ครับ',
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+        }),
+      expected: 'unsafe response',
+    },
+    {
       name: 'an unexpected error',
       fetchResult: () => Promise.reject(new Error('gemini-secret')),
       expected: 'unexpected error',

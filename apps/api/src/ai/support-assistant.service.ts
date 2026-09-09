@@ -79,6 +79,7 @@ type SafeAssistantContext = {
 
 type GeminiResponse = {
   candidates?: {
+    finishReason?: unknown;
     content?: {
       parts?: { text?: unknown }[];
     };
@@ -89,6 +90,7 @@ const PLATFORM_KNOWLEDGE = `
 SpaceLink เป็นแพลตฟอร์มค้นหางานแฟร์และอีเวนต์ เลือกโซน ดูแผนผังบูธ จองบูธ ชำระเงิน และติดตามสถานะการจอง
 ผู้ขายเริ่มจากเลือก Event เปิดแผนผัง เลือกบูธว่าง ตรวจสอบรายละเอียด แล้วสร้างการจองซึ่งจะรอชำระเงินตามเวลาที่กำหนด
 ผู้ขายอัปโหลดหลักฐานการชำระเงินจากหน้ารายละเอียดการจอง และติดตามสถานะได้จากหน้าการจองของฉัน
+ระบบตรวจสลิปด้วย SlipOK และเมื่อผลเป็น VERIFIED จะยืนยันการจองอัตโนมัติ ไม่มีขั้นตอนรอผู้จัดงานหรือแอดมินอนุมัติการชำระเงิน
 หน้าโปรไฟล์ใช้แก้ข้อมูลติดต่อ ข้อมูลร้าน หมวดสินค้า และโลโก้ร้าน
 AI แนะนำโซนช่วยเปรียบเทียบหมวดสินค้าของร้านกับโซนและบูธว่าง แต่ผู้ขายเป็นผู้เลือกบูธสุดท้าย
 SpaceLink ใช้ Email OTP สำหรับเข้าสู่ระบบ ไม่มีรหัสผ่านถาวร
@@ -355,7 +357,7 @@ export class SupportAssistantService {
                 ],
               },
             ],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1200 },
           }),
           signal: controller.signal,
         },
@@ -397,13 +399,41 @@ function parseGeminiText(value: unknown): string {
   }
 
   const payload = value as GeminiResponse;
-  const text = payload.candidates?.[0]?.content?.parts
+  const candidate = payload.candidates?.[0];
+  if (
+    typeof candidate?.finishReason === 'string' &&
+    candidate.finishReason !== 'STOP'
+  ) {
+    throw new Error('Gemini returned an incomplete response');
+  }
+  const text = candidate?.content?.parts
     ?.map((part) => part.text)
     .find((part): part is string => typeof part === 'string')
     ?.trim();
 
   if (!text) throw new Error('Gemini response did not contain text');
+  if (!isSafeAssistantAnswer(text)) {
+    throw new Error('Gemini returned an unsafe response');
+  }
   return text.slice(0, 2400);
+}
+
+/**
+ * The assistant is required to answer in Thai. A response with no Thai text is
+ * not useful to this UI and, in live testing, proved to be a fragment of model
+ * safety instructions rather than an answer. Explicit internal markers are
+ * rejected too, even if the surrounding response contains Thai text.
+ */
+function isSafeAssistantAnswer(text: string): boolean {
+  return (
+    /[\u0E00-\u0E7F]/u.test(text) &&
+    !/<\/?untrusted_runtime_data>|system\s*prompt|x-goog-api-key|GEMINI_API_KEY|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY/i.test(
+      text,
+    ) &&
+    !/รอการตรวจสอบ|(?:ผู้จัดงาน|แอดมิน|เจ้าหน้าที่).*(?:ตรวจสอบ|อนุมัติ|ยืนยัน).*(?:สลิป|ยอดเงิน|การชำระเงิน)/i.test(
+      text,
+    )
+  );
 }
 
 /**
@@ -562,6 +592,12 @@ function geminiFailureSummary(cause: unknown): string {
     }
     if (cause.message === 'Gemini response did not contain text') {
       return 'response contained no text';
+    }
+    if (cause.message === 'Gemini returned an unsafe response') {
+      return 'unsafe response';
+    }
+    if (cause.message === 'Gemini returned an incomplete response') {
+      return 'incomplete response';
     }
   }
 
