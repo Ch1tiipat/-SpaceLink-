@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10)
 
-The Prisma schema remains frozen except for these nine additive changes:
+The Prisma schema remains frozen except for these ten additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -79,11 +79,18 @@ The Prisma schema remains frozen except for these nine additive changes:
   the existing `OrgMembership` model. An organization `OWNER` may delegate these permissions to
   that organization's `ADMIN` memberships; `SUPER_ADMIN` may appoint or replace the `OWNER` but
   must not manage these two granular permissions.
+- SCRUM-165: add the `PaymentGroupStatus` enum and `BookingPaymentGroup` model, with additive
+  optional relations from `Booking` and `VerifiedSlip`, so one batch of same-vendor, same-shop,
+  same-event bookings can share one PromptPay payment total and hold deadline. A verified group
+  payment confirms every member booking atomically. Refund requests remain per booking; service
+  code must enforce both the existing per-booking cap and an aggregate approved/processed refund
+  cap no greater than the payment group's `totalAmount`. Existing ungrouped bookings and slips
+  remain valid and unchanged.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the nine tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the ten tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 

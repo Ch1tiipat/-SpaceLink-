@@ -8,6 +8,7 @@ import type {
 } from './slip-verifier.interface';
 
 const BOOKING_ID = '11111111-1111-4111-8111-111111111111';
+const PAYMENT_GROUP_ID = '22222222-2222-4222-8222-222222222222';
 const SLIP_URL =
   'https://example.invalid/signed/slip.jpg?token=short-lived-secret';
 const SLIP_OBJECT_PATH = 'vendor-id/booking-id/stored-slip.jpg';
@@ -67,6 +68,33 @@ describe('SlipVerificationService', () => {
 
     // `bookingId` is ours, not the provider's — a verifier has no business
     // knowing which booking a slip belongs to.
+    expect(verifier.verify).toHaveBeenCalledWith({
+      slipImageUrl: SLIP_URL,
+      expectedAmount: REQUEST.expectedAmount,
+    });
+  });
+
+  it('keeps an ungrouped booking slip unchanged', async () => {
+    await createService().verify(REQUEST);
+
+    const row = createdRow(prisma.verifiedSlip.create);
+    expect(row.bookingId).toBe(BOOKING_ID);
+    expect(row).not.toHaveProperty('paymentGroupId');
+    expect(verifier.verify).toHaveBeenCalledWith({
+      slipImageUrl: SLIP_URL,
+      expectedAmount: REQUEST.expectedAmount,
+    });
+  });
+
+  it('persists a payment group without exposing it to the verifier', async () => {
+    await createService().verify({
+      ...REQUEST,
+      paymentGroupId: PAYMENT_GROUP_ID,
+    });
+
+    expect(createdRow(prisma.verifiedSlip.create).paymentGroupId).toBe(
+      PAYMENT_GROUP_ID,
+    );
     expect(verifier.verify).toHaveBeenCalledWith({
       slipImageUrl: SLIP_URL,
       expectedAmount: REQUEST.expectedAmount,

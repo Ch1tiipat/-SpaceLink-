@@ -12,6 +12,7 @@ import {
   MembershipRole,
   NotificationType,
   OrgStatus,
+  PaymentGroupStatus,
   Prisma,
   SlipStatus,
   UserRole,
@@ -58,6 +59,8 @@ const BOOKING_ID_2 = '77777777-7777-4777-8777-777777777778';
 const BOOKING_ID_3 = '77777777-7777-4777-8777-777777777779';
 const ADMIN_ID = '99999999-9999-4999-8999-999999999999';
 const BOOKING_CODE = 'BK-0123456789AB';
+const PAYMENT_GROUP_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PAYMENT_GROUP_CODE = 'PG-0123456789AB';
 const EVENT_START = new Date('2026-09-10T00:00:00.000Z');
 const EVENT_END = new Date('2026-09-12T00:00:00.000Z');
 const NOW = new Date('2026-08-02T00:00:00.000Z');
@@ -89,6 +92,7 @@ const EXEMPT_DTO: ConfirmExemptBookingDto = {
 const CREATED_BOOKING: Booking = {
   id: BOOKING_ID,
   bookingCode: 'BK-0123456789AB',
+  paymentGroupId: null,
   eventId: EVENT_ID,
   boothId: BOOTH_ID,
   shopId: SHOP_ID,
@@ -165,6 +169,9 @@ const bookingFindUnique = jest.fn();
 const bookingFindMany = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const bookingUpdateMany = jest.fn();
+const paymentGroupFindFirst = jest.fn();
+const paymentGroupCreate = jest.fn();
+const paymentGroupUpdateMany = jest.fn();
 const verifiedSlipFindFirst = jest.fn();
 const verifySlip = jest.fn();
 const uploadForVerification = jest.fn();
@@ -187,6 +194,11 @@ const mockPrismaService = {
     findMany: bookingFindMany,
     updateMany: bookingUpdateMany,
   },
+  bookingPaymentGroup: {
+    findFirst: paymentGroupFindFirst,
+    create: paymentGroupCreate,
+    updateMany: paymentGroupUpdateMany,
+  },
   verifiedSlip: { findFirst: verifiedSlipFindFirst },
   platformConfig: { findFirst: platformConfigFindFirst },
   $transaction: prismaTransaction,
@@ -205,6 +217,7 @@ const mockNotificationsService = {
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
   bookingCode: BOOKING_CODE,
+  paymentGroupId: null,
   status: BookingStatus.PENDING_PAYMENT,
   boothPrice: BOOTH_PRICE,
   holdExpiresAt: new Date('2026-08-02T00:05:00.000Z'),
@@ -246,6 +259,7 @@ describe('BookingsService', () => {
       endDate: EVENT_END,
       organization: {
         status: OrgStatus.ACTIVE,
+        promptpayId: '0812345678',
         orgConfig: { bookingQuotaPerVendor: 3 },
       },
     });
@@ -270,6 +284,23 @@ describe('BookingsService', () => {
     });
     bookingFindMany.mockResolvedValue([]);
     bookingUpdateMany.mockResolvedValue({ count: 1 });
+    paymentGroupFindFirst.mockResolvedValue(null);
+    paymentGroupCreate.mockResolvedValue({
+      id: PAYMENT_GROUP_ID,
+      paymentCode: PAYMENT_GROUP_CODE,
+      vendorUserId: VENDOR_ID,
+      shopId: SHOP_ID,
+      eventId: EVENT_ID,
+      organizationId: ORGANIZATION_ID,
+      totalAmount: new Prisma.Decimal('4500'),
+      status: PaymentGroupStatus.PENDING_PAYMENT,
+      holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+      confirmedAt: null,
+      cancelledAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    paymentGroupUpdateMany.mockResolvedValue({ count: 1 });
     platformConfigFindFirst.mockResolvedValue({ defaultBookingQuota: 2 });
     verifySlip.mockResolvedValue({
       status: SlipStatus.VERIFIED,
@@ -356,6 +387,25 @@ describe('BookingsService', () => {
         relatedEntityId: BOOKING_ID,
       },
     );
+  });
+
+  it('keeps the legacy single-booking flow ungrouped and enforces the SCRUM-164 quota', async () => {
+    bookingCount.mockResolvedValue(1);
+
+    const result = await service.create(CREATE_DTO, VENDOR_ID);
+
+    expect(result.paymentGroupId).toBeNull();
+    expect(bookingCount).toHaveBeenCalledWith({
+      where: {
+        eventId: EVENT_ID,
+        vendorUserId: VENDOR_ID,
+        status: {
+          in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
+        },
+      },
+    });
+    expect(bookingCreateData()).not.toHaveProperty('paymentGroupId');
+    expect(paymentGroupCreate).not.toHaveBeenCalled();
   });
 
   it('keeps booking creation successful when notification delivery fails', async () => {
@@ -712,6 +762,7 @@ describe('BookingsService', () => {
           return Promise.resolve(booking);
         },
       );
+      bookingUpdateMany.mockResolvedValue({ count: batchBookings.length });
     }
 
     it('creates every booking atomically and notifies after commit', async () => {
@@ -719,18 +770,54 @@ describe('BookingsService', () => {
 
       await expect(
         service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
-      ).resolves.toEqual(
-        batchBookings.map((booking) => ({
+      ).resolves.toEqual({
+        id: PAYMENT_GROUP_ID,
+        paymentCode: PAYMENT_GROUP_CODE,
+        vendorUserId: VENDOR_ID,
+        shopId: SHOP_ID,
+        eventId: EVENT_ID,
+        organizationId: ORGANIZATION_ID,
+        totalAmount: '4500',
+        status: PaymentGroupStatus.PENDING_PAYMENT,
+        holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        confirmedAt: null,
+        cancelledAt: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+        bookings: batchBookings.map((booking) => ({
           ...booking,
+          paymentGroupId: PAYMENT_GROUP_ID,
           boothPrice: '1500',
         })),
-      );
+        paymentQrDataUri: 'data:image/png;base64,cXI=',
+      });
 
       expect(prismaTransaction).toHaveBeenCalledTimes(1);
       expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
       expect(bookingCreate).toHaveBeenCalledTimes(3);
+      expect(paymentGroupCreate).toHaveBeenCalledWith({
+        data: {
+          paymentCode: expect.stringMatching(/^PG-[A-F0-9]{12}$/) as string,
+          vendorUserId: VENDOR_ID,
+          shopId: SHOP_ID,
+          eventId: EVENT_ID,
+          organizationId: ORGANIZATION_ID,
+          totalAmount: new Prisma.Decimal('4500'),
+          holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        },
+      });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: { id: { in: [BOOKING_ID, BOOKING_ID_2, BOOKING_ID_3] } },
+        data: {
+          paymentGroupId: PAYMENT_GROUP_ID,
+          holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        },
+      });
+      expect(generatePromptPayPayload).toHaveBeenCalledWith('0812345678', {
+        amount: 4500,
+      });
       expect(createForUser).toHaveBeenCalledTimes(3);
       batchBookings.forEach((booking, index) => {
         expect(createForUser).toHaveBeenNthCalledWith(index + 1, VENDOR_ID, {
@@ -767,6 +854,7 @@ describe('BookingsService', () => {
 
       expect(prismaTransaction).toHaveBeenCalledTimes(1);
       expect(bookingCreate).toHaveBeenCalledTimes(1);
+      expect(paymentGroupCreate).not.toHaveBeenCalled();
       expect(createForUser).not.toHaveBeenCalled();
     });
 
@@ -806,6 +894,21 @@ describe('BookingsService', () => {
       expect(createForUser).not.toHaveBeenCalled();
     });
 
+    it('counts each staged booking against the SCRUM-164 quota in the same transaction', async () => {
+      mockBatchCreates();
+      bookingCount
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2);
+
+      const result = await service.createBatch(CREATE_BATCH_DTO, VENDOR_ID);
+
+      expect(result.bookings).toHaveLength(3);
+      expect(bookingCount).toHaveBeenCalledTimes(3);
+      expect(paymentGroupCreate).toHaveBeenCalledTimes(1);
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+    });
+
     it('retries the entire batch after a serializable transaction conflict', async () => {
       mockBatchCreates();
       const serializationError = new Prisma.PrismaClientKnownRequestError(
@@ -826,9 +929,8 @@ describe('BookingsService', () => {
         },
       );
 
-      await expect(
-        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
-      ).resolves.toHaveLength(3);
+      const result = await service.createBatch(CREATE_BATCH_DTO, VENDOR_ID);
+      expect(result.bookings).toHaveLength(3);
 
       expect(prismaTransaction).toHaveBeenCalledTimes(2);
       expect(bookingCreate).toHaveBeenCalledTimes(6);
@@ -855,9 +957,8 @@ describe('BookingsService', () => {
         new Error('notification unavailable'),
       );
 
-      await expect(
-        service.createBatch(CREATE_BATCH_DTO, VENDOR_ID),
-      ).resolves.toHaveLength(3);
+      const result = await service.createBatch(CREATE_BATCH_DTO, VENDOR_ID);
+      expect(result.bookings).toHaveLength(3);
       expect(createForUser).toHaveBeenCalledTimes(3);
     });
   });
@@ -964,6 +1065,184 @@ describe('BookingsService', () => {
     });
   });
 
+  describe('payment groups', () => {
+    const groupBookings = [
+      {
+        id: BOOKING_ID,
+        bookingCode: BOOKING_CODE,
+        status: BookingStatus.PENDING_PAYMENT,
+        holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        confirmedAt: null,
+        booth: { status: BoothStatus.AVAILABLE },
+      },
+      {
+        id: BOOKING_ID_2,
+        bookingCode: 'BK-0123456789AC',
+        status: BookingStatus.PENDING_PAYMENT,
+        holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        confirmedAt: null,
+        booth: { status: BoothStatus.AVAILABLE },
+      },
+    ];
+    const groupForSlip = {
+      id: PAYMENT_GROUP_ID,
+      paymentCode: PAYMENT_GROUP_CODE,
+      vendorUserId: VENDOR_ID,
+      organizationId: ORGANIZATION_ID,
+      totalAmount: new Prisma.Decimal('3000'),
+      status: PaymentGroupStatus.PENDING_PAYMENT,
+      holdExpiresAt: CREATED_BOOKING.holdExpiresAt as Date,
+      confirmedAt: null,
+      event: { status: EventStatus.PUBLISHED, endDate: EVENT_END },
+      bookings: groupBookings,
+    };
+
+    it('returns 404 for an unknown or foreign payment group', async () => {
+      paymentGroupFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findPaymentGroup(PAYMENT_GROUP_ID, VENDOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(paymentGroupFindFirst).toHaveBeenCalledWith({
+        where: { id: PAYMENT_GROUP_ID, vendorUserId: VENDOR_ID },
+        include: expect.any(Object) as object,
+      });
+    });
+
+    it('returns the shared total QR and member bookings for an owned group', async () => {
+      paymentGroupFindFirst.mockResolvedValue({
+        id: PAYMENT_GROUP_ID,
+        paymentCode: PAYMENT_GROUP_CODE,
+        vendorUserId: VENDOR_ID,
+        shopId: SHOP_ID,
+        eventId: EVENT_ID,
+        organizationId: ORGANIZATION_ID,
+        totalAmount: new Prisma.Decimal('3000'),
+        status: PaymentGroupStatus.PENDING_PAYMENT,
+        holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        confirmedAt: null,
+        cancelledAt: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+        bookings: [CREATED_BOOKING],
+        event: { organization: { promptpayId: '0812345678' } },
+      });
+
+      const result = await service.findPaymentGroup(
+        PAYMENT_GROUP_ID,
+        VENDOR_ID,
+      );
+
+      expect(result.totalAmount).toBe('3000');
+      expect(result.bookings).toEqual([
+        { ...CREATED_BOOKING, boothPrice: '1500' },
+      ]);
+      expect(result.paymentQrDataUri).toBe('data:image/png;base64,cXI=');
+      expect(generatePromptPayPayload).toHaveBeenCalledWith('0812345678', {
+        amount: 3000,
+      });
+    });
+
+    it('verifies one slip against the total and confirms all members atomically', async () => {
+      paymentGroupFindFirst.mockResolvedValue(groupForSlip);
+      verifySlip.mockResolvedValue({
+        status: SlipStatus.VERIFIED,
+        amount: new Prisma.Decimal('3000'),
+      });
+      bookingUpdateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.uploadPaymentGroupSlip(
+        PAYMENT_GROUP_ID,
+        SLIP_FILE,
+        VENDOR_ID,
+      );
+
+      expect(uploadForVerification).toHaveBeenCalledWith(
+        SLIP_FILE,
+        BOOKING_ID,
+        VENDOR_ID,
+      );
+      expect(verifySlip).toHaveBeenCalledWith(
+        {
+          bookingId: BOOKING_ID,
+          paymentGroupId: PAYMENT_GROUP_ID,
+          slipImageUrl: SIGNED_SLIP_URL,
+          storedObjectPath: SLIP_OBJECT_PATH,
+          expectedAmount: groupForSlip.totalAmount,
+        },
+        mockPrismaService,
+      );
+      expect(paymentGroupUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: PAYMENT_GROUP_ID,
+          vendorUserId: VENDOR_ID,
+          status: PaymentGroupStatus.PENDING_PAYMENT,
+          holdExpiresAt: { gt: NOW },
+        },
+        data: { status: PaymentGroupStatus.CONFIRMED, confirmedAt: NOW },
+      });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          paymentGroupId: PAYMENT_GROUP_ID,
+          vendorUserId: VENDOR_ID,
+          status: BookingStatus.PENDING_PAYMENT,
+          holdExpiresAt: { gt: NOW },
+        },
+        data: { status: BookingStatus.CONFIRMED, confirmedAt: NOW },
+      });
+      expect(result.paymentGroup.status).toBe(PaymentGroupStatus.CONFIRMED);
+      expect(result.bookings).toHaveLength(2);
+      expect(
+        result.bookings.every(
+          ({ status }) => status === BookingStatus.CONFIRMED,
+        ),
+      ).toBe(true);
+      expect(createForUser).toHaveBeenCalledWith(
+        VENDOR_ID,
+        expect.objectContaining({
+          relatedEntityType: 'PAYMENT_GROUP',
+          relatedEntityId: PAYMENT_GROUP_ID,
+        }) as object,
+      );
+    });
+
+    it('keeps every member pending when the verified total is wrong', async () => {
+      paymentGroupFindFirst.mockResolvedValue(groupForSlip);
+      verifySlip.mockResolvedValue({
+        status: SlipStatus.VERIFIED,
+        amount: new Prisma.Decimal('2999.99'),
+      });
+
+      const result = await service.uploadPaymentGroupSlip(
+        PAYMENT_GROUP_ID,
+        SLIP_FILE,
+        VENDOR_ID,
+      );
+
+      expect(result.verification).toEqual({
+        status: SlipStatus.INVALID,
+        message: 'ยอดเงินในสลิปไม่ตรงกับยอดรวมที่ต้องชำระ',
+      });
+      expect(paymentGroupUpdateMany).not.toHaveBeenCalled();
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects and removes the uploaded object when not every member can confirm', async () => {
+      paymentGroupFindFirst.mockResolvedValue(groupForSlip);
+      verifySlip.mockResolvedValue({
+        status: SlipStatus.VERIFIED,
+        amount: new Prisma.Decimal('3000'),
+      });
+      bookingUpdateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        service.uploadPaymentGroupSlip(PAYMENT_GROUP_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toThrow('รายการจองในกลุ่มหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
+      expect(removeObject).toHaveBeenCalledWith(SLIP_OBJECT_PATH);
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+  });
+
   describe('uploadSlip', () => {
     beforeEach(() => {
       bookingFindFirst.mockResolvedValue(PENDING_SLIP_BOOKING);
@@ -980,6 +1259,7 @@ describe('BookingsService', () => {
         select: {
           id: true,
           bookingCode: true,
+          paymentGroupId: true,
           status: true,
           boothPrice: true,
           holdExpiresAt: true,
@@ -990,6 +1270,19 @@ describe('BookingsService', () => {
           booth: { select: { status: true } },
         },
       });
+      expect(uploadForVerification).not.toHaveBeenCalled();
+      expect(verifySlip).not.toHaveBeenCalled();
+    });
+
+    it('routes a grouped booking away from the legacy single-slip flow', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...PENDING_SLIP_BOOKING,
+        paymentGroupId: PAYMENT_GROUP_ID,
+      });
+
+      await expect(
+        service.uploadSlip(BOOKING_ID, SLIP_FILE, VENDOR_ID),
+      ).rejects.toThrow('การจองนี้ต้องชำระเงินผ่านกลุ่มการชำระเงิน');
       expect(uploadForVerification).not.toHaveBeenCalled();
       expect(verifySlip).not.toHaveBeenCalled();
     });
@@ -1257,6 +1550,7 @@ describe('BookingsService', () => {
     beforeEach(() => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
+        paymentGroupId: null,
         status: BookingStatus.CONFIRMED,
         holdExpiresAt: null,
         bookingStartDate: EVENT_START,
@@ -1270,6 +1564,7 @@ describe('BookingsService', () => {
         where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
         select: {
           id: true,
+          paymentGroupId: true,
           status: true,
           holdExpiresAt: true,
           bookingStartDate: true,
@@ -1299,6 +1594,21 @@ describe('BookingsService', () => {
       expect(result.status).toBe(BookingStatus.CANCELLED);
       expect(result.cancelledByRole).toBe(CancelledByRole.VENDOR);
       expect(result.boothPrice).toBe('1500');
+    });
+
+    it('prevents a pending payment group from being partially cancelled', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        paymentGroupId: PAYMENT_GROUP_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+        holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
+        bookingStartDate: EVENT_START,
+      });
+
+      await expect(
+        service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
+      ).rejects.toThrow('ไม่สามารถยกเลิกรายการเดียวระหว่างรอชำระเงินแบบกลุ่ม');
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
     });
 
     it('returns 404 for a missing booking or another vendor booking', async () => {
@@ -1345,6 +1655,7 @@ describe('BookingsService', () => {
     it('records an expired pending hold as a system cancellation', async () => {
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
+        paymentGroupId: null,
         status: BookingStatus.PENDING_PAYMENT,
         holdExpiresAt: new Date('2026-08-01T23:59:59.000Z'),
         bookingStartDate: EVENT_START,
@@ -1488,6 +1799,32 @@ describe('BookingsService', () => {
     expect(result.paymentQrDataUri).toBeNull();
   });
 
+  it('does not expose an individual-price QR for a grouped booking', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        ...CREATED_BOOKING,
+        paymentGroupId: PAYMENT_GROUP_ID,
+        event: {
+          id: EVENT_ID,
+          slug: 'creative-market-abc123',
+          name: 'ตลาดนัดสร้างสรรค์',
+          organization: { promptpayId: '0812345678' },
+        },
+        booth: {
+          id: BOOTH_ID,
+          code: 'A01',
+          zone: { id: VENUE_ID, code: 'A', name: 'อาหารและเครื่องดื่ม' },
+        },
+        shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+      },
+    ]);
+
+    const [result] = await service.findAll(VENDOR_ID);
+
+    expect(result.paymentQrDataUri).toBeNull();
+    expect(generatePromptPayPayload).not.toHaveBeenCalled();
+  });
+
   it('lists organization bookings with admin display data and string money', async () => {
     bookingFindMany.mockResolvedValue([ADMIN_BOOKING]);
 
@@ -1533,8 +1870,18 @@ describe('BookingsService', () => {
 
       expect(verifiedSlipFindFirst).toHaveBeenCalledWith({
         where: {
-          bookingId: BOOKING_ID,
-          booking: { event: { organizationId: ORGANIZATION_ID } },
+          OR: [
+            {
+              bookingId: BOOKING_ID,
+              booking: { event: { organizationId: ORGANIZATION_ID } },
+            },
+            {
+              paymentGroup: {
+                organizationId: ORGANIZATION_ID,
+                bookings: { some: { id: BOOKING_ID } },
+              },
+            },
+          ],
         },
         select: { slipImageUrl: true },
         orderBy: { createdAt: 'desc' },
@@ -1661,6 +2008,7 @@ describe('BookingsService', () => {
         },
         select: {
           id: true,
+          paymentGroupId: true,
           status: true,
           vendor: { select: { isBlacklisted: true } },
         },
@@ -1691,6 +2039,22 @@ describe('BookingsService', () => {
         relatedEntityType: 'BOOKING',
         relatedEntityId: BOOKING_ID,
       });
+    });
+
+    it('prevents a partial payment exemption inside a payment group', async () => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        paymentGroupId: PAYMENT_GROUP_ID,
+        status: BookingStatus.PENDING_PAYMENT,
+        vendor: { isBlacklisted: false },
+      });
+
+      await expect(
+        service.confirmExempt(BOOKING_ID, EXEMPT_DTO, ORGANIZATION_ID),
+      ).rejects.toThrow(
+        'ไม่สามารถยืนยันยกเว้นการชำระเงินเฉพาะรายการในกลุ่มได้',
+      );
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
     });
 
     it('rejects a blacklisted vendor before updating the booking', async () => {

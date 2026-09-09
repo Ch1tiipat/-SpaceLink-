@@ -18,6 +18,9 @@ export interface SlipVerificationRequest extends SlipVerificationInput {
   /** `booking.id`. Becomes `verifiedSlip.bookingId`. */
   bookingId: string;
 
+  /** Optional SCRUM-165 group id. Never forwarded to the provider. */
+  paymentGroupId?: string;
+
   /**
    * Stable private object path stored in `verifiedSlip.slipImageUrl`. The
    * short-lived `slipImageUrl` above is for the verifier only and must never be
@@ -82,6 +85,9 @@ export class SlipVerificationService {
     await transaction.verifiedSlip.create({
       data: {
         bookingId: request.bookingId,
+        ...(request.paymentGroupId
+          ? { paymentGroupId: request.paymentGroupId }
+          : {}),
         slipImageUrl: request.storedObjectPath,
         slipokStatus: result.status,
         // `amount` is NOT NULL, but a non-VERIFIED result read no amount off the

@@ -59,6 +59,7 @@ const CANCEL_DTO: CancelBookingDto = {
   cancelReason: 'ไม่สามารถเข้าร่วมงานได้',
 };
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
+const PAYMENT_GROUP_ID = '88888888-8888-4888-8888-888888888888';
 const ADMIN_USER: User = {
   ...CURRENT_USER,
   id: '77777777-7777-4777-8777-777777777777',
@@ -73,6 +74,7 @@ const EXEMPT_DTO: ConfirmExemptBookingDto = {
 const cancel = jest.fn();
 const confirmExempt = jest.fn();
 const create = jest.fn();
+const createBatch = jest.fn();
 const findAll = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const findByCode = jest.fn();
@@ -80,10 +82,13 @@ const findOne = jest.fn();
 const getQuotaContext = jest.fn();
 const createAdminSlipAccess = jest.fn();
 const uploadSlip = jest.fn();
+const findPaymentGroup = jest.fn();
+const uploadPaymentGroupSlip = jest.fn();
 const mockBookingsService = {
   cancel,
   confirmExempt,
   create,
+  createBatch,
   findAll,
   findAllAcrossOrganizations,
   findByCode,
@@ -91,6 +96,8 @@ const mockBookingsService = {
   getQuotaContext,
   createAdminSlipAccess,
   uploadSlip,
+  findPaymentGroup,
+  uploadPaymentGroupSlip,
 };
 
 @Controller('payment-slip-multipart-probe')
@@ -109,13 +116,16 @@ function controllerHandler(
     | 'cancel'
     | 'confirmExempt'
     | 'create'
+    | 'createBatch'
     | 'findAll'
     | 'findAllAcrossOrganizations'
     | 'findByCode'
     | 'findOne'
     | 'getQuotaContext'
     | 'getAdminSlip'
-    | 'uploadSlip',
+    | 'uploadSlip'
+    | 'findPaymentGroup'
+    | 'uploadPaymentGroupSlip',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     BookingsController.prototype,
@@ -186,6 +196,15 @@ describe('BookingsController', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('getQuotaContext')),
     ).toEqual([UserRole.VENDOR]);
+    for (const name of [
+      'createBatch',
+      'findPaymentGroup',
+      'uploadPaymentGroupSlip',
+    ] as const) {
+      expect(Reflect.getMetadata(ROLES_KEY, controllerHandler(name))).toEqual([
+        UserRole.VENDOR,
+      ]);
+    }
     expect(
       Reflect.getMetadata(
         ROLES_KEY,
@@ -250,6 +269,27 @@ describe('BookingsController', () => {
     await controller.create(CREATE_DTO, CURRENT_USER);
 
     expect(create).toHaveBeenCalledWith(CREATE_DTO, VENDOR_ID);
+  });
+
+  it('passes the authenticated vendor id when creating a payment group batch', async () => {
+    createBatch.mockResolvedValue({ id: PAYMENT_GROUP_ID });
+    const dto = {
+      eventId: CREATE_DTO.eventId,
+      shopId: CREATE_DTO.shopId,
+      boothIds: [CREATE_DTO.boothId],
+    };
+
+    await controller.createBatch(dto, CURRENT_USER);
+
+    expect(createBatch).toHaveBeenCalledWith(dto, VENDOR_ID);
+  });
+
+  it('passes only the payment group id and authenticated vendor to lookup', async () => {
+    findPaymentGroup.mockResolvedValue({ id: PAYMENT_GROUP_ID });
+
+    await controller.findPaymentGroup(PAYMENT_GROUP_ID, CURRENT_USER);
+
+    expect(findPaymentGroup).toHaveBeenCalledWith(PAYMENT_GROUP_ID, VENDOR_ID);
   });
 
   it('passes the authenticated vendor id when listing bookings', async () => {
@@ -328,6 +368,33 @@ describe('BookingsController', () => {
       controller.uploadSlip('booking-id', undefined, CURRENT_USER),
     ).toThrow(BadRequestException);
     expect(uploadSlip).not.toHaveBeenCalled();
+  });
+
+  it('passes one group slip file with the authenticated vendor id', async () => {
+    uploadPaymentGroupSlip.mockResolvedValue({});
+
+    await controller.uploadPaymentGroupSlip(
+      PAYMENT_GROUP_ID,
+      SLIP_FILE,
+      CURRENT_USER,
+    );
+
+    expect(uploadPaymentGroupSlip).toHaveBeenCalledWith(
+      PAYMENT_GROUP_ID,
+      SLIP_FILE,
+      VENDOR_ID,
+    );
+  });
+
+  it('rejects a payment group slip request with no file', () => {
+    expect(() =>
+      controller.uploadPaymentGroupSlip(
+        PAYMENT_GROUP_ID,
+        undefined,
+        CURRENT_USER,
+      ),
+    ).toThrow(BadRequestException);
+    expect(uploadPaymentGroupSlip).not.toHaveBeenCalled();
   });
 
   it('passes the guard-resolved organization id when looking a booking up', async () => {

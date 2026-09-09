@@ -7,6 +7,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import {
   BookingStatus,
   NotificationType,
+  PaymentGroupStatus,
   Prisma,
   RefundStatus,
   SlipStatus,
@@ -21,6 +22,7 @@ const ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const BOOKING_ID = '44444444-4444-4444-8444-444444444444';
 const REFUND_ID = '55555555-5555-4555-8555-555555555555';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
+const PAYMENT_GROUP_ID = '99999999-9999-4999-8999-999999999999';
 const NOW = new Date('2026-08-23T08:00:00.000Z');
 const BOOTH_PRICE = new Prisma.Decimal('1500');
 
@@ -84,6 +86,7 @@ const refundRequestFindFirst = jest.fn();
 const refundRequestFindMany = jest.fn();
 const refundRequestCreate = jest.fn();
 const refundRequestUpdateMany = jest.fn();
+const refundRequestAggregate = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 const createForRole = jest.fn();
@@ -96,6 +99,7 @@ const mockPrismaService = {
     findMany: refundRequestFindMany,
     create: refundRequestCreate,
     updateMany: refundRequestUpdateMany,
+    aggregate: refundRequestAggregate,
   },
   $transaction: prismaTransaction,
 };
@@ -113,6 +117,7 @@ function eligibleBooking() {
     isPaymentExempt: false,
     status: BookingStatus.CANCELLED,
     event: { organizationId: ORGANIZATION_ID },
+    paymentGroup: null,
     slips: [{ amount: new Prisma.Decimal('1500') }],
   };
 }
@@ -129,6 +134,8 @@ function adminRefund(
     booking: {
       boothPrice: BOOTH_PRICE,
       vendorUserId: VENDOR_ID,
+      paymentGroupId: null,
+      paymentGroup: null,
     },
   };
 }
@@ -146,6 +153,9 @@ describe('RefundsService', () => {
     refundRequestFindMany.mockResolvedValue([REFUND]);
     refundRequestCreate.mockResolvedValue(REFUND);
     refundRequestUpdateMany.mockResolvedValue({ count: 1 });
+    refundRequestAggregate.mockResolvedValue({
+      _sum: { approvedAmount: null },
+    });
     createForUser.mockResolvedValue(null);
     createForRole.mockResolvedValue(1);
     createForOrganizationAdmins.mockResolvedValue(2);
@@ -184,6 +194,16 @@ describe('RefundsService', () => {
           isPaymentExempt: true,
           status: true,
           event: { select: { organizationId: true } },
+          paymentGroup: {
+            select: {
+              status: true,
+              totalAmount: true,
+              slips: {
+                where: { slipokStatus: SlipStatus.VERIFIED },
+                select: { amount: true },
+              },
+            },
+          },
           slips: {
             where: { slipokStatus: SlipStatus.VERIFIED },
             select: { amount: true },
@@ -208,6 +228,44 @@ describe('RefundsService', () => {
       expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
+    });
+
+    it('keeps the legacy ungrouped refund cap based only on the booth price', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...eligibleBooking(),
+        paymentGroup: null,
+      });
+
+      await expect(
+        service.create(BOOKING_ID, VENDOR_ID, {
+          ...CREATE_DTO,
+          requestedAmount: '1500',
+        }),
+      ).resolves.toMatchObject({ id: REFUND_ID });
+      expect(refundRequestAggregate).not.toHaveBeenCalled();
+
+      await expect(
+        service.create(BOOKING_ID, VENDOR_ID, {
+          ...CREATE_DTO,
+          requestedAmount: '1500.01',
+        }),
+      ).rejects.toThrow('จำนวนเงินที่ขอคืนต้องไม่เกินราคาบูธ');
+    });
+
+    it('accepts payment evidence from the shared verified group slip', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...eligibleBooking(),
+        slips: [],
+        paymentGroup: {
+          status: PaymentGroupStatus.CONFIRMED,
+          totalAmount: new Prisma.Decimal('3000'),
+          slips: [{ amount: new Prisma.Decimal('3000') }],
+        },
+      });
+
+      await expect(
+        service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO),
+      ).resolves.toMatchObject({ id: REFUND_ID });
     });
 
     it('notifies organization admins and super admins after the request commits', async () => {
@@ -431,6 +489,7 @@ describe('RefundsService', () => {
               },
             },
             shop: { select: { id: true, name: true } },
+            paymentGroup: { select: { paymentCode: true } },
           },
         },
         requestedBy: {
@@ -498,6 +557,71 @@ describe('RefundsService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(refundRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a grouped approval that would exceed the aggregate paid total', async () => {
+      refundRequestFindFirst.mockResolvedValue({
+        ...adminRefund(),
+        booking: {
+          ...adminRefund().booking,
+          paymentGroupId: PAYMENT_GROUP_ID,
+          paymentGroup: { totalAmount: new Prisma.Decimal('3000') },
+        },
+      });
+      refundRequestAggregate.mockResolvedValue({
+        _sum: { approvedAmount: new Prisma.Decimal('2200') },
+      });
+
+      await expect(
+        service.approve(
+          BOOKING_ID,
+          REFUND_ID,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+          APPROVE_DTO,
+        ),
+      ).rejects.toThrow('ยอดคืนเงินรวมต้องไม่เกินยอดที่ชำระของกลุ่มการจอง');
+      expect(refundRequestAggregate).toHaveBeenCalledWith({
+        where: {
+          id: { not: REFUND_ID },
+          booking: { paymentGroupId: PAYMENT_GROUP_ID },
+          status: { in: [RefundStatus.APPROVED, RefundStatus.PROCESSED] },
+        },
+        _sum: { approvedAmount: true },
+      });
+      expect(refundRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('allows a grouped approval within the aggregate paid total', async () => {
+      const groupedRefund = {
+        ...adminRefund(),
+        booking: {
+          ...adminRefund().booking,
+          paymentGroupId: PAYMENT_GROUP_ID,
+          paymentGroup: { totalAmount: new Prisma.Decimal('3000') },
+        },
+      };
+      refundRequestFindFirst
+        .mockResolvedValueOnce(groupedRefund)
+        .mockResolvedValueOnce({
+          ...REFUND,
+          status: RefundStatus.APPROVED,
+          approvedAmount: new Prisma.Decimal('1000'),
+        });
+      refundRequestAggregate.mockResolvedValue({
+        _sum: { approvedAmount: new Prisma.Decimal('2000') },
+      });
+
+      await expect(
+        service.approve(
+          BOOKING_ID,
+          REFUND_ID,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+          APPROVE_DTO,
+        ),
+      ).resolves.toMatchObject({ approvedAmount: '1000' });
+      expect(refundRequestUpdateMany).toHaveBeenCalledTimes(1);
     });
 
     it('returns 404 for a mismatched booking, tenant or refund id', async () => {

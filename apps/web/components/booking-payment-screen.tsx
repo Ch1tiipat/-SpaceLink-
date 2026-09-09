@@ -24,6 +24,16 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
   if (state.status === 'error') return <BookingPageMessage title="เปิดหน้าชำระเงินไม่ได้" detail={state.message} />;
 
   const { booking } = state;
+  if (booking.paymentGroupId) {
+    return (
+      <BookingPageMessage
+        title="รายการนี้ต้องชำระพร้อมกันทั้งกลุ่ม"
+        detail="ระบบรวมยอดของ Booking ชุดนี้ไว้ในรายการชำระเงินเดียว"
+        href={`/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`}
+        action="ไปหน้าชำระเงินรวม"
+      />
+    );
+  }
   if (previewConfirmed || booking.status === 'CONFIRMED') {
     return <BookingPageMessage title="ยืนยันการจองเรียบร้อยแล้ว" detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`} href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} action="ดูรายละเอียดการจอง" />;
   }

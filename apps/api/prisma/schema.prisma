@@ -78,6 +78,12 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum PaymentGroupStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+}
+
 enum CancelledByRole {
   VENDOR
   ORG_ADMIN
@@ -165,6 +171,7 @@ model Organization {
   announcements  Announcement[]
   penalties      Penalty[]
   supportTickets SupportTicket[]
+  paymentGroups  BookingPaymentGroup[]
   orgConfig      OrgConfig?
 
   @@map("organization")
@@ -187,6 +194,7 @@ model User {
   shops              Shop[]
   bookingsPlaced     Booking[]           @relation("BookingVendor")
   bookingsCancelled  Booking[]           @relation("BookingCanceller")
+  paymentGroups      BookingPaymentGroup[] @relation("PaymentGroupVendor")
   reviews            Review[]
   notifications      Notification[]
   pushSubscriptions  PushSubscription[]
@@ -380,6 +388,7 @@ model Event {
   subscription       Subscription?
   policy             EventPolicy?
   bookings           Booking[]
+  paymentGroups      BookingPaymentGroup[]
   recommendationLogs RecommendationLog[]
 
   @@index([organizationId])
@@ -439,6 +448,7 @@ model Shop {
 
   owner      User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   bookings   Booking[]
+  paymentGroups BookingPaymentGroup[]
   categories ShopCategory[]
 
   @@index([ownerUserId])
@@ -456,9 +466,40 @@ model ShopCategory {
   @@map("shop_category")
 }
 
+model BookingPaymentGroup {
+  id             String             @id @default(uuid()) @map("payment_group_id") @db.Uuid
+  paymentCode    String             @unique @map("payment_code")
+  vendorUserId   String             @map("vendor_user_id") @db.Uuid
+  shopId         String             @map("shop_id") @db.Uuid
+  eventId        String             @map("event_id") @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  totalAmount    Decimal            @map("total_amount") @db.Decimal(12, 2)
+  status         PaymentGroupStatus @default(PENDING_PAYMENT)
+  holdExpiresAt  DateTime           @map("hold_expires_at") @db.Timestamptz
+  confirmedAt    DateTime?          @map("confirmed_at") @db.Timestamptz
+  cancelledAt    DateTime?          @map("cancelled_at") @db.Timestamptz
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  vendor       User           @relation("PaymentGroupVendor", fields: [vendorUserId], references: [id], onDelete: Restrict)
+  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  slips        VerifiedSlip[]
+
+  @@index([vendorUserId])
+  @@index([shopId])
+  @@index([eventId])
+  @@index([organizationId])
+  @@index([status, holdExpiresAt])
+  @@map("booking_payment_group")
+}
+
 model Booking {
   id                  String           @id @default(uuid()) @map("booking_id") @db.Uuid
   bookingCode         String           @unique @map("booking_code")
+  paymentGroupId      String?          @map("payment_group_id") @db.Uuid
   eventId             String           @map("event_id") @db.Uuid
   boothId             String           @map("booth_id") @db.Uuid
   shopId              String           @map("shop_id") @db.Uuid
@@ -481,6 +522,7 @@ model Booking {
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   booth          Booth           @relation(fields: [boothId], references: [id], onDelete: Restrict)
   shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  paymentGroup   BookingPaymentGroup? @relation(fields: [paymentGroupId], references: [id], onDelete: Restrict)
   vendor         User            @relation("BookingVendor", fields: [vendorUserId], references: [id], onDelete: Restrict)
   canceller      User?           @relation("BookingCanceller", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   slips          VerifiedSlip[]
@@ -492,12 +534,14 @@ model Booking {
   @@index([vendorUserId])
   @@index([boothId])
   @@index([shopId])
+  @@index([paymentGroupId])
   @@map("booking")
 }
 
 model VerifiedSlip {
   id           String     @id @default(uuid()) @map("slip_id") @db.Uuid
   bookingId    String     @map("booking_id") @db.Uuid
+  paymentGroupId String?  @map("payment_group_id") @db.Uuid
   amount       Decimal    @db.Decimal(10, 2)
   transRef     String?    @unique @map("trans_ref")
   sendingBank  String?    @map("sending_bank")
@@ -509,9 +553,11 @@ model VerifiedSlip {
   verifiedAt   DateTime?  @map("verified_at") @db.Timestamptz
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking      Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  paymentGroup BookingPaymentGroup? @relation(fields: [paymentGroupId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
+  @@index([paymentGroupId])
   @@map("verified_slip")
 }
 

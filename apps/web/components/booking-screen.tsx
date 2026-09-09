@@ -320,7 +320,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     try {
       if (selectedBooths.length > 1) {
         if (!canUseUxPreview()) {
-          await createBookingsBatch(
+          const paymentGroup = await createBookingsBatch(
             {
               eventId: data.event.id,
               shopId: vendor.shop.id,
@@ -328,6 +328,10 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             },
             vendor.token,
           );
+          router.push(
+            `/bookings/payment-groups/${encodeURIComponent(paymentGroup.id)}/payment`,
+          );
+          return;
         }
         router.push('/bookings?tab=pending');
         return;

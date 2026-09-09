@@ -512,7 +512,14 @@ export function MyBookingsScreen() {
                       ดู Event
                     </Link>
                     {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
-                      <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/payment`} className="sl-action-primary">
+                      <Link
+                        href={
+                          booking.paymentGroupId
+                            ? `/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`
+                            : `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`
+                        }
+                        className="sl-action-primary"
+                      >
                         ชำระเงิน
                       </Link>
                     ) : null}
