@@ -13,6 +13,7 @@ import {
 import {
   Bell,
   CalendarDays,
+  ChevronDown,
   CircleDollarSign,
   House,
   Landmark,
@@ -277,12 +278,17 @@ const BOTTOM_NAV: NavItem[] = [
  */
 const BARE_ROUTES = new Set(["/login", "/register"]);
 const DISMISSED_BROADCAST_KEY = "spacelink:dismissed-system-broadcast-id";
+const SELECTED_ADMIN_ORGANIZATION_KEY =
+  "spacelink:selected-admin-organization-id";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { auth, signOut } = useAuthState();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
@@ -304,26 +310,33 @@ export function AppShell({ children }: { children: ReactNode }) {
       return;
     }
 
-    const syncFromUrl = () => {
+    const syncOrganization = () => {
       const query = new URLSearchParams(window.location.search);
       const requestedId = query.get("organization");
+      const storedId = window.sessionStorage.getItem(
+        SELECTED_ADMIN_ORGANIZATION_KEY,
+      );
       const nextId = organizations.some(
         (organization) => organization.id === requestedId,
       )
         ? requestedId!
-        : organizations[0].id;
+        : organizations.some((organization) => organization.id === storedId)
+          ? storedId!
+          : organizations[0].id;
 
       setSelectedOrganizationId(nextId);
+      window.sessionStorage.setItem(SELECTED_ADMIN_ORGANIZATION_KEY, nextId);
 
-      if (isAdminRoute && requestedId !== nextId) {
-        query.set("organization", nextId);
-        router.replace(`${pathname}?${query.toString()}`);
+      if (isAdminRoute && requestedId) {
+        query.delete("organization");
+        const suffix = query.toString();
+        router.replace(suffix ? `${pathname}?${suffix}` : pathname);
       }
     };
 
-    syncFromUrl();
-    window.addEventListener("popstate", syncFromUrl);
-    return () => window.removeEventListener("popstate", syncFromUrl);
+    syncOrganization();
+    window.addEventListener("popstate", syncOrganization);
+    return () => window.removeEventListener("popstate", syncOrganization);
   }, [isAdmin, isAdminRoute, organizations, pathname, router]);
 
   useEffect(() => {
@@ -432,9 +445,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
 
     setSelectedOrganizationId(organizationId);
+    window.sessionStorage.setItem(
+      SELECTED_ADMIN_ORGANIZATION_KEY,
+      organizationId,
+    );
     const query = new URLSearchParams(window.location.search);
-    query.set("organization", organizationId);
-    router.replace(`${pathname}?${query.toString()}`);
+    if (query.has("organization")) {
+      query.delete("organization");
+      const suffix = query.toString();
+      router.replace(suffix ? `${pathname}?${suffix}` : pathname);
+    }
+  }
+
+  function toggleNavGroup(groupLabel: string) {
+    setCollapsedNavGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupLabel)) next.delete(groupLabel);
+      else next.add(groupLabel);
+      return next;
+    });
   }
 
   function confirmSignOut() {
@@ -513,10 +542,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar
             pathname={pathname}
             navGroups={navGroups}
-            selectedOrganizationId={selectedOrganizationId}
             collapsed={sidebarCollapsed}
+            collapsedGroups={collapsedNavGroups}
             onSignOut={() => setSignOutConfirmOpen(true)}
             onToggle={() => setSidebarCollapsed((current) => !current)}
+            onToggleGroup={toggleNavGroup}
           />
         )}
 
@@ -563,7 +593,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <BottomNav
           pathname={pathname}
           items={bottomNavItems}
-          selectedOrganizationId={selectedOrganizationId}
           showUnreadNotificationDot={
             unreadNotificationCount !== null && unreadNotificationCount > 0
           }
@@ -612,17 +641,19 @@ function SystemBroadcastBanner({
 function Sidebar({
   pathname,
   navGroups,
-  selectedOrganizationId,
   collapsed,
+  collapsedGroups,
   onSignOut,
   onToggle,
+  onToggleGroup,
 }: {
   pathname: string;
   navGroups: NavGroup[];
-  selectedOrganizationId: string;
   collapsed: boolean;
+  collapsedGroups: Set<string>;
   onSignOut: () => void;
   onToggle: () => void;
+  onToggleGroup: (groupLabel: string) => void;
 }) {
   if (collapsed) {
     return (
@@ -671,31 +702,37 @@ function Sidebar({
       </div>
 
       <div className="grid gap-0.5 overflow-y-auto pb-3">
-        {navGroups.map((group) => (
-          <div key={group.label}>
-            {collapsed ? (
-              <span
-                aria-hidden
-                className="mx-auto my-3 block h-px w-7 bg-[#ece7f3]"
-              />
-            ) : (
-              <span className="block px-3 pb-[7px] pt-[13px] text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC]">
-                {group.label}
-              </span>
-            )}
-            <nav className="grid gap-[3px]">
-              {group.items.map((item) => (
-                <SidebarItem
-                  key={item.label}
-                  item={item}
-                  pathname={pathname}
-                  collapsed={collapsed}
-                  selectedOrganizationId={selectedOrganizationId}
+        {navGroups.map((group) => {
+          const groupCollapsed = collapsedGroups.has(group.label);
+          return (
+            <div key={group.label}>
+              <button
+                type="button"
+                onClick={() => onToggleGroup(group.label)}
+                aria-expanded={!groupCollapsed}
+                className="flex w-full items-center justify-between px-3 pb-[7px] pt-[13px] text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC] transition hover:text-violet"
+              >
+                <span>{group.label}</span>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${groupCollapsed ? "-rotate-90" : ""}`}
+                  aria-hidden
                 />
-              ))}
-            </nav>
-          </div>
-        ))}
+              </button>
+              {!groupCollapsed ? (
+                <nav className="grid gap-[3px]">
+                  {group.items.map((item) => (
+                    <SidebarItem
+                      key={item.label}
+                      item={item}
+                      pathname={pathname}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </nav>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-auto border-t border-line px-2.5 pb-0.5 pt-4">
@@ -720,12 +757,10 @@ function SidebarItem({
   item,
   pathname,
   collapsed,
-  selectedOrganizationId,
 }: {
   item: NavItem;
   pathname: string;
   collapsed: boolean;
-  selectedOrganizationId: string;
 }) {
   const Icon = item.icon;
   const shared = `flex min-h-12 w-full items-center rounded-[13px] py-2.5 text-left text-[14px] font-medium transition-colors ${
@@ -751,7 +786,7 @@ function SidebarItem({
 
   return (
     <Link
-      href={navItemHref(item, selectedOrganizationId)}
+      href={item.href}
       aria-current={active ? "page" : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
@@ -2276,12 +2311,10 @@ function FooterColumn({
 function BottomNav({
   pathname,
   items,
-  selectedOrganizationId,
   showUnreadNotificationDot,
 }: {
   pathname: string;
   items: NavItem[];
-  selectedOrganizationId: string;
   showUnreadNotificationDot: boolean;
 }) {
   return (
@@ -2308,7 +2341,7 @@ function BottomNav({
         return (
           <Link
             key={item.label}
-            href={navItemHref(item, selectedOrganizationId)}
+            href={item.href}
             aria-current={active ? "page" : undefined}
             className={`relative grid min-w-[72px] flex-1 place-items-center gap-0.5 rounded-xl px-1 text-sm transition-colors ${
               active
@@ -2329,17 +2362,6 @@ function BottomNav({
       })}
     </nav>
   );
-}
-
-function navItemHref(
-  item: Extract<NavItem, { kind: "link" }>,
-  organizationId: string,
-) {
-  if (!organizationId || !item.href.startsWith("/admin")) {
-    return item.href;
-  }
-
-  return `${item.href}?${new URLSearchParams({ organization: organizationId }).toString()}`;
 }
 
 function BrandMark() {
