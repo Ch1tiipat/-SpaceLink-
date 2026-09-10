@@ -26,6 +26,10 @@ import {
   type VenueLocation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import {
+  getFacebookEmbeddedPost,
+  type FacebookEmbeddedPost,
+} from '@/lib/facebook-embed';
 import { isUuid } from '@/lib/route-identifier';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
@@ -127,6 +131,9 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const contactPhone = event.contactPhone ?? event.organization.contactPhone;
   const contactEmail = event.contactEmail ?? event.organization.contactEmail;
   const facebookUrl = safeHttpUrl(event.organization.facebookUrl);
+  const facebookPost = getFacebookEmbeddedPost(
+    event.organization.facebookUrl,
+  );
   const lineUrl = safeHttpUrl(event.organization.lineUrl);
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
@@ -180,6 +187,19 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         <DetailSection kicker="ANNOUNCEMENT" title="ข่าวสารสำคัญก่อนเข้าร่วมงาน" description={`ประกาศจากผู้จัดงาน: ${event.organization.name}`}>
           <EventAnnouncements key={`${eventId}:${event.organization.id}`} organizationId={event.organization.id} />
         </DetailSection>
+
+        {facebookPost ? (
+          <DetailSection
+            kicker="FACEBOOK NEWS"
+            title="ข่าวจาก Facebook ผู้จัดงาน"
+            description="โพสต์สาธารณะที่ผู้จัดงานเลือกมาแสดงผ่าน Facebook Official Embed"
+          >
+            <FacebookPostEmbed
+              organizationName={event.organization.name}
+              post={facebookPost}
+            />
+          </DetailSection>
+        ) : null}
 
         <DetailSection kicker="EVENT ATMOSPHERE" title="บรรยากาศภายในงาน" description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ" count={event.bannerUrl ? '1 รูป' : '0 รูป'}>
           <div className="rounded-[22px] border border-[#e4d8ee] bg-[linear-gradient(180deg,#fcfaff,#f8f5fb)] p-4">
@@ -290,13 +310,22 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               <InfoItem label="ผู้จัดงาน" value={event.organization.name} />
               <InfoItem label="เบอร์ติดต่อ" value={contactPhone ?? 'ยังไม่ระบุ'} />
               <InfoItem label="Email" value={contactEmail ?? 'ยังไม่ระบุ'} />
-              <InfoItem label="Facebook" value={facebookUrl ? 'Facebook Page' : 'ยังไม่ระบุ'} />
+              <InfoItem
+                label="Facebook"
+                value={
+                  facebookPost
+                    ? 'Facebook Post'
+                    : facebookUrl
+                      ? 'Facebook Page'
+                      : 'ยังไม่ระบุ'
+                }
+              />
               <InfoItem label="LINE" value={lineUrl ? 'LINE ผู้จัดงาน' : 'ยังไม่ระบุ'} />
             </dl>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {contactPhone ? <a href={`tel:${contactPhone.replace(/\s/g, '')}`} className="sl-action-primary">โทรหาผู้จัดงาน</a> : <button disabled className="sl-action-primary cursor-not-allowed opacity-50">ยังไม่มีเบอร์ติดต่อ</button>}
               {contactEmail ? <a href={`mailto:${contactEmail}`} className="sl-action-secondary text-violet">ส่ง Email</a> : <button disabled className="sl-action-secondary cursor-not-allowed text-muted opacity-60">ยังไม่มี Email</button>}
-              {facebookUrl ? <a href={facebookUrl} target="_blank" rel="noreferrer" className="sl-action-secondary text-violet">เปิด Facebook ผู้จัดงาน</a> : null}
+              {facebookUrl ? <a href={facebookUrl} target="_blank" rel="noreferrer" className="sl-action-secondary text-violet">{facebookPost ? 'เปิดโพสต์ Facebook' : 'เปิด Facebook ผู้จัดงาน'}</a> : null}
               {lineUrl ? <a href={lineUrl} target="_blank" rel="noreferrer" className="sl-action-secondary text-violet">เปิด LINE ผู้จัดงาน</a> : null}
             </div>
           </article>
@@ -304,6 +333,45 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       </div>
 
     </main>
+  );
+}
+
+function FacebookPostEmbed({
+  organizationName,
+  post,
+}: {
+  organizationName: string;
+  post: FacebookEmbeddedPost;
+}) {
+  return (
+    <div className="rounded-[22px] border border-[#e4d8ee] bg-[linear-gradient(180deg,#fcfaff,#f8f5fb)] p-4 sm:p-5">
+      <div className="mx-auto w-full max-w-[500px]">
+        <iframe
+          title={`โพสต์ Facebook จาก ${organizationName}`}
+          src={post.embedUrl}
+          width={500}
+          height={673}
+          className="block w-full max-w-full border-0"
+          scrolling="no"
+          frameBorder="0"
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-xs">
+          <span className="font-bold text-muted">แหล่งที่มา: Facebook</span>
+          <a
+            href={post.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-extrabold text-violet underline decoration-violet/30 underline-offset-4"
+          >
+            เปิดโพสต์ต้นฉบับ →
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 
