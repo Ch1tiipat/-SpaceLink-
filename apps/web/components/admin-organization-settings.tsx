@@ -19,6 +19,7 @@ import {
   type CurrentUser,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { classifyFacebookUrl } from '@/lib/facebook-embed';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { AdminTeamManagement } from '@/components/admin-team-management';
 
@@ -62,6 +63,7 @@ export function AdminOrganizationSettings() {
   const [quotaSuccess, setQuotaSuccess] = useState<string | null>(null);
   const [socialError, setSocialError] = useState<string | null>(null);
   const [socialSuccess, setSocialSuccess] = useState<string | null>(null);
+  const facebookPreview = classifyFacebookUrl(facebookUrl);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -230,10 +232,18 @@ export function AdminOrganizationSettings() {
     setSocialError(null);
     setSocialSuccess(null);
 
-    const normalizedFacebookUrl = facebookUrl.trim();
+    const facebookClassification = classifyFacebookUrl(facebookUrl);
+    const normalizedFacebookUrl =
+      facebookClassification.kind === 'embedded-post'
+        ? facebookClassification.post.sourceUrl
+        : facebookClassification.kind === 'page'
+          ? facebookClassification.sourceUrl
+          : '';
     const normalizedLineUrl = lineUrl.trim();
-    if (normalizedFacebookUrl && !isHttpUrl(normalizedFacebookUrl)) {
-      setSocialError('ลิงก์ Facebook ต้องขึ้นต้นด้วย http:// หรือ https://');
+    if (facebookClassification.kind === 'invalid') {
+      setSocialError(
+        'รองรับเฉพาะลิงก์ HTTPS ของ Facebook Page หรือ Public Post ที่ถูกต้องเท่านั้น',
+      );
       return;
     }
     if (normalizedLineUrl && !isHttpUrl(normalizedLineUrl)) {
@@ -438,8 +448,66 @@ export function AdminOrganizationSettings() {
               >
                 วาง URL ของ Public Post โดยตรง ไม่ต้องวางโค้ด iframe
                 ระบบจะแสดง Official Facebook Embed ส่วนลิงก์ Page
-                จะแสดงเป็นปุ่มติดต่อเท่านั้น
+                จะแสดงเป็นปุ่มติดต่อเท่านั้น โพสต์ต้องเป็น Public
+                และอาจหายเมื่อเจ้าของลบโพสต์หรือเปลี่ยนผู้ชม
               </p>
+
+              <div className="mt-4" aria-live="polite">
+                {facebookPreview.kind === 'empty' ? (
+                  <p className="rounded-2xl bg-[#f8f5fb] px-4 py-3 text-sm text-muted">
+                    ไม่บังคับกรอก หากเว้นว่าง หน้า Event จะไม่แสดงส่วน Facebook
+                  </p>
+                ) : null}
+                {facebookPreview.kind === 'page' ? (
+                  <div className="rounded-2xl border border-violet/15 bg-violet-tint px-4 py-3 text-sm text-[#51445e]">
+                    <p className="font-extrabold text-violet">
+                      ตรวจพบ Facebook Page
+                    </p>
+                    <p className="mt-1 leading-6">
+                      URL นี้จะแสดงเป็นปุ่มติดต่อเท่านั้น ไม่ถูกฝังเป็นข่าวในหน้า Event
+                    </p>
+                    <a
+                      href={facebookPreview.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex font-bold text-violet underline underline-offset-4"
+                    >
+                      เปิดหน้า Facebook เพื่อตรวจสอบ
+                    </a>
+                  </div>
+                ) : null}
+                {facebookPreview.kind === 'embedded-post' ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <p className="text-sm font-extrabold text-emerald-800">
+                      ตรวจพบ Public Post — จะแสดงเป็นข่าวแบบ Embed ในหน้า Event
+                    </p>
+                    <div className="mx-auto mt-4 w-full max-w-[500px] overflow-hidden rounded-xl bg-white">
+                      <iframe
+                        title="ตัวอย่างโพสต์ Facebook ก่อนบันทึก"
+                        src={facebookPreview.post.embedUrl}
+                        width={500}
+                        height={673}
+                        loading="lazy"
+                        className="block w-full max-w-[500px]"
+                      />
+                    </div>
+                    <a
+                      href={facebookPreview.post.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex text-sm font-bold text-emerald-800 underline underline-offset-4"
+                    >
+                      เปิดโพสต์ต้นฉบับ
+                    </a>
+                  </div>
+                ) : null}
+                {facebookPreview.kind === 'invalid' ? (
+                  <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
+                    URL นี้ไม่รองรับ กรุณาใช้ HTTPS จาก facebook.com โดยตรง
+                    ห้ามวาง iframe, URL Plugin, โดเมนเลียนแบบ, credential หรือ custom port
+                  </p>
+                ) : null}
+              </div>
 
               <label
                 className="mt-5 block text-sm font-bold"
@@ -479,9 +547,17 @@ export function AdminOrganizationSettings() {
                   </p>
                 ) : null}
                 {socialSuccess ? (
-                  <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-                    {socialSuccess}
-                  </p>
+                  <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <p className="font-bold">{socialSuccess}</p>
+                    <a
+                      href="/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex font-extrabold underline underline-offset-4"
+                    >
+                      เปิดหน้าค้นหา Event เพื่อตรวจผล
+                    </a>
+                  </div>
                 ) : null}
               </div>
 

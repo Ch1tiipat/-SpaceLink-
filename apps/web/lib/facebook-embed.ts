@@ -15,6 +15,12 @@ export type FacebookEmbeddedPost = {
   sourceUrl: string;
 };
 
+export type FacebookUrlClassification =
+  | { kind: 'empty' }
+  | { kind: 'invalid' }
+  | { kind: 'page'; sourceUrl: string }
+  | { kind: 'embedded-post'; post: FacebookEmbeddedPost };
+
 function canonicalPermalink(url: URL): string | null {
   if (url.pathname !== '/permalink.php') return null;
 
@@ -52,16 +58,44 @@ function canonicalPostsPath(url: URL): string | null {
   return `https://www.facebook.com/${encodeURIComponent(pathSegments[0])}/posts/${encodeURIComponent(pathSegments[2])}`;
 }
 
-export function getFacebookEmbeddedPost(
+function canonicalPage(url: URL): string | null {
+  if (url.pathname === '/profile.php') {
+    const pageId = url.searchParams.get('id');
+    if (!pageId || pageId.length > 30 || !PAGE_ID_PATTERN.test(pageId)) {
+      return null;
+    }
+
+    const canonical = new URL('https://www.facebook.com/profile.php');
+    canonical.searchParams.set('id', pageId);
+    return canonical.toString();
+  }
+
+  const pathSegments = url.pathname.split('/').filter(Boolean);
+  if (
+    pathSegments.length !== 1 ||
+    !PAGE_SLUG_PATTERN.test(pathSegments[0]) ||
+    ['plugins', 'permalink.php'].includes(pathSegments[0].toLowerCase())
+  ) {
+    return null;
+  }
+
+  return `https://www.facebook.com/${encodeURIComponent(pathSegments[0])}`;
+}
+
+export function classifyFacebookUrl(
   value: string | null,
-): FacebookEmbeddedPost | null {
-  if (!value || value.length > MAX_FACEBOOK_URL_LENGTH) return null;
+): FacebookUrlClassification {
+  const normalizedValue = value?.trim() ?? '';
+  if (!normalizedValue) return { kind: 'empty' };
+  if (normalizedValue.length > MAX_FACEBOOK_URL_LENGTH) {
+    return { kind: 'invalid' };
+  }
 
   let url: URL;
   try {
-    url = new URL(value);
+    url = new URL(normalizedValue);
   } catch {
-    return null;
+    return { kind: 'invalid' };
   }
 
   if (
@@ -71,19 +105,36 @@ export function getFacebookEmbeddedPost(
     url.password ||
     url.port
   ) {
-    return null;
+    return { kind: 'invalid' };
   }
 
   const sourceUrl = canonicalPermalink(url) ?? canonicalPostsPath(url);
-  if (!sourceUrl) return null;
+  if (sourceUrl) {
+    const embedUrl = new URL(FACEBOOK_PLUGIN_URL);
+    embedUrl.searchParams.set('href', sourceUrl);
+    embedUrl.searchParams.set('show_text', 'true');
+    embedUrl.searchParams.set('width', '500');
 
-  const embedUrl = new URL(FACEBOOK_PLUGIN_URL);
-  embedUrl.searchParams.set('href', sourceUrl);
-  embedUrl.searchParams.set('show_text', 'true');
-  embedUrl.searchParams.set('width', '500');
+    return {
+      kind: 'embedded-post',
+      post: {
+        embedUrl: embedUrl.toString(),
+        sourceUrl,
+      },
+    };
+  }
 
-  return {
-    embedUrl: embedUrl.toString(),
-    sourceUrl,
-  };
+  const pageUrl = canonicalPage(url);
+  return pageUrl
+    ? { kind: 'page', sourceUrl: pageUrl }
+    : { kind: 'invalid' };
+}
+
+export function getFacebookEmbeddedPost(
+  value: string | null,
+): FacebookEmbeddedPost | null {
+  const classification = classifyFacebookUrl(value);
+  return classification.kind === 'embedded-post'
+    ? classification.post
+    : null;
 }
