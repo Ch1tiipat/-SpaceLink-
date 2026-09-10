@@ -3,7 +3,7 @@ const facebookAssert: typeof import('node:assert/strict') = require(
   'node:assert/strict',
 );
 const { test: facebookTest }: typeof import('node:test') = require('node:test');
-const { getFacebookEmbeddedPost } = require(
+const { classifyFacebookUrl, getFacebookEmbeddedPost } = require(
   './facebook-embed.ts',
 ) as typeof import('./facebook-embed');
 
@@ -100,4 +100,57 @@ facebookTest('returns null for missing, invalid, or oversized input', () => {
     getFacebookEmbeddedPost(`https://www.facebook.com/${'a'.repeat(2100)}`),
     null,
   );
+});
+
+facebookTest('classifies an empty Facebook value as optional', () => {
+  facebookAssert.deepEqual(classifyFacebookUrl('   '), { kind: 'empty' });
+  facebookAssert.deepEqual(classifyFacebookUrl(null), { kind: 'empty' });
+});
+
+facebookTest('classifies the approved public post for the Admin preview', () => {
+  const result = classifyFacebookUrl(APPROVED_POST_URL);
+
+  facebookAssert.equal(result.kind, 'embedded-post');
+  if (result.kind === 'embedded-post') {
+    facebookAssert.equal(result.post.sourceUrl, APPROVED_POST_URL);
+  }
+});
+
+facebookTest('classifies supported Facebook Page URLs without claiming an embed', () => {
+  facebookAssert.deepEqual(
+    classifyFacebookUrl(
+      'https://www.facebook.com/profile.php?id=61594183376080&utm_source=test#about',
+    ),
+    {
+      kind: 'page',
+      sourceUrl:
+        'https://www.facebook.com/profile.php?id=61594183376080',
+    },
+  );
+  facebookAssert.deepEqual(
+    classifyFacebookUrl('https://m.facebook.com/SpaceLink.SUT?ref=share'),
+    {
+      kind: 'page',
+      sourceUrl: 'https://www.facebook.com/SpaceLink.SUT',
+    },
+  );
+});
+
+facebookTest('rejects unsafe Admin Facebook input before saving', () => {
+  const rejectedValues = [
+    '<iframe src="https://www.facebook.com/plugins/post.php"></iframe>',
+    'http://www.facebook.com/SpaceLink.SUT',
+    'https://facebook.com.evil.example/SpaceLink.SUT',
+    'https://user:password@www.facebook.com/SpaceLink.SUT',
+    'https://www.facebook.com:444/SpaceLink.SUT',
+    'https://www.facebook.com/plugins/post.php?href=https://example.test',
+  ];
+
+  for (const value of rejectedValues) {
+    facebookAssert.deepEqual(
+      classifyFacebookUrl(value),
+      { kind: 'invalid' },
+      value,
+    );
+  }
 });
