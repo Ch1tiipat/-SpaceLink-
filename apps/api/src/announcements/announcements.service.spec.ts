@@ -12,6 +12,11 @@ const create = jest.fn();
 const update = jest.fn();
 const deleteAnnouncement = jest.fn();
 const fanOutToOrganizationBookers = jest.fn();
+const deleteByRelatedEntity = jest.fn();
+const prismaTransaction = jest.fn();
+const transactionClient = {
+  announcement: { delete: deleteAnnouncement },
+};
 const mockPrismaService = {
   announcement: {
     findMany,
@@ -20,8 +25,12 @@ const mockPrismaService = {
     update,
     delete: deleteAnnouncement,
   },
+  $transaction: prismaTransaction,
 };
-const mockNotificationsService = { fanOutToOrganizationBookers };
+const mockNotificationsService = {
+  fanOutToOrganizationBookers,
+  deleteByRelatedEntity,
+};
 
 const organizationId = '00000000-0000-4000-8000-000000000001';
 const announcementId = '00000000-0000-4000-8000-000000000002';
@@ -32,6 +41,11 @@ describe('AnnouncementsService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     fanOutToOrganizationBookers.mockResolvedValue(1);
+    deleteByRelatedEntity.mockResolvedValue({ count: 2 });
+    prismaTransaction.mockImplementation(
+      (operation: (client: typeof transactionClient) => Promise<unknown>) =>
+        operation(transactionClient),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +117,11 @@ describe('AnnouncementsService', () => {
         },
       },
     });
+    expect(deleteByRelatedEntity).toHaveBeenCalledWith(
+      'ANNOUNCEMENT',
+      announcementId,
+      transactionClient,
+    );
   });
 
   it('creates an active announcement and notifies organization bookers', async () => {
@@ -229,5 +248,35 @@ describe('AnnouncementsService', () => {
     expect(deleteAnnouncement).toHaveBeenCalledWith({
       where: { id: announcementId, organizationId },
     });
+    expect(deleteByRelatedEntity).toHaveBeenCalledWith(
+      'ANNOUNCEMENT',
+      announcementId,
+      transactionClient,
+    );
   });
+
+  it.each([
+    ['super admin', () => service.removeAcrossOrganizations(announcementId)],
+    [
+      'organization admin',
+      () => service.remove(announcementId, organizationId),
+    ],
+  ])(
+    'rolls back notification deletion when the %s announcement delete fails',
+    async (_actor, removeAnnouncement) => {
+      const failure = new Error('announcement delete failed');
+      deleteAnnouncement.mockRejectedValue(failure);
+
+      await expect(removeAnnouncement()).rejects.toBe(failure);
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+      expect(deleteByRelatedEntity).toHaveBeenCalledWith(
+        'ANNOUNCEMENT',
+        announcementId,
+        transactionClient,
+      );
+      expect(deleteByRelatedEntity.mock.invocationCallOrder[0]).toBeLessThan(
+        deleteAnnouncement.mock.invocationCallOrder[0],
+      );
+    },
+  );
 });

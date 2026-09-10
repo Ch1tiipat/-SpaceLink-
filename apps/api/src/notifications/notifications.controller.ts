@@ -1,15 +1,17 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import type { User } from '@prisma/client';
+import { UserRole, type User } from '@prisma/client';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -42,5 +44,11 @@ export class NotificationsController {
     @CurrentUser() currentUser: User,
   ) {
     return this.notificationsService.markRead(currentUser.id, notificationId);
+  }
+
+  @Delete(':notificationId')
+  @Roles(UserRole.SUPER_ADMIN)
+  removeAsSuperAdmin(@Param('notificationId') notificationId: string) {
+    return this.notificationsService.removeAsSuperAdmin(notificationId);
   }
 }
