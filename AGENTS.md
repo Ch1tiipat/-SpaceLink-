@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10; SCRUM-175 added 2026-09-11)
 
-The Prisma schema remains frozen except for these ten additive changes:
+The Prisma schema remains frozen except for these eleven additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -86,11 +86,15 @@ The Prisma schema remains frozen except for these ten additive changes:
   code must enforce both the existing per-booking cap and an aggregate approved/processed refund
   cap no greater than the payment group's `totalAmount`. Existing ungrouped bookings and slips
   remain valid and unchanged.
+- SCRUM-175: add the nullable `Venue.googleMapsUrl` field
+  (`String? @map("google_maps_url")`) alongside the existing latitude and longitude fields, so an
+  organization admin can provide an optional Google Maps share link without replacing the
+  coordinate-based map embed.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the ten tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the eleven tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 

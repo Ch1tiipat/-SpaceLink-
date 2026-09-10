@@ -762,6 +762,7 @@ export type AdminVenue = {
   address: string | null;
   latitude: string | null;
   longitude: string | null;
+  googleMapsUrl: string | null;
   mapImageUrl: string | null;
   status: "ACTIVE" | "INACTIVE";
   createdAt: string;
@@ -770,12 +771,16 @@ export type AdminVenue = {
 
 export type VenueLocation = Pick<
   AdminVenue,
-  'id' | 'name' | 'address' | 'latitude' | 'longitude'
+  'id' | 'name' | 'address' | 'latitude' | 'longitude' | 'googleMapsUrl'
 >;
 
 export type UpdateAdminVenueLocationInput = {
   latitude: string;
   longitude: string;
+};
+
+export type UpdateAdminVenueMapsLinkInput = {
+  googleMapsUrl: string | null;
 };
 
 export type AdminZone = {
@@ -1167,6 +1172,19 @@ export function updateAdminVenueLocation(
     input,
     { token },
     "ไม่สามารถบันทึกพิกัดสถานที่ได้",
+  );
+}
+
+export function updateAdminVenueMapsLink(
+  venueId: string,
+  input: UpdateAdminVenueMapsLinkInput,
+  token: string,
+): Promise<AdminVenue> {
+  return patchJson<AdminVenue>(
+    "/venues/" + encodeURIComponent(venueId),
+    input,
+    { token },
+    "ไม่สามารถบันทึกลิงก์ Google Maps ได้",
   );
 }
 
