@@ -398,7 +398,7 @@ export function AdminOrganizationSettings() {
                 <div>
                   <h2 className="text-xl font-black">ช่องทางติดต่อผู้จัดงาน</h2>
                   <p className="text-sm text-muted">
-                    แสดง Facebook และ LINE ขององค์กรในหน้า Event
+                    แสดง Facebook, ข่าวจากโพสต์สาธารณะ และ LINE ในหน้า Event
                   </p>
                 </div>
               </div>
@@ -407,7 +407,7 @@ export function AdminOrganizationSettings() {
                 className="mt-7 block text-sm font-bold"
                 htmlFor="organization-facebook-url"
               >
-                ลิงก์ Facebook Page
+                ลิงก์ Facebook Page หรือ Public Post
               </label>
               <div className="relative mt-2">
                 <Link2
@@ -420,6 +420,7 @@ export function AdminOrganizationSettings() {
                   type="url"
                   inputMode="url"
                   autoComplete="url"
+                  maxLength={2048}
                   className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
                   value={facebookUrl}
                   onChange={(event) => {
@@ -427,9 +428,18 @@ export function AdminOrganizationSettings() {
                     setSocialError(null);
                     setSocialSuccess(null);
                   }}
-                  placeholder="https://www.facebook.com/your-page"
+                  placeholder="https://www.facebook.com/permalink.php?story_fbid=...&id=..."
+                  aria-describedby="organization-facebook-url-help"
                 />
               </div>
+              <p
+                id="organization-facebook-url-help"
+                className="mt-2 text-xs leading-5 text-muted"
+              >
+                วาง URL ของ Public Post โดยตรง ไม่ต้องวางโค้ด iframe
+                ระบบจะแสดง Official Facebook Embed ส่วนลิงก์ Page
+                จะแสดงเป็นปุ่มติดต่อเท่านั้น
+              </p>
 
               <label
                 className="mt-5 block text-sm font-bold"
