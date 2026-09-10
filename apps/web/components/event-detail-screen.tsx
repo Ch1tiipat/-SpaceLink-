@@ -184,22 +184,18 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           <p className="whitespace-pre-line text-sm leading-7 text-muted">{event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}</p>
         </DetailSection>
 
-        <DetailSection kicker="ANNOUNCEMENT" title="ข่าวสารสำคัญก่อนเข้าร่วมงาน" description={`ประกาศจากผู้จัดงาน: ${event.organization.name}`}>
-          <EventAnnouncements key={`${eventId}:${event.organization.id}`} organizationId={event.organization.id} />
+        <DetailSection
+          kicker="EVENT NEWS"
+          title="ข่าวสารสำคัญก่อนเข้าร่วมงาน"
+          description={`ประกาศและข่าวที่ ${event.organization.name} เลือกเผยแพร่`}
+        >
+          <EventNews
+            key={`${eventId}:${event.organization.id}`}
+            organizationId={event.organization.id}
+            organizationName={event.organization.name}
+            facebookPost={facebookPost}
+          />
         </DetailSection>
-
-        {facebookPost ? (
-          <DetailSection
-            kicker="FACEBOOK NEWS"
-            title="ข่าวจาก Facebook ผู้จัดงาน"
-            description="โพสต์สาธารณะที่ผู้จัดงานเลือกมาแสดงผ่าน Facebook Official Embed"
-          >
-            <FacebookPostEmbed
-              organizationName={event.organization.name}
-              post={facebookPost}
-            />
-          </DetailSection>
-        ) : null}
 
         <DetailSection kicker="EVENT ATMOSPHERE" title="บรรยากาศภายในงาน" description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ" count={event.bannerUrl ? '1 รูป' : '0 รูป'}>
           <div className="rounded-[22px] border border-[#e4d8ee] bg-[linear-gradient(180deg,#fcfaff,#f8f5fb)] p-4">
@@ -574,7 +570,15 @@ type AnnouncementState =
   | { status: 'error' }
   | { status: 'ready'; announcements: AdminAnnouncement[] };
 
-function EventAnnouncements({ organizationId }: { organizationId: string }) {
+function EventNews({
+  organizationId,
+  organizationName,
+  facebookPost,
+}: {
+  organizationId: string;
+  organizationName: string;
+  facebookPost: FacebookEmbeddedPost | null;
+}) {
   const [state, setState] = useState<AnnouncementState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -594,44 +598,59 @@ function EventAnnouncements({ organizationId }: { organizationId: string }) {
     };
   }, [organizationId, attempt]);
 
-  if (state.status === 'loading') {
-    return <div role="status"><EmptyState text="กำลังโหลดประกาศจากผู้จัดงาน…" /></div>;
-  }
-
-  if (state.status === 'error') {
-    return (
-      <div className="rounded-[16px] border border-line bg-[#fcfbfd] p-5 text-center">
-        <p role="alert" className="text-sm text-muted">โหลดประกาศไม่สำเร็จ กรุณาลองใหม่</p>
-        <button
-          type="button"
-          className="sl-action-secondary mt-4 text-violet"
-          onClick={() => {
-            setState({ status: 'loading' });
-            setAttempt((value) => value + 1);
-          }}
-        >
-          ลองโหลดประกาศอีกครั้ง
-        </button>
-      </div>
-    );
-  }
-
-  if (state.announcements.length === 0) {
-    return <EmptyState text="ยังไม่มีประกาศจากผู้จัดงาน" />;
-  }
-
   return (
-    <div className="grid min-w-0 gap-3">
-      {state.announcements.map((announcement) => (
-        <article key={announcement.id} className="min-w-0 rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-[#eee6ff] px-3 py-1.5 font-bold text-violet">ประกาศผู้จัดงาน</span>
-            <AnnouncementDate announcement={announcement} />
+    <div className="grid min-w-0 gap-5">
+      {state.status === 'loading' ? (
+        <div role="status"><EmptyState text="กำลังโหลดประกาศจากผู้จัดงาน…" /></div>
+      ) : null}
+
+      {state.status === 'error' ? (
+        <div className="rounded-[16px] border border-line bg-[#fcfbfd] p-5 text-center">
+          <p role="alert" className="text-sm text-muted">โหลดประกาศไม่สำเร็จ กรุณาลองใหม่</p>
+          <button
+            type="button"
+            className="sl-action-secondary mt-4 text-violet"
+            onClick={() => {
+              setState({ status: 'loading' });
+              setAttempt((value) => value + 1);
+            }}
+          >
+            ลองโหลดประกาศอีกครั้ง
+          </button>
+        </div>
+      ) : null}
+
+      {state.status === 'ready' && state.announcements.length > 0 ? (
+        <div className="grid min-w-0 gap-3" aria-label="ประกาศจากผู้จัดงาน">
+          {state.announcements.map((announcement) => (
+            <article key={announcement.id} className="min-w-0 rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full bg-[#eee6ff] px-3 py-1.5 font-bold text-violet">ประกาศผู้จัดงาน</span>
+                <AnnouncementDate announcement={announcement} />
+              </div>
+              <h3 className="break-words text-[13px] font-extrabold">{announcement.title}</h3>
+              <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-7 text-muted">{announcement.body}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {facebookPost ? (
+        <div aria-label="ข่าวจาก Facebook ผู้จัดงาน">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="rounded-full bg-[#eaf1ff] px-3 py-1.5 font-bold text-[#2856a3]">Facebook ผู้จัดงาน</span>
+            <span className="text-muted">โพสต์สาธารณะที่ผู้จัดงานเลือก</span>
           </div>
-          <h3 className="break-words text-[13px] font-extrabold">{announcement.title}</h3>
-          <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-7 text-muted">{announcement.body}</p>
-        </article>
-      ))}
+          <FacebookPostEmbed
+            organizationName={organizationName}
+            post={facebookPost}
+          />
+        </div>
+      ) : null}
+
+      {state.status === 'ready' && state.announcements.length === 0 && !facebookPost ? (
+        <EmptyState text="ยังไม่มีข่าวสารจากผู้จัดงาน" />
+      ) : null}
     </div>
   );
 }
