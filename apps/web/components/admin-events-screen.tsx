@@ -9,17 +9,22 @@ import {
   useState,
 } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   Calculator,
   CalendarCheck2,
   CalendarClock,
   CalendarDays,
   CircleDollarSign,
+  Images,
   Power,
   Plus,
   RefreshCw,
   Send,
   Search,
+  Save,
   Trash2,
+  UploadCloud,
   X,
 } from 'lucide-react';
 import {
@@ -42,6 +47,8 @@ import {
   openAdminEvent,
   publishAdminEvent,
   quoteAdminEventSubscription,
+  updateAdminEventGallery,
+  uploadAdminEventGallery,
   type AdminVenue,
   type CreateAdminEventInput,
   type AdminOrganizationEvent,
@@ -99,6 +106,8 @@ export function AdminEventsScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const [galleryEvent, setGalleryEvent] =
+    useState<AdminOrganizationEvent | null>(null);
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !organizationId) return;
@@ -465,6 +474,15 @@ export function AdminEventsScreen() {
                   ) : null}
                   <button
                     type="button"
+                    onClick={() => setGalleryEvent(event)}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Images className="h-4 w-4" aria-hidden />
+                    จัดการแกลเลอรี ({event.galleryUrls.length}/10)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void deleteEvent(event)}
                     disabled={Boolean(busyAction)}
                     className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
@@ -494,8 +512,310 @@ export function AdminEventsScreen() {
             }}
           />
         ) : null}
+
+        {galleryEvent && token && organizationId ? (
+          <EventGalleryDialog
+            key={galleryEvent.id}
+            event={galleryEvent}
+            organizationId={organizationId}
+            token={token}
+            onClose={() => setGalleryEvent(null)}
+            onUpdated={(updated, message) => {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === updated.id ? updated : item,
+                ),
+              );
+              setGalleryEvent(updated);
+              setNotice(message);
+            }}
+          />
+        ) : null}
       </AdminPage>
     </AdminAccessGate>
+  );
+}
+
+type PendingGalleryFile = {
+  file: File;
+  previewUrl: string;
+};
+
+function EventGalleryDialog({
+  event,
+  organizationId,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onClose: () => void;
+  onUpdated: (updated: AdminOrganizationEvent, message: string) => void;
+}) {
+  const [urls, setUrls] = useState(event.galleryUrls);
+  const [savedUrls, setSavedUrls] = useState(event.galleryUrls);
+  const [pending, setPending] = useState<PendingGalleryFile[]>([]);
+  const [busy, setBusy] = useState<'upload' | 'save' | ''>('');
+  const [error, setError] = useState('');
+  const pendingRef = useRef(pending);
+
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  useEffect(
+    () => () => {
+      pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    },
+    [],
+  );
+
+  const remaining = 10 - urls.length - pending.length;
+  const hasChanges = JSON.stringify(urls) !== JSON.stringify(savedUrls);
+
+  function selectFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const selected = Array.from(files);
+    if (selected.length > remaining) {
+      setError(`เลือกได้อีกไม่เกิน ${remaining} รูป`);
+      return;
+    }
+    const invalid = selected.find(
+      (file) =>
+        !['image/jpeg', 'image/png'].includes(file.type) ||
+        file.size > 2 * 1024 * 1024,
+    );
+    if (invalid) {
+      setError('แต่ละรูปต้องเป็น JPEG หรือ PNG และมีขนาดไม่เกิน 2 MB');
+      return;
+    }
+    setError('');
+    setPending((current) => [
+      ...current,
+      ...selected.map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ]);
+  }
+
+  function removePending(index: number) {
+    setPending((current) => {
+      URL.revokeObjectURL(current[index].previewUrl);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+  }
+
+  function moveUrl(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= urls.length) return;
+    setUrls((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  async function upload() {
+    if (pending.length === 0) return;
+    setBusy('upload');
+    setError('');
+    try {
+      const updated = await uploadAdminEventGallery(
+        organizationId,
+        event.id,
+        pending.map((item) => item.file),
+        token,
+      );
+      pending.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      setPending([]);
+      setUrls(updated.galleryUrls);
+      setSavedUrls(updated.galleryUrls);
+      onUpdated(updated, `เพิ่มรูปในแกลเลอรี “${event.name}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'อัปโหลดรูปภาพไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function save() {
+    if (!hasChanges) return;
+    setBusy('save');
+    setError('');
+    try {
+      const updated = await updateAdminEventGallery(
+        organizationId,
+        event.id,
+        urls,
+        token,
+      );
+      setUrls(updated.galleryUrls);
+      setSavedUrls(updated.galleryUrls);
+      onUpdated(updated, `บันทึกลำดับแกลเลอรี “${event.name}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'บันทึกแกลเลอรีไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-gallery-title"
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+              Event gallery
+            </span>
+            <h2 id="event-gallery-title" className="mt-1 text-xl font-black text-ink">
+              รูปบรรยากาศ · {event.name}
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              มี {urls.length + pending.length}/10 รูป · เพิ่มได้อีก {remaining} รูป
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={Boolean(busy)}
+            aria-label="ปิดหน้าต่างจัดการแกลเลอรี"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+
+        {error ? <AdminError message={error} /> : null}
+
+        {urls.length > 0 ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {urls.map((url, index) => (
+              <article key={url} className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]">
+                <div
+                  role="img"
+                  aria-label={`รูปบรรยากาศลำดับ ${index + 1}`}
+                  className="aspect-[4/3] bg-[#f3eef7] bg-cover bg-center"
+                  style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
+                />
+                <div className="flex items-center justify-between gap-2 p-2">
+                  <span className="pl-1 text-xs font-extrabold text-muted">
+                    ลำดับ {index + 1}
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveUrl(index, -1)}
+                      disabled={Boolean(busy) || index === 0}
+                      aria-label={`เลื่อนรูปที่ ${index + 1} ขึ้น`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveUrl(index, 1)}
+                      disabled={Boolean(busy) || index === urls.length - 1}
+                      aria-label={`เลื่อนรูปที่ ${index + 1} ลง`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUrls((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      disabled={Boolean(busy)}
+                      aria-label={`ลบรูปที่ ${index + 1}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {pending.length > 0 ? (
+          <div className="mt-5">
+            <h3 className="text-sm font-extrabold text-ink">ตัวอย่างก่อนอัปโหลด</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pending.map((item, index) => (
+                <article key={item.previewUrl} className="overflow-hidden rounded-[18px] border border-dashed border-violet bg-[#faf7ff]">
+                  <div
+                    role="img"
+                    aria-label={`ตัวอย่าง ${item.file.name}`}
+                    className="aspect-[4/3] bg-cover bg-center"
+                    style={{ backgroundImage: `url(${JSON.stringify(item.previewUrl)})` }}
+                  />
+                  <div className="flex items-center justify-between gap-2 p-2">
+                    <span className="min-w-0 truncate pl-1 text-xs font-bold text-muted">
+                      {item.file.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removePending(index)}
+                      disabled={Boolean(busy)}
+                      aria-label={`ยกเลิก ${item.file.name}`}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-col gap-3 border-t border-[#eee9f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${remaining === 0 || busy ? 'pointer-events-none opacity-40' : ''}`}>
+            <UploadCloud className="h-4 w-4" aria-hidden />
+            เลือกรูปหลายไฟล์
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png"
+              disabled={remaining === 0 || Boolean(busy)}
+              onChange={(changeEvent) => {
+                selectFiles(changeEvent.target.files);
+                changeEvent.target.value = '';
+              }}
+              className="sr-only"
+            />
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => void upload()}
+              disabled={pending.length === 0 || Boolean(busy) || hasChanges}
+              title={hasChanges ? 'บันทึกลำดับหรือลบรูปก่อนอัปโหลดรูปใหม่' : undefined}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <UploadCloud className="h-4 w-4" aria-hidden />
+              {busy === 'upload' ? 'กำลังอัปโหลด…' : `อัปโหลด ${pending.length} รูป`}
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!hasChanges || Boolean(busy)}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Save className="h-4 w-4" aria-hidden />
+              {busy === 'save' ? 'กำลังบันทึก…' : 'บันทึกลำดับ/การลบ'}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 

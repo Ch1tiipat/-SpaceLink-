@@ -4,7 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
+import {
+  GUARDS_METADATA,
+  INTERCEPTORS_METADATA,
+  ROUTE_ARGS_METADATA,
+} from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 
 jest.mock('jose', () => ({
@@ -35,6 +39,7 @@ const open = jest.fn();
 const close = jest.fn();
 const remove = jest.fn();
 const update = jest.fn();
+const uploadGallery = jest.fn();
 const service = {
   findByOrganization,
   create,
@@ -44,6 +49,7 @@ const service = {
   close,
   remove,
   update,
+  uploadGallery,
 } as unknown as EventsService;
 
 function handler(
@@ -55,6 +61,7 @@ function handler(
     | 'open'
     | 'close'
     | 'update'
+    | 'uploadGallery'
     | 'remove' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -93,6 +100,7 @@ describe('OrganizationEventsController', () => {
       'close',
       'remove',
       'update',
+      'uploadGallery',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -156,31 +164,35 @@ describe('OrganizationEventsController', () => {
     expect(remove).toHaveBeenCalledWith('event-1', ORGANIZATION_ID);
   });
 
-  it.each(['publish', 'open', 'close', 'remove', 'update'] as const)(
-    'validates the %s event id by UUID shape',
-    (method) => {
-      const metadata = Reflect.getMetadata(
-        ROUTE_ARGS_METADATA,
-        OrganizationEventsController,
-        method,
-      ) as Record<string, { data?: string; pipes?: unknown[] }>;
-      const eventIdParameter = Object.values(metadata).find(
-        (parameter) => parameter.data === 'eventId',
-      );
+  it.each([
+    'publish',
+    'open',
+    'close',
+    'remove',
+    'update',
+    'uploadGallery',
+  ] as const)('validates the %s event id by UUID shape', (method) => {
+    const metadata = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      OrganizationEventsController,
+      method,
+    ) as Record<string, { data?: string; pipes?: unknown[] }>;
+    const eventIdParameter = Object.values(metadata).find(
+      (parameter) => parameter.data === 'eventId',
+    );
 
-      expect(eventIdParameter?.pipes).toEqual(
-        expect.arrayContaining([expect.any(LooseUuidPipe)]),
-      );
+    expect(eventIdParameter?.pipes).toEqual(
+      expect.arrayContaining([expect.any(LooseUuidPipe)]),
+    );
 
-      const pipe = eventIdParameter?.pipes?.find(
-        (candidate) => candidate instanceof LooseUuidPipe,
-      ) as LooseUuidPipe;
-      expect(pipe.transform(LEGACY_EVENT_ID)).toBe(LEGACY_EVENT_ID);
-      expect(() => pipe.transform('not-a-uuid')).toThrow(BadRequestException);
-    },
-  );
+    const pipe = eventIdParameter?.pipes?.find(
+      (candidate) => candidate instanceof LooseUuidPipe,
+    ) as LooseUuidPipe;
+    expect(pipe.transform(LEGACY_EVENT_ID)).toBe(LEGACY_EVENT_ID);
+    expect(() => pipe.transform('not-a-uuid')).toThrow(BadRequestException);
+  });
 
-  it.each(['findByOrganization', 'update'] as const)(
+  it.each(['findByOrganization', 'update', 'uploadGallery'] as const)(
     'answers 404 when an ORG_ADMIN requests another organization via %s',
     async (name) => {
       const warn = jest
@@ -255,6 +267,27 @@ describe('OrganizationEventsController', () => {
       );
     },
   );
+
+  it('uses a multiple-files interceptor and passes the scoped upload to the service', async () => {
+    const interceptors = Reflect.getMetadata(
+      INTERCEPTORS_METADATA,
+      handler('uploadGallery'),
+    ) as unknown[];
+    expect(interceptors).toHaveLength(1);
+    const files = [
+      { buffer: Buffer.from('first') },
+      { buffer: Buffer.from('second') },
+    ];
+    uploadGallery.mockResolvedValue({ id: LEGACY_EVENT_ID });
+
+    await controller.uploadGallery(ORGANIZATION_ID, LEGACY_EVENT_ID, files);
+
+    expect(uploadGallery).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      files,
+    );
+  });
 
   it('rejects vendors on the update handler', () => {
     const context = contextFor(
