@@ -24,6 +24,7 @@ import {
   type VenueLocation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { getEventCoverUrl } from '@/lib/event-cover';
 import {
   getFacebookEmbeddedPost,
   type FacebookEmbeddedPost,
@@ -163,11 +164,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
         <section
           className="relative mt-5 flex min-h-[390px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] px-11 py-12 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[340px] max-sm:px-7"
-          style={event.bannerUrl ? {
-            backgroundImage: `linear-gradient(100deg,rgba(36,16,62,.93),rgba(78,30,150,.74),rgba(56,101,104,.58)),url("${event.bannerUrl}")`,
+          style={{
+            backgroundImage: `linear-gradient(100deg,rgba(36,16,62,.93),rgba(78,30,150,.74),rgba(56,101,104,.58)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
             backgroundPosition: 'center',
             backgroundSize: 'cover',
-          } : undefined}
+          }}
         >
           <div className="relative z-10 max-w-[720px]">
             <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">

@@ -7,10 +7,11 @@ import {
   Patch,
   Post,
   UploadedFiles,
+  UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -33,6 +34,10 @@ import {
   MAX_EVENT_GALLERY_FILE_SIZE_BYTES,
   type UploadedEventGalleryFile,
 } from './event-gallery-storage.service';
+import {
+  MAX_EVENT_BANNER_FILE_SIZE_BYTES,
+  type UploadedEventBannerFile,
+} from './event-banner-storage.service';
 
 @Controller('organizations/:organizationId/events')
 export class OrganizationEventsController {
@@ -86,6 +91,34 @@ export class OrganizationEventsController {
       organizationId,
       files ?? [],
     );
+  }
+
+  @Post(':eventId/banner')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { files: 1, fileSize: MAX_EVENT_BANNER_FILE_SIZE_BYTES },
+    }),
+  )
+  uploadBanner(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @UploadedFile() file: UploadedEventBannerFile | undefined,
+  ) {
+    return this.eventsService.uploadBanner(eventId, organizationId, file);
+  }
+
+  @Delete(':eventId/banner')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  removeBanner(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+  ) {
+    return this.eventsService.removeBanner(eventId, organizationId);
   }
 
   @Post(':eventId/join-information')

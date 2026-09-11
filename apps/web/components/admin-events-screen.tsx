@@ -16,6 +16,7 @@ import {
   CalendarClock,
   CalendarDays,
   CircleDollarSign,
+  ImageIcon,
   Images,
   Info,
   Pencil,
@@ -45,6 +46,7 @@ import {
   createAdminEventInformation,
   createAdminEventJoinInformation,
   createAdminEvent,
+  deleteAdminEventBanner,
   deleteAdminEventInformation,
   deleteAdminEventJoinInformation,
   deleteAdminEvent,
@@ -58,6 +60,7 @@ import {
   updateAdminEventInformation,
   updateAdminEventJoinInformation,
   updateAdminEventGallery,
+  uploadAdminEventBanner,
   uploadAdminEventGallery,
   type AdminVenue,
   type CreateAdminEventInput,
@@ -67,6 +70,7 @@ import {
   type EventInformation,
   type EventInformationType,
 } from '@/lib/api';
+import { getEventCoverUrl } from '@/lib/event-cover';
 
 type EventFilter = 'ALL' | AdminOrganizationEvent['status'];
 
@@ -120,6 +124,8 @@ export function AdminEventsScreen() {
   const [notice, setNotice] = useState('');
   const [busyAction, setBusyAction] = useState('');
   const [galleryEvent, setGalleryEvent] =
+    useState<AdminOrganizationEvent | null>(null);
+  const [bannerEvent, setBannerEvent] =
     useState<AdminOrganizationEvent | null>(null);
   const [joinInfoEvent, setJoinInfoEvent] =
     useState<AdminOrganizationEvent | null>(null);
@@ -407,8 +413,17 @@ export function AdminEventsScreen() {
                 return (
                   <article
                   key={event.id}
-                  className="rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff] p-5"
+                  className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
                 >
+                  <div
+                    role="img"
+                    aria-label={`ภาพปก ${event.name}`}
+                    className="aspect-[16/7] bg-cover bg-center"
+                    style={{
+                      backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.5),rgba(56,101,104,.18)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
+                    }}
+                  />
+                  <div className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <span
                       className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_STYLES[displayedStatus]}`}
@@ -491,6 +506,15 @@ export function AdminEventsScreen() {
                   ) : null}
                   <button
                     type="button"
+                    onClick={() => setBannerEvent(event)}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ImageIcon className="h-4 w-4" aria-hidden />
+                    {event.bannerUrl ? 'เปลี่ยน/ลบภาพปก' : 'เพิ่มภาพปก'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setGalleryEvent(event)}
                     disabled={Boolean(busyAction)}
                     className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
@@ -527,6 +551,7 @@ export function AdminEventsScreen() {
                       ? 'กำลังลบ...'
                       : 'ลบอีเวนต์'}
                   </button>
+                  </div>
                   </article>
                 );
               })}
@@ -540,9 +565,9 @@ export function AdminEventsScreen() {
             organizationId={organizationId}
             token={token}
             onClose={() => setCreateOpen(false)}
-            onCreated={() => {
+            onCreated={(message) => {
               setCreateOpen(false);
-              setNotice('สร้าง Event และ Subscription แบบ DRAFT เรียบร้อยแล้ว');
+              setNotice(message);
               setReloadKey((value) => value + 1);
             }}
           />
@@ -562,6 +587,27 @@ export function AdminEventsScreen() {
                 ),
               );
               setGalleryEvent(updated);
+              setNotice(message);
+            }}
+          />
+        ) : null}
+
+        {bannerEvent && token && organizationId ? (
+          <EventBannerDialog
+            key={bannerEvent.id}
+            event={bannerEvent}
+            organizationId={organizationId}
+            token={token}
+            onClose={() => setBannerEvent(null)}
+            onUpdated={(updated, message) => {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === updated.id ? { ...item, ...updated } : item,
+                ),
+              );
+              setBannerEvent((current) =>
+                current ? { ...current, ...updated } : updated,
+              );
               setNotice(message);
             }}
           />
@@ -1042,6 +1088,179 @@ function EventJoinInformationDialog({
   );
 }
 
+function EventBannerDialog({
+  event,
+  organizationId,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onClose: () => void;
+  onUpdated: (updated: AdminOrganizationEvent, message: string) => void;
+}) {
+  const [pending, setPending] = useState<PendingBannerFile | null>(null);
+  const [busy, setBusy] = useState<'upload' | 'remove' | ''>('');
+  const [error, setError] = useState('');
+  const pendingRef = useRef(pending);
+
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  useEffect(
+    () => () => {
+      if (pendingRef.current) {
+        URL.revokeObjectURL(pendingRef.current.previewUrl);
+      }
+    },
+    [],
+  );
+
+  function selectFile(file: File | undefined) {
+    if (!file) return;
+    const validationError = validateBannerFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    setPending({ file, previewUrl: URL.createObjectURL(file) });
+    setError('');
+  }
+
+  async function upload() {
+    if (!pending) return;
+    setBusy('upload');
+    setError('');
+    try {
+      const updated = await uploadAdminEventBanner(
+        organizationId,
+        event.id,
+        pending.file,
+        token,
+      );
+      URL.revokeObjectURL(pending.previewUrl);
+      setPending(null);
+      onUpdated(updated, `บันทึกภาพปก “${event.name}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'อัปโหลดภาพปกไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function remove() {
+    if (!event.bannerUrl) return;
+    if (!window.confirm(`ลบภาพปกของ “${event.name}” หรือไม่?`)) return;
+    setBusy('remove');
+    setError('');
+    try {
+      const updated = await deleteAdminEventBanner(
+        organizationId,
+        event.id,
+        token,
+      );
+      onUpdated(updated, `ลบภาพปก “${event.name}” เรียบร้อยแล้ว`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ลบภาพปกไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-banner-title"
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+              Event cover
+            </span>
+            <h2 id="event-banner-title" className="mt-1 text-xl font-black text-ink">
+              ภาพปก · {event.name}
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              JPEG หรือ PNG ขนาดไม่เกิน 2 MB และไม่เกิน 2000 × 2000 พิกเซล
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={Boolean(busy)}
+            aria-label="ปิดหน้าต่างจัดการภาพปก"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+
+        {error ? <AdminError message={error} /> : null}
+
+        <div
+          role="img"
+          aria-label={pending ? `ตัวอย่าง ${pending.file.name}` : `ภาพปก ${event.name}`}
+          className="mt-5 aspect-video rounded-[18px] bg-cover bg-center"
+          style={{
+            backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.38),rgba(56,101,104,.16)),url(${JSON.stringify(pending?.previewUrl ?? getEventCoverUrl(event.bannerUrl))})`,
+          }}
+        />
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-40' : ''}`}>
+            <UploadCloud className="h-4 w-4" aria-hidden />
+            {event.bannerUrl ? 'เลือกภาพใหม่' : 'เลือกภาพปก'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              disabled={Boolean(busy)}
+              onChange={(changeEvent) => {
+                selectFile(changeEvent.target.files?.[0]);
+                changeEvent.target.value = '';
+              }}
+              className="sr-only"
+            />
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {event.bannerUrl ? (
+              <button
+                type="button"
+                onClick={() => void remove()}
+                disabled={Boolean(busy) || Boolean(pending)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] px-4 text-sm font-extrabold text-[#b42318] disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+                {busy === 'remove' ? 'กำลังลบ…' : 'ลบภาพปก'}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void upload()}
+              disabled={!pending || Boolean(busy)}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet px-4 text-sm font-extrabold text-white disabled:opacity-40"
+            >
+              <Save className="h-4 w-4" aria-hidden />
+              {busy === 'upload' ? 'กำลังอัปโหลด…' : 'บันทึกภาพปก'}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type PendingBannerFile = {
+  file: File;
+  previewUrl: string;
+};
+
 type PendingGalleryFile = {
   file: File;
   previewUrl: string;
@@ -1336,7 +1555,7 @@ function CreateEventDialog({
   organizationId: string;
   token: string;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (message: string) => void;
 }) {
   const [input, setInput] = useState<CreateAdminEventInput>({
     venueId: venues[0]?.id ?? '',
@@ -1350,7 +1569,20 @@ function CreateEventDialog({
   const [quote, setQuote] = useState<EventSubscriptionQuote | null>(null);
   const [busy, setBusy] = useState<'quote' | 'create' | ''>('');
   const [error, setError] = useState('');
+  const [banner, setBanner] = useState<PendingBannerFile | null>(null);
   const inputRevision = useRef(0);
+  const bannerRef = useRef(banner);
+
+  useEffect(() => {
+    bannerRef.current = banner;
+  }, [banner]);
+
+  useEffect(
+    () => () => {
+      if (bannerRef.current) URL.revokeObjectURL(bannerRef.current.previewUrl);
+    },
+    [],
+  );
 
   function update<K extends keyof CreateAdminEventInput>(
     key: K,
@@ -1386,12 +1618,34 @@ function CreateEventDialog({
     setBusy('create');
     setError('');
     try {
-      await createAdminEvent(
+      const created = await createAdminEvent(
         organizationId,
         { ...cleanInput(input), expectedFinalPrice: quote.finalPrice },
         token,
       );
-      onCreated();
+      if (!banner) {
+        onCreated('สร้าง Event และ Subscription แบบ DRAFT เรียบร้อยแล้ว');
+        return;
+      }
+
+      try {
+        await uploadAdminEventBanner(
+          organizationId,
+          created.id,
+          banner.file,
+          token,
+        );
+        URL.revokeObjectURL(banner.previewUrl);
+        onCreated('สร้าง Event และบันทึกภาพปกเรียบร้อยแล้ว');
+      } catch (uploadError) {
+        const detail =
+          uploadError instanceof Error
+            ? uploadError.message
+            : 'อัปโหลดภาพปกไม่สำเร็จ';
+        onCreated(
+          `สร้าง Event แล้ว แต่ยังบันทึกภาพปกไม่สำเร็จ: ${detail} กรุณาลองใหม่จากเมนูจัดการภาพปก`,
+        );
+      }
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'สร้างอีเวนต์ไม่สำเร็จ',
@@ -1399,6 +1653,18 @@ function CreateEventDialog({
     } finally {
       setBusy('');
     }
+  }
+
+  function selectBanner(file: File | undefined) {
+    if (!file) return;
+    const validationError = validateBannerFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (banner) URL.revokeObjectURL(banner.previewUrl);
+    setBanner({ file, previewUrl: URL.createObjectURL(file) });
+    setError('');
   }
 
   return (
@@ -1506,6 +1772,50 @@ function CreateEventDialog({
             />
           </Field>
 
+          <div className="sm:col-span-2">
+            <span className="text-sm font-bold text-ink">ภาพปกอีเวนต์ (ไม่บังคับ)</span>
+            <div
+              role="img"
+              aria-label={banner ? `ตัวอย่าง ${banner.file.name}` : 'ตัวอย่างภาพปกเริ่มต้น'}
+              className="mt-2 aspect-video w-full rounded-[18px] bg-cover bg-center"
+              style={{
+                backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.38),rgba(56,101,104,.16)),url(${JSON.stringify(banner?.previewUrl ?? getEventCoverUrl(null))})`,
+              }}
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <label className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-50' : ''}`}>
+                <UploadCloud className="h-4 w-4" aria-hidden />
+                {banner ? 'เปลี่ยนภาพ' : 'เลือกภาพปก'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  disabled={Boolean(busy)}
+                  onChange={(changeEvent) => {
+                    selectBanner(changeEvent.target.files?.[0]);
+                    changeEvent.target.value = '';
+                  }}
+                  className="sr-only"
+                />
+              </label>
+              {banner ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    URL.revokeObjectURL(banner.previewUrl);
+                    setBanner(null);
+                  }}
+                  disabled={Boolean(busy)}
+                  className="h-10 rounded-xl border border-[#ddd4e7] px-4 text-sm font-bold text-muted disabled:opacity-50"
+                >
+                  ไม่ใช้ภาพนี้
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              JPEG หรือ PNG ขนาดไม่เกิน 2 MB และไม่เกิน 2000 × 2000 พิกเซล
+            </p>
+          </div>
+
           {error ? (
             <p className="sm:col-span-2 rounded-xl bg-[#fff0ef] px-4 py-3 text-sm font-bold text-[#b42318]">
               {error}
@@ -1605,6 +1915,17 @@ function cleanInput(input: CreateAdminEventInput): CreateAdminEventInput {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== ''),
   ) as CreateAdminEventInput;
+}
+
+function validateBannerFile(file: File): string | null {
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    return 'ภาพปกต้องเป็นไฟล์ JPEG หรือ PNG';
+  }
+  if (file.size === 0) return 'ไฟล์ภาพปกว่างเปล่า';
+  if (file.size > 2 * 1024 * 1024) {
+    return 'ภาพปกต้องมีขนาดไม่เกิน 2 MB';
+  }
+  return null;
 }
 
 function formatBaht(value: string) {

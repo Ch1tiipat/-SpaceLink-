@@ -25,6 +25,10 @@ import {
   MAX_EVENT_GALLERY_FILES,
   type UploadedEventGalleryFile,
 } from './event-gallery-storage.service';
+import {
+  EventBannerStorageService,
+  type UploadedEventBannerFile,
+} from './event-banner-storage.service';
 
 const ACTIVE_BOOKING_STATUSES = [
   BookingStatus.PENDING_PAYMENT,
@@ -38,6 +42,7 @@ export class EventsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly bannerStorage: EventBannerStorageService,
     private readonly galleryStorage: EventGalleryStorageService,
   ) {}
 
@@ -523,6 +528,69 @@ export class EventsService {
     } catch (error) {
       await this.cleanupGalleryUrls(uploadedUrls);
       throw error;
+    }
+  }
+
+  async uploadBanner(
+    id: string,
+    orgId: string,
+    file: UploadedEventBannerFile | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('กรุณาเลือกภาพปกอีเวนต์');
+    }
+
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { bannerUrl: true },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const uploadedUrl = await this.bannerStorage.uploadForEvent(file, id);
+    let updated;
+    try {
+      updated = await this.prisma.event.update({
+        where: { id, organizationId: orgId },
+        data: { bannerUrl: uploadedUrl },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
+        },
+      });
+    } catch (error) {
+      await this.cleanupBannerUrl(uploadedUrl);
+      throw error;
+    }
+
+    await this.cleanupBannerUrl(existing.bannerUrl);
+    return withGalleryUrls(updated);
+  }
+
+  async removeBanner(id: string, orgId: string) {
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { bannerUrl: true },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const updated = await this.prisma.event.update({
+      where: { id, organizationId: orgId },
+      data: { bannerUrl: null },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    await this.cleanupBannerUrl(existing.bannerUrl);
+    return withGalleryUrls(updated);
+  }
+
+  private async cleanupBannerUrl(url: string | null): Promise<void> {
+    if (!url) return;
+    try {
+      await this.bannerStorage.removeByUrl(url);
+    } catch {
+      this.logger.error('Failed to clean up an event banner object');
     }
   }
 

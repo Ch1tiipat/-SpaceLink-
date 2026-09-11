@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">ภาพปกอีเวนต์ SpaceLink</title>
+  <desc id="description">พื้นหลังไล่สีพร้อมลวดลายบูธและเต็นท์ตลาด</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#301050"/>
+      <stop offset="0.55" stop-color="#7442c8"/>
+      <stop offset="1" stop-color="#337a72"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.18" r="0.62">
+      <stop offset="0" stop-color="#f7dcff" stop-opacity="0.48"/>
+      <stop offset="1" stop-color="#f7dcff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#background)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M160 700h1280" opacity="0.25" stroke-width="12"/>
+    <path d="m450 535 150-180 150 180m-270 0h240v165H480z" opacity="0.48" stroke-width="18"/>
+    <path d="m850 535 150-180 150 180m-270 0h240v165H880z" opacity="0.34" stroke-width="18"/>
+    <path d="M600 355v-85m400 85v-85" opacity="0.4" stroke-width="14"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="600" cy="250" r="12" opacity="0.78"/>
+    <circle cx="1000" cy="250" r="12" opacity="0.62"/>
+    <circle cx="1260" cy="180" r="8" opacity="0.5"/>
+    <circle cx="320" cy="210" r="7" opacity="0.42"/>
+  </g>
+</svg>
