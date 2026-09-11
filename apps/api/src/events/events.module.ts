@@ -4,6 +4,7 @@ import { EventsController } from './events.controller';
 import { OrganizationEventsController } from './organization-events.controller';
 import { EventGalleryStorageService } from './event-gallery-storage.service';
 import { EventJoinInformationService } from './event-join-information.service';
+import { EventInformationService } from './event-information.service';
 
 @Module({
   controllers: [EventsController, OrganizationEventsController],
@@ -11,6 +12,7 @@ import { EventJoinInformationService } from './event-join-information.service';
     EventsService,
     EventGalleryStorageService,
     EventJoinInformationService,
+    EventInformationService,
   ],
 })
 export class EventsModule {}

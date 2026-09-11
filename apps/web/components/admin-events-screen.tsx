@@ -42,8 +42,10 @@ import {
 } from '@/components/admin-ui';
 import {
   closeAdminEvent,
+  createAdminEventInformation,
   createAdminEventJoinInformation,
   createAdminEvent,
+  deleteAdminEventInformation,
   deleteAdminEventJoinInformation,
   deleteAdminEvent,
   getAdminOrganizationEvents,
@@ -51,7 +53,9 @@ import {
   openAdminEvent,
   publishAdminEvent,
   quoteAdminEventSubscription,
+  reorderAdminEventInformation,
   reorderAdminEventJoinInformation,
+  updateAdminEventInformation,
   updateAdminEventJoinInformation,
   updateAdminEventGallery,
   uploadAdminEventGallery,
@@ -60,6 +64,8 @@ import {
   type AdminOrganizationEvent,
   type EventSubscriptionQuote,
   type EventJoinInformation,
+  type EventInformation,
+  type EventInformationType,
 } from '@/lib/api';
 
 type EventFilter = 'ALL' | AdminOrganizationEvent['status'];
@@ -116,6 +122,8 @@ export function AdminEventsScreen() {
   const [galleryEvent, setGalleryEvent] =
     useState<AdminOrganizationEvent | null>(null);
   const [joinInfoEvent, setJoinInfoEvent] =
+    useState<AdminOrganizationEvent | null>(null);
+  const [informationEvent, setInformationEvent] =
     useState<AdminOrganizationEvent | null>(null);
 
   useEffect(() => {
@@ -501,6 +509,15 @@ export function AdminEventsScreen() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setInformationEvent(event)}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Info className="h-4 w-4" aria-hidden />
+                    รายละเอียดภายในงาน ({event.information.length})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void deleteEvent(event)}
                     disabled={Boolean(busyAction)}
                     className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
@@ -572,8 +589,291 @@ export function AdminEventsScreen() {
             }}
           />
         ) : null}
+
+        {informationEvent && token && organizationId ? (
+          <EventInformationDialog
+            key={informationEvent.id}
+            event={informationEvent}
+            organizationId={organizationId}
+            token={token}
+            onClose={() => setInformationEvent(null)}
+            onUpdated={(information, message) => {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === informationEvent.id
+                    ? { ...item, information }
+                    : item,
+                ),
+              );
+              setInformationEvent((current) =>
+                current ? { ...current, information } : current,
+              );
+              setNotice(message);
+            }}
+          />
+        ) : null}
       </AdminPage>
     </AdminAccessGate>
+  );
+}
+
+const EVENT_INFORMATION_TYPE_LABELS: Record<EventInformationType, string> = {
+  ATMOSPHERE: 'บรรยากาศ',
+  ACTIVITY: 'กิจกรรม',
+  FACILITY: 'สิ่งอำนวยความสะดวก',
+};
+
+function EventInformationDialog({
+  event,
+  organizationId,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onClose: () => void;
+  onUpdated: (items: EventInformation[], message: string) => void;
+}) {
+  const [items, setItems] = useState(event.information);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState<EventInformationType>('ATMOSPHERE');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function resetForm() {
+    setEditingId(null);
+    setTitle('');
+    setDescription('');
+    setType('ATMOSPHERE');
+  }
+
+  function edit(item: EventInformation) {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setDescription(item.description);
+    setType(item.type);
+    setError('');
+  }
+
+  async function save(formEvent: FormEvent) {
+    formEvent.preventDefault();
+    const nextTitle = title.trim();
+    const nextDescription = description.trim();
+    if (!nextTitle || !nextDescription) {
+      setError('กรุณากรอกหัวข้อและรายละเอียดให้ครบ');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const input = { title: nextTitle, description: nextDescription, type };
+      const saved = editingId
+        ? await updateAdminEventInformation(
+            organizationId,
+            event.id,
+            editingId,
+            input,
+            token,
+          )
+        : await createAdminEventInformation(
+            organizationId,
+            event.id,
+            input,
+            token,
+          );
+      const nextItems = editingId
+        ? items.map((item) => (item.id === saved.id ? saved : item))
+        : [...items, saved];
+      setItems(nextItems);
+      resetForm();
+      onUpdated(
+        nextItems,
+        editingId
+          ? 'แก้ไขรายละเอียดภายในงานแล้ว'
+          : 'เพิ่มรายละเอียดภายในงานแล้ว',
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'บันทึกรายละเอียดไม่สำเร็จ',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(item: EventInformation) {
+    if (!window.confirm(`ลบ “${item.title}” หรือไม่?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteAdminEventInformation(
+        organizationId,
+        event.id,
+        item.id,
+        token,
+      );
+      const nextItems = items
+        .filter((current) => current.id !== item.id)
+        .map((current, sortOrder) => ({ ...current, sortOrder }));
+      setItems(nextItems);
+      if (editingId === item.id) resetForm();
+      onUpdated(nextItems, 'ลบรายละเอียดภายในงานแล้ว');
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'ลบรายละเอียดไม่สำเร็จ',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function move(index: number, offset: -1 | 1) {
+    const target = index + offset;
+    if (target < 0 || target >= items.length) return;
+    const previous = items;
+    const nextItems = [...items];
+    [nextItems[index], nextItems[target]] = [nextItems[target], nextItems[index]];
+    const normalized = nextItems.map((item, sortOrder) => ({
+      ...item,
+      sortOrder,
+    }));
+    setItems(normalized);
+    setBusy(true);
+    setError('');
+    try {
+      const saved = await reorderAdminEventInformation(
+        organizationId,
+        event.id,
+        normalized.map((item) => item.id),
+        token,
+      );
+      setItems(saved);
+      onUpdated(saved, 'บันทึกลำดับรายละเอียดแล้ว');
+    } catch (cause) {
+      setItems(previous);
+      setError(
+        cause instanceof Error ? cause.message : 'จัดลำดับรายละเอียดไม่สำเร็จ',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-information-title"
+        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+              Event information
+            </span>
+            <h2
+              id="event-information-title"
+              className="mt-1 text-xl font-black text-ink"
+            >
+              รายละเอียดภายในงาน · {event.name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="ปิดหน้าต่างรายละเอียดภายในงาน"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+
+        {error ? <AdminError message={error} /> : null}
+
+        <div className="mt-5 grid gap-3">
+          {items.length === 0 ? (
+            <AdminEmpty
+              icon={Info}
+              title="ยังไม่มีรายละเอียดภายในงาน"
+              description="เพิ่มข้อมูลบรรยากาศ กิจกรรม หรือสิ่งอำนวยความสะดวก"
+            />
+          ) : (
+            items.map((item, index) => (
+              <article
+                key={item.id}
+                className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="inline-flex rounded-full bg-[#eee8ff] px-2.5 py-1 text-xs font-bold text-violet">
+                      {EVENT_INFORMATION_TYPE_LABELS[item.type]}
+                    </span>
+                    <h3 className="mt-2 break-words font-extrabold text-ink">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">
+                      {item.description}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button type="button" onClick={() => void move(index, -1)} disabled={busy || index === 0} aria-label={`เลื่อน ${item.title} ขึ้น`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => void move(index, 1)} disabled={busy || index === items.length - 1} aria-label={`เลื่อน ${item.title} ลง`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => edit(item)} disabled={busy} aria-label={`แก้ไข ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => void remove(item)} disabled={busy} aria-label={`ลบ ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+
+        <form
+          onSubmit={(formEvent) => void save(formEvent)}
+          className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4"
+        >
+          <h3 className="font-extrabold text-ink">
+            {editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}
+          </h3>
+          <label className="mt-3 block text-sm font-bold text-ink">
+            หมวด
+            <select
+              value={type}
+              onChange={(inputEvent) =>
+                setType(inputEvent.target.value as EventInformationType)
+              }
+              disabled={busy}
+              className={`${INPUT_CLASS} mt-2`}
+            >
+              {Object.entries(EVENT_INFORMATION_TYPE_LABELS).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-bold text-ink">
+            หัวข้อ
+            <input value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} maxLength={200} disabled={busy} className={`${INPUT_CLASS} mt-2`} />
+          </label>
+          <label className="mt-3 block text-sm font-bold text-ink">
+            รายละเอียด
+            <textarea value={description} onChange={(inputEvent) => setDescription(inputEvent.target.value)} maxLength={5000} rows={4} disabled={busy} className={`${INPUT_CLASS} mt-2 py-3`} />
+          </label>
+          <div className="mt-4 flex justify-end gap-2">
+            {editingId ? <button type="button" onClick={resetForm} disabled={busy} className="sl-action-secondary">ยกเลิกแก้ไข</button> : null}
+            <button type="submit" disabled={busy} className="sl-action-primary">{busy ? 'กำลังบันทึก...' : editingId ? 'บันทึกการแก้ไข' : 'เพิ่มรายละเอียด'}</button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 

@@ -114,6 +114,7 @@ describe('EventsService', () => {
         venue: { select: { id: true, name: true } },
         subscription: true,
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
   });
@@ -182,6 +183,7 @@ describe('EventsService', () => {
         },
         include: {
           joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
         },
       });
       expect(subscriptionCreate).toHaveBeenCalledWith({
@@ -498,6 +500,16 @@ describe('EventsService', () => {
             sortOrder: 0,
           },
         ],
+        information: [
+          {
+            id: 'information-1',
+            eventId: 'event-1',
+            title: 'เวิร์กช็อป',
+            description: 'เปิดให้ร่วมกิจกรรมตลอดวัน',
+            type: 'ACTIVITY',
+            sortOrder: 0,
+          },
+        ],
       });
       zoneFindMany.mockResolvedValue([
         {
@@ -578,6 +590,13 @@ describe('EventsService', () => {
       expect(result.event.joinInformation).toEqual([
         expect.objectContaining({ title: 'จุดลงทะเบียน', sortOrder: 0 }),
       ]);
+      expect(result.event.information).toEqual([
+        expect.objectContaining({
+          title: 'เวิร์กช็อป',
+          type: 'ACTIVITY',
+          sortOrder: 0,
+        }),
+      ]);
       const [eventQuery] = findFirst.mock.calls[0] as [
         {
           include: {
@@ -585,6 +604,7 @@ describe('EventsService', () => {
               select: { facebookUrl: boolean; lineUrl: boolean };
             };
             joinInformation: { orderBy: { sortOrder: string } };
+            information: { orderBy: { sortOrder: string } };
           };
         },
       ];
@@ -593,6 +613,9 @@ describe('EventsService', () => {
         lineUrl: true,
       });
       expect(eventQuery.include.joinInformation).toEqual({
+        orderBy: { sortOrder: 'asc' },
+      });
+      expect(eventQuery.include.information).toEqual({
         orderBy: { sortOrder: 'asc' },
       });
       expect(result.zones[0].booths[1]).not.toHaveProperty('bookings');
@@ -718,6 +741,7 @@ describe('EventsService', () => {
       data: { galleryUrls: [third, first] },
       include: {
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
     expect(removeByUrls).toHaveBeenCalledWith([second]);
@@ -801,6 +825,7 @@ describe('EventsService', () => {
       data: { galleryUrls: [existing, ...uploaded] },
       include: {
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
   });
@@ -847,6 +872,7 @@ describe('EventsService', () => {
         venue: { select: { id: true, name: true } },
         subscription: true,
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
   });

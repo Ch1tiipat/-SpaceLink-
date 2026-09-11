@@ -26,6 +26,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
+import { EventInformationService } from './event-information.service';
 import { EventJoinInformationService } from './event-join-information.service';
 import { OrganizationEventsController } from './organization-events.controller';
 
@@ -45,6 +46,10 @@ const createJoinInformation = jest.fn();
 const updateJoinInformation = jest.fn();
 const removeJoinInformation = jest.fn();
 const reorderJoinInformation = jest.fn();
+const createInformation = jest.fn();
+const updateInformation = jest.fn();
+const removeInformation = jest.fn();
+const reorderInformation = jest.fn();
 const service = {
   findByOrganization,
   create,
@@ -62,6 +67,12 @@ const joinInformationService = {
   remove: removeJoinInformation,
   reorder: reorderJoinInformation,
 } as unknown as EventJoinInformationService;
+const informationService = {
+  create: createInformation,
+  update: updateInformation,
+  remove: removeInformation,
+  reorder: reorderInformation,
+} as unknown as EventInformationService;
 
 function handler(
   name:
@@ -77,6 +88,10 @@ function handler(
     | 'updateJoinInformation'
     | 'removeJoinInformation'
     | 'reorderJoinInformation'
+    | 'createInformation'
+    | 'updateInformation'
+    | 'removeInformation'
+    | 'reorderInformation'
     | 'remove' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -104,6 +119,7 @@ describe('OrganizationEventsController', () => {
   const controller = new OrganizationEventsController(
     service,
     joinInformationService,
+    informationService,
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -141,6 +157,27 @@ describe('OrganizationEventsController', () => {
       'updateJoinInformation',
       'removeJoinInformation',
       'reorderJoinInformation',
+    ] as const) {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
+        SupabaseAuthGuard,
+        OrgScopeGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler(name))).toBe(
+        'organizationId',
+      );
+      expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
+        UserRole.ORG_ADMIN,
+      ]);
+    }
+  });
+
+  it('protects event-information writes for scoped organization admins only', () => {
+    for (const name of [
+      'createInformation',
+      'updateInformation',
+      'removeInformation',
+      'reorderInformation',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -214,6 +251,10 @@ describe('OrganizationEventsController', () => {
     'updateJoinInformation',
     'removeJoinInformation',
     'reorderJoinInformation',
+    'createInformation',
+    'updateInformation',
+    'removeInformation',
+    'reorderInformation',
   ] as const)('validates the %s event id by UUID shape', (method) => {
     const metadata = Reflect.getMetadata(
       ROUTE_ARGS_METADATA,
@@ -285,10 +326,70 @@ describe('OrganizationEventsController', () => {
     );
   });
 
+  it('passes scoped event-information mutations to their service', async () => {
+    const input = {
+      title: 'เวิร์กช็อป',
+      description: 'ร่วมกิจกรรมได้ตลอดวัน',
+      type: 'ACTIVITY' as const,
+    };
+    createInformation.mockResolvedValue({ id: 'information-1' });
+    updateInformation.mockResolvedValue({ id: 'information-1' });
+    removeInformation.mockResolvedValue({ id: 'information-1' });
+    reorderInformation.mockResolvedValue([]);
+
+    await controller.createInformation(ORGANIZATION_ID, LEGACY_EVENT_ID, input);
+    await controller.updateInformation(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      { title: 'เวิร์กช็อปใหม่' },
+    );
+    await controller.removeInformation(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+    );
+    await controller.reorderInformation(ORGANIZATION_ID, LEGACY_EVENT_ID, {
+      ids: [LEGACY_EVENT_ID],
+    });
+
+    expect(createInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      input,
+    );
+    expect(updateInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      { title: 'เวิร์กช็อปใหม่' },
+    );
+    expect(removeInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+    );
+    expect(reorderInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      [LEGACY_EVENT_ID],
+    );
+  });
+
   it('rejects SUPER_ADMIN on event join-information writes', () => {
     const context = contextFor(
       { user: { id: ORG_ADMIN_ID, role: UserRole.SUPER_ADMIN } },
       'createJoinInformation',
+    );
+    expect(() => new RolesGuard(new Reflector()).canActivate(context)).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('rejects SUPER_ADMIN on event-information writes', () => {
+    const context = contextFor(
+      { user: { id: ORG_ADMIN_ID, role: UserRole.SUPER_ADMIN } },
+      'createInformation',
     );
     expect(() => new RolesGuard(new Reflector()).canActivate(context)).toThrow(
       ForbiddenException,
@@ -303,6 +404,10 @@ describe('OrganizationEventsController', () => {
     'updateJoinInformation',
     'removeJoinInformation',
     'reorderJoinInformation',
+    'createInformation',
+    'updateInformation',
+    'removeInformation',
+    'reorderInformation',
   ] as const)(
     'answers 404 when an ORG_ADMIN requests another organization via %s',
     async (name) => {

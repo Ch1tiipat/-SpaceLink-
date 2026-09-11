@@ -19,6 +19,7 @@ import {
   getEventMap,
   getEventMapBySlug,
   getVenueLocation,
+  type EventInformationType,
   type EventMap,
   type VenueLocation,
 } from '@/lib/api';
@@ -40,6 +41,12 @@ const compactDateFormatter = new Intl.DateTimeFormat('th-TH', {
   month: 'short',
   year: 'numeric',
 });
+
+const EVENT_INFORMATION_TYPE_LABELS: Record<EventInformationType, string> = {
+  ATMOSPHERE: 'บรรยากาศ',
+  ACTIVITY: 'กิจกรรม',
+  FACILITY: 'สิ่งอำนวยความสะดวก',
+};
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(value);
@@ -227,13 +234,13 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             </DetailSection>
           ) : null}
 
-        {galleryUrls.length > 0 ? (
-          <DetailSection
-            kicker="EVENT ATMOSPHERE"
-            title="บรรยากาศภายในงาน"
-            description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ"
-            count={`${galleryUrls.length} รูป`}
-          >
+        <DetailSection
+          kicker="EVENT DETAILS"
+          title="รายละเอียดภายในงาน"
+          description="รวมภาพบรรยากาศ กิจกรรม และสิ่งอำนวยความสะดวกของงาน"
+          count={galleryUrls.length > 0 ? `${galleryUrls.length} รูป` : undefined}
+        >
+          {galleryUrls.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {galleryUrls.map((url, index) => (
                 <div
@@ -245,15 +252,32 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                 />
               ))}
             </div>
-          </DetailSection>
-        ) : null}
+          ) : null}
 
-        <DetailSection kicker="ACTIVITIES" title="กิจกรรมภายในงาน">
-          <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลกิจกรรม" />
-        </DetailSection>
+          {event.information.length > 0 ? (
+            <div className={`${galleryUrls.length > 0 ? 'mt-5' : ''} grid gap-3 sm:grid-cols-2`}>
+              {event.information.map((item) => (
+                <article
+                  key={item.id}
+                  className="rounded-[16px] border border-[#e7deef] bg-[#faf7ff] p-5"
+                >
+                  <span className="inline-flex rounded-full bg-[#eee8ff] px-2.5 py-1 text-xs font-bold text-violet">
+                    {EVENT_INFORMATION_TYPE_LABELS[item.type]}
+                  </span>
+                  <h3 className="mt-3 break-words font-extrabold">
+                    {item.title}
+                  </h3>
+                  <p className="mt-2 whitespace-pre-line break-words text-sm leading-7 text-muted">
+                    {item.description}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : null}
 
-        <DetailSection kicker="FACILITIES" title="สิ่งอำนวยความสะดวกภายในงาน">
-          <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลสิ่งอำนวยความสะดวก" />
+          {galleryUrls.length === 0 && event.information.length === 0 ? (
+            <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดภายในงาน" />
+          ) : null}
         </DetailSection>
 
         <DetailSection
