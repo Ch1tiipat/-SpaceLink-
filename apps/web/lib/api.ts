@@ -8,6 +8,7 @@ export type EventSummary = {
   startTime: string | null;
   endTime: string | null;
   bannerUrl: string | null;
+  galleryUrls: string[];
   status: "DRAFT" | "PUBLISHED" | "ONGOING" | "COMPLETED" | "CANCELLED";
 };
 
@@ -1594,6 +1595,83 @@ export function deleteAdminEvent(
     { token },
     "ลบอีเวนต์ไม่สำเร็จ",
   );
+}
+
+export function updateAdminEventGallery(
+  organizationId: string,
+  eventId: string,
+  galleryUrls: string[],
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return patchJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}`,
+    { galleryUrls },
+    { token },
+    "บันทึกลำดับรูปภาพไม่สำเร็จ",
+  );
+}
+
+export async function uploadAdminEventGallery(
+  organizationId: string,
+  eventId: string,
+  files: File[],
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationEvent> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      0,
+    );
+  }
+
+  const form = new FormData();
+  files.forEach((file) => form.append("files", file));
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/gallery`,
+      {
+        method: "POST",
+        signal,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      },
+    );
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    throw new ApiError(
+      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดรูปภาพได้ กรุณาลองใหม่อีกครั้ง",
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(", ")
+      : payload?.message;
+    const fallbackByStatus: Record<number, string> = {
+      400: "ไฟล์รูปภาพไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด",
+      404: "ไม่พบอีเวนต์ในองค์กรนี้",
+      413: "ไฟล์รูปภาพมีขนาดเกิน 2 MB",
+      502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+    };
+    throw new ApiError(
+      detail || fallbackByStatus[response.status] || "อัปโหลดรูปภาพไม่สำเร็จ",
+      response.status,
+    );
+  }
+
+  return (await response.json()) as AdminOrganizationEvent;
 }
 
 export function getAdminOrganizationBookings(

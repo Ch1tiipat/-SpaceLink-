@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -19,6 +20,11 @@ import { decimalString } from '../common/decimal';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_BILLING_CONFIG } from '../platform-config/platform-config.service';
 import { generateEventSlug } from './event-slug.util';
+import {
+  EventGalleryStorageService,
+  MAX_EVENT_GALLERY_FILES,
+  type UploadedEventGalleryFile,
+} from './event-gallery-storage.service';
 
 const ACTIVE_BOOKING_STATUSES = [
   BookingStatus.PENDING_PAYMENT,
@@ -28,7 +34,12 @@ const MAX_EVENT_SLUG_ATTEMPTS = 3;
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(EventsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly galleryStorage: EventGalleryStorageService,
+  ) {}
 
   async create(createEventDto: CreateEventDto, organizationId: string) {
     for (let attempt = 1; attempt <= MAX_EVENT_SLUG_ATTEMPTS; attempt += 1) {
@@ -84,7 +95,7 @@ export class EventsService {
           });
 
           return {
-            ...event,
+            ...withGalleryUrls(event),
             venue: quote.venue,
             subscription: serializeSubscription(subscription),
           };
@@ -126,7 +137,7 @@ export class EventsService {
     });
 
     return events.map((event) => ({
-      ...event,
+      ...withGalleryUrls(event),
       subscription: event.subscription
         ? serializeSubscription(event.subscription)
         : null,
@@ -211,6 +222,7 @@ export class EventsService {
         startTime: true,
         endTime: true,
         bannerUrl: true,
+        galleryUrls: true,
         status: true,
         organization: {
           select: {
@@ -241,7 +253,7 @@ export class EventsService {
     });
 
     return events.map(({ venue, ...event }) => ({
-      ...event,
+      ...withGalleryUrls(event),
       venue: {
         id: venue.id,
         name: venue.name,
@@ -371,7 +383,7 @@ export class EventsService {
 
     return {
       event: {
-        ...publicEvent,
+        ...withGalleryUrls(publicEvent),
         organization: {
           id: organization.id,
           name: organization.name,
@@ -427,11 +439,80 @@ export class EventsService {
    * A filtered-out row raises P2025, which PrismaExceptionFilter turns into
    * the same 404 a missing id gives, so there is nothing to catch here.
    */
-  update(id: string, updateEventDto: UpdateEventDto, orgId: string) {
-    return this.prisma.event.update({
+  async update(id: string, updateEventDto: UpdateEventDto, orgId: string) {
+    const { galleryUrls, ...eventFields } = updateEventDto;
+    if (galleryUrls === undefined) {
+      const updated = await this.prisma.event.update({
+        where: { id, organizationId: orgId },
+        data: eventFields,
+      });
+      return withGalleryUrls(updated);
+    }
+
+    const existing = await this.prisma.event.findFirst({
       where: { id, organizationId: orgId },
-      data: updateEventDto,
+      select: { galleryUrls: true },
     });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const currentUrls = galleryUrlArray(existing.galleryUrls);
+    if (galleryUrls.some((url) => !currentUrls.includes(url))) {
+      throw new BadRequestException(
+        'จัดลำดับหรือลบได้เฉพาะรูปที่มีอยู่ในอีเวนต์นี้',
+      );
+    }
+
+    const updated = await this.prisma.event.update({
+      where: { id, organizationId: orgId },
+      data: { ...eventFields, galleryUrls },
+    });
+    const removedUrls = currentUrls.filter((url) => !galleryUrls.includes(url));
+    await this.cleanupGalleryUrls(removedUrls);
+    return withGalleryUrls(updated);
+  }
+
+  async uploadGallery(
+    id: string,
+    orgId: string,
+    files: UploadedEventGalleryFile[],
+  ) {
+    if (files.length === 0) {
+      throw new BadRequestException('กรุณาเลือกรูปภาพอย่างน้อย 1 รูป');
+    }
+
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { galleryUrls: true },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const currentUrls = galleryUrlArray(existing.galleryUrls);
+    if (currentUrls.length + files.length > MAX_EVENT_GALLERY_FILES) {
+      throw new BadRequestException(
+        `อีเวนต์หนึ่งมีรูปบรรยากาศได้สูงสุด ${MAX_EVENT_GALLERY_FILES} รูป`,
+      );
+    }
+
+    const uploadedUrls = await this.galleryStorage.uploadForEvent(files, id);
+    try {
+      const updated = await this.prisma.event.update({
+        where: { id, organizationId: orgId },
+        data: { galleryUrls: [...currentUrls, ...uploadedUrls] },
+      });
+      return withGalleryUrls(updated);
+    } catch (error) {
+      await this.cleanupGalleryUrls(uploadedUrls);
+      throw error;
+    }
+  }
+
+  private async cleanupGalleryUrls(urls: string[]): Promise<void> {
+    if (urls.length === 0) return;
+    try {
+      await this.galleryStorage.removeByUrls(urls);
+    } catch {
+      this.logger.error('Failed to clean up removed event gallery objects');
+    }
   }
 
   async publish(id: string, orgId: string) {
@@ -467,7 +548,7 @@ export class EventsService {
     }
 
     return {
-      ...event,
+      ...withGalleryUrls(event),
       subscription: event.subscription
         ? serializeSubscription(event.subscription)
         : null,
@@ -562,7 +643,7 @@ export class EventsService {
     }
 
     return {
-      ...event,
+      ...withGalleryUrls(event),
       subscription: event.subscription
         ? serializeSubscription(event.subscription)
         : null,
@@ -605,6 +686,16 @@ function dateValue(value: string): Date {
     throw new BadRequestException('Invalid event date');
   }
   return date;
+}
+
+function galleryUrlArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((url): url is string => typeof url === 'string')
+    : [];
+}
+
+function withGalleryUrls<T extends { galleryUrls?: unknown }>(event: T) {
+  return { ...event, galleryUrls: galleryUrlArray(event.galleryUrls) };
 }
 
 function decimal(value: string | Prisma.Decimal): Prisma.Decimal {

@@ -6,8 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -17,6 +20,11 @@ import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
+import {
+  MAX_EVENT_GALLERY_FILES,
+  MAX_EVENT_GALLERY_FILE_SIZE_BYTES,
+  type UploadedEventGalleryFile,
+} from './event-gallery-storage.service';
 
 @Controller('organizations/:organizationId/events')
 export class OrganizationEventsController {
@@ -42,6 +50,30 @@ export class OrganizationEventsController {
     @Body() input: CreateEventDto,
   ) {
     return this.eventsService.create(input, organizationId);
+  }
+
+  @Post(':eventId/gallery')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_EVENT_GALLERY_FILES, {
+      limits: {
+        files: MAX_EVENT_GALLERY_FILES,
+        fileSize: MAX_EVENT_GALLERY_FILE_SIZE_BYTES,
+      },
+    }),
+  )
+  uploadGallery(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @UploadedFiles() files: UploadedEventGalleryFile[] | undefined,
+  ) {
+    return this.eventsService.uploadGallery(
+      eventId,
+      organizationId,
+      files ?? [],
+    );
   }
 
   @Patch(':eventId/publish')

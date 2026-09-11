@@ -13,6 +13,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateEventSlug } from './event-slug.util';
 import { EventsService } from './events.service';
+import { EventGalleryStorageService } from './event-gallery-storage.service';
 
 jest.mock('./event-slug.util', () => ({
   generateEventSlug: jest.fn(),
@@ -33,6 +34,9 @@ const venueFindFirst = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const subscriptionCreate = jest.fn();
 const transaction = jest.fn();
+const uploadForEvent = jest.fn();
+const removeByUrls = jest.fn();
+const mockGalleryStorage = { uploadForEvent, removeByUrls };
 
 const mockPrismaService = {
   event: {
@@ -60,6 +64,10 @@ describe('EventsService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     generateEventSlugMock.mockReturnValue('sut-market-abc123');
+    uploadForEvent.mockResolvedValue([
+      'https://project.supabase.co/storage/v1/object/public/event-gallery/event/new',
+    ]);
+    removeByUrls.mockResolvedValue(undefined);
     transaction.mockImplementation(
       (callback: (client: typeof mockPrismaService) => unknown) =>
         callback(mockPrismaService),
@@ -69,6 +77,10 @@ describe('EventsService', () => {
       providers: [
         EventsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: EventGalleryStorageService,
+          useValue: mockGalleryStorage,
+        },
       ],
     }).compile();
 
@@ -84,13 +96,16 @@ describe('EventsService', () => {
       {
         id: eventId,
         organizationId: orgId,
+        galleryUrls: null,
         venue: { id: 'venue-1', name: 'Convention Center' },
         subscription: null,
       },
     ];
     eventFindMany.mockResolvedValue(events);
 
-    await expect(service.findByOrganization(orgId)).resolves.toEqual(events);
+    await expect(service.findByOrganization(orgId)).resolves.toEqual([
+      { ...events[0], galleryUrls: [] },
+    ]);
 
     expect(eventFindMany).toHaveBeenCalledWith({
       where: { organizationId: orgId },
@@ -317,6 +332,7 @@ describe('EventsService', () => {
           startTime: '09:00',
           endTime: '20:00',
           bannerUrl: null,
+          galleryUrls: ['https://example.com/gallery.png'],
           status: 'PUBLISHED',
           organization: {
             id: 'org-1',
@@ -359,6 +375,7 @@ describe('EventsService', () => {
       expect(result[0]).toMatchObject({
         id: 'event-1',
         slug: 'future-tech-expo-abc123',
+        galleryUrls: ['https://example.com/gallery.png'],
         organization: { id: 'org-1', name: 'SpaceLink University' },
         venue: {
           id: 'venue-1',
@@ -377,6 +394,7 @@ describe('EventsService', () => {
         }),
       );
       expect(discoveryQuery?.select?.slug).toBe(true);
+      expect(discoveryQuery?.select?.galleryUrls).toBe(true);
     });
 
     it('filters discovery to active organizations', async () => {
@@ -662,6 +680,116 @@ describe('EventsService', () => {
         data: dto,
       }),
     );
+  });
+
+  it('reorders and removes only URLs already stored on the event', async () => {
+    const first = 'https://example.com/first.png';
+    const second = 'https://example.com/second.png';
+    const third = 'https://example.com/third.png';
+    findFirst.mockResolvedValue({ galleryUrls: [first, second, third] });
+    eventUpdate.mockResolvedValue({ id: eventId, galleryUrls: [third, first] });
+
+    await expect(
+      service.update(eventId, { galleryUrls: [third, first] }, orgId),
+    ).resolves.toEqual({ id: eventId, galleryUrls: [third, first] });
+
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      data: { galleryUrls: [third, first] },
+    });
+    expect(removeByUrls).toHaveBeenCalledWith([second]);
+    expect(eventUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      removeByUrls.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rejects injecting an external gallery URL through PATCH', async () => {
+    findFirst.mockResolvedValue({
+      galleryUrls: ['https://example.com/existing.png'],
+    });
+
+    await expect(
+      service.update(
+        eventId,
+        { galleryUrls: ['https://attacker.example/injected.png'] },
+        orgId,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventUpdate).not.toHaveBeenCalled();
+    expect(removeByUrls).not.toHaveBeenCalled();
+  });
+
+  it('keeps the database result when removed-object cleanup fails', async () => {
+    const removed = 'https://example.com/removed.png';
+    findFirst.mockResolvedValue({ galleryUrls: [removed] });
+    eventUpdate.mockResolvedValue({ id: eventId, galleryUrls: [] });
+    removeByUrls.mockRejectedValue(new Error('storage unavailable'));
+
+    await expect(
+      service.update(eventId, { galleryUrls: [] }, orgId),
+    ).resolves.toEqual({ id: eventId, galleryUrls: [] });
+  });
+
+  it('checks organization ownership before uploading gallery files', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.uploadGallery(eventId, orgId, [{ buffer: Buffer.from('image') }]),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(uploadForEvent).not.toHaveBeenCalled();
+  });
+
+  it('enforces the total ten-image gallery limit before storage upload', async () => {
+    findFirst.mockResolvedValue({
+      galleryUrls: Array.from(
+        { length: 10 },
+        (_, index) => `https://example.com/${index}.png`,
+      ),
+    });
+
+    await expect(
+      service.uploadGallery(eventId, orgId, [{ buffer: Buffer.from('image') }]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(uploadForEvent).not.toHaveBeenCalled();
+  });
+
+  it('appends uploaded URLs in file order', async () => {
+    const existing = 'https://example.com/existing.png';
+    const uploaded = [
+      'https://example.com/uploaded-one.png',
+      'https://example.com/uploaded-two.png',
+    ];
+    const files = [
+      { buffer: Buffer.from('first') },
+      { buffer: Buffer.from('second') },
+    ];
+    findFirst.mockResolvedValue({ galleryUrls: [existing] });
+    uploadForEvent.mockResolvedValue(uploaded);
+    eventUpdate.mockResolvedValue({
+      id: eventId,
+      galleryUrls: [existing, ...uploaded],
+    });
+
+    await service.uploadGallery(eventId, orgId, files);
+
+    expect(uploadForEvent).toHaveBeenCalledWith(files, eventId);
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      data: { galleryUrls: [existing, ...uploaded] },
+    });
+  });
+
+  it('cleans uploaded objects when the database append fails', async () => {
+    const uploaded = ['https://example.com/uploaded.png'];
+    const failure = new Error('database unavailable');
+    findFirst.mockResolvedValue({ galleryUrls: [] });
+    uploadForEvent.mockResolvedValue(uploaded);
+    eventUpdate.mockRejectedValue(failure);
+
+    await expect(
+      service.uploadGallery(eventId, orgId, [{ buffer: Buffer.from('image') }]),
+    ).rejects.toBe(failure);
+    expect(removeByUrls).toHaveBeenCalledWith(uploaded);
   });
 
   it('publishes a draft event within the caller organization', async () => {

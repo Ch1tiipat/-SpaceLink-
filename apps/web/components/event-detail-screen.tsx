@@ -9,7 +9,6 @@ import {
   CircleDollarSign,
   Clock3,
   Heart,
-  ImageIcon,
   LayoutGrid,
   MapPin,
   Navigation,
@@ -145,6 +144,9 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     event.organization.facebookUrl,
   );
   const lineUrl = safeHttpUrl(event.organization.lineUrl);
+  const galleryUrls = event.galleryUrls
+    .map(safeHttpsUrl)
+    .filter((url): url is string => Boolean(url));
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
@@ -207,24 +209,26 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           />
         </DetailSection>
 
-        <DetailSection kicker="EVENT ATMOSPHERE" title="บรรยากาศภายในงาน" description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ" count={event.bannerUrl ? '1 รูป' : '0 รูป'}>
-          <div className="rounded-[22px] border border-[#e4d8ee] bg-[linear-gradient(180deg,#fcfaff,#f8f5fb)] p-4">
-            <div className="mb-4 flex items-center justify-between gap-4 max-sm:items-start max-sm:flex-col">
-              <div className="flex items-center gap-3">
-                <span className="grid h-[38px] w-[38px] place-items-center rounded-xl bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">✦</span>
-                <span><strong className="block text-[13px]">สำรวจบรรยากาศก่อนจอง</strong><span className="block text-sm text-muted">ภาพที่ผู้จัดงานเผยแพร่ในระบบ</span></span>
-              </div>
-              <span className="rounded-full border border-line bg-white px-3 py-2 text-sm text-muted">ภาพจากข้อมูล Event</span>
+        {galleryUrls.length > 0 ? (
+          <DetailSection
+            kicker="EVENT ATMOSPHERE"
+            title="บรรยากาศภายในงาน"
+            description="ดูพื้นที่จริงและบรรยากาศของงาน ก่อนเลือกโซนที่เหมาะกับร้านของคุณ"
+            count={`${galleryUrls.length} รูป`}
+          >
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {galleryUrls.map((url, index) => (
+                <div
+                  key={url}
+                  role="img"
+                  aria-label={`ภาพบรรยากาศ ${event.name} ลำดับ ${index + 1}`}
+                  className={`min-h-[220px] rounded-[18px] bg-[#f3eef7] bg-cover bg-center ${index === 0 && galleryUrls.length > 1 ? 'sm:col-span-2 lg:row-span-2 lg:min-h-[455px]' : ''}`}
+                  style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
+                />
+              ))}
             </div>
-            {event.bannerUrl ? (
-              <div className="min-h-[320px] rounded-[18px] bg-cover bg-center" role="img" aria-label={`ภาพประชาสัมพันธ์ ${event.name}`} style={{ backgroundImage: `url("${event.bannerUrl}")` }} />
-            ) : (
-              <div className="grid min-h-[220px] place-items-center rounded-[18px] border border-dashed border-[#ddd2e6] bg-[#f8f4fc] px-5 text-center">
-                <div><span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#eee6ff] text-violet"><ImageIcon className="h-5 w-5" aria-hidden /></span><strong className="mt-3 block text-sm">ยังไม่มีภาพบรรยากาศ</strong><span className="mt-1 block text-sm text-muted">เมื่อผู้จัดงานเพิ่มรูป ภาพจะปรากฏในกรอบนี้อัตโนมัติ</span></div>
-              </div>
-            )}
-          </div>
-        </DetailSection>
+          </DetailSection>
+        ) : null}
 
         <DetailSection kicker="ACTIVITIES" title="กิจกรรมภายในงาน">
           <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลกิจกรรม" />
