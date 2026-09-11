@@ -26,6 +26,7 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
 import { SystemBroadcastsModule } from './system-broadcasts/system-broadcasts.module';
 import { PlatformConfigModule } from './platform-config/platform-config.module';
+import { TransactionsModule } from './transactions/transactions.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PlatformConfigModule } from './platform-config/platform-config.module';
     PushSubscriptionsModule,
     SystemBroadcastsModule,
     PlatformConfigModule,
+    TransactionsModule,
   ],
 })
 export class AppModule {}
