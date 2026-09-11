@@ -1,5 +1,5 @@
-import { AdminVendorsScreen } from '@/components/admin-vendors-screen';
+import { redirect } from 'next/navigation';
 
 export default function AdminVendorsPage() {
-  return <AdminVendorsScreen />;
+  redirect('/admin/transactions?tab=vendors');
 }

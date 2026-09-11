@@ -15,7 +15,6 @@ import {
   Bell,
   CalendarDays,
   ChevronDown,
-  CircleDollarSign,
   House,
   Inbox,
   Landmark,
@@ -32,7 +31,6 @@ import {
   Send,
   Sparkles,
   Star,
-  Store,
   ThumbsDown,
   ThumbsUp,
   Ticket,
@@ -204,10 +202,14 @@ const ADMIN_NAV_GROUP: NavGroup = {
     },
     {
       kind: "link",
-      label: "การจอง",
-      href: "/admin/bookings",
+      label: "การเงินและการจอง",
+      href: "/admin/transactions",
       icon: Ticket,
-      matches: (pathname) => pathname.startsWith("/admin/bookings"),
+      matches: (pathname) =>
+        pathname.startsWith("/admin/transactions") ||
+        pathname.startsWith("/admin/bookings") ||
+        pathname.startsWith("/admin/payments") ||
+        pathname.startsWith("/admin/vendors"),
     },
     {
       kind: "link",
@@ -250,20 +252,6 @@ const ADMIN_NAV_GROUP: NavGroup = {
       href: "/admin/quota-requests",
       icon: Inbox,
       matches: (pathname) => pathname.startsWith("/admin/quota-requests"),
-    },
-    {
-      kind: "link",
-      label: "ผู้ขาย",
-      href: "/admin/vendors",
-      icon: Store,
-      matches: (pathname) => pathname.startsWith("/admin/vendors"),
-    },
-    {
-      kind: "link",
-      label: "การชำระเงิน",
-      href: "/admin/payments",
-      icon: CircleDollarSign,
-      matches: (pathname) => pathname.startsWith("/admin/payments"),
     },
   ],
 };
@@ -577,7 +565,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (adminRole === "SUPER_ADMIN") return true;
     if (selectedOrganization?.membershipRole === "OWNER") return true;
     if (item.kind !== "link") return true;
-    if (["/admin/bookings", "/admin/payments"].includes(item.href)) {
+    if (item.href === "/admin/transactions") {
       return selectedOrganization?.canManagePayments === true;
     }
     if (["/admin/zones", "/admin/map-designer"].includes(item.href)) {
