@@ -50,6 +50,9 @@ const notificationCreateMany = jest.fn();
 const notificationFindMany = jest.fn();
 const notificationCount = jest.fn();
 const notificationUpdateMany = jest.fn();
+const notificationDeleteMany = jest.fn();
+const notificationDelete = jest.fn();
+const notificationFindUnique = jest.fn();
 const sendToUser = jest.fn();
 const sendToUsers = jest.fn();
 const prismaTransaction = jest.fn();
@@ -58,7 +61,10 @@ const transactionClient = {
   review: { findMany: reviewFindMany },
   notification: {
     findMany: notificationFindMany,
+    findUnique: notificationFindUnique,
     createMany: notificationCreateMany,
+    deleteMany: notificationDeleteMany,
+    delete: notificationDelete,
   },
 };
 const mockPrismaService = {
@@ -72,6 +78,9 @@ const mockPrismaService = {
     findMany: notificationFindMany,
     count: notificationCount,
     updateMany: notificationUpdateMany,
+    deleteMany: notificationDeleteMany,
+    delete: notificationDelete,
+    findUnique: notificationFindUnique,
   },
   $transaction: prismaTransaction,
 };
@@ -105,6 +114,12 @@ describe('NotificationsService', () => {
     notificationFindMany.mockResolvedValue([NOTIFICATION]);
     notificationCount.mockResolvedValue(1);
     notificationUpdateMany.mockResolvedValue({ count: 1 });
+    notificationDeleteMany.mockResolvedValue({ count: 2 });
+    notificationDelete.mockResolvedValue(NOTIFICATION);
+    notificationFindUnique.mockResolvedValue({
+      relatedEntityType: INPUT.relatedEntityType,
+      relatedEntityId: INPUT.relatedEntityId,
+    });
     sendToUser.mockResolvedValue(undefined);
     sendToUsers.mockResolvedValue(undefined);
     userFindMany.mockResolvedValue([{ id: USER_ID }, { id: OTHER_USER_ID }]);
@@ -691,5 +706,63 @@ describe('NotificationsService', () => {
       where: { userId: USER_ID, isRead: false },
       data: { isRead: true },
     });
+  });
+
+  it('deletes every notification for the same related entity', async () => {
+    await expect(
+      service.deleteByRelatedEntity(
+        INPUT.relatedEntityType,
+        INPUT.relatedEntityId,
+      ),
+    ).resolves.toEqual({ count: 2 });
+    expect(notificationDeleteMany).toHaveBeenCalledWith({
+      where: {
+        relatedEntityType: INPUT.relatedEntityType,
+        relatedEntityId: INPUT.relatedEntityId,
+      },
+    });
+  });
+
+  it('deletes a related notification group as a super admin', async () => {
+    await expect(service.removeAsSuperAdmin(NOTIFICATION_ID)).resolves.toEqual({
+      count: 2,
+    });
+
+    expect(notificationFindUnique).toHaveBeenCalledWith({
+      where: { id: NOTIFICATION_ID },
+      select: { relatedEntityType: true, relatedEntityId: true },
+    });
+    expect(notificationDeleteMany).toHaveBeenCalledWith({
+      where: {
+        relatedEntityType: INPUT.relatedEntityType,
+        relatedEntityId: INPUT.relatedEntityId,
+      },
+    });
+    expect(notificationDelete).not.toHaveBeenCalled();
+  });
+
+  it('deletes only a standalone notification as a super admin', async () => {
+    notificationFindUnique.mockResolvedValue({
+      relatedEntityType: null,
+      relatedEntityId: null,
+    });
+
+    await expect(service.removeAsSuperAdmin(NOTIFICATION_ID)).resolves.toEqual({
+      count: 1,
+    });
+    expect(notificationDelete).toHaveBeenCalledWith({
+      where: { id: NOTIFICATION_ID },
+    });
+    expect(notificationDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when a super admin notification does not exist', async () => {
+    notificationFindUnique.mockResolvedValue(null);
+
+    await expect(service.removeAsSuperAdmin(NOTIFICATION_ID)).rejects.toEqual(
+      new NotFoundException('ไม่พบการแจ้งเตือน'),
+    );
+    expect(notificationDeleteMany).not.toHaveBeenCalled();
+    expect(notificationDelete).not.toHaveBeenCalled();
   });
 });

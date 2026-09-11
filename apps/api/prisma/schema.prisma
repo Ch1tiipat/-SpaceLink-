@@ -281,6 +281,7 @@ model Venue {
   address        String?
   latitude       Decimal?    @db.Decimal(9, 6)
   longitude      Decimal?    @db.Decimal(9, 6)
+  googleMapsUrl  String?     @map("google_maps_url")
   mapImageUrl    String?     @map("map_image_url")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz

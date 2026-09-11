@@ -34,15 +34,22 @@ const findMine = jest.fn();
 const unreadCount = jest.fn();
 const markRead = jest.fn();
 const markAllRead = jest.fn();
+const removeAsSuperAdmin = jest.fn();
 const mockNotificationsService = {
   findMine,
   unreadCount,
   markRead,
   markAllRead,
+  removeAsSuperAdmin,
 };
 
 function controllerHandler(
-  name: 'findMine' | 'unreadCount' | 'markRead' | 'markAllRead',
+  name:
+    | 'findMine'
+    | 'unreadCount'
+    | 'markRead'
+    | 'markAllRead'
+    | 'removeAsSuperAdmin',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     NotificationsController.prototype,
@@ -90,6 +97,18 @@ describe('NotificationsController', () => {
     }
   });
 
+  it('restricts deletion to super admins without adding duplicate guards', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, controllerHandler('removeAsSuperAdmin')),
+    ).toEqual([UserRole.SUPER_ADMIN]);
+    expect(
+      Reflect.getMetadata(
+        GUARDS_METADATA,
+        controllerHandler('removeAsSuperAdmin'),
+      ),
+    ).toBeUndefined();
+  });
+
   it('lists only the current user notifications', async () => {
     findMine.mockResolvedValue([]);
 
@@ -121,6 +140,15 @@ describe('NotificationsController', () => {
     await controller.markAllRead(CURRENT_USER);
 
     expect(markAllRead).toHaveBeenCalledWith(USER_ID);
+  });
+
+  it('deletes a notification as a super admin', async () => {
+    removeAsSuperAdmin.mockResolvedValue({ count: 2 });
+
+    await expect(
+      controller.removeAsSuperAdmin(NOTIFICATION_ID),
+    ).resolves.toEqual({ count: 2 });
+    expect(removeAsSuperAdmin).toHaveBeenCalledWith(NOTIFICATION_ID);
   });
 
   it('transforms true and false query strings into booleans', async () => {
