@@ -42,6 +42,8 @@ const close = jest.fn();
 const remove = jest.fn();
 const update = jest.fn();
 const uploadGallery = jest.fn();
+const uploadBanner = jest.fn();
+const removeBanner = jest.fn();
 const createJoinInformation = jest.fn();
 const updateJoinInformation = jest.fn();
 const removeJoinInformation = jest.fn();
@@ -60,6 +62,8 @@ const service = {
   remove,
   update,
   uploadGallery,
+  uploadBanner,
+  removeBanner,
 } as unknown as EventsService;
 const joinInformationService = {
   create: createJoinInformation,
@@ -84,6 +88,8 @@ function handler(
     | 'close'
     | 'update'
     | 'uploadGallery'
+    | 'uploadBanner'
+    | 'removeBanner'
     | 'createJoinInformation'
     | 'updateJoinInformation'
     | 'removeJoinInformation'
@@ -135,6 +141,8 @@ describe('OrganizationEventsController', () => {
       'remove',
       'update',
       'uploadGallery',
+      'uploadBanner',
+      'removeBanner',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -247,6 +255,8 @@ describe('OrganizationEventsController', () => {
     'remove',
     'update',
     'uploadGallery',
+    'uploadBanner',
+    'removeBanner',
     'createJoinInformation',
     'updateJoinInformation',
     'removeJoinInformation',
@@ -400,6 +410,8 @@ describe('OrganizationEventsController', () => {
     'findByOrganization',
     'update',
     'uploadGallery',
+    'uploadBanner',
+    'removeBanner',
     'createJoinInformation',
     'updateJoinInformation',
     'removeJoinInformation',
@@ -503,6 +515,27 @@ describe('OrganizationEventsController', () => {
       ORGANIZATION_ID,
       files,
     );
+  });
+
+  it('uses a single-file interceptor and passes scoped banner mutations to the service', async () => {
+    const interceptors = Reflect.getMetadata(
+      INTERCEPTORS_METADATA,
+      handler('uploadBanner'),
+    ) as unknown[];
+    expect(interceptors).toHaveLength(1);
+    const file = { buffer: Buffer.from('banner') };
+    uploadBanner.mockResolvedValue({ id: LEGACY_EVENT_ID });
+    removeBanner.mockResolvedValue({ id: LEGACY_EVENT_ID, bannerUrl: null });
+
+    await controller.uploadBanner(ORGANIZATION_ID, LEGACY_EVENT_ID, file);
+    await controller.removeBanner(ORGANIZATION_ID, LEGACY_EVENT_ID);
+
+    expect(uploadBanner).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      file,
+    );
+    expect(removeBanner).toHaveBeenCalledWith(LEGACY_EVENT_ID, ORGANIZATION_ID);
   });
 
   it('rejects vendors on the update handler', () => {

@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { generateEventSlug } from './event-slug.util';
 import { EventsService } from './events.service';
 import { EventGalleryStorageService } from './event-gallery-storage.service';
+import { EventBannerStorageService } from './event-banner-storage.service';
 
 jest.mock('./event-slug.util', () => ({
   generateEventSlug: jest.fn(),
@@ -37,6 +38,12 @@ const transaction = jest.fn();
 const uploadForEvent = jest.fn();
 const removeByUrls = jest.fn();
 const mockGalleryStorage = { uploadForEvent, removeByUrls };
+const uploadBannerForEvent = jest.fn();
+const removeBannerByUrl = jest.fn();
+const mockBannerStorage = {
+  uploadForEvent: uploadBannerForEvent,
+  removeByUrl: removeBannerByUrl,
+};
 
 const mockPrismaService = {
   event: {
@@ -68,6 +75,10 @@ describe('EventsService', () => {
       'https://project.supabase.co/storage/v1/object/public/event-gallery/event/new',
     ]);
     removeByUrls.mockResolvedValue(undefined);
+    uploadBannerForEvent.mockResolvedValue(
+      'https://project.supabase.co/storage/v1/object/public/event-banners/event/new',
+    );
+    removeBannerByUrl.mockResolvedValue(undefined);
     transaction.mockImplementation(
       (callback: (client: typeof mockPrismaService) => unknown) =>
         callback(mockPrismaService),
@@ -77,6 +88,10 @@ describe('EventsService', () => {
       providers: [
         EventsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: EventBannerStorageService,
+          useValue: mockBannerStorage,
+        },
         {
           provide: EventGalleryStorageService,
           useValue: mockGalleryStorage,
@@ -784,6 +799,101 @@ describe('EventsService', () => {
       service.uploadGallery(eventId, orgId, [{ buffer: Buffer.from('image') }]),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(uploadForEvent).not.toHaveBeenCalled();
+  });
+
+  it('checks organization ownership before uploading a banner', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.uploadBanner(eventId, orgId, { buffer: Buffer.from('image') }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(uploadBannerForEvent).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing banner before storage upload', async () => {
+    await expect(
+      service.uploadBanner(eventId, orgId, undefined),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(findFirst).not.toHaveBeenCalled();
+    expect(uploadBannerForEvent).not.toHaveBeenCalled();
+  });
+
+  it('replaces the database banner before cleaning up the previous object', async () => {
+    const previous = 'https://example.com/previous.png';
+    const uploaded =
+      'https://project.supabase.co/storage/v1/object/public/event-banners/event/new';
+    const file = { buffer: Buffer.from('image') };
+    findFirst.mockResolvedValue({ bannerUrl: previous });
+    uploadBannerForEvent.mockResolvedValue(uploaded);
+    eventUpdate.mockResolvedValue({ id: eventId, bannerUrl: uploaded });
+
+    await expect(service.uploadBanner(eventId, orgId, file)).resolves.toEqual({
+      id: eventId,
+      bannerUrl: uploaded,
+      galleryUrls: [],
+    });
+
+    expect(uploadBannerForEvent).toHaveBeenCalledWith(file, eventId);
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      data: { bannerUrl: uploaded },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    expect(eventUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      removeBannerByUrl.mock.invocationCallOrder[0],
+    );
+    expect(removeBannerByUrl).toHaveBeenCalledWith(previous);
+  });
+
+  it('cleans a newly uploaded banner when the database update fails', async () => {
+    const uploaded =
+      'https://project.supabase.co/storage/v1/object/public/event-banners/event/new';
+    const failure = new Error('database unavailable');
+    findFirst.mockResolvedValue({ bannerUrl: null });
+    uploadBannerForEvent.mockResolvedValue(uploaded);
+    eventUpdate.mockRejectedValue(failure);
+
+    await expect(
+      service.uploadBanner(eventId, orgId, { buffer: Buffer.from('image') }),
+    ).rejects.toBe(failure);
+    expect(removeBannerByUrl).toHaveBeenCalledWith(uploaded);
+  });
+
+  it('clears the database banner before cleaning up the stored object', async () => {
+    const existing = 'https://example.com/banner.png';
+    findFirst.mockResolvedValue({ bannerUrl: existing });
+    eventUpdate.mockResolvedValue({ id: eventId, bannerUrl: null });
+
+    await expect(service.removeBanner(eventId, orgId)).resolves.toEqual({
+      id: eventId,
+      bannerUrl: null,
+      galleryUrls: [],
+    });
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId: orgId },
+      data: { bannerUrl: null },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    expect(eventUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      removeBannerByUrl.mock.invocationCallOrder[0],
+    );
+    expect(removeBannerByUrl).toHaveBeenCalledWith(existing);
+  });
+
+  it('answers 404 when removing a banner outside the caller organization', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.removeBanner(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(eventUpdate).not.toHaveBeenCalled();
+    expect(removeBannerByUrl).not.toHaveBeenCalled();
   });
 
   it('enforces the total ten-image gallery limit before storage upload', async () => {
