@@ -163,7 +163,11 @@ const boothFindUnique = jest.fn();
 const shopFindFirst = jest.fn();
 const userFindUnique = jest.fn();
 const bookingFindFirst = jest.fn();
+const GRANT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const bookingCount = jest.fn();
+const quotaGrantFindFirst = jest.fn();
+const quotaGrantUpdateMany = jest.fn();
+const quotaGrantCount = jest.fn();
 const bookingCreate = jest.fn();
 const bookingFindUnique = jest.fn();
 const bookingFindMany = jest.fn();
@@ -200,6 +204,11 @@ const mockPrismaService = {
     updateMany: paymentGroupUpdateMany,
   },
   verifiedSlip: { findFirst: verifiedSlipFindFirst },
+  boothQuotaGrant: {
+    findFirst: quotaGrantFindFirst,
+    updateMany: quotaGrantUpdateMany,
+    count: quotaGrantCount,
+  },
   platformConfig: { findFirst: platformConfigFindFirst },
   $transaction: prismaTransaction,
 };
@@ -273,6 +282,11 @@ describe('BookingsService', () => {
     userFindUnique.mockResolvedValue({ isBlacklisted: false });
     bookingFindFirst.mockResolvedValue(null);
     bookingCount.mockResolvedValue(0);
+    // No grant unless a test says so, so every pre-existing quota expectation
+    // keeps meaning what it meant before SCRUM-182.
+    quotaGrantFindFirst.mockResolvedValue(null);
+    quotaGrantUpdateMany.mockResolvedValue({ count: 1 });
+    quotaGrantCount.mockResolvedValue(0);
     bookingCreate.mockResolvedValue(CREATED_BOOKING);
     bookingFindUnique.mockResolvedValue({
       ...CREATED_BOOKING,
@@ -695,6 +709,51 @@ describe('BookingsService', () => {
       });
     });
 
+    it('adds unspent grants to what the vendor may still select', async () => {
+      eventFindUnique.mockResolvedValue({
+        organization: {
+          orgConfig: { bookingQuotaPerVendor: 2 },
+        },
+      });
+      bookingCount.mockResolvedValue(2);
+      quotaGrantCount.mockResolvedValue(1);
+
+      // Without this the approved vendor is still shown a full quota and a
+      // disabled map, and the approval looks like it did nothing.
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).resolves.toEqual({
+        configuredQuota: 2,
+        activeBookingCount: 2,
+        remainingQuota: 1,
+        effectiveSelectionLimit: 1,
+      });
+      expect(quotaGrantCount).toHaveBeenCalledWith({
+        where: {
+          eventId: EVENT_ID,
+          vendorUserId: VENDOR_ID,
+          consumedBookingId: null,
+        },
+      });
+    });
+
+    it('ignores grants that have already been spent', async () => {
+      eventFindUnique.mockResolvedValue({
+        organization: {
+          orgConfig: { bookingQuotaPerVendor: 2 },
+        },
+      });
+      bookingCount.mockResolvedValue(2);
+      quotaGrantCount.mockResolvedValue(0);
+
+      await expect(
+        service.getQuotaContext(EVENT_ID, VENDOR_ID),
+      ).resolves.toMatchObject({
+        remainingQuota: 0,
+        effectiveSelectionLimit: 0,
+      });
+    });
+
     it('returns 404 for an unknown event without reading booking counts', async () => {
       eventFindUnique.mockResolvedValue(null);
 
@@ -963,43 +1022,144 @@ describe('BookingsService', () => {
     });
   });
 
-  describe('createForAdmin', () => {
-    it('does not let a quota exception bypass the blacklist', async () => {
-      userFindUnique.mockResolvedValue({ isBlacklisted: true });
-
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(bookingFindFirst).not.toHaveBeenCalled();
-      expect(bookingCreate).not.toHaveBeenCalled();
-    });
-
-    // The approved end of a quota exception. The default event mock allows 3
-    // per vendor and the vendor already holds 5 — the vendor path would refuse
-    // this outright (see 'rejects a vendor who has reached the organization
-    // quota'), and this path must not.
-    it('creates a booking for a vendor already over the quota', async () => {
+  // SCRUM-182 replaced the admin create path: approving a quota request now
+  // mints a BoothQuotaGrant and the vendor books a booth themselves through
+  // this same method, so the waiver lives here rather than in a separate
+  // admin-only entry point.
+  describe('booth quota grants', () => {
+    it('lets a vendor at the quota book when they hold an unspent grant', async () => {
       bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
 
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).resolves.toEqual({ ...CREATED_BOOKING, boothPrice: '1500' });
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).resolves.toEqual({
+        ...CREATED_BOOKING,
+        boothPrice: '1500',
+      });
 
+      expect(quotaGrantFindFirst).toHaveBeenCalledWith({
+        where: {
+          vendorUserId: VENDOR_ID,
+          eventId: EVENT_ID,
+          consumedBookingId: null,
+        },
+        orderBy: { grantedAt: 'asc' },
+        select: { id: true },
+      });
       expect(bookingCreate).toHaveBeenCalledTimes(1);
       const data = bookingCreateData();
-      // Booked for the vendor named in the argument, not for whoever approved
-      // it, and on the ordinary pending-payment path — an exception to the
-      // quota is not an exemption from paying.
+      // A grant waives the ceiling and nothing else: the booking is still the
+      // vendor's own, still pending payment, still not payment-exempt.
       expect(data.vendorUserId).toBe(VENDOR_ID);
       expect(data.status).toBe(BookingStatus.PENDING_PAYMENT);
       expect(data.isPaymentExempt).toBe(false);
     });
 
-    it('returns 404 without writing when the event belongs to another organization', async () => {
+    it('spends the grant on the booking it paid for', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
+
+      await service.create(CREATE_DTO, VENDOR_ID);
+
+      const [spendArgs] = quotaGrantUpdateMany.mock.calls[0] as [
+        {
+          where: { id: string; consumedBookingId: null };
+          data: { consumedBookingId: string; consumedAt: Date };
+        },
+      ];
+      expect(spendArgs.where).toEqual({
+        id: GRANT_ID,
+        consumedBookingId: null,
+      });
+      expect(spendArgs.data.consumedBookingId).toBe(BOOKING_ID);
+      expect(spendArgs.data.consumedAt).toBeInstanceOf(Date);
+      // Spent after the booking exists — it cannot name a row that has not
+      // been written yet.
+      expect(bookingCreate.mock.invocationCallOrder[0]).toBeLessThan(
+        quotaGrantUpdateMany.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('refuses a vendor at the quota who holds no grant', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue(null);
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'คุณจองบูธในงานนี้ครบโควตาแล้ว',
+      );
+      expect(bookingCreate).not.toHaveBeenCalled();
+      expect(quotaGrantUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not look for a grant when the vendor is under the quota', async () => {
+      bookingCount.mockResolvedValue(1);
+
+      await service.create(CREATE_DTO, VENDOR_ID);
+
+      expect(quotaGrantFindFirst).not.toHaveBeenCalled();
+      expect(quotaGrantUpdateMany).not.toHaveBeenCalled();
+      expect(bookingCreate).toHaveBeenCalledTimes(1);
+    });
+
+    // The race the `consumedBookingId: null` filter exists for: both requests
+    // read the grant as unspent, so the guard in the update is the only thing
+    // that can separate them. The loser must throw, which rolls its own
+    // booking back with the transaction.
+    it('lets only one of two concurrent bookings spend the same grant', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
+      quotaGrantUpdateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      const [winner, loser] = await Promise.allSettled([
+        service.create(CREATE_DTO, VENDOR_ID),
+        service.create(CREATE_DTO, VENDOR_ID),
+      ]);
+
+      expect(winner.status).toBe('fulfilled');
+      expect(loser.status).toBe('rejected');
+      if (loser.status === 'rejected') {
+        expect(loser.reason).toBeInstanceOf(ConflictException);
+        expect(loser.reason).toMatchObject({
+          message: 'สิทธิ์จองเพิ่มถูกใช้ไปแล้ว กรุณาตรวจสอบรายการจองของคุณ',
+        });
+      }
+      expect(quotaGrantUpdateMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('still refuses a booth that already has an active booking', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
+      bookingFindFirst.mockResolvedValue({ id: 'existing-booking' });
+
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'บูธนี้ถูกจองไปแล้ว',
+      );
+      expect(bookingCreate).not.toHaveBeenCalled();
+      expect(quotaGrantUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not let a grant bypass the blacklist', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
+      userFindUnique.mockResolvedValue({ isBlacklisted: true });
+
+      await expect(
+        service.create(CREATE_DTO, VENDOR_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(bookingCreate).not.toHaveBeenCalled();
+      expect(quotaGrantUpdateMany).not.toHaveBeenCalled();
+    });
+
+    // The grant carries no expiry of its own: it dies with its event, which is
+    // the existing bookable-event check doing the work (decision 0.2).
+    it('still refuses an event that has closed for bookings', async () => {
+      bookingCount.mockResolvedValue(5);
+      quotaGrantFindFirst.mockResolvedValue({ id: GRANT_ID });
       eventFindUnique.mockResolvedValue({
         id: EVENT_ID,
-        status: EventStatus.PUBLISHED,
-        organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        status: EventStatus.COMPLETED,
+        organizationId: ORGANIZATION_ID,
         venueId: VENUE_ID,
         startDate: EVENT_START,
         endDate: EVENT_END,
@@ -1009,59 +1169,11 @@ describe('BookingsService', () => {
         },
       });
 
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).rejects.toThrow(new NotFoundException('ไม่พบอีเวนต์'));
-
-      expect(bookingFindFirst).not.toHaveBeenCalled();
-      expect(bookingCount).not.toHaveBeenCalled();
-      expect(bookingCreate).not.toHaveBeenCalled();
-    });
-
-    // Quota is the only invariant waived. The rest of createWithinTransaction
-    // still runs, so an admin cannot double-book a booth by approving a ticket.
-    it('still refuses a booth with an active booking', async () => {
-      bookingCount.mockResolvedValue(5);
-      bookingFindFirst.mockResolvedValue({ id: 'existing-booking' });
-
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).rejects.toThrow('บูธนี้ถูกจองไปแล้ว');
-      expect(bookingCreate).not.toHaveBeenCalled();
-    });
-
-    it('still refuses a booth in another venue', async () => {
-      bookingCount.mockResolvedValue(5);
-      boothFindUnique.mockResolvedValue({
-        id: BOOTH_ID,
-        status: BoothStatus.AVAILABLE,
-        boothPrice: BOOTH_PRICE,
-        zone: { venueId: '88888888-8888-4888-8888-888888888888' },
-      });
-
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(bookingCreate).not.toHaveBeenCalled();
-    });
-
-    it('keeps the serializable retry the vendor path has', async () => {
-      const serializationError = new Prisma.PrismaClientKnownRequestError(
-        'Transaction write conflict',
-        { code: 'P2034', clientVersion: 'test' },
+      await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
+        'อีเวนต์นี้ยังไม่เปิดให้จอง',
       );
-      prismaTransaction
-        .mockRejectedValueOnce(serializationError)
-        .mockImplementationOnce(
-          (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
-            operation(mockPrismaService as unknown as Prisma.TransactionClient),
-        );
-
-      await expect(
-        service.createForAdmin(CREATE_DTO, VENDOR_ID, ORGANIZATION_ID),
-      ).resolves.toMatchObject({ id: BOOKING_ID });
-      expect(prismaTransaction).toHaveBeenCalledTimes(2);
-      expect(bookingCreate).toHaveBeenCalledTimes(1);
+      expect(bookingCreate).not.toHaveBeenCalled();
+      expect(quotaGrantUpdateMany).not.toHaveBeenCalled();
     });
   });
 

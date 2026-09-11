@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+import { RejectQuotaExceptionDto } from './dto/reject-quota-exception.dto';
 import { UpdateSupportTicketStatusDto } from './dto/update-support-ticket-status.dto';
 import { SupportTicketsService } from './support-tickets.service';
 
@@ -73,6 +74,33 @@ export class SupportTicketsController {
     );
   }
 
+  /**
+   * The organization's request inbox. Its absence was the reason an ORG_ADMIN
+   * had no way to see a vendor's quota request at all: every other read on this
+   * controller is SUPER_ADMIN-only by the class-level @Roles.
+   */
+  @Get('organizations/:organizationId')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  findAllForOrganizationAdmin(@CurrentOrgId() organizationId: string) {
+    return this.supportTicketsService.findAllForOrganizationAdmin(
+      organizationId,
+    );
+  }
+
+  @Get('organizations/:organizationId/:ticketId')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  findOneForOrganizationAdmin(
+    @Param('ticketId') ticketId: string,
+    @CurrentOrgId() organizationId: string,
+  ) {
+    return this.supportTicketsService.findOneForOrganizationAdmin(
+      ticketId,
+      organizationId,
+    );
+  }
+
   // Org-scoped, so its effective guard chain is [SupabaseAuthGuard, RolesGuard,
   // SupabaseAuthGuard, OrgScopeGuard] — Nest runs controller-level guards before
   // route-level ones, and `@OrgScoped` bundles its own SupabaseAuthGuard. That
@@ -87,11 +115,30 @@ export class SupportTicketsController {
     @Param('ticketId') ticketId: string,
     @Body() approveQuotaExceptionDto: ApproveQuotaExceptionDto,
     @CurrentOrgId() orgId: string,
+    @CurrentUser() currentUser: User,
   ) {
     return this.supportTicketsService.approveQuotaException(
       ticketId,
       approveQuotaExceptionDto,
       orgId,
+      currentUser.id,
+    );
+  }
+
+  @Patch(':ticketId/reject-quota-exception')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('ticketId')
+  rejectQuotaException(
+    @Param('ticketId') ticketId: string,
+    @Body() rejectQuotaExceptionDto: RejectQuotaExceptionDto,
+    @CurrentOrgId() orgId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.supportTicketsService.rejectQuotaException(
+      ticketId,
+      rejectQuotaExceptionDto,
+      orgId,
+      currentUser.id,
     );
   }
 }

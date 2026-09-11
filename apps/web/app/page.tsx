@@ -25,6 +25,7 @@ import {
   type EventZone,
 } from "@/lib/api";
 import { isEventBookable } from "@/lib/event-booking-rules";
+import { getEventCoverUrl } from "@/lib/event-cover";
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
 type UpdateFilter = "all" | "event" | "announcement";
@@ -469,7 +470,10 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
       className="sl-surface relative block h-full overflow-hidden text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
     >
       <div
-        className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}
+        className="flex min-h-[130px] items-end bg-cover bg-center p-[17px] text-white"
+        style={{
+          backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.82),rgba(78,30,150,.48),rgba(56,101,104,.38)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
+        }}
       >
         <strong className="text-[23px]">{formatDateRange(event)}</strong>
       </div>

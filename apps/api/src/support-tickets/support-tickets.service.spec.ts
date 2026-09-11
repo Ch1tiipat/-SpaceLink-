@@ -13,7 +13,7 @@ import {
   TicketType,
   UserRole,
 } from '@prisma/client';
-import { BookingsService } from '../bookings/bookings.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportTicketsService } from './support-tickets.service';
@@ -22,6 +22,7 @@ import {
   CreateSupportTicketDto,
   SupportTicketRequestType,
 } from './dto/create-support-ticket.dto';
+import { RejectQuotaExceptionDto } from './dto/reject-quota-exception.dto';
 
 const TICKET_ID = '11111111-1111-4111-8111-111111111111';
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
@@ -53,9 +54,12 @@ const ADMIN_ISSUE_DTO: CreateSupportTicketDto = {
   subject: 'ขอความช่วยเหลือจาก Super Admin',
   message: 'กรุณาตรวจสอบการตั้งค่าขององค์กร',
 };
+const GRANT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const APPROVE_DTO: ApproveQuotaExceptionDto = {
-  eventId: EVENT_ID,
-  boothId: BOOTH_ID,
+  reason: 'อนุมัติตามที่ร้องขอ',
+};
+const REJECT_DTO: RejectQuotaExceptionDto = {
+  reason: 'โควตาของงานนี้เต็มแล้ว',
 };
 
 const CREATED_TICKET = {
@@ -70,12 +74,6 @@ const CREATED_TICKET = {
   updatedAt: NOW,
 };
 
-const CREATED_BOOKING = {
-  id: BOOKING_ID,
-  bookingCode: 'BK-0123456789AB',
-  boothPrice: '1500',
-};
-
 const bookingFindMany = jest.fn();
 const bookingFindFirst = jest.fn();
 const boothFindFirst = jest.fn();
@@ -88,9 +86,11 @@ const supportTicketFindMany = jest.fn();
 const ticketMessageCreate = jest.fn();
 const shopFindFirst = jest.fn();
 const prismaTransaction = jest.fn();
-const createForAdmin = jest.fn();
+const quotaGrantCreate = jest.fn();
 const createForUser = jest.fn();
 const createForRole = jest.fn();
+const createForOrganizationAdmins = jest.fn();
+const recordAuditLog = jest.fn();
 
 const mockPrismaService = {
   booking: { findMany: bookingFindMany, findFirst: bookingFindFirst },
@@ -105,10 +105,15 @@ const mockPrismaService = {
   },
   ticketMessage: { create: ticketMessageCreate },
   shop: { findFirst: shopFindFirst },
+  boothQuotaGrant: { create: quotaGrantCreate },
   $transaction: prismaTransaction,
 };
-const mockBookingsService = { createForAdmin };
-const mockNotificationsService = { createForUser, createForRole };
+const mockNotificationsService = {
+  createForUser,
+  createForRole,
+  createForOrganizationAdmins,
+};
+const mockAuditLogsService = { record: recordAuditLog };
 
 describe('SupportTicketsService', () => {
   let service: SupportTicketsService;
@@ -125,6 +130,7 @@ describe('SupportTicketsService', () => {
 
     bookingFindMany.mockResolvedValue([
       {
+        id: BOOKING_ID,
         bookingCode: 'BK-ONE',
         event: { name: 'งานทดสอบ', organizationId: ORGANIZATION_ID },
         booth: {
@@ -146,6 +152,7 @@ describe('SupportTicketsService', () => {
       id: TICKET_ID,
       userId: VENDOR_ID,
       status: TicketStatus.OPEN,
+      booking: { eventId: EVENT_ID },
     });
     supportTicketFindUnique.mockResolvedValue({
       id: TICKET_ID,
@@ -155,19 +162,21 @@ describe('SupportTicketsService', () => {
     supportTicketUpdateMany.mockResolvedValue({ count: 1 });
     supportTicketUpdate.mockResolvedValue({ id: TICKET_ID });
     shopFindFirst.mockResolvedValue({ id: SHOP_ID });
-    createForAdmin.mockResolvedValue(CREATED_BOOKING);
+    quotaGrantCreate.mockResolvedValue({ id: GRANT_ID });
     createForUser.mockResolvedValue(null);
     createForRole.mockResolvedValue(1);
+    createForOrganizationAdmins.mockResolvedValue(1);
+    recordAuditLog.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupportTicketsService,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: BookingsService, useValue: mockBookingsService },
         {
           provide: NotificationsService,
           useValue: mockNotificationsService,
         },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
       ],
     }).compile();
 
@@ -348,6 +357,7 @@ describe('SupportTicketsService', () => {
           booth: { zoneId: ZONE_ID },
         },
         select: {
+          id: true,
           bookingCode: true,
           event: { select: { name: true, organizationId: true } },
           booth: {
@@ -387,7 +397,10 @@ describe('SupportTicketsService', () => {
           userId: VENDOR_ID,
           // Taken from the event, never from anything the vendor sent (§14.2).
           organizationId: ORGANIZATION_ID,
-          bookingId: null,
+          // One of the vendor's own bookings in the requested event. A quota
+          // ticket has no event column, so this is what lets an approval name
+          // the event it grants for (SCRUM-182).
+          bookingId: BOOKING_ID,
           type: TicketType.OTHER,
           subject: CREATE_DTO.subject,
           status: TicketStatus.OPEN,
@@ -625,21 +638,76 @@ describe('SupportTicketsService', () => {
     });
   });
 
+  describe('findAllForOrganizationAdmin', () => {
+    it('filters the inbox to the guard-resolved organization', async () => {
+      supportTicketFindMany.mockResolvedValue([]);
+
+      await service.findAllForOrganizationAdmin(ORGANIZATION_ID);
+
+      // §14.2: an org-scoped query without an explicit organization filter is a
+      // cross-tenant leak, not an error anyone would ever see.
+      expect(supportTicketFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { organizationId: ORGANIZATION_ID },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+  });
+
+  describe('findOneForOrganizationAdmin', () => {
+    it('scopes the detail read to the organization', async () => {
+      supportTicketFindFirst.mockResolvedValue({ id: TICKET_ID });
+
+      await service.findOneForOrganizationAdmin(TICKET_ID, ORGANIZATION_ID);
+
+      expect(supportTicketFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
+        }),
+      );
+    });
+
+    it('answers 404 for a ticket belonging to another organization', async () => {
+      supportTicketFindFirst.mockResolvedValue(null);
+
+      // 404 and not 403: a 403 would confirm the id names a real ticket to a
+      // caller with no right to know that.
+      await expect(
+        service.findOneForOrganizationAdmin(TICKET_ID, ORGANIZATION_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('approveQuotaException', () => {
-    it('claims the ticket, creates the booking, and links it before notifying', async () => {
+    it('grants permission instead of creating a booking', async () => {
       const result = await service.approveQuotaException(
         TICKET_ID,
         APPROVE_DTO,
         ORGANIZATION_ID,
+        ADMIN_ID,
       );
 
-      expect(result).toEqual(CREATED_BOOKING);
-      // The org filter repeats what OrgScopeGuard already resolved — it cannot
-      // exclude a row the guard allowed, and it forces every caller to have an
-      // orgId to pass (§14.2).
+      expect(result).toEqual({
+        ticketId: TICKET_ID,
+        status: TicketStatus.CLOSED,
+        grantId: GRANT_ID,
+        decidedAt: NOW,
+      });
+      // TicketType.OTHER in the filter is what stops these routes minting a
+      // booth grant out of an issue report, which also carries a bookingId.
       expect(supportTicketFindFirst).toHaveBeenCalledWith({
-        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
-        select: { id: true, userId: true, status: true },
+        where: {
+          id: TICKET_ID,
+          organizationId: ORGANIZATION_ID,
+          type: TicketType.OTHER,
+        },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          booking: { select: { eventId: true } },
+        },
       });
       expect(supportTicketUpdateMany).toHaveBeenCalledWith({
         where: {
@@ -649,39 +717,64 @@ describe('SupportTicketsService', () => {
         },
         data: { status: TicketStatus.CLOSED },
       });
-      // The shop belongs to the ticket owner, not to the approving admin.
-      expect(shopFindFirst).toHaveBeenCalledWith({
-        where: { ownerUserId: VENDOR_ID },
+      expect(quotaGrantCreate).toHaveBeenCalledWith({
+        data: {
+          vendorUserId: VENDOR_ID,
+          eventId: EVENT_ID,
+          organizationId: ORGANIZATION_ID,
+          sourceTicketId: TICKET_ID,
+          grantedByUserId: ADMIN_ID,
+        },
         select: { id: true },
       });
-      expect(createForAdmin).toHaveBeenCalledWith(
-        { eventId: EVENT_ID, boothId: BOOTH_ID, shopId: SHOP_ID },
-        VENDOR_ID,
+    });
+
+    it('writes the audit trail and tells the vendor to pick a booth themselves', async () => {
+      await service.approveQuotaException(
+        TICKET_ID,
+        APPROVE_DTO,
         ORGANIZATION_ID,
+        ADMIN_ID,
       );
-      expect(supportTicketUpdate).toHaveBeenCalledWith({
-        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
-        data: { bookingId: BOOKING_ID },
+
+      expect(recordAuditLog).toHaveBeenCalledWith({
+        actorUserId: ADMIN_ID,
+        action: 'QUOTA_EXCEPTION_APPROVED',
+        targetType: 'SUPPORT_TICKET',
+        targetId: TICKET_ID,
+        metadata: {
+          previousStatus: TicketStatus.OPEN,
+          newStatus: TicketStatus.CLOSED,
+          grantId: GRANT_ID,
+          vendorUserId: VENDOR_ID,
+          eventId: EVENT_ID,
+          organizationId: ORGANIZATION_ID,
+          reason: APPROVE_DTO.reason,
+        },
       });
+      // The old copy claimed a booking had already been made for them. It must
+      // not survive: nothing is booked until the vendor books it.
       expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
         type: NotificationType.SUPPORT_TICKET,
-        title: 'คำร้องขอยกเว้นโควตาได้รับการอนุมัติแล้ว',
-        body: 'ระบบสร้างการจองให้คุณเรียบร้อยแล้ว',
+        title: 'คำร้องขอเพิ่มโควตาได้รับการอนุมัติแล้ว',
+        body: 'คุณสามารถกลับไปเลือกบูธที่ต้องการได้ด้วยตนเอง โดยใช้สิทธิ์ได้จนกว่างานจะปิดรับจอง',
         relatedEntityType: 'SUPPORT_TICKET',
         relatedEntityId: TICKET_ID,
       });
-      expect(supportTicketUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
-        shopFindFirst.mock.invocationCallOrder[0],
+    });
+
+    it('records a null reason when the admin gave none', async () => {
+      await service.approveQuotaException(
+        TICKET_ID,
+        {},
+        ORGANIZATION_ID,
+        ADMIN_ID,
       );
-      expect(shopFindFirst.mock.invocationCallOrder[0]).toBeLessThan(
-        createForAdmin.mock.invocationCallOrder[0],
-      );
-      expect(createForAdmin.mock.invocationCallOrder[0]).toBeLessThan(
-        supportTicketUpdate.mock.invocationCallOrder[0],
-      );
-      expect(supportTicketUpdate.mock.invocationCallOrder[0]).toBeLessThan(
-        createForUser.mock.invocationCallOrder[0],
-      );
+
+      const [auditArgs] = recordAuditLog.mock.calls[0] as [
+        { metadata: { reason: string | null } },
+      ];
+      expect(auditArgs.metadata.reason).toBeNull();
     });
 
     it('approves a ticket that is already being processed', async () => {
@@ -689,11 +782,17 @@ describe('SupportTicketsService', () => {
         id: TICKET_ID,
         userId: VENDOR_ID,
         status: TicketStatus.PROCESSING,
+        booking: { eventId: EVENT_ID },
       });
 
       await expect(
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-      ).resolves.toEqual(CREATED_BOOKING);
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+      ).resolves.toMatchObject({ grantId: GRANT_ID });
     });
 
     it('rejects a ticket that is already closed', async () => {
@@ -701,77 +800,79 @@ describe('SupportTicketsService', () => {
         id: TICKET_ID,
         userId: VENDOR_ID,
         status: TicketStatus.CLOSED,
+        booking: { eventId: EVENT_ID },
       });
 
       await expect(
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
       ).rejects.toBeInstanceOf(ConflictException);
-      expect(createForAdmin).not.toHaveBeenCalled();
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
-      expect(supportTicketUpdate).not.toHaveBeenCalled();
+      expect(quotaGrantCreate).not.toHaveBeenCalled();
       expect(createForUser).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
     });
 
     it('returns 404 for a missing or out-of-organization ticket', async () => {
       supportTicketFindFirst.mockResolvedValue(null);
 
       await expect(
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
-      expect(supportTicketUpdate).not.toHaveBeenCalled();
-      expect(createForAdmin).not.toHaveBeenCalled();
+      expect(quotaGrantCreate).not.toHaveBeenCalled();
     });
 
-    it('restores the open ticket when its owner still has no shop', async () => {
-      shopFindFirst.mockResolvedValue(null);
-
-      await expect(
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-      ).rejects.toThrow('ไม่พบร้านค้าของผู้ใช้');
-      expect(createForAdmin).not.toHaveBeenCalled();
-      expect(supportTicketUpdate).toHaveBeenCalledWith({
-        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
-        data: { status: TicketStatus.OPEN },
-      });
-      expect(createForUser).not.toHaveBeenCalled();
-    });
-
-    // Booth conflicts, an unbookable event and a missing booth are all decided
-    // by BookingsService. Nothing here rewrites them into a different answer.
-    it('restores the original status and rethrows the booking error unchanged', async () => {
-      const bookingError = new ConflictException('บูธนี้ถูกจองไปแล้ว');
+    it('refuses a legacy ticket that names no event', async () => {
       supportTicketFindFirst.mockResolvedValue({
         id: TICKET_ID,
         userId: VENDOR_ID,
-        status: TicketStatus.PROCESSING,
+        status: TicketStatus.OPEN,
+        booking: null,
       });
-      createForAdmin.mockRejectedValue(bookingError);
 
       await expect(
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-      ).rejects.toBe(bookingError);
-      expect(supportTicketUpdate).toHaveBeenCalledWith({
-        where: { id: TICKET_ID, organizationId: ORGANIZATION_ID },
-        data: { status: TicketStatus.PROCESSING },
-      });
-      expect(createForUser).not.toHaveBeenCalled();
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(quotaGrantCreate).not.toHaveBeenCalled();
     });
 
-    it('allows only one concurrent approval to create a booking', async () => {
+    it('lets only one of two concurrent approvals grant', async () => {
       supportTicketUpdateMany
         .mockResolvedValueOnce({ count: 1 })
         .mockResolvedValueOnce({ count: 0 });
 
       const [winner, loser] = await Promise.allSettled([
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
-        service.approveQuotaException(TICKET_ID, APPROVE_DTO, ORGANIZATION_ID),
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+        service.approveQuotaException(
+          TICKET_ID,
+          APPROVE_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
       ]);
 
       expect(winner.status).toBe('fulfilled');
-      if (winner.status === 'fulfilled') {
-        expect(winner.value).toEqual(CREATED_BOOKING);
-      }
       expect(loser.status).toBe('rejected');
       if (loser.status === 'rejected') {
         expect(loser.reason).toBeInstanceOf(ConflictException);
@@ -779,13 +880,125 @@ describe('SupportTicketsService', () => {
           message: 'คำร้องนี้ถูกปิดไปแล้ว',
         });
       }
-      expect(shopFindFirst).toHaveBeenCalledTimes(1);
-      expect(createForAdmin).toHaveBeenCalledTimes(1);
-      expect(supportTicketUpdate).toHaveBeenCalledTimes(1);
+      expect(quotaGrantCreate).toHaveBeenCalledTimes(1);
       expect(createForUser).toHaveBeenCalledTimes(1);
-      expect(supportTicketUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { bookingId: BOOKING_ID } }),
+    });
+  });
+
+  describe('rejectQuotaException', () => {
+    it('closes the ticket without granting anything', async () => {
+      const result = await service.rejectQuotaException(
+        TICKET_ID,
+        REJECT_DTO,
+        ORGANIZATION_ID,
+        ADMIN_ID,
       );
+
+      expect(result).toEqual({
+        ticketId: TICKET_ID,
+        status: TicketStatus.CLOSED,
+        grantId: null,
+        decidedAt: NOW,
+      });
+      expect(quotaGrantCreate).not.toHaveBeenCalled();
+      expect(supportTicketUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: TICKET_ID,
+          organizationId: ORGANIZATION_ID,
+          status: { in: [TicketStatus.OPEN, TicketStatus.PROCESSING] },
+        },
+        data: { status: TicketStatus.CLOSED },
+      });
+    });
+
+    it('audits the rejection and passes the reason to the vendor verbatim', async () => {
+      await service.rejectQuotaException(
+        TICKET_ID,
+        REJECT_DTO,
+        ORGANIZATION_ID,
+        ADMIN_ID,
+      );
+
+      expect(recordAuditLog).toHaveBeenCalledWith({
+        actorUserId: ADMIN_ID,
+        action: 'QUOTA_EXCEPTION_REJECTED',
+        targetType: 'SUPPORT_TICKET',
+        targetId: TICKET_ID,
+        metadata: {
+          previousStatus: TicketStatus.OPEN,
+          newStatus: TicketStatus.CLOSED,
+          vendorUserId: VENDOR_ID,
+          organizationId: ORGANIZATION_ID,
+          reason: REJECT_DTO.reason,
+        },
+      });
+      expect(createForUser).toHaveBeenCalledWith(VENDOR_ID, {
+        type: NotificationType.SUPPORT_TICKET,
+        title: 'คำร้องขอเพิ่มโควตาไม่ได้รับการอนุมัติ',
+        body: REJECT_DTO.reason,
+        relatedEntityType: 'SUPPORT_TICKET',
+        relatedEntityId: TICKET_ID,
+      });
+    });
+
+    it('rejects a ticket that is already closed', async () => {
+      supportTicketFindFirst.mockResolvedValue({
+        id: TICKET_ID,
+        userId: VENDOR_ID,
+        status: TicketStatus.CLOSED,
+        booking: { eventId: EVENT_ID },
+      });
+
+      await expect(
+        service.rejectQuotaException(
+          TICKET_ID,
+          REJECT_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 for a ticket belonging to another organization', async () => {
+      supportTicketFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.rejectQuotaException(
+          TICKET_ID,
+          REJECT_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets only one of two concurrent rejections close the ticket', async () => {
+      supportTicketUpdateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      const [winner, loser] = await Promise.allSettled([
+        service.rejectQuotaException(
+          TICKET_ID,
+          REJECT_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+        service.rejectQuotaException(
+          TICKET_ID,
+          REJECT_DTO,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+        ),
+      ]);
+
+      expect(winner.status).toBe('fulfilled');
+      expect(loser.status).toBe('rejected');
+      expect(createForUser).toHaveBeenCalledTimes(1);
     });
   });
 });

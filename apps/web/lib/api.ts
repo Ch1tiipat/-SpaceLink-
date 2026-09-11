@@ -336,9 +336,24 @@ export type CreateSupportTicketInput =
       message: string;
     };
 
+/**
+ * Approving grants permission, not a booth (SCRUM-182). There is no eventId or
+ * boothId: the vendor picks a booth themselves through the normal flow, so an
+ * approval cannot jump the queue ahead of someone booking that booth right now.
+ */
 export type ApproveQuotaExceptionInput = {
-  eventId: string;
-  boothId: string;
+  reason?: string;
+};
+
+export type RejectQuotaExceptionInput = {
+  reason: string;
+};
+
+export type QuotaExceptionDecision = {
+  ticketId: string;
+  status: SupportTicketStatus;
+  grantId: string | null;
+  decidedAt: string;
 };
 
 export type SlipVerificationStatus =
@@ -701,6 +716,12 @@ export type SuperAdminSupportTicket = {
   user: { id: string; email: string; fullName: string };
   organization: { id: string; name: string } | null;
 };
+
+/**
+ * The organization-scoped inbox is served by the same selects as the Super
+ * Admin list, so it answers in the same shape. Aliased rather than duplicated.
+ */
+export type OrganizationSupportTicket = SuperAdminSupportTicket;
 
 export type SuperAdminSupportTicketDetail = SuperAdminSupportTicket & {
   booking: {
@@ -1645,6 +1666,18 @@ export function updateAdminEventGallery(
   );
 }
 
+export function deleteAdminEventBanner(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return deleteJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/banner`,
+    { token },
+    "ลบภาพปกอีเวนต์ไม่สำเร็จ",
+  );
+}
+
 export function createAdminEventJoinInformation(
   organizationId: string,
   eventId: string,
@@ -1813,6 +1846,69 @@ export async function uploadAdminEventGallery(
     };
     throw new ApiError(
       detail || fallbackByStatus[response.status] || "อัปโหลดรูปภาพไม่สำเร็จ",
+      response.status,
+    );
+  }
+
+  return (await response.json()) as AdminOrganizationEvent;
+}
+
+export async function uploadAdminEventBanner(
+  organizationId: string,
+  eventId: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationEvent> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      0,
+    );
+  }
+
+  const form = new FormData();
+  form.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/banner`,
+      {
+        method: "POST",
+        signal,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      },
+    );
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    throw new ApiError(
+      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดภาพปกได้ กรุณาลองใหม่อีกครั้ง",
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(", ")
+      : payload?.message;
+    const fallbackByStatus: Record<number, string> = {
+      400: "ไฟล์ภาพปกไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด",
+      404: "ไม่พบอีเวนต์ในองค์กรนี้",
+      413: "ไฟล์ภาพปกมีขนาดเกิน 2 MB",
+      502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+    };
+    throw new ApiError(
+      detail || fallbackByStatus[response.status] || "อัปโหลดภาพปกไม่สำเร็จ",
       response.status,
     );
   }
@@ -2063,6 +2159,34 @@ export function getSuperAdminSupportTicketDetail(
 ): Promise<SuperAdminSupportTicketDetail> {
   return getJson<SuperAdminSupportTicketDetail>(
     `/support-tickets/${encodeURIComponent(ticketId)}`,
+    { signal, token },
+  );
+}
+
+export type OrganizationSupportTicketDetail = SuperAdminSupportTicketDetail;
+
+/** An organization's own request inbox; the API scopes it to the membership. */
+export function getOrganizationSupportTickets(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSupportTicket[]> {
+  return getJson<OrganizationSupportTicket[]>(
+    `/support-tickets/organizations/${encodeURIComponent(organizationId)}`,
+    { signal, token },
+  );
+}
+
+export function getOrganizationSupportTicketDetail(
+  organizationId: string,
+  ticketId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSupportTicketDetail> {
+  return getJson<OrganizationSupportTicketDetail>(
+    `/support-tickets/organizations/${encodeURIComponent(
+      organizationId,
+    )}/${encodeURIComponent(ticketId)}`,
     { signal, token },
   );
 }
@@ -2544,21 +2668,36 @@ export function createOrganizationAdminSupportTicket(
   );
 }
 
-/** Approves one request; the API derives the organization from the ticket. */
+/**
+ * Approves one request; the API derives the organization from the ticket. The
+ * answer is a permission, not a booking — the vendor still has to go and book.
+ */
 export function approveQuotaException(
   ticketId: string,
   input: ApproveQuotaExceptionInput,
   token: string,
   signal?: AbortSignal,
-): Promise<BookingRecord> {
-  return patchJson<BookingRecord>(
+): Promise<QuotaExceptionDecision> {
+  return patchJson<QuotaExceptionDecision>(
     `/support-tickets/${encodeURIComponent(ticketId.trim())}/approve-quota-exception`,
-    {
-      eventId: input.eventId.trim(),
-      boothId: input.boothId.trim(),
-    },
+    input.reason?.trim() ? { reason: input.reason.trim() } : {},
     { signal, token },
     "ไม่สามารถอนุมัติคำร้องขอเพิ่มโควตาได้",
+  );
+}
+
+/** Rejects one request. The reason is required and reaches the vendor as-is. */
+export function rejectQuotaException(
+  ticketId: string,
+  input: RejectQuotaExceptionInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<QuotaExceptionDecision> {
+  return patchJson<QuotaExceptionDecision>(
+    `/support-tickets/${encodeURIComponent(ticketId.trim())}/reject-quota-exception`,
+    { reason: input.reason.trim() },
+    { signal, token },
+    "ไม่สามารถปฏิเสธคำร้องขอเพิ่มโควตาได้",
   );
 }
 

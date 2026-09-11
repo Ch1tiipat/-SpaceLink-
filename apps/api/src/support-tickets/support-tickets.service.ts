@@ -13,8 +13,7 @@ import {
   TicketType,
   UserRole,
 } from '@prisma/client';
-import { BookingsService } from '../bookings/bookings.service';
-import type { BookingResponse } from '../bookings/bookings.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
@@ -22,6 +21,7 @@ import {
   CreateSupportTicketDto,
   SupportTicketRequestType,
 } from './dto/create-support-ticket.dto';
+import { RejectQuotaExceptionDto } from './dto/reject-quota-exception.dto';
 
 /**
  * A ticket an admin may still act on. CLOSED is deliberately absent: closing is
@@ -117,6 +117,18 @@ export type SupportTicketStatusResponse = Prisma.SupportTicketGetPayload<{
   select: typeof supportTicketStatusSelect;
 }>;
 
+/**
+ * What an approve or reject answers with. Approving no longer returns a booking
+ * because it no longer creates one (SCRUM-182): `grantId` is the permission the
+ * vendor now holds, and it is null on a rejection.
+ */
+export interface QuotaExceptionDecisionResponse {
+  ticketId: string;
+  status: TicketStatus;
+  grantId: string | null;
+  decidedAt: Date;
+}
+
 const NEXT_TICKET_STATUS: Partial<Record<TicketStatus, TicketStatus>> = {
   [TicketStatus.OPEN]: TicketStatus.PROCESSING,
   [TicketStatus.PROCESSING]: TicketStatus.CLOSED,
@@ -133,8 +145,8 @@ const NEXT_TICKET_STATUS: Partial<Record<TicketStatus, TicketStatus>> = {
 export class SupportTicketsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly bookingsService: BookingsService,
     private readonly notifications: NotificationsService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   /** Derives organization and booking context from vendor-owned records. */
@@ -168,6 +180,7 @@ export class SupportTicketsService {
             booth: { zoneId },
           },
           select: {
+            id: true,
             bookingCode: true,
             event: { select: { name: true, organizationId: true } },
             booth: {
@@ -218,6 +231,13 @@ export class SupportTicketsService {
 
         const context = bookings[0];
         organizationId = context.event.organizationId;
+        // A quota ticket carries no event column of its own, and the event id
+        // the vendor typed is validated here and then thrown away. Pinning one
+        // of their existing bookings in that event is what lets an approval
+        // later name the event it is granting quota for, without widening the
+        // frozen schema. `bookings` is already filtered to this event, so this
+        // cannot point at a different one.
+        bookingId = context.id;
         type = TicketType.OTHER;
         contextualMessage = [
           'ประเภทคำร้อง: ขอโควต้าบูธเพิ่ม',
@@ -290,6 +310,28 @@ export class SupportTicketsService {
 
       return created;
     });
+
+    // The fix for "the request never reaches the admin": a quota request used to
+    // land in the database and notify nobody, so the only way an admin saw one
+    // was by going looking. `createForOrganizationAdmins` already owns the
+    // fan-out, its permission filter and its fallback to the OWNER when nobody
+    // holds `canManageZones`, so this is a call and not new machinery.
+    if (
+      requestType === SupportTicketRequestType.QUOTA_INCREASE &&
+      ticket.organizationId
+    ) {
+      await this.notifications.createForOrganizationAdmins(
+        ticket.organizationId,
+        'zones',
+        {
+          type: NotificationType.SUPPORT_TICKET,
+          title: 'มีคำร้องขอเพิ่มโควตาบูธใหม่',
+          body: subject,
+          relatedEntityType: 'SUPPORT_TICKET',
+          relatedEntityId: ticket.id,
+        },
+      );
+    }
 
     return this.toResponse(ticket);
   }
@@ -416,40 +458,141 @@ export class SupportTicketsService {
     return updated;
   }
 
+  /** The organization's own request inbox, scoped by the guard-derived org. */
+  async findAllForOrganizationAdmin(
+    organizationId: string,
+  ): Promise<SupportTicketOverviewResponse[]> {
+    return this.prisma.supportTicket.findMany({
+      where: { organizationId },
+      select: supportTicketOverviewSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   /**
-   * Approves a quota exception by creating the booking the vendor could not
-   * create themselves, then closing the ticket against it.
-   *
-   * `orgId` comes from `@CurrentOrgId()`, which OrgScopeGuard already derived
-   * from this exact ticket's own `organizationId` — so the filter below cannot
-   * exclude a row the guard allowed. It is the same forcing function as
-   * `BookingsService.findOne`: a caller must supply an `orgId` to compile, and
-   * the only sanctioned source throws the moment `@OrgScoped` is missing from
-   * the route.
-   *
-   * **This is deliberately not one transaction.** `createForAdmin` opens its
-   * own serializable transaction and retries it on a write conflict; running
-   * that inside an outer interactive transaction would mean two connections
-   * held at once per approval, which is how a small pool deadlocks. Instead,
-   * an atomic status update claims the ticket before the booking is created.
-   * A failed booking restores the ticket's previous actionable status.
+   * One request in full. The `organizationId` filter is what makes another
+   * organization's ticket answer 404 rather than 403 — a 403 would confirm the
+   * id names a real ticket to a caller with no right to know that.
    */
-  async approveQuotaException(
+  async findOneForOrganizationAdmin(
     ticketId: string,
-    approveQuotaExceptionDto: ApproveQuotaExceptionDto,
-    orgId: string,
-  ): Promise<BookingResponse> {
+    organizationId: string,
+  ): Promise<SupportTicketDetailResponse> {
     const ticket = await this.prisma.supportTicket.findFirst({
-      where: { id: ticketId, organizationId: orgId },
-      select: { id: true, userId: true, status: true },
+      where: { id: ticketId, organizationId },
+      select: supportTicketDetailSelect,
     });
 
     if (!ticket) {
       throw new NotFoundException('ไม่พบคำร้อง');
     }
-    if (!ACTIONABLE_TICKET_STATUSES.includes(ticket.status)) {
-      throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
+
+    return ticket;
+  }
+
+  /**
+   * Approves a quota request by granting permission — **not** by creating a
+   * booking. The vendor returns to the normal booking flow and picks a booth
+   * themselves, because pre-selecting one here would let an approval beat
+   * another vendor who is booking that same booth in real time.
+   *
+   * The grant has no expiry of its own. It dies with its event: every create
+   * path already refuses an event that is not PUBLISHED/ONGOING or whose end
+   * date has passed, so a grant cannot outlive the thing it applies to.
+   *
+   * `orgId` comes from `@CurrentOrgId()`, which OrgScopeGuard already derived
+   * from this exact ticket's own `organizationId` — so the filter below cannot
+   * exclude a row the guard allowed, and a foreign ticket never gets this far.
+   */
+  async approveQuotaException(
+    ticketId: string,
+    approveQuotaExceptionDto: ApproveQuotaExceptionDto,
+    orgId: string,
+    actingAdminUserId: string,
+  ): Promise<QuotaExceptionDecisionResponse> {
+    const ticket = await this.loadActionableQuotaTicket(ticketId, orgId);
+    const eventId = ticket.booking?.eventId;
+    if (!eventId) {
+      throw new ConflictException(
+        'คำร้องนี้ไม่มีข้อมูลงานที่เกี่ยวข้อง ไม่สามารถอนุมัติได้',
+      );
     }
+
+    // Claim and grant in one transaction. The old flow could not do this — it
+    // called into a second serializable transaction and had to hand-roll a
+    // status rollback — but a grant is a single local insert, so the ticket and
+    // the permission it produced now commit or fail together.
+    const grantId = await this.prisma.$transaction(async (transaction) => {
+      const claimed = await transaction.supportTicket.updateMany({
+        where: {
+          id: ticketId,
+          organizationId: orgId,
+          status: { in: ACTIONABLE_TICKET_STATUSES },
+        },
+        data: { status: TicketStatus.CLOSED },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
+      }
+
+      const grant = await transaction.boothQuotaGrant.create({
+        data: {
+          vendorUserId: ticket.userId,
+          eventId,
+          organizationId: orgId,
+          sourceTicketId: ticketId,
+          grantedByUserId: actingAdminUserId,
+        },
+        select: { id: true },
+      });
+
+      return grant.id;
+    });
+
+    await this.auditLogs.record({
+      actorUserId: actingAdminUserId,
+      action: 'QUOTA_EXCEPTION_APPROVED',
+      targetType: 'SUPPORT_TICKET',
+      targetId: ticketId,
+      metadata: {
+        previousStatus: ticket.status,
+        newStatus: TicketStatus.CLOSED,
+        grantId,
+        vendorUserId: ticket.userId,
+        eventId,
+        organizationId: orgId,
+        reason: approveQuotaExceptionDto.reason ?? null,
+      },
+    });
+
+    await this.notifications.createForUser(ticket.userId, {
+      type: NotificationType.SUPPORT_TICKET,
+      title: 'คำร้องขอเพิ่มโควตาได้รับการอนุมัติแล้ว',
+      body: 'คุณสามารถกลับไปเลือกบูธที่ต้องการได้ด้วยตนเอง โดยใช้สิทธิ์ได้จนกว่างานจะปิดรับจอง',
+      relatedEntityType: 'SUPPORT_TICKET',
+      relatedEntityId: ticketId,
+    });
+
+    return {
+      ticketId,
+      status: TicketStatus.CLOSED,
+      grantId,
+      decidedAt: new Date(),
+    };
+  }
+
+  /**
+   * Closes a quota request without granting anything. Same atomic claim as the
+   * approve path, so two admins cannot both decide one ticket; the reason is
+   * recorded for the audit trail and shown to the vendor verbatim.
+   */
+  async rejectQuotaException(
+    ticketId: string,
+    rejectQuotaExceptionDto: RejectQuotaExceptionDto,
+    orgId: string,
+    actingAdminUserId: string,
+  ): Promise<QuotaExceptionDecisionResponse> {
+    const ticket = await this.loadActionableQuotaTicket(ticketId, orgId);
 
     const claimed = await this.prisma.supportTicket.updateMany({
       where: {
@@ -463,51 +606,68 @@ export class SupportTicketsService {
       throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
     }
 
-    let booking: BookingResponse;
-    try {
-      const shop = await this.prisma.shop.findFirst({
-        where: { ownerUserId: ticket.userId },
-        select: { id: true },
-      });
-      if (!shop) {
-        throw new NotFoundException('ไม่พบร้านค้าของผู้ใช้');
-      }
-
-      // Everything a booking must satisfy is still checked in here — booth
-      // availability, the venue match, the date range, no second active booking
-      // on this (event, booth). Only the quota is waived, and anything this
-      // throws is the caller's answer unchanged.
-      booking = await this.bookingsService.createForAdmin(
-        {
-          eventId: approveQuotaExceptionDto.eventId,
-          boothId: approveQuotaExceptionDto.boothId,
-          shopId: shop.id,
-        },
-        ticket.userId,
-        orgId,
-      );
-    } catch (error) {
-      await this.prisma.supportTicket.update({
-        where: { id: ticketId, organizationId: orgId },
-        data: { status: ticket.status },
-      });
-      throw error;
-    }
-
-    await this.prisma.supportTicket.update({
-      where: { id: ticketId, organizationId: orgId },
-      data: { bookingId: booking.id },
+    await this.auditLogs.record({
+      actorUserId: actingAdminUserId,
+      action: 'QUOTA_EXCEPTION_REJECTED',
+      targetType: 'SUPPORT_TICKET',
+      targetId: ticketId,
+      metadata: {
+        previousStatus: ticket.status,
+        newStatus: TicketStatus.CLOSED,
+        vendorUserId: ticket.userId,
+        organizationId: orgId,
+        reason: rejectQuotaExceptionDto.reason,
+      },
     });
 
     await this.notifications.createForUser(ticket.userId, {
       type: NotificationType.SUPPORT_TICKET,
-      title: 'คำร้องขอยกเว้นโควตาได้รับการอนุมัติแล้ว',
-      body: 'ระบบสร้างการจองให้คุณเรียบร้อยแล้ว',
+      title: 'คำร้องขอเพิ่มโควตาไม่ได้รับการอนุมัติ',
+      body: rejectQuotaExceptionDto.reason,
       relatedEntityType: 'SUPPORT_TICKET',
-      relatedEntityId: ticket.id,
+      relatedEntityId: ticketId,
     });
 
-    return booking;
+    return {
+      ticketId,
+      status: TicketStatus.CLOSED,
+      grantId: null,
+      decidedAt: new Date(),
+    };
+  }
+
+  /**
+   * Shared pre-check for both decisions. The TicketType.OTHER gate matters:
+   * these two routes must not be usable to mint a booth grant out of an issue
+   * report, which is a different ticket type that also carries a bookingId.
+   */
+  private async loadActionableQuotaTicket(
+    ticketId: string,
+    orgId: string,
+  ): Promise<{
+    id: string;
+    userId: string;
+    status: TicketStatus;
+    booking: { eventId: string } | null;
+  }> {
+    const ticket = await this.prisma.supportTicket.findFirst({
+      where: { id: ticketId, organizationId: orgId, type: TicketType.OTHER },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        booking: { select: { eventId: true } },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('ไม่พบคำร้อง');
+    }
+    if (!ACTIONABLE_TICKET_STATUSES.includes(ticket.status)) {
+      throw new ConflictException('คำร้องนี้ถูกปิดไปแล้ว');
+    }
+
+    return ticket;
   }
 
   private toResponse(ticket: SupportTicketRecord): SupportTicketResponse {
