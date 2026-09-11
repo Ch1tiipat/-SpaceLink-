@@ -308,6 +308,42 @@ export class NotificationsService {
     });
   }
 
+  deleteByRelatedEntity(
+    relatedEntityType: string,
+    relatedEntityId: string,
+    transaction: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ count: number }> {
+    return transaction.notification.deleteMany({
+      where: { relatedEntityType, relatedEntityId },
+    });
+  }
+
+  removeAsSuperAdmin(notificationId: string): Promise<{ count: number }> {
+    return this.prisma.$transaction(async (transaction) => {
+      const notification = await transaction.notification.findUnique({
+        where: { id: notificationId },
+        select: { relatedEntityType: true, relatedEntityId: true },
+      });
+
+      if (!notification) {
+        throw new NotFoundException('ไม่พบการแจ้งเตือน');
+      }
+
+      if (notification.relatedEntityType && notification.relatedEntityId) {
+        return this.deleteByRelatedEntity(
+          notification.relatedEntityType,
+          notification.relatedEntityId,
+          transaction,
+        );
+      }
+
+      await transaction.notification.delete({
+        where: { id: notificationId },
+      });
+      return { count: 1 };
+    });
+  }
+
   private async createReviewEligibilityNotificationsWithinTransaction(
     transaction: Prisma.TransactionClient,
   ): Promise<number> {

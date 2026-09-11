@@ -38,13 +38,20 @@ export class AnnouncementsService {
   }
 
   removeAcrossOrganizations(id: string) {
-    return this.prisma.announcement.delete({
-      where: { id },
-      include: {
-        organization: {
-          select: { id: true, name: true },
+    return this.prisma.$transaction(async (transaction) => {
+      await this.notifications.deleteByRelatedEntity(
+        'ANNOUNCEMENT',
+        id,
+        transaction,
+      );
+      return transaction.announcement.delete({
+        where: { id },
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
         },
-      },
+      });
     });
   }
 
@@ -85,8 +92,15 @@ export class AnnouncementsService {
   }
 
   remove(id: string, organizationId: string) {
-    return this.prisma.announcement.delete({
-      where: { id, organizationId },
+    return this.prisma.$transaction(async (transaction) => {
+      await this.notifications.deleteByRelatedEntity(
+        'ANNOUNCEMENT',
+        id,
+        transaction,
+      );
+      return transaction.announcement.delete({
+        where: { id, organizationId },
+      });
     });
   }
 
