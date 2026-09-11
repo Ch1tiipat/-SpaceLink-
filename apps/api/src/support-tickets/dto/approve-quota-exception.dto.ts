@@ -1,10 +1,14 @@
-import { Matches } from 'class-validator';
-import { UUID_SHAPE } from '../../common/utils/uuid.util';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
+/**
+ * Approving grants permission, not a booth. There is deliberately no `eventId`
+ * or `boothId`: pre-selecting a booth on the vendor's behalf would let an
+ * approval jump the queue ahead of another vendor booking that same booth in
+ * real time, so the vendor returns to the normal flow and picks one themselves.
+ */
 export class ApproveQuotaExceptionDto {
-  @Matches(UUID_SHAPE)
-  eventId!: string;
-
-  @Matches(UUID_SHAPE)
-  boothId!: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
 }

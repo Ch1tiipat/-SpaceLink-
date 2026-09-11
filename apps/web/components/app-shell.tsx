@@ -16,6 +16,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   House,
+  Inbox,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -234,6 +235,13 @@ const ADMIN_NAV_GROUP: NavGroup = {
       href: "/admin/organization",
       icon: Landmark,
       matches: (pathname) => pathname.startsWith("/admin/organization"),
+    },
+    {
+      kind: "link",
+      label: "คำร้องขอโควตา",
+      href: "/admin/quota-requests",
+      icon: Inbox,
+      matches: (pathname) => pathname.startsWith("/admin/quota-requests"),
     },
     {
       kind: "link",

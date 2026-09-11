@@ -121,16 +121,6 @@ export interface BookingQuotaContext {
   effectiveSelectionLimit: number;
 }
 
-/**
- * The admin create path may waive only the quota. Its required organization
- * scope is carried into the same transaction so the event cannot be swapped
- * for one owned by another organization between authorization and creation.
- */
-interface CreateBookingOptions {
-  requiredOrganizationId?: string;
-  skipQuotaCheck?: boolean;
-}
-
 interface SlipBooking {
   id: string;
   bookingCode: string;
@@ -230,11 +220,7 @@ export class BookingsService {
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
   ): Promise<BookingResponse> {
-    const booking = await this.createWithRetry(
-      createBookingDto,
-      vendorUserId,
-      {},
-    );
+    const booking = await this.createWithRetry(createBookingDto, vendorUserId);
 
     await this.notifications
       .createForUser(vendorUserId, {
@@ -321,24 +307,33 @@ export class BookingsService {
 
     const orgQuota =
       event.organization.orgConfig?.bookingQuotaPerVendor ?? null;
-    const [activeBookingCount, platformConfig] = await Promise.all([
-      this.prisma.booking.count({
-        where: {
-          eventId,
-          vendorUserId,
-          status: { in: ACTIVE_BOOKING_STATUSES },
-        },
-      }),
-      orgQuota === null
-        ? this.prisma.platformConfig.findFirst({
-            orderBy: { updatedAt: 'desc' },
-            select: { defaultBookingQuota: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const [activeBookingCount, unconsumedGrantCount, platformConfig] =
+      await Promise.all([
+        this.prisma.booking.count({
+          where: {
+            eventId,
+            vendorUserId,
+            status: { in: ACTIVE_BOOKING_STATUSES },
+          },
+        }),
+        this.prisma.boothQuotaGrant.count({
+          where: { eventId, vendorUserId, consumedBookingId: null },
+        }),
+        orgQuota === null
+          ? this.prisma.platformConfig.findFirst({
+              orderBy: { updatedAt: 'desc' },
+              select: { defaultBookingQuota: true },
+            })
+          : Promise.resolve(null),
+      ]);
     const configuredQuota =
       orgQuota ?? platformConfig?.defaultBookingQuota ?? DEFAULT_BOOKING_QUOTA;
-    const remainingQuota = Math.max(configuredQuota - activeBookingCount, 0);
+    // Each unspent BoothQuotaGrant (SCRUM-182) is one booking the vendor may
+    // make past the configured ceiling, so it has to widen what the booking
+    // screens are told is left — otherwise an approved vendor still sees a
+    // disabled map and the approval looks like it did nothing.
+    const remainingQuota =
+      Math.max(configuredQuota - activeBookingCount, 0) + unconsumedGrantCount;
 
     return {
       configuredQuota,
@@ -371,7 +366,6 @@ export class BookingsService {
                     shopId: createBookingsBatchDto.shopId,
                   },
                   vendorUserId,
-                  {},
                 ),
               );
             }
@@ -453,41 +447,13 @@ export class BookingsService {
   }
 
   /**
-   * The approved end of a booking-quota exception (SupportTicketsService): an
-   * admin creates the booking on a vendor's behalf with the per-event quota
-   * skipped, and nothing else skipped. Booth availability, the venue match, the
-   * date range and the one-active-booking-per-(event, booth) rule all still
-   * apply, so this cannot double-book a booth or reach into another venue —
-   * quota is the single invariant an admin is allowed to waive here.
-   *
-   * `vendorUserId` is the vendor the booking is *for*, not the admin calling.
-   * The shop is still checked against that vendor inside the transaction, so an
-   * admin cannot attach someone else's shop to it.
-   *
-   * `organizationId` must come from the authenticated admin's resolved
-   * organization scope. The event is bound to it again inside the booking
-   * transaction; a missing or foreign event is deliberately indistinguishable.
-   */
-  createForAdmin(
-    createBookingDto: CreateBookingDto,
-    vendorUserId: string,
-    organizationId: string,
-  ): Promise<BookingResponse> {
-    return this.createWithRetry(createBookingDto, vendorUserId, {
-      requiredOrganizationId: organizationId,
-      skipQuotaCheck: true,
-    });
-  }
-
-  /**
-   * The serializable-transaction retry shared by both create paths. A P2034
-   * write conflict is retried; a P2002 is the unique (event, booth) constraint
+   * The serializable-transaction retry around a single create. A P2034 write
+   * conflict is retried; a P2002 is the unique (event, booth) constraint
    * firing, which no retry can help with.
    */
   private async createWithRetry(
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
-    options: CreateBookingOptions,
   ): Promise<BookingResponse> {
     for (
       let attempt = 1;
@@ -501,7 +467,6 @@ export class BookingsService {
               transaction,
               createBookingDto,
               vendorUserId,
-              options,
             ),
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         );
@@ -536,7 +501,6 @@ export class BookingsService {
     transaction: Prisma.TransactionClient,
     createBookingDto: CreateBookingDto,
     vendorUserId: string,
-    options: CreateBookingOptions = {},
   ): Promise<BookingResponse> {
     const { eventId, boothId, shopId } = createBookingDto;
     const [event, booth, shop, vendor] = await Promise.all([
@@ -585,12 +549,6 @@ export class BookingsService {
     }
 
     if (!event) {
-      throw new NotFoundException('ไม่พบอีเวนต์');
-    }
-    if (
-      options.requiredOrganizationId &&
-      event.organizationId !== options.requiredOrganizationId
-    ) {
       throw new NotFoundException('ไม่พบอีเวนต์');
     }
     if (event.organization.status !== OrgStatus.ACTIVE) {
@@ -659,12 +617,21 @@ export class BookingsService {
     const quota =
       orgQuota ?? platformConfig?.defaultBookingQuota ?? DEFAULT_BOOKING_QUOTA;
 
-    // Everything above this point applies to both callers. The quota is the one
-    // invariant `createForAdmin` waives, and it is waived here rather than by
-    // skipping the counting above so the two paths read the same data and the
-    // block stays a single decision.
-    if (!options.skipQuotaCheck && activeBookingCount >= quota) {
-      throw new ConflictException('คุณจองบูธในงานนี้ครบโควตาแล้ว');
+    // Being at the ceiling is no longer automatically a refusal: an approved
+    // BoothQuotaGrant (SCRUM-182) buys exactly one booking past it. The grant is
+    // only *found* here — spending it has to wait until the booking row exists,
+    // because spending it means naming the booking it paid for.
+    let grantIdToSpend: string | null = null;
+    if (activeBookingCount >= quota) {
+      const grant = await transaction.boothQuotaGrant.findFirst({
+        where: { vendorUserId, eventId, consumedBookingId: null },
+        orderBy: { grantedAt: 'asc' },
+        select: { id: true },
+      });
+      if (!grant) {
+        throw new ConflictException('คุณจองบูธในงานนี้ครบโควตาแล้ว');
+      }
+      grantIdToSpend = grant.id;
     }
 
     const now = new Date();
@@ -683,6 +650,25 @@ export class BookingsService {
     };
 
     const booking = await transaction.booking.create({ data });
+
+    if (grantIdToSpend) {
+      // `consumedBookingId: null` in the filter is the entire race defence. Two
+      // concurrent bookings can both read this grant as unspent a moment ago,
+      // but only one can match this update; the loser gets count 0 and throws,
+      // which rolls its own booking back with it. Do not relax this to an
+      // `update` by id — that would let both succeed, the second silently
+      // overwriting which booking the grant paid for.
+      const spent = await transaction.boothQuotaGrant.updateMany({
+        where: { id: grantIdToSpend, consumedBookingId: null },
+        data: { consumedBookingId: booking.id, consumedAt: now },
+      });
+      if (spent.count === 0) {
+        throw new ConflictException(
+          'สิทธิ์จองเพิ่มถูกใช้ไปแล้ว กรุณาตรวจสอบรายการจองของคุณ',
+        );
+      }
+    }
+
     return this.toResponse(booking);
   }
 

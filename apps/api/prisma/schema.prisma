@@ -178,6 +178,7 @@ model Organization {
   penalties      Penalty[]
   supportTickets SupportTicket[]
   paymentGroups  BookingPaymentGroup[]
+  quotaGrants    BoothQuotaGrant[]
   orgConfig      OrgConfig?
 
   @@map("organization")
@@ -212,6 +213,8 @@ model User {
   ticketMessages     TicketMessage[]
   recommendationLogs RecommendationLog[]
   auditLogs           AuditLog[]
+  quotaGrantsReceived BoothQuotaGrant[]   @relation("QuotaGrantVendor")
+  quotaGrantsIssued   BoothQuotaGrant[]   @relation("QuotaGrantGrantedBy")
 
   @@map("app_user")
 }
@@ -399,6 +402,7 @@ model Event {
   recommendationLogs RecommendationLog[]
   joinInformation    EventJoinInformation[]
   information        EventInformation[]
+  quotaGrants        BoothQuotaGrant[]
 
   @@index([organizationId])
   @@index([venueId])
@@ -565,6 +569,7 @@ model Booking {
   penalties      Penalty[]
   refundRequests RefundRequest[]
   supportTickets SupportTicket[]
+  quotaGrant     BoothQuotaGrant?
 
   @@unique([eventId, boothId])
   @@index([vendorUserId])
@@ -640,6 +645,7 @@ model SupportTicket {
   organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   booking      Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   messages     TicketMessage[]
+  quotaGrant   BoothQuotaGrant?
 
   @@index([userId])
   @@index([organizationId])
@@ -659,6 +665,35 @@ model TicketMessage {
 
   @@index([ticketId])
   @@map("ticket_message")
+}
+
+/// An approved booth-quota-increase request (SCRUM-182). A row is permission to
+/// exceed the per-event quota by one booking, never a booking itself: the vendor
+/// returns to the normal booking flow and picks an available booth, so approving
+/// cannot beat another vendor to a booth in real time. `consumedBookingId` is
+/// unique, which is what makes spending a grant atomic — two concurrent bookings
+/// cannot both claim it. There is deliberately no `expiresAt`: a grant dies with
+/// its event, because every booking path already refuses a closed event.
+model BoothQuotaGrant {
+  id                String    @id @default(uuid()) @map("quota_grant_id") @db.Uuid
+  vendorUserId      String    @map("vendor_user_id") @db.Uuid
+  eventId           String    @map("event_id") @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  sourceTicketId    String    @unique @map("source_ticket_id") @db.Uuid
+  grantedByUserId   String    @map("granted_by_user_id") @db.Uuid
+  grantedAt         DateTime  @default(now()) @map("granted_at") @db.Timestamptz
+  consumedBookingId String?   @unique @map("consumed_booking_id") @db.Uuid
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz
+
+  vendor          User          @relation("QuotaGrantVendor", fields: [vendorUserId], references: [id], onDelete: Cascade)
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTicket    SupportTicket @relation(fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  grantedBy       User          @relation("QuotaGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  consumedBooking Booking?      @relation(fields: [consumedBookingId], references: [id], onDelete: SetNull)
+
+  @@index([vendorUserId, eventId])
+  @@map("booth_quota_grant")
 }
 
 model Review {
