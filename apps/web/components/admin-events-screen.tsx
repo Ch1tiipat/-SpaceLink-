@@ -17,6 +17,8 @@ import {
   CalendarDays,
   CircleDollarSign,
   Images,
+  Info,
+  Pencil,
   Power,
   Plus,
   RefreshCw,
@@ -40,19 +42,24 @@ import {
 } from '@/components/admin-ui';
 import {
   closeAdminEvent,
+  createAdminEventJoinInformation,
   createAdminEvent,
+  deleteAdminEventJoinInformation,
   deleteAdminEvent,
   getAdminOrganizationEvents,
   getAdminVenues,
   openAdminEvent,
   publishAdminEvent,
   quoteAdminEventSubscription,
+  reorderAdminEventJoinInformation,
+  updateAdminEventJoinInformation,
   updateAdminEventGallery,
   uploadAdminEventGallery,
   type AdminVenue,
   type CreateAdminEventInput,
   type AdminOrganizationEvent,
   type EventSubscriptionQuote,
+  type EventJoinInformation,
 } from '@/lib/api';
 
 type EventFilter = 'ALL' | AdminOrganizationEvent['status'];
@@ -107,6 +114,8 @@ export function AdminEventsScreen() {
   const [notice, setNotice] = useState('');
   const [busyAction, setBusyAction] = useState('');
   const [galleryEvent, setGalleryEvent] =
+    useState<AdminOrganizationEvent | null>(null);
+  const [joinInfoEvent, setJoinInfoEvent] =
     useState<AdminOrganizationEvent | null>(null);
 
   useEffect(() => {
@@ -483,6 +492,15 @@ export function AdminEventsScreen() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setJoinInfoEvent(event)}
+                    disabled={Boolean(busyAction)}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Info className="h-4 w-4" aria-hidden />
+                    ข้อมูลก่อนเข้าร่วม ({event.joinInformation.length})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void deleteEvent(event)}
                     disabled={Boolean(busyAction)}
                     className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
@@ -531,8 +549,196 @@ export function AdminEventsScreen() {
             }}
           />
         ) : null}
+
+        {joinInfoEvent && token && organizationId ? (
+          <EventJoinInformationDialog
+            key={joinInfoEvent.id}
+            event={joinInfoEvent}
+            organizationId={organizationId}
+            token={token}
+            onClose={() => setJoinInfoEvent(null)}
+            onUpdated={(joinInformation, message) => {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === joinInfoEvent.id
+                    ? { ...item, joinInformation }
+                    : item,
+                ),
+              );
+              setJoinInfoEvent((current) =>
+                current ? { ...current, joinInformation } : current,
+              );
+              setNotice(message);
+            }}
+          />
+        ) : null}
       </AdminPage>
     </AdminAccessGate>
+  );
+}
+
+function EventJoinInformationDialog({
+  event,
+  organizationId,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onClose: () => void;
+  onUpdated: (items: EventJoinInformation[], message: string) => void;
+}) {
+  const [items, setItems] = useState(event.joinInformation);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function resetForm() {
+    setEditingId(null);
+    setTitle('');
+    setContent('');
+  }
+
+  function edit(item: EventJoinInformation) {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setContent(item.content);
+    setError('');
+  }
+
+  async function save(formEvent: FormEvent) {
+    formEvent.preventDefault();
+    const nextTitle = title.trim();
+    const nextContent = content.trim();
+    if (!nextTitle || !nextContent) {
+      setError('กรุณากรอกหัวข้อและรายละเอียดให้ครบ');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const saved = editingId
+        ? await updateAdminEventJoinInformation(
+            organizationId,
+            event.id,
+            editingId,
+            { title: nextTitle, content: nextContent },
+            token,
+          )
+        : await createAdminEventJoinInformation(
+            organizationId,
+            event.id,
+            { title: nextTitle, content: nextContent },
+            token,
+          );
+      const nextItems = editingId
+        ? items.map((item) => (item.id === saved.id ? saved : item))
+        : [...items, saved];
+      setItems(nextItems);
+      resetForm();
+      onUpdated(
+        nextItems,
+        editingId ? 'แก้ไขข้อมูลก่อนเข้าร่วมงานแล้ว' : 'เพิ่มข้อมูลก่อนเข้าร่วมงานแล้ว',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'บันทึกข้อมูลไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(item: EventJoinInformation) {
+    if (!window.confirm(`ลบ “${item.title}” หรือไม่?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteAdminEventJoinInformation(
+        organizationId,
+        event.id,
+        item.id,
+        token,
+      );
+      const nextItems = items
+        .filter((current) => current.id !== item.id)
+        .map((current, sortOrder) => ({ ...current, sortOrder }));
+      setItems(nextItems);
+      if (editingId === item.id) resetForm();
+      onUpdated(nextItems, 'ลบข้อมูลก่อนเข้าร่วมงานแล้ว');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ลบข้อมูลไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function move(index: number, offset: -1 | 1) {
+    const target = index + offset;
+    if (target < 0 || target >= items.length) return;
+    const previous = items;
+    const nextItems = [...items];
+    [nextItems[index], nextItems[target]] = [nextItems[target], nextItems[index]];
+    const normalized = nextItems.map((item, sortOrder) => ({ ...item, sortOrder }));
+    setItems(normalized);
+    setBusy(true);
+    setError('');
+    try {
+      const saved = await reorderAdminEventJoinInformation(
+        organizationId,
+        event.id,
+        normalized.map((item) => item.id),
+        token,
+      );
+      setItems(saved);
+      onUpdated(saved, 'บันทึกลำดับข้อมูลแล้ว');
+    } catch (cause) {
+      setItems(previous);
+      setError(cause instanceof Error ? cause.message : 'จัดลำดับข้อมูลไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="event-join-info-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Event join information</span>
+            <h2 id="event-join-info-title" className="mt-1 text-xl font-black text-ink">ข้อมูลก่อนเข้าร่วม · {event.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="ปิดหน้าต่างข้อมูลก่อนเข้าร่วมงาน" className="grid h-10 w-10 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"><X className="h-4 w-4" aria-hidden /></button>
+        </div>
+
+        {error ? <AdminError message={error} /> : null}
+
+        <div className="mt-5 grid gap-3">
+          {items.length === 0 ? <AdminEmpty icon={Info} title="ยังไม่มีข้อมูลก่อนเข้าร่วมงาน" description="เพิ่มเวลา จุดลงทะเบียน ข้อห้าม หรือคำแนะนำสำหรับผู้เข้าร่วม" /> : items.map((item, index) => (
+            <article key={item.id} className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><span className="text-xs font-bold text-muted">ลำดับ {index + 1}</span><h3 className="mt-1 break-words font-extrabold text-ink">{item.title}</h3><p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">{item.content}</p></div>
+                <div className="flex shrink-0 gap-1">
+                  <button type="button" onClick={() => void move(index, -1)} disabled={busy || index === 0} aria-label={`เลื่อน ${item.title} ขึ้น`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => void move(index, 1)} disabled={busy || index === items.length - 1} aria-label={`เลื่อน ${item.title} ลง`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => edit(item)} disabled={busy} aria-label={`แก้ไข ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => void remove(item)} disabled={busy} aria-label={`ลบ ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <form onSubmit={(formEvent) => void save(formEvent)} className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4">
+          <h3 className="font-extrabold text-ink">{editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
+          <label className="mt-3 block text-sm font-bold text-ink">หัวข้อ<input value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} maxLength={200} disabled={busy} className={`${INPUT_CLASS} mt-2`} /></label>
+          <label className="mt-3 block text-sm font-bold text-ink">รายละเอียด<textarea value={content} onChange={(inputEvent) => setContent(inputEvent.target.value)} maxLength={5000} rows={4} disabled={busy} className={`${INPUT_CLASS} mt-2 py-3`} /></label>
+          <div className="mt-4 flex justify-end gap-2">{editingId ? <button type="button" onClick={resetForm} disabled={busy} className="sl-action-secondary">ยกเลิกแก้ไข</button> : null}<button type="submit" disabled={busy} className="sl-action-primary">{busy ? 'กำลังบันทึก...' : editingId ? 'บันทึกการแก้ไข' : 'เพิ่มข้อมูล'}</button></div>
+        </form>
+      </section>
+    </div>
   );
 }
 

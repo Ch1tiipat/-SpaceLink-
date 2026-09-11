@@ -18,9 +18,7 @@ import {
 import {
   getEventMap,
   getEventMapBySlug,
-  getPublicAnnouncements,
   getVenueLocation,
-  type AdminAnnouncement,
   type EventMap,
   type VenueLocation,
 } from '@/lib/api';
@@ -196,18 +194,38 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           <p className="whitespace-pre-line text-sm leading-7 text-muted">{event.description ?? 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}</p>
         </DetailSection>
 
-        <DetailSection
-          kicker="EVENT NEWS"
-          title="ข่าวสารสำคัญก่อนเข้าร่วมงาน"
-          description={`ประกาศและข่าวที่ ${event.organization.name} เลือกเผยแพร่`}
-        >
-          <EventNews
-            key={`${eventId}:${event.organization.id}`}
-            organizationId={event.organization.id}
-            organizationName={event.organization.name}
-            facebookPost={facebookPost}
-          />
-        </DetailSection>
+          <DetailSection
+            kicker="EVENT NEWS"
+            title="ข่าวสารสำคัญก่อนเข้าร่วมงาน"
+            description={`ข้อมูลเฉพาะสำหรับผู้ที่จะเข้าร่วม ${event.name}`}
+          >
+            {event.joinInformation.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {event.joinInformation.map((item, index) => (
+                  <article key={item.id} className="rounded-[16px] border border-[#e7deef] bg-[#faf7ff] p-5">
+                    <span className="text-xs font-bold text-violet">ข้อมูลลำดับ {index + 1}</span>
+                    <h3 className="mt-2 break-words font-extrabold">{item.title}</h3>
+                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-7 text-muted">{item.content}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text="ผู้จัดงานยังไม่ได้เพิ่มข้อมูลก่อนเข้าร่วมงาน" />
+            )}
+          </DetailSection>
+
+          {facebookPost ? (
+            <DetailSection
+              kicker="ORGANIZER NEWS"
+              title="ข่าวจากผู้จัดงาน"
+              description={`โพสต์สาธารณะจาก Facebook ของ ${event.organization.name}`}
+            >
+              <FacebookPostEmbed
+                organizationName={event.organization.name}
+                post={facebookPost}
+              />
+            </DetailSection>
+          ) : null}
 
         {galleryUrls.length > 0 ? (
           <DetailSection
@@ -589,109 +607,6 @@ function googleEmbedUrl({ latitude, longitude }: Coordinates): string {
 function googleDirectionsUrl({ latitude, longitude }: Coordinates): string {
   const destination = encodeURIComponent(`${latitude},${longitude}`);
   return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
-}
-
-type AnnouncementState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; announcements: AdminAnnouncement[] };
-
-function EventNews({
-  organizationId,
-  organizationName,
-  facebookPost,
-}: {
-  organizationId: string;
-  organizationName: string;
-  facebookPost: FacebookEmbeddedPost | null;
-}) {
-  const [state, setState] = useState<AnnouncementState>({ status: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    getPublicAnnouncements(organizationId, controller.signal)
-      .then((announcements) => {
-        if (active) setState({ status: 'ready', announcements });
-      })
-      .catch(() => {
-        if (active) setState({ status: 'error' });
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [organizationId, attempt]);
-
-  return (
-    <div className="grid min-w-0 gap-5">
-      {state.status === 'loading' ? (
-        <div role="status"><EmptyState text="กำลังโหลดประกาศจากผู้จัดงาน…" /></div>
-      ) : null}
-
-      {state.status === 'error' ? (
-        <div className="rounded-[16px] border border-line bg-[#fcfbfd] p-5 text-center">
-          <p role="alert" className="text-sm text-muted">โหลดประกาศไม่สำเร็จ กรุณาลองใหม่</p>
-          <button
-            type="button"
-            className="sl-action-secondary mt-4 text-violet"
-            onClick={() => {
-              setState({ status: 'loading' });
-              setAttempt((value) => value + 1);
-            }}
-          >
-            ลองโหลดประกาศอีกครั้ง
-          </button>
-        </div>
-      ) : null}
-
-      {state.status === 'ready' && state.announcements.length > 0 ? (
-        <div className="grid min-w-0 gap-3" aria-label="ประกาศจากผู้จัดงาน">
-          {state.announcements.map((announcement) => (
-            <article key={announcement.id} className="min-w-0 rounded-[13px] border border-[#e7deef] bg-[#faf7ff] p-[15px]">
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-[#eee6ff] px-3 py-1.5 font-bold text-violet">ประกาศผู้จัดงาน</span>
-                <AnnouncementDate announcement={announcement} />
-              </div>
-              <h3 className="break-words text-[13px] font-extrabold">{announcement.title}</h3>
-              <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-7 text-muted">{announcement.body}</p>
-            </article>
-          ))}
-        </div>
-      ) : null}
-
-      {facebookPost ? (
-        <div aria-label="ข่าวจาก Facebook ผู้จัดงาน">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="rounded-full bg-[#eaf1ff] px-3 py-1.5 font-bold text-[#2856a3]">Facebook ผู้จัดงาน</span>
-            <span className="text-muted">โพสต์สาธารณะที่ผู้จัดงานเลือก</span>
-          </div>
-          <FacebookPostEmbed
-            organizationName={organizationName}
-            post={facebookPost}
-          />
-        </div>
-      ) : null}
-
-      {state.status === 'ready' && state.announcements.length === 0 && !facebookPost ? (
-        <EmptyState text="ยังไม่มีข่าวสารจากผู้จัดงาน" />
-      ) : null}
-    </div>
-  );
-}
-
-function AnnouncementDate({ announcement }: { announcement: AdminAnnouncement }) {
-  const value = announcement.publishedAt ?? announcement.createdAt;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return <span className="text-muted">ไม่ระบุวันที่ประกาศ</span>;
-  }
-  return (
-    <time dateTime={date.toISOString()} className="text-muted">
-      {announcement.publishedAt ? 'เผยแพร่' : 'สร้างประกาศ'} {dateFormatter.format(date)}
-    </time>
-  );
 }
 
 function DetailSection({ kicker, title, description, count, action, children }: { kicker: string; title: string; description?: string; count?: string; action?: ReactNode; children: ReactNode }) {

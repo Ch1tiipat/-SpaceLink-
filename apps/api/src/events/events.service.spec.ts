@@ -113,6 +113,7 @@ describe('EventsService', () => {
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
   });
@@ -178,6 +179,9 @@ describe('EventsService', () => {
           contactPhone: undefined,
           contactEmail: undefined,
           status: 'DRAFT',
+        },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
         },
       });
       expect(subscriptionCreate).toHaveBeenCalledWith({
@@ -485,6 +489,15 @@ describe('EventsService', () => {
         },
         venue: { id: 'venue-1', name: 'SUT', address: null },
         policy: null,
+        joinInformation: [
+          {
+            id: 'join-1',
+            eventId: 'event-1',
+            title: 'จุดลงทะเบียน',
+            content: 'ประตูหน้า',
+            sortOrder: 0,
+          },
+        ],
       });
       zoneFindMany.mockResolvedValue([
         {
@@ -562,18 +575,25 @@ describe('EventsService', () => {
         facebookUrl: 'https://www.facebook.com/sut',
         lineUrl: 'https://line.me/R/ti/p/@sut',
       });
+      expect(result.event.joinInformation).toEqual([
+        expect.objectContaining({ title: 'จุดลงทะเบียน', sortOrder: 0 }),
+      ]);
       const [eventQuery] = findFirst.mock.calls[0] as [
         {
           include: {
             organization: {
               select: { facebookUrl: boolean; lineUrl: boolean };
             };
+            joinInformation: { orderBy: { sortOrder: string } };
           };
         },
       ];
       expect(eventQuery.include.organization.select).toMatchObject({
         facebookUrl: true,
         lineUrl: true,
+      });
+      expect(eventQuery.include.joinInformation).toEqual({
+        orderBy: { sortOrder: 'asc' },
       });
       expect(result.zones[0].booths[1]).not.toHaveProperty('bookings');
     });
@@ -696,6 +716,9 @@ describe('EventsService', () => {
     expect(eventUpdate).toHaveBeenCalledWith({
       where: { id: eventId, organizationId: orgId },
       data: { galleryUrls: [third, first] },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+      },
     });
     expect(removeByUrls).toHaveBeenCalledWith([second]);
     expect(eventUpdate.mock.invocationCallOrder[0]).toBeLessThan(
@@ -776,6 +799,9 @@ describe('EventsService', () => {
     expect(eventUpdate).toHaveBeenCalledWith({
       where: { id: eventId, organizationId: orgId },
       data: { galleryUrls: [existing, ...uploaded] },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+      },
     });
   });
 
@@ -820,6 +846,7 @@ describe('EventsService', () => {
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
   });
