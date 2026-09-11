@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --test lib/push-registration.test.ts lib/facebook-embed.test.ts"
+    "test": "node --experimental-strip-types --test lib/push-registration.test.ts lib/facebook-embed.test.ts lib/admin-organization-access.test.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-thai": "^5.3.0",

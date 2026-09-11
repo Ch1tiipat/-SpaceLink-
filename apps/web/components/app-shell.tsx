@@ -6,6 +6,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -46,19 +47,25 @@ import {
   getEvents,
   getActiveSystemBroadcast,
   getMe,
+  getSuperAdminOrganizations,
   getUnreadNotificationCount,
   getZoneRecommendations,
   markAllNotificationsRead,
-  type CurrentUser,
   type DiscoveryEvent,
   type EventMap,
   type SupportAssistantAction,
   type SupportAssistantHistoryMessage,
   type SupportAssistantResponse,
   type SystemBroadcast,
+  type CurrentUser,
   type VendorShop,
   type ZoneRecommendation,
 } from "@/lib/api";
+import {
+  buildAdminOrganizationCatalog,
+  selectAdminOrganizationId,
+  type AdminOrganization,
+} from "@/lib/admin-organization-access";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { isEventBookable } from "@/lib/event-booking-rules";
 import {
@@ -90,20 +97,21 @@ type NavItem =
   | { kind: "soon"; label: string; icon: LucideIcon };
 
 type NavGroup = { label: string; items: NavItem[] };
-type AdminOrganization = CurrentUser["organizations"][number];
-
 type AdminOrganizationContextValue = {
   organizations: AdminOrganization[];
+  catalogStatus: "loading" | "ready" | "error";
   selectedOrganizationId: string;
   selectOrganization: (organizationId: string) => void;
 };
 
 const AdminOrganizationContext = createContext<AdminOrganizationContextValue>({
   organizations: [],
+  catalogStatus: "ready",
   selectedOrganizationId: "",
   selectOrganization: () => undefined,
 });
 const NO_ADMIN_ORGANIZATIONS: AdminOrganization[] = [];
+const NO_ADMIN_MEMBERSHIPS: CurrentUser["organizations"] = [];
 
 export function useAdminOrganizationSelection() {
   return useContext(AdminOrganizationContext);
@@ -298,6 +306,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => new Set(),
   );
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [superAdminOrganizations, setSuperAdminOrganizations] = useState<
+    Awaited<ReturnType<typeof getSuperAdminOrganizations>>
+  >([]);
+  const [superAdminCatalogStatus, setSuperAdminCatalogStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
@@ -308,12 +322,65 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isAdmin =
     auth.status === "signed-in" &&
     (auth.role === "ORG_ADMIN" || auth.role === "SUPER_ADMIN");
-  const organizations = isAdmin ? auth.organizations : NO_ADMIN_ORGANIZATIONS;
+  const adminRole = isAdmin ? auth.role : null;
+  const membershipOrganizations = auth.status === "signed-in"
+    ? auth.organizations
+    : NO_ADMIN_MEMBERSHIPS;
+  const organizations = useMemo(
+    () =>
+      adminRole
+        ? buildAdminOrganizationCatalog(
+            adminRole,
+            membershipOrganizations,
+            superAdminOrganizations,
+          )
+        : NO_ADMIN_ORGANIZATIONS,
+    [adminRole, membershipOrganizations, superAdminOrganizations],
+  );
+  const catalogStatus =
+    adminRole === "SUPER_ADMIN" ? superAdminCatalogStatus : "ready";
   const isAdminRoute = pathname.startsWith("/admin");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
 
   useEffect(() => {
-    if (!isAdmin || organizations.length === 0) {
+    if (adminRole !== "SUPER_ADMIN") {
+      setSuperAdminOrganizations([]);
+      setSuperAdminCatalogStatus("ready");
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setSuperAdminCatalogStatus("loading");
+
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) throw new Error("Missing authenticated session");
+
+        const rows = await getSuperAdminOrganizations(token, controller.signal);
+        if (!active) return;
+        setSuperAdminOrganizations(rows);
+        setSuperAdminCatalogStatus("ready");
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        if (active) {
+          setSuperAdminOrganizations([]);
+          setSuperAdminCatalogStatus("error");
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [adminRole]);
+
+  useEffect(() => {
+    if (!isAdmin || catalogStatus !== "ready" || organizations.length === 0) {
       setSelectedOrganizationId("");
       return;
     }
@@ -324,13 +391,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       const storedId = window.sessionStorage.getItem(
         SELECTED_ADMIN_ORGANIZATION_KEY,
       );
-      const nextId = organizations.some(
-        (organization) => organization.id === requestedId,
-      )
-        ? requestedId!
-        : organizations.some((organization) => organization.id === storedId)
-          ? storedId!
-          : organizations[0].id;
+      const nextId = selectAdminOrganizationId(
+        organizations,
+        requestedId,
+        storedId,
+      );
 
       setSelectedOrganizationId(nextId);
       window.sessionStorage.setItem(SELECTED_ADMIN_ORGANIZATION_KEY, nextId);
@@ -345,7 +410,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     syncOrganization();
     window.addEventListener("popstate", syncOrganization);
     return () => window.removeEventListener("popstate", syncOrganization);
-  }, [isAdmin, isAdminRoute, organizations, pathname, router]);
+  }, [catalogStatus, isAdmin, isAdminRoute, organizations, pathname, router]);
 
   useEffect(() => {
     setUnreadNotificationCount(null);
@@ -509,6 +574,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     (organization) => organization.id === selectedOrganizationId,
   );
   const visibleAdminItems = ADMIN_NAV_GROUP.items.filter((item) => {
+    if (adminRole === "SUPER_ADMIN") return true;
     if (selectedOrganization?.membershipRole === "OWNER") return true;
     if (item.kind !== "link") return true;
     if (["/admin/bookings", "/admin/payments"].includes(item.href)) {
@@ -531,6 +597,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <AdminOrganizationContext.Provider
       value={{
         organizations,
+        catalogStatus,
         selectedOrganizationId,
         selectOrganization,
       }}
