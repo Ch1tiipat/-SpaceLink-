@@ -1,8 +1,16 @@
 'use client';
 
-import { useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  backspaceOtpValue,
+  changeOtpValue,
+  clampOtpFocus,
+  OTP_LENGTH,
+  pasteOtpValue,
+  type OtpTransition,
+} from './otp-input-logic';
 
-export const OTP_LENGTH = 6;
+export { OTP_LENGTH } from './otp-input-logic';
 
 type OtpInputProps = {
   /** The digits entered so far, densely packed and never longer than OTP_LENGTH. */
@@ -33,10 +41,15 @@ export function OtpInput({
   autoFocus,
 }: OtpInputProps) {
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
+  const currentValue = useRef(value);
   const digits = value.split('');
 
+  useEffect(() => {
+    currentValue.current = value;
+  }, [value]);
+
   const focusAt = (index: number) => {
-    const clamped = Math.max(0, Math.min(OTP_LENGTH - 1, index));
+    const clamped = clampOtpFocus(index);
     const input = inputs.current[clamped];
     input?.focus();
     // Selecting means the next keystroke replaces rather than appends, so a
@@ -44,37 +57,17 @@ export function OtpInput({
     input?.select();
   };
 
-  const commit = (next: string, focusIndex: number) => {
-    onChange(next.slice(0, OTP_LENGTH));
-    focusAt(focusIndex);
+  const commit = (transition: OtpTransition) => {
+    // Keep the next event independent from React's controlled-state render.
+    // A second digit may arrive after focus moves but before the parent value
+    // prop commits, especially with password managers and fast typing.
+    currentValue.current = transition.value;
+    onChange(transition.value);
+    focusAt(transition.focusIndex);
   };
 
   const handleChange = (index: number, raw: string) => {
-    const typed = raw.replace(/\D/g, '');
-
-    if (typed.length > 1) {
-      // More than one digit arrived at once: a browser autofilling the code
-      // from an SMS or mail client, or a paste the paste handler did not see.
-      // Fill forward from this box.
-      const next = (digits.slice(0, index).join('') + typed).slice(
-        0,
-        OTP_LENGTH,
-      );
-      commit(next, next.length);
-      return;
-    }
-
-    const next = digits.slice();
-
-    if (typed.length === 0) {
-      // The box was cleared with Delete; Backspace is handled in keydown.
-      next.splice(index, 1);
-      commit(next.join(''), index);
-      return;
-    }
-
-    next[index] = typed;
-    commit(next.join(''), index + 1);
+    commit(changeOtpValue(currentValue.current, index, raw));
   };
 
   const handleKeyDown = (
@@ -83,17 +76,7 @@ export function OtpInput({
   ) => {
     if (event.key === 'Backspace') {
       event.preventDefault();
-      const next = digits.slice();
-
-      if (digits[index]) {
-        next.splice(index, 1);
-        commit(next.join(''), index);
-      } else if (index > 0) {
-        // Already empty, so backspace deletes the digit before it and follows
-        // the caret back, the way a single text field would behave.
-        next.splice(index - 1, 1);
-        commit(next.join(''), index - 1);
-      }
+      commit(backspaceOtpValue(currentValue.current, index));
       return;
     }
 
@@ -110,17 +93,14 @@ export function OtpInput({
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData
-      .getData('text')
-      .replace(/\D/g, '')
-      .slice(0, OTP_LENGTH);
+    const transition = pasteOtpValue(event.clipboardData.getData('text'));
 
-    if (!pasted) {
+    if (!transition) {
       return;
     }
 
     event.preventDefault();
-    commit(pasted, pasted.length);
+    commit(transition);
   };
 
   return (
