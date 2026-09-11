@@ -10,10 +10,12 @@ import {
   Megaphone,
   RefreshCw,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  deleteNotification,
   getMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -76,6 +78,9 @@ export default function SuperAdminNotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [deletingNotificationId, setDeletingNotificationId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -139,6 +144,25 @@ export default function SuperAdminNotificationsPage() {
       }
     }
     router.push(getSuperAdminNotificationHref(notification));
+  }
+
+  async function removeNotification(notification: NotificationRecord) {
+    if (deletingNotificationId) return;
+    const confirmed = window.confirm(
+      'ยืนยันการลบการแจ้งเตือนนี้? หากรายการนี้เชื่อมกับเหตุการณ์เดียวกัน การแจ้งเตือนที่เกี่ยวข้องของผู้ใช้ทุกคนจะถูกลบด้วย',
+    );
+    if (!confirmed) return;
+
+    setDeletingNotificationId(notification.id);
+    setError('');
+    try {
+      await deleteNotification(notification.id, await getAccessToken());
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setDeletingNotificationId(null);
+    }
   }
 
   return (
@@ -222,47 +246,66 @@ export default function SuperAdminNotificationsPage() {
               const meta = TYPE_META[notification.type];
               const Icon = meta.icon;
               return (
-                <button
+                <div
                   key={notification.id}
-                  type="button"
-                  onClick={() => void openNotification(notification)}
                   className={`flex w-full items-start gap-4 px-5 py-4 text-left transition hover:bg-[#faf7ff] ${
                     notification.isRead ? 'bg-white' : 'bg-[#fbf8ff]'
                   }`}
                 >
-                  <span
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${meta.tone}`}
+                  <button
+                    type="button"
+                    onClick={() => void openNotification(notification)}
+                    className="flex min-w-0 flex-1 items-start gap-4 text-left"
                   >
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <strong className="text-sm text-[#242032]">
-                        {notification.title}
-                      </strong>
-                      <span className="rounded-full bg-[#f2edf8] px-2 py-0.5 text-[10px] font-bold text-[#716675]">
-                        {meta.label}
-                      </span>
-                      {!notification.isRead ? (
-                        <span
-                          className="h-2 w-2 rounded-full bg-[#7c3aed]"
-                          aria-label="ยังไม่ได้อ่าน"
-                        />
-                      ) : null}
-                    </span>
-                    {notification.body ? (
-                      <span className="mt-1 block text-[13px] leading-6 text-[#716675]">
-                        {notification.body}
-                      </span>
-                    ) : null}
-                    <time
-                      dateTime={notification.createdAt}
-                      className="mt-1.5 block text-[11px] text-[#978e9e]"
+                    <span
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${meta.tone}`}
                     >
-                      {formatDate(notification.createdAt)}
-                    </time>
-                  </span>
-                </button>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <strong className="text-sm text-[#242032]">
+                          {notification.title}
+                        </strong>
+                        <span className="rounded-full bg-[#f2edf8] px-2 py-0.5 text-[10px] font-bold text-[#716675]">
+                          {meta.label}
+                        </span>
+                        {!notification.isRead ? (
+                          <span
+                            className="h-2 w-2 rounded-full bg-[#7c3aed]"
+                            aria-label="ยังไม่ได้อ่าน"
+                          />
+                        ) : null}
+                      </span>
+                      {notification.body ? (
+                        <span className="mt-1 block text-[13px] leading-6 text-[#716675]">
+                          {notification.body}
+                        </span>
+                      ) : null}
+                      <time
+                        dateTime={notification.createdAt}
+                        className="mt-1.5 block text-[11px] text-[#978e9e]"
+                      >
+                        {formatDate(notification.createdAt)}
+                      </time>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void removeNotification(notification)}
+                    disabled={deletingNotificationId !== null}
+                    aria-label={`ลบการแจ้งเตือน ${notification.title}`}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#978e9e] transition hover:bg-[#fff0f0] hover:text-[#b42318] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Trash2
+                      className={`h-4 w-4 ${
+                        deletingNotificationId === notification.id
+                          ? 'animate-pulse'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
               );
             })}
           </div>

@@ -1384,6 +1384,17 @@ export function markAllNotificationsRead(
   );
 }
 
+export function deleteNotification(
+  notificationId: string,
+  token: string,
+): Promise<NotificationCount> {
+  return deleteJson<NotificationCount>(
+    `/notifications/${encodeURIComponent(notificationId)}`,
+    { token },
+    "ไม่สามารถลบการแจ้งเตือนได้",
+  );
+}
+
 export function createPushSubscription(
   input: PushSubscriptionInput,
   token: string,
