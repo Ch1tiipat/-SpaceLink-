@@ -8,6 +8,7 @@ import {
   Building2,
   CheckCircle2,
   Edit3,
+  ExternalLink,
   Loader2,
   MapPin,
   Plus,
@@ -26,6 +27,7 @@ import {
   getMe,
   updateAdminBooth,
   updateAdminVenueLocation,
+  updateAdminVenueMapsLink,
   updateAdminZone,
   type AdminBooth,
   type AdminBoothStatus,
@@ -110,6 +112,7 @@ export function AdminZoneBoothScreen() {
   const [loadingBooths, setLoadingBooths] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingVenue, setSavingVenue] = useState(false);
+  const [savingMapsLink, setSavingMapsLink] = useState(false);
   const [zoneMode, setZoneMode] = useState<EditorMode>('create');
   const [boothMode, setBoothMode] = useState<EditorMode>('create');
   const [editingZoneId, setEditingZoneId] = useState('');
@@ -118,6 +121,7 @@ export function AdminZoneBoothScreen() {
   const [boothDraft, setBoothDraft] = useState<BoothDraft>(EMPTY_BOOTH);
   const [venueLocationDraft, setVenueLocationDraft] =
     useState<VenueLocationDraft>(EMPTY_VENUE_LOCATION);
+  const [venueMapsLinkDraft, setVenueMapsLinkDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -206,6 +210,7 @@ export function AdminZoneBoothScreen() {
           }
         : EMPTY_VENUE_LOCATION,
     );
+    setVenueMapsLinkDraft(selectedVenue?.googleMapsUrl ?? '');
   }, [venueId, venues]);
 
   useEffect(() => {
@@ -394,6 +399,55 @@ export function AdminZoneBoothScreen() {
     }
   }
 
+  function openVenueMapsLink() {
+    const googleMapsUrl = validHttpsUrl(venueMapsLinkDraft);
+    if (!googleMapsUrl) {
+      setError('กรุณากรอกลิงก์ HTTPS ที่ถูกต้องและยาวไม่เกิน 500 ตัวอักษร');
+      return;
+    }
+
+    clearFeedback();
+    const opened = window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+    if (opened) opened.opener = null;
+  }
+
+  async function submitVenueMapsLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = venueMapsLinkDraft.trim();
+    const googleMapsUrl = value ? validHttpsUrl(value) : null;
+
+    if (!venueId) {
+      setError('กรุณาเลือกสถานที่จัดงาน');
+      return;
+    }
+    if (value && !googleMapsUrl) {
+      setError('กรุณากรอกลิงก์ HTTPS ที่ถูกต้องและยาวไม่เกิน 500 ตัวอักษร');
+      return;
+    }
+
+    setSavingMapsLink(true);
+    clearFeedback();
+    try {
+      const saved = await updateAdminVenueMapsLink(
+        venueId,
+        { googleMapsUrl },
+        token,
+      );
+      setVenues((current) =>
+        current.map((venue) => (venue.id === saved.id ? saved : venue)),
+      );
+      setSuccess(
+        googleMapsUrl
+          ? 'บันทึกลิงก์ Google Maps เรียบร้อยแล้ว'
+          : 'ลบลิงก์ Google Maps เรียบร้อยแล้ว',
+      );
+    } catch (cause) {
+      setError(describeError(cause, 'ไม่สามารถบันทึกลิงก์ Google Maps ได้'));
+    } finally {
+      setSavingMapsLink(false);
+    }
+  }
+
   async function submitBooth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!zoneId || !boothDraft.code.trim() || !isMoney(boothDraft.boothPrice)) {
@@ -565,6 +619,50 @@ export function AdminZoneBoothScreen() {
               <Save className="h-4 w-4" aria-hidden />
               {savingVenue ? 'กำลังบันทึก...' : 'บันทึกพิกัดสถานที่'}
             </button>
+          </form>
+          <form onSubmit={submitVenueMapsLink} className="mt-5 border-t border-line pt-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
+                <ExternalLink className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h2 className="font-black text-ink">ลิงก์ Google Maps</h2>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  เพิ่มลิงก์แชร์แยกจากพิกัด และตรวจลิงก์ก่อนบันทึกได้
+                </p>
+              </div>
+            </div>
+            <label className="mt-4 block max-w-xl text-xs font-extrabold text-ink">
+              ลิงก์ Google Maps
+              <input
+                type="url"
+                inputMode="url"
+                maxLength={500}
+                value={venueMapsLinkDraft}
+                onChange={(event) => setVenueMapsLinkDraft(event.target.value)}
+                placeholder="https://maps.app.goo.gl/..."
+                className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
+              />
+            </label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openVenueMapsLink}
+                disabled={!venueMapsLinkDraft.trim() || savingMapsLink}
+                className="flex items-center gap-2 rounded-xl border border-violet px-4 py-2.5 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden />
+                เปิดใน Google Maps
+              </button>
+              <button
+                type="submit"
+                disabled={savingMapsLink || !venueId}
+                className="flex items-center gap-2 rounded-xl bg-violet px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" aria-hidden />
+                {savingMapsLink ? 'กำลังบันทึก...' : 'บันทึกลิงก์ Google Maps'}
+              </button>
+            </div>
           </form>
           {error && <Feedback tone="error">{error}</Feedback>}
           {success && <Feedback tone="success">{success}</Feedback>}
@@ -899,6 +997,17 @@ function isCoordinate(value: string, min: number, max: number): boolean {
   if (!/^-?\d{1,3}(\.\d{1,6})?$/.test(value)) return false;
   const coordinate = Number(value);
   return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max;
+}
+
+function validHttpsUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 500) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function describeError(cause: unknown, fallback: string): string {

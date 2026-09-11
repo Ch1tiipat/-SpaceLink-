@@ -2,6 +2,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
 } from 'class-validator';
@@ -29,6 +30,11 @@ export class CreateVenueDto {
   @IsOptional()
   @Matches(/^-?\d{1,3}(\.\d{1,6})?$/)
   longitude?: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(500)
+  googleMapsUrl?: string;
 
   @IsOptional()
   @IsString()

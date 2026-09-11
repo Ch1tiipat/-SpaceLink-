@@ -60,6 +60,16 @@ function safeHttpUrl(value: string | null): string | null {
   }
 }
 
+function safeHttpsUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [result, setResult] = useState<{
@@ -411,6 +421,8 @@ function VenueLocationMap({
     state.status === 'ready'
       ? parseCoordinates(state.venue.latitude, state.venue.longitude)
       : null;
+  const googleMapsUrl =
+    state.status === 'ready' ? safeHttpsUrl(state.venue.googleMapsUrl) : null;
   const address = venue.address ?? venue.name;
 
   return (
@@ -449,6 +461,16 @@ function VenueLocationMap({
             ยังไม่มีพิกัดสำหรับนำทาง
           </button>
         )}
+        {googleMapsUrl ? (
+          <a
+            href={googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sl-action-secondary mt-3 w-full text-violet"
+          >
+            เปิดใน Google Maps →
+          </a>
+        ) : null}
       </div>
 
       <div className="relative min-h-[320px] overflow-hidden rounded-[18px] border border-[#ded4e5] bg-[linear-gradient(135deg,#f8f5fa,#eff4f2)] shadow-soft sm:min-h-[390px]">
