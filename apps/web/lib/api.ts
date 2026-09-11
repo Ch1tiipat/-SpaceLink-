@@ -336,9 +336,24 @@ export type CreateSupportTicketInput =
       message: string;
     };
 
+/**
+ * Approving grants permission, not a booth (SCRUM-182). There is no eventId or
+ * boothId: the vendor picks a booth themselves through the normal flow, so an
+ * approval cannot jump the queue ahead of someone booking that booth right now.
+ */
 export type ApproveQuotaExceptionInput = {
-  eventId: string;
-  boothId: string;
+  reason?: string;
+};
+
+export type RejectQuotaExceptionInput = {
+  reason: string;
+};
+
+export type QuotaExceptionDecision = {
+  ticketId: string;
+  status: SupportTicketStatus;
+  grantId: string | null;
+  decidedAt: string;
 };
 
 export type SlipVerificationStatus =
@@ -701,6 +716,12 @@ export type SuperAdminSupportTicket = {
   user: { id: string; email: string; fullName: string };
   organization: { id: string; name: string } | null;
 };
+
+/**
+ * The organization-scoped inbox is served by the same selects as the Super
+ * Admin list, so it answers in the same shape. Aliased rather than duplicated.
+ */
+export type OrganizationSupportTicket = SuperAdminSupportTicket;
 
 export type SuperAdminSupportTicketDetail = SuperAdminSupportTicket & {
   booking: {
@@ -2067,6 +2088,34 @@ export function getSuperAdminSupportTicketDetail(
   );
 }
 
+export type OrganizationSupportTicketDetail = SuperAdminSupportTicketDetail;
+
+/** An organization's own request inbox; the API scopes it to the membership. */
+export function getOrganizationSupportTickets(
+  organizationId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSupportTicket[]> {
+  return getJson<OrganizationSupportTicket[]>(
+    `/support-tickets/organizations/${encodeURIComponent(organizationId)}`,
+    { signal, token },
+  );
+}
+
+export function getOrganizationSupportTicketDetail(
+  organizationId: string,
+  ticketId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OrganizationSupportTicketDetail> {
+  return getJson<OrganizationSupportTicketDetail>(
+    `/support-tickets/organizations/${encodeURIComponent(
+      organizationId,
+    )}/${encodeURIComponent(ticketId)}`,
+    { signal, token },
+  );
+}
+
 export function updateSuperAdminSupportTicketStatus(
   ticketId: string,
   status: SupportTicketStatus,
@@ -2544,21 +2593,36 @@ export function createOrganizationAdminSupportTicket(
   );
 }
 
-/** Approves one request; the API derives the organization from the ticket. */
+/**
+ * Approves one request; the API derives the organization from the ticket. The
+ * answer is a permission, not a booking — the vendor still has to go and book.
+ */
 export function approveQuotaException(
   ticketId: string,
   input: ApproveQuotaExceptionInput,
   token: string,
   signal?: AbortSignal,
-): Promise<BookingRecord> {
-  return patchJson<BookingRecord>(
+): Promise<QuotaExceptionDecision> {
+  return patchJson<QuotaExceptionDecision>(
     `/support-tickets/${encodeURIComponent(ticketId.trim())}/approve-quota-exception`,
-    {
-      eventId: input.eventId.trim(),
-      boothId: input.boothId.trim(),
-    },
+    input.reason?.trim() ? { reason: input.reason.trim() } : {},
     { signal, token },
     "ไม่สามารถอนุมัติคำร้องขอเพิ่มโควตาได้",
+  );
+}
+
+/** Rejects one request. The reason is required and reaches the vendor as-is. */
+export function rejectQuotaException(
+  ticketId: string,
+  input: RejectQuotaExceptionInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<QuotaExceptionDecision> {
+  return patchJson<QuotaExceptionDecision>(
+    `/support-tickets/${encodeURIComponent(ticketId.trim())}/reject-quota-exception`,
+    { reason: input.reason.trim() },
+    { signal, token },
+    "ไม่สามารถปฏิเสธคำร้องขอเพิ่มโควตาได้",
   );
 }
 

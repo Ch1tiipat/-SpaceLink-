@@ -10,6 +10,10 @@ import {
 } from 'lucide-react';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { getMe, type CurrentUser } from '@/lib/api';
+import {
+  selectAdminOrganizationId,
+  type AdminOrganization,
+} from '@/lib/admin-organization-access';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 export type AdminAccessState =
@@ -18,22 +22,19 @@ export type AdminAccessState =
   | 'denied'
   | 'no-organization';
 
-type Organization = CurrentUser['organizations'][number];
-
 export function useAdminPageAccess(
   requiredPermission?: 'payments' | 'zones',
 ): {
   access: AdminAccessState;
   token: string;
   organizationId: string;
-  organization: Organization | null;
+  organization: AdminOrganization | null;
 } {
   const router = useRouter();
-  const { selectedOrganizationId } = useAdminOrganizationSelection();
+  const { organizations, catalogStatus, selectedOrganizationId } =
+    useAdminOrganizationSelection();
   const [access, setAccess] = useState<AdminAccessState>('loading');
   const [token, setToken] = useState('');
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [organizationId, setOrganizationId] = useState('');
   const [userRole, setUserRole] = useState<CurrentUser['role'] | null>(null);
 
   useEffect(() => {
@@ -56,14 +57,13 @@ export function useAdminPageAccess(
           setAccess('denied');
           return;
         }
-        if (me.organizations.length === 0) {
+        if (me.role === 'ORG_ADMIN' && me.organizations.length === 0) {
           setAccess('no-organization');
           return;
         }
 
         setToken(accessToken);
         setUserRole(me.role);
-        setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -77,15 +77,10 @@ export function useAdminPageAccess(
     };
   }, [router]);
 
-  useEffect(() => {
-    if (access !== 'allowed' || organizations.length === 0) return;
-    const nextId = organizations.some(
-      (organization) => organization.id === selectedOrganizationId,
-    )
-      ? selectedOrganizationId
-      : organizations[0].id;
-    setOrganizationId(nextId);
-  }, [access, organizations, selectedOrganizationId]);
+  const organizationId = selectAdminOrganizationId(
+    organizations,
+    selectedOrganizationId,
+  );
 
   const organization =
     organizations.find((item) => item.id === organizationId) ?? null;
@@ -97,11 +92,16 @@ export function useAdminPageAccess(
       ? organization?.canManagePayments === true
       : organization?.canManageZones === true);
 
+  let resolvedAccess = access;
+  if (access === 'allowed') {
+    if (catalogStatus === 'loading') resolvedAccess = 'loading';
+    else if (catalogStatus === 'error') resolvedAccess = 'denied';
+    else if (!organization) resolvedAccess = 'no-organization';
+    else if (!hasRequiredPermission) resolvedAccess = 'denied';
+  }
+
   return {
-    access:
-      access === 'allowed' && organization && !hasRequiredPermission
-        ? 'denied'
-        : access,
+    access: resolvedAccess,
     token,
     organizationId,
     organization,

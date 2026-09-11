@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SupportTicketsController } from './support-tickets.controller';
 import { SupportTicketsService } from './support-tickets.service';
 import { ApproveQuotaExceptionDto } from './dto/approve-quota-exception.dto';
+import { RejectQuotaExceptionDto } from './dto/reject-quota-exception.dto';
 import {
   CreateSupportTicketDto,
   SupportTicketRequestType,
@@ -45,13 +46,19 @@ const CREATE_DTO: CreateSupportTicketDto = {
   message: 'ต้องการจองบูธเพิ่มอีก 1 บูธในงานนี้',
 };
 const APPROVE_DTO: ApproveQuotaExceptionDto = {
-  eventId: '55555555-5555-4555-8555-555555555555',
-  boothId: '66666666-6666-4666-8666-666666666666',
+  reason: 'อนุมัติตามที่ร้องขอ',
 };
+const REJECT_DTO: RejectQuotaExceptionDto = {
+  reason: 'โควตาของงานนี้เต็มแล้ว',
+};
+const ADMIN_USER: User = { ...CURRENT_USER, role: UserRole.ORG_ADMIN };
 
 const create = jest.fn();
 const createForOrganizationAdmin = jest.fn();
 const approveQuotaException = jest.fn();
+const rejectQuotaException = jest.fn();
+const findAllForOrganizationAdmin = jest.fn();
+const findOneForOrganizationAdmin = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const findOneForSuperAdmin = jest.fn();
 const updateStatus = jest.fn();
@@ -59,6 +66,9 @@ const mockSupportTicketsService = {
   create,
   createForOrganizationAdmin,
   approveQuotaException,
+  rejectQuotaException,
+  findAllForOrganizationAdmin,
+  findOneForOrganizationAdmin,
   findAllAcrossOrganizations,
   findOneForSuperAdmin,
   updateStatus,
@@ -69,6 +79,9 @@ function controllerHandler(
     | 'create'
     | 'createForOrganizationAdmin'
     | 'approveQuotaException'
+    | 'rejectQuotaException'
+    | 'findAllForOrganizationAdmin'
+    | 'findOneForOrganizationAdmin'
     | 'findAllAcrossOrganizations'
     | 'findOneForSuperAdmin'
     | 'updateStatus',
@@ -241,18 +254,105 @@ describe('SupportTicketsController', () => {
     );
   });
 
-  it('passes the guard-resolved organization id when approving', async () => {
-    approveQuotaException.mockResolvedValue({ id: 'booking-id' });
+  it('passes the guard-resolved organization id and the acting admin when approving', async () => {
+    approveQuotaException.mockResolvedValue({ grantId: 'grant-id' });
 
     await controller.approveQuotaException(
       TICKET_ID,
       APPROVE_DTO,
       ORGANIZATION_ID,
+      ADMIN_USER,
     );
 
+    // The admin id is the audit trail's actor: it must come from the verified
+    // token, never from the request body.
     expect(approveQuotaException).toHaveBeenCalledWith(
       TICKET_ID,
       APPROVE_DTO,
+      ORGANIZATION_ID,
+      ADMIN_USER.id,
+    );
+  });
+
+  it('passes the guard-resolved organization id and the acting admin when rejecting', async () => {
+    rejectQuotaException.mockResolvedValue({ grantId: null });
+
+    await controller.rejectQuotaException(
+      TICKET_ID,
+      REJECT_DTO,
+      ORGANIZATION_ID,
+      ADMIN_USER,
+    );
+
+    expect(rejectQuotaException).toHaveBeenCalledWith(
+      TICKET_ID,
+      REJECT_DTO,
+      ORGANIZATION_ID,
+      ADMIN_USER.id,
+    );
+  });
+
+  // The three routes SCRUM-182 adds are the first reads on this controller an
+  // ORG_ADMIN may make. Metadata alone enforces nothing, so each one asserts
+  // the guard travels with the scope key — a route carrying only the metadata
+  // returns 200 and checks no tenant at all.
+  it('puts the organization inbox behind OrgScopeGuard scoped to organizationId', () => {
+    const handler = controllerHandler('findAllForOrganizationAdmin');
+
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.ORG_ADMIN,
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
+
+  it('puts the organization ticket detail behind OrgScopeGuard scoped to organizationId', () => {
+    const handler = controllerHandler('findOneForOrganizationAdmin');
+
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('organizationId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.ORG_ADMIN,
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
+
+  it('puts the rejection route behind OrgScopeGuard scoped to ticketId', () => {
+    const handler = controllerHandler('rejectQuotaException');
+
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('ticketId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual([
+      UserRole.SUPER_ADMIN,
+      UserRole.ORG_ADMIN,
+    ]);
+  });
+
+  it('delegates the organization inbox to the service with only the scoped org', async () => {
+    findAllForOrganizationAdmin.mockResolvedValue([]);
+
+    await controller.findAllForOrganizationAdmin(ORGANIZATION_ID);
+
+    expect(findAllForOrganizationAdmin).toHaveBeenCalledWith(ORGANIZATION_ID);
+  });
+
+  it('delegates the organization ticket detail with the scoped org', async () => {
+    findOneForOrganizationAdmin.mockResolvedValue({ id: TICKET_ID });
+
+    await controller.findOneForOrganizationAdmin(TICKET_ID, ORGANIZATION_ID);
+
+    expect(findOneForOrganizationAdmin).toHaveBeenCalledWith(
+      TICKET_ID,
       ORGANIZATION_ID,
     );
   });

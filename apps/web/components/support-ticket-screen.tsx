@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import {
@@ -11,13 +12,11 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
-  approveQuotaException,
   createOrganizationAdminSupportTicket,
   createSupportTicket,
   getBooths,
   getMyBookings,
   getMe,
-  type BookingRecord,
   type BoothOption,
   type MyBooking,
   type SupportTicketRecord,
@@ -194,7 +193,7 @@ export function SupportTicketScreen() {
     return <OrganizationAdminTicketForm token={access.token} />;
   }
 
-  return <AdminApprovalForm token={access.token} />;
+  return <SuperAdminSupportPointer />;
 }
 
 function VendorTicketForm({ token, preview }: { token: string; preview: boolean }) {
@@ -693,98 +692,41 @@ function OrganizationAdminTicketForm({ token }: { token: string }) {
   );
 }
 
-function AdminApprovalForm({ token }: { token: string }) {
-  const [ticketId, setTicketId] = useState('');
-  const [eventId, setEventId] = useState('');
-  const [boothId, setBoothId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [booking, setBooking] = useState<BookingRecord | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!ticketId.trim() || !eventId.trim() || !boothId.trim()) {
-      setError('กรุณากรอก Ticket ID, Event ID และ Booth ID ให้ครบ');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setBooking(null);
-    try {
-      const created = await approveQuotaException(
-        ticketId,
-        { eventId, boothId },
-        token,
-      );
-      setBooking(created);
-    } catch (cause) {
-      setError(describeError(cause, 'อนุมัติคำร้องขอเพิ่มโควตาไม่สำเร็จ'));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
+/**
+ * SCRUM-182 removed the hand-typed approval form that used to live here. It
+ * asked for a Ticket ID, an Event ID and a Booth ID as free text, with no list
+ * to pick from — and approving a quota request no longer creates a booking at
+ * all, so there is no booth for anyone to type. Requests are reviewed on the
+ * organization inbox at /admin/quota-requests; Super Admin support lives in its
+ * own console.
+ */
+function SuperAdminSupportPointer() {
   return (
-    <section aria-labelledby="quota-approval-heading" className="sl-surface mt-8 p-6 sm:p-8">
+    <section aria-labelledby="support-console-heading" className="sl-surface mt-8 p-6 sm:p-8">
       <div className="flex items-start gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
           <ShieldCheck className="h-5 w-5" aria-hidden />
         </span>
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Organization Admin</p>
-          <h2 id="quota-approval-heading" className="mt-1 text-2xl font-black text-ink">
-            อนุมัติคำร้องขอเพิ่มโควตา
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Support</p>
+          <h2 id="support-console-heading" className="mt-1 text-2xl font-black text-ink">
+            จัดการคำร้องได้ที่หน้าเฉพาะ
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            ตรวจสอบ Ticket ID, Event ID และ Booth ID ก่อนอนุมัติ ระบบจะสร้าง Booking และปิด Ticket อัตโนมัติ
+            คำร้องขอเพิ่มโควตาของแต่ละองค์กรอยู่ที่หน้า &ldquo;คำร้องขอเพิ่มโควตาบูธ&rdquo; ในเมนูผู้ดูแลองค์กร
+            ส่วนคำร้องทั้งระบบอยู่ในคอนโซล Super Admin
           </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link href="/admin/quota-requests" className="sl-action-primary w-fit">
+              <ClipboardCheck className="h-4 w-4" aria-hidden />
+              ไปที่คำร้องขอเพิ่มโควตา
+            </Link>
+            <Link href="/super-admin/support" className="sl-action-secondary w-fit">
+              คำร้องทั้งระบบ
+            </Link>
+          </div>
         </div>
       </div>
-
-      <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Field label="Ticket ID">
-          <input
-            value={ticketId}
-            onChange={(event) => setTicketId(event.target.value)}
-            className={inputClass}
-            placeholder="UUID ของ Ticket"
-            required
-          />
-        </Field>
-        <Field label="Event ID">
-          <input
-            value={eventId}
-            onChange={(event) => setEventId(event.target.value)}
-            className={inputClass}
-            placeholder="UUID ของ Event"
-            required
-          />
-        </Field>
-        <Field label="Booth ID">
-          <input
-            value={boothId}
-            onChange={(event) => setBoothId(event.target.value)}
-            className={inputClass}
-            placeholder="UUID ของ Booth"
-            required
-          />
-        </Field>
-
-        <div className="sm:col-span-2">
-          {error && <ErrorMessage message={error} />}
-          {booking && (
-            <SuccessMessage>
-              อนุมัติเรียบร้อยแล้ว Booking code: <strong>{booking.bookingCode}</strong>
-            </SuccessMessage>
-          )}
-        </div>
-
-        <button type="submit" disabled={submitting} className="sl-action-primary w-fit disabled:opacity-60 sm:col-span-2">
-          <ClipboardCheck className="h-4 w-4" aria-hidden />
-          {submitting ? 'กำลังอนุมัติ...' : 'อนุมัติและสร้าง Booking'}
-        </button>
-      </form>
     </section>
   );
 }
