@@ -77,6 +77,7 @@ export class EventsService {
             },
             include: {
               joinInformation: { orderBy: { sortOrder: 'asc' } },
+              information: { orderBy: { sortOrder: 'asc' } },
             },
           });
           const subscription = await transaction.subscription.create({
@@ -137,6 +138,7 @@ export class EventsService {
         venue: { select: { id: true, name: true } },
         subscription: true,
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -329,6 +331,7 @@ export class EventsService {
           },
         },
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -452,6 +455,7 @@ export class EventsService {
         data: eventFields,
         include: {
           joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
         },
       });
       return withGalleryUrls(updated);
@@ -475,6 +479,7 @@ export class EventsService {
       data: { ...eventFields, galleryUrls },
       include: {
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
     const removedUrls = currentUrls.filter((url) => !galleryUrls.includes(url));
@@ -511,6 +516,7 @@ export class EventsService {
         data: { galleryUrls: [...currentUrls, ...uploadedUrls] },
         include: {
           joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
         },
       });
       return withGalleryUrls(updated);
@@ -556,6 +562,7 @@ export class EventsService {
         venue: { select: { id: true, name: true } },
         subscription: true,
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!event) {
@@ -652,6 +659,7 @@ export class EventsService {
         venue: { select: { id: true, name: true } },
         subscription: true,
         joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!event) {

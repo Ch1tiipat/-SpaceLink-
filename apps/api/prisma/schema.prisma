@@ -62,6 +62,12 @@ enum EventStatus {
   CANCELLED
 }
 
+enum EventInformationType {
+  ATMOSPHERE
+  ACTIVITY
+  FACILITY
+}
+
 enum SubscriptionStatus {
   DRAFT
   PENDING_PAYMENT
@@ -392,6 +398,7 @@ model Event {
   paymentGroups      BookingPaymentGroup[]
   recommendationLogs RecommendationLog[]
   joinInformation    EventJoinInformation[]
+  information        EventInformation[]
 
   @@index([organizationId])
   @@index([venueId])
@@ -409,6 +416,20 @@ model EventJoinInformation {
 
   @@index([eventId, sortOrder])
   @@map("event_join_information")
+}
+
+model EventInformation {
+  id          String               @id @default(uuid()) @map("event_information_id") @db.Uuid
+  eventId     String               @map("event_id") @db.Uuid
+  title       String
+  description String               @db.Text
+  type        EventInformationType
+  sortOrder   Int                  @default(0) @map("sort_order")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder])
+  @@map("event_information")
 }
 
 model EventPolicy {
