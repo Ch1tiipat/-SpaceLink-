@@ -12,6 +12,14 @@ export type EventSummary = {
   status: "DRAFT" | "PUBLISHED" | "ONGOING" | "COMPLETED" | "CANCELLED";
 };
 
+export type EventJoinInformation = {
+  id: string;
+  eventId: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+};
+
 export type DiscoveryEvent = EventSummary & {
   organization: {
     id: string;
@@ -79,6 +87,7 @@ export type EventMap = {
       cancellationPolicy: string | null;
       refundPolicy: string | null;
     } | null;
+    joinInformation: EventJoinInformation[];
   };
   zones: EventZone[];
 };
@@ -551,6 +560,12 @@ export type AdminOrganizationEvent = EventSummary & {
   mapImageUrl: string | null;
   venue: { id: string; name: string };
   subscription: EventSubscription | null;
+  joinInformation: EventJoinInformation[];
+};
+
+export type SaveEventJoinInformationInput = {
+  title: string;
+  content: string;
 };
 
 export type EventSubscriptionQuote = {
@@ -1608,6 +1623,62 @@ export function updateAdminEventGallery(
     { galleryUrls },
     { token },
     "บันทึกลำดับรูปภาพไม่สำเร็จ",
+  );
+}
+
+export function createAdminEventJoinInformation(
+  organizationId: string,
+  eventId: string,
+  input: SaveEventJoinInformationInput,
+  token: string,
+): Promise<EventJoinInformation> {
+  return postJson<EventJoinInformation>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information`,
+    input,
+    { token },
+    "เพิ่มข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+  );
+}
+
+export function updateAdminEventJoinInformation(
+  organizationId: string,
+  eventId: string,
+  informationId: string,
+  input: Partial<SaveEventJoinInformationInput>,
+  token: string,
+): Promise<EventJoinInformation> {
+  return patchJson<EventJoinInformation>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/${encodeURIComponent(informationId)}`,
+    input,
+    { token },
+    "แก้ไขข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+  );
+}
+
+export function deleteAdminEventJoinInformation(
+  organizationId: string,
+  eventId: string,
+  informationId: string,
+  token: string,
+): Promise<EventJoinInformation> {
+  return deleteJson<EventJoinInformation>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/${encodeURIComponent(informationId)}`,
+    { token },
+    "ลบข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+  );
+}
+
+export function reorderAdminEventJoinInformation(
+  organizationId: string,
+  eventId: string,
+  ids: string[],
+  token: string,
+): Promise<EventJoinInformation[]> {
+  return patchJson<EventJoinInformation[]>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/reorder`,
+    { ids },
+    { token },
+    "บันทึกลำดับข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
   );
 }
 

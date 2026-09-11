@@ -26,6 +26,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
+import { EventJoinInformationService } from './event-join-information.service';
 import { OrganizationEventsController } from './organization-events.controller';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -40,6 +41,10 @@ const close = jest.fn();
 const remove = jest.fn();
 const update = jest.fn();
 const uploadGallery = jest.fn();
+const createJoinInformation = jest.fn();
+const updateJoinInformation = jest.fn();
+const removeJoinInformation = jest.fn();
+const reorderJoinInformation = jest.fn();
 const service = {
   findByOrganization,
   create,
@@ -51,6 +56,12 @@ const service = {
   update,
   uploadGallery,
 } as unknown as EventsService;
+const joinInformationService = {
+  create: createJoinInformation,
+  update: updateJoinInformation,
+  remove: removeJoinInformation,
+  reorder: reorderJoinInformation,
+} as unknown as EventJoinInformationService;
 
 function handler(
   name:
@@ -62,6 +73,10 @@ function handler(
     | 'close'
     | 'update'
     | 'uploadGallery'
+    | 'createJoinInformation'
+    | 'updateJoinInformation'
+    | 'removeJoinInformation'
+    | 'reorderJoinInformation'
     | 'remove' = 'findByOrganization',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -86,7 +101,10 @@ function contextFor(
 }
 
 describe('OrganizationEventsController', () => {
-  const controller = new OrganizationEventsController(service);
+  const controller = new OrganizationEventsController(
+    service,
+    joinInformationService,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -112,6 +130,27 @@ describe('OrganizationEventsController', () => {
       );
       expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
         UserRole.SUPER_ADMIN,
+        UserRole.ORG_ADMIN,
+      ]);
+    }
+  });
+
+  it('protects join-information writes for scoped organization admins only', () => {
+    for (const name of [
+      'createJoinInformation',
+      'updateJoinInformation',
+      'removeJoinInformation',
+      'reorderJoinInformation',
+    ] as const) {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
+        SupabaseAuthGuard,
+        OrgScopeGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler(name))).toBe(
+        'organizationId',
+      );
+      expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
         UserRole.ORG_ADMIN,
       ]);
     }
@@ -171,6 +210,10 @@ describe('OrganizationEventsController', () => {
     'remove',
     'update',
     'uploadGallery',
+    'createJoinInformation',
+    'updateJoinInformation',
+    'removeJoinInformation',
+    'reorderJoinInformation',
   ] as const)('validates the %s event id by UUID shape', (method) => {
     const metadata = Reflect.getMetadata(
       ROUTE_ARGS_METADATA,
@@ -192,7 +235,75 @@ describe('OrganizationEventsController', () => {
     expect(() => pipe.transform('not-a-uuid')).toThrow(BadRequestException);
   });
 
-  it.each(['findByOrganization', 'update', 'uploadGallery'] as const)(
+  it('passes scoped join-information mutations to their service', async () => {
+    const input = { title: 'เวลาเข้างาน', content: 'เริ่ม 08:00 น.' };
+    createJoinInformation.mockResolvedValue({ id: 'join-1' });
+    updateJoinInformation.mockResolvedValue({ id: 'join-1' });
+    removeJoinInformation.mockResolvedValue({ id: 'join-1' });
+    reorderJoinInformation.mockResolvedValue([]);
+
+    await controller.createJoinInformation(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      input,
+    );
+    await controller.updateJoinInformation(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      { title: 'เวลาใหม่' },
+    );
+    await controller.removeJoinInformation(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+    );
+    await controller.reorderJoinInformation(ORGANIZATION_ID, LEGACY_EVENT_ID, {
+      ids: [LEGACY_EVENT_ID],
+    });
+
+    expect(createJoinInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      input,
+    );
+    expect(updateJoinInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      { title: 'เวลาใหม่' },
+    );
+    expect(removeJoinInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+    );
+    expect(reorderJoinInformation).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      [LEGACY_EVENT_ID],
+    );
+  });
+
+  it('rejects SUPER_ADMIN on event join-information writes', () => {
+    const context = contextFor(
+      { user: { id: ORG_ADMIN_ID, role: UserRole.SUPER_ADMIN } },
+      'createJoinInformation',
+    );
+    expect(() => new RolesGuard(new Reflector()).canActivate(context)).toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it.each([
+    'findByOrganization',
+    'update',
+    'uploadGallery',
+    'createJoinInformation',
+    'updateJoinInformation',
+    'removeJoinInformation',
+    'reorderJoinInformation',
+  ] as const)(
     'answers 404 when an ORG_ADMIN requests another organization via %s',
     async (name) => {
       const warn = jest

@@ -18,7 +18,11 @@ import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { CreateEventDto } from './dto/create-event.dto';
+import { CreateEventJoinInformationDto } from './dto/create-event-join-information.dto';
+import { ReorderEventJoinInformationDto } from './dto/reorder-event-join-information.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { UpdateEventJoinInformationDto } from './dto/update-event-join-information.dto';
+import { EventJoinInformationService } from './event-join-information.service';
 import { EventsService } from './events.service';
 import {
   MAX_EVENT_GALLERY_FILES,
@@ -28,7 +32,10 @@ import {
 
 @Controller('organizations/:organizationId/events')
 export class OrganizationEventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly joinInformationService: EventJoinInformationService,
+  ) {}
 
   @Post('quote')
   @UseGuards(RolesGuard)
@@ -73,6 +80,68 @@ export class OrganizationEventsController {
       eventId,
       organizationId,
       files ?? [],
+    );
+  }
+
+  @Post(':eventId/join-information')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  createJoinInformation(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: CreateEventJoinInformationDto,
+  ) {
+    return this.joinInformationService.create(eventId, organizationId, input);
+  }
+
+  @Patch(':eventId/join-information/reorder')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  reorderJoinInformation(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: ReorderEventJoinInformationDto,
+  ) {
+    return this.joinInformationService.reorder(
+      eventId,
+      organizationId,
+      input.ids,
+    );
+  }
+
+  @Patch(':eventId/join-information/:informationId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  updateJoinInformation(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Param('informationId', new LooseUuidPipe()) informationId: string,
+    @Body() input: UpdateEventJoinInformationDto,
+  ) {
+    return this.joinInformationService.update(
+      eventId,
+      informationId,
+      organizationId,
+      input,
+    );
+  }
+
+  @Delete(':eventId/join-information/:informationId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  removeJoinInformation(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Param('informationId', new LooseUuidPipe()) informationId: string,
+  ) {
+    return this.joinInformationService.remove(
+      eventId,
+      informationId,
+      organizationId,
     );
   }
 

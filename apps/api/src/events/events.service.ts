@@ -75,6 +75,9 @@ export class EventsService {
               contactEmail: createEventDto.contactEmail,
               status: EventStatus.DRAFT,
             },
+            include: {
+              joinInformation: { orderBy: { sortOrder: 'asc' } },
+            },
           });
           const subscription = await transaction.subscription.create({
             data: {
@@ -133,6 +136,7 @@ export class EventsService {
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -324,6 +328,7 @@ export class EventsService {
             refundPolicy: true,
           },
         },
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -445,6 +450,9 @@ export class EventsService {
       const updated = await this.prisma.event.update({
         where: { id, organizationId: orgId },
         data: eventFields,
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+        },
       });
       return withGalleryUrls(updated);
     }
@@ -465,6 +473,9 @@ export class EventsService {
     const updated = await this.prisma.event.update({
       where: { id, organizationId: orgId },
       data: { ...eventFields, galleryUrls },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+      },
     });
     const removedUrls = currentUrls.filter((url) => !galleryUrls.includes(url));
     await this.cleanupGalleryUrls(removedUrls);
@@ -498,6 +509,9 @@ export class EventsService {
       const updated = await this.prisma.event.update({
         where: { id, organizationId: orgId },
         data: { galleryUrls: [...currentUrls, ...uploadedUrls] },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+        },
       });
       return withGalleryUrls(updated);
     } catch (error) {
@@ -541,6 +555,7 @@ export class EventsService {
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!event) {
@@ -636,6 +651,7 @@ export class EventsService {
       include: {
         venue: { select: { id: true, name: true } },
         subscription: true,
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!event) {
