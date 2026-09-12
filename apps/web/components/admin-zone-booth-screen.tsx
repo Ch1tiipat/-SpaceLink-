@@ -18,6 +18,7 @@ import {
 import {
   ApiError,
   createAdminBooth,
+  createAdminVenue,
   createAdminZone,
   deleteAdminBooth,
   deleteAdminZone,
@@ -33,6 +34,7 @@ import {
   type AdminBoothStatus,
   type AdminVenue,
   type AdminZone,
+  type CreateAdminVenueInput,
   type SaveBoothInput,
   type SaveZoneInput,
 } from '@/lib/api';
@@ -45,6 +47,13 @@ type EditorMode = 'create' | 'edit';
 type VenueLocationDraft = {
   latitude: string;
   longitude: string;
+};
+
+type VenueDraft = {
+  name: string;
+  description: string;
+  address: string;
+  googleMapsUrl: string;
 };
 
 type ZoneDraft = {
@@ -90,6 +99,13 @@ const EMPTY_VENUE_LOCATION: VenueLocationDraft = {
   longitude: '',
 };
 
+const EMPTY_VENUE: VenueDraft = {
+  name: '',
+  description: '',
+  address: '',
+  googleMapsUrl: '',
+};
+
 const STATUS_LABELS: Record<AdminBoothStatus, string> = {
   AVAILABLE: 'ว่างพร้อมจอง',
   BOOKED: 'จองแล้ว',
@@ -110,6 +126,8 @@ export function AdminZoneBoothScreen() {
   const [loadingVenues, setLoadingVenues] = useState(false);
   const [loadingZones, setLoadingZones] = useState(false);
   const [loadingBooths, setLoadingBooths] = useState(false);
+  const [creatingVenue, setCreatingVenue] = useState(false);
+  const [showVenueForm, setShowVenueForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingVenue, setSavingVenue] = useState(false);
   const [savingMapsLink, setSavingMapsLink] = useState(false);
@@ -121,6 +139,7 @@ export function AdminZoneBoothScreen() {
   const [boothDraft, setBoothDraft] = useState<BoothDraft>(EMPTY_BOOTH);
   const [venueLocationDraft, setVenueLocationDraft] =
     useState<VenueLocationDraft>(EMPTY_VENUE_LOCATION);
+  const [venueDraft, setVenueDraft] = useState<VenueDraft>(EMPTY_VENUE);
   const [venueMapsLinkDraft, setVenueMapsLinkDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -184,6 +203,7 @@ export function AdminZoneBoothScreen() {
           (venue) => venue.organizationId === selectedOrganizationId,
         );
         setVenues(organizationVenues);
+        setShowVenueForm(organizationVenues.length === 0);
         setVenueId((current) =>
           organizationVenues.some((venue) => venue.id === current)
             ? current
@@ -399,6 +419,52 @@ export function AdminZoneBoothScreen() {
     }
   }
 
+  async function submitVenue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = venueDraft.name.trim();
+    const mapsValue = venueDraft.googleMapsUrl.trim();
+    const googleMapsUrl = mapsValue ? validHttpsUrl(mapsValue) : null;
+
+    if (!selectedOrganizationId) {
+      setError('กรุณาเลือกองค์กรก่อนสร้างสถานที่');
+      return;
+    }
+    if (!name) {
+      setError('กรุณากรอกชื่อสถานที่');
+      return;
+    }
+    if (mapsValue && !googleMapsUrl) {
+      setError('กรุณากรอกลิงก์ HTTPS ที่ถูกต้องและยาวไม่เกิน 500 ตัวอักษร');
+      return;
+    }
+
+    const payload: CreateAdminVenueInput = {
+      name,
+      ...optionalString('description', venueDraft.description),
+      ...optionalString('address', venueDraft.address),
+      ...(googleMapsUrl ? { googleMapsUrl } : {}),
+    };
+
+    setCreatingVenue(true);
+    clearFeedback();
+    try {
+      const saved = await createAdminVenue(
+        selectedOrganizationId,
+        payload,
+        token,
+      );
+      setVenues((current) => [...current, saved]);
+      setVenueId(saved.id);
+      setVenueDraft(EMPTY_VENUE);
+      setShowVenueForm(false);
+      setSuccess('สร้างสถานที่เรียบร้อยแล้ว คุณสามารถเพิ่มพิกัด โซน และบูธต่อได้');
+    } catch (cause) {
+      setError(describeError(cause, 'ไม่สามารถสร้างสถานที่ได้'));
+    } finally {
+      setCreatingVenue(false);
+    }
+  }
+
   function openVenueMapsLink() {
     const googleMapsUrl = validHttpsUrl(venueMapsLinkDraft);
     if (!googleMapsUrl) {
@@ -555,29 +621,120 @@ export function AdminZoneBoothScreen() {
         </header>
 
         <section className="mt-6 rounded-[26px] border border-line bg-white p-5 shadow-[0_18px_45px_rgba(54,36,91,0.06)]">
-          <label className="block max-w-xl">
-            <span className="mb-2 flex items-center gap-2 text-sm font-extrabold text-ink">
-              <Building2 className="h-4 w-4 text-violet" aria-hidden /> สถานที่จัดงาน
-            </span>
-            <select
-              value={venueId}
-              onChange={(event) => {
-                setVenueId(event.target.value);
-                startCreateZone();
-                startCreateBooth();
+          <div className="flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="block flex-1">
+              <span className="mb-2 flex items-center gap-2 text-sm font-extrabold text-ink">
+                <Building2 className="h-4 w-4 text-violet" aria-hidden /> สถานที่จัดงาน
+              </span>
+              <select
+                value={venueId}
+                onChange={(event) => {
+                  setVenueId(event.target.value);
+                  startCreateZone();
+                  startCreateBooth();
+                }}
+                disabled={loadingVenues || venues.length === 0}
+                className="h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm font-bold text-ink outline-none focus:border-violet disabled:bg-[#f7f5f9]"
+              >
+                {venues.length === 0 && <option value="">ไม่พบสถานที่</option>}
+                {venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>{venue.name}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setShowVenueForm((current) => !current);
+                clearFeedback();
               }}
-              disabled={loadingVenues}
-              className="h-12 w-full rounded-2xl border border-line bg-white px-4 text-sm font-bold text-ink outline-none focus:border-violet"
+              disabled={!selectedOrganizationId || creatingVenue}
+              className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-violet px-5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {venues.length === 0 && <option value="">ไม่พบสถานที่</option>}
-              {venues.map((venue) => (
-                <option key={venue.id} value={venue.id}>{venue.name}</option>
-              ))}
-            </select>
-          </label>
+              <Plus className="h-4 w-4" aria-hidden />
+              {showVenueForm ? 'ปิดแบบฟอร์ม' : 'สร้างสถานที่'}
+            </button>
+          </div>
           <p className="mt-3 text-xs leading-5 text-muted">
-            รายการสถานที่มาจาก Public Discovery API การสร้างและแก้ไขจะสำเร็จเฉพาะสถานที่ที่บัญชีนี้มีสิทธิ์ดูแล
+            สถานที่ใหม่จะเริ่มเป็นฉบับร่าง และสร้างได้เฉพาะ OWNER หรือผู้ดูแลที่ได้รับสิทธิ์จัดการโซน
           </p>
+          {showVenueForm && (
+            <form onSubmit={submitVenue} className="mt-5 rounded-2xl border border-violet/20 bg-[#faf7ff] p-4">
+              <h2 className="font-black text-ink">สร้างสถานที่ใหม่</h2>
+              <p className="mt-1 text-xs leading-5 text-muted">
+                กรอกชื่อสถานที่ก่อน แล้วจึงเพิ่มพิกัด โซน และบูธหลังสร้างสำเร็จ
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-extrabold text-ink">
+                  ชื่อสถานที่ *
+                  <input
+                    required
+                    maxLength={200}
+                    value={venueDraft.name}
+                    onChange={(event) => setVenueDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="เช่น ศูนย์ประชุมเชียงใหม่"
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
+                  />
+                </label>
+                <label className="text-xs font-extrabold text-ink">
+                  ที่อยู่
+                  <input
+                    maxLength={500}
+                    value={venueDraft.address}
+                    onChange={(event) => setVenueDraft((current) => ({ ...current, address: event.target.value }))}
+                    placeholder="ที่อยู่ของสถานที่"
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
+                  />
+                </label>
+                <label className="text-xs font-extrabold text-ink sm:col-span-2">
+                  ลิงก์ Google Maps
+                  <input
+                    type="url"
+                    inputMode="url"
+                    maxLength={500}
+                    value={venueDraft.googleMapsUrl}
+                    onChange={(event) => setVenueDraft((current) => ({ ...current, googleMapsUrl: event.target.value }))}
+                    placeholder="https://maps.app.goo.gl/..."
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
+                  />
+                </label>
+              </div>
+              <label className="mt-3 block text-xs font-extrabold text-ink">
+                รายละเอียด
+                <textarea
+                  maxLength={2000}
+                  rows={3}
+                  value={venueDraft.description}
+                  onChange={(event) => setVenueDraft((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="รายละเอียดเพิ่มเติมของสถานที่"
+                  className="mt-1.5 w-full resize-none rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-violet"
+                />
+              </label>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={creatingVenue || !selectedOrganizationId}
+                  className="flex items-center gap-2 rounded-xl bg-[#15803d] px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creatingVenue ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+                  {creatingVenue ? 'กำลังสร้าง...' : 'บันทึกสถานที่'}
+                </button>
+                {venues.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVenueDraft(EMPTY_VENUE);
+                      setShowVenueForm(false);
+                      clearFeedback();
+                    }}
+                    className="rounded-xl border border-line px-4 py-2.5 text-xs font-extrabold text-ink"
+                  >
+                    ยกเลิก
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
           <form
             onSubmit={submitVenueLocation}
             className="mt-5 border-t border-line pt-5"

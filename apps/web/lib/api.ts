@@ -1055,9 +1055,16 @@ export type AdminVenue = {
   longitude: string | null;
   googleMapsUrl: string | null;
   mapImageUrl: string | null;
-  status: "ACTIVE" | "INACTIVE";
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
   createdAt: string;
   updatedAt: string;
+};
+
+export type CreateAdminVenueInput = {
+  name: string;
+  description?: string;
+  address?: string;
+  googleMapsUrl?: string;
 };
 
 export type VenueLocation = Pick<
@@ -1441,6 +1448,19 @@ export function getAdminVenues(
   signal?: AbortSignal,
 ): Promise<AdminVenue[]> {
   return getJson<AdminVenue[]>("/venues", { signal, token });
+}
+
+export function createAdminVenue(
+  organizationId: string,
+  input: CreateAdminVenueInput,
+  token: string,
+): Promise<AdminVenue> {
+  return postJson<AdminVenue>(
+    "/organizations/" + encodeURIComponent(organizationId) + "/venues",
+    input,
+    { token },
+    "ไม่สามารถสร้างสถานที่ได้",
+  );
 }
 
 export function getVenueLocation(
