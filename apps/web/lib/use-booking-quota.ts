@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getBookingQuotaContext,
   type BookingQuotaContext,
@@ -29,65 +29,75 @@ export function useBookingQuota(
   eventId: string | null,
   token: string | null,
   preview: boolean,
-): { state: BookingQuotaState; refresh: () => void } {
+): { state: BookingQuotaState; refresh: () => Promise<BookingQuotaState> } {
   const requestKey = eventId && token ? `${eventId}:${token}` : null;
   const [stored, setStored] = useState<{
     key: string | null;
     state: BookingQuotaState;
   }>({ key: null, state: { status: 'idle' } });
-  const [reloadCount, setReloadCount] = useState(0);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    void reloadCount;
-
+  const load = useCallback(async (signal?: AbortSignal): Promise<BookingQuotaState> => {
+    const requestId = ++requestIdRef.current;
     if (!eventId || !token) {
-      setStored({ key: null, state: { status: 'idle' } });
-      return;
+      const next: BookingQuotaState = { status: 'idle' };
+      setStored({ key: null, state: next });
+      return next;
     }
     if (preview) {
-      setStored({
-        key: requestKey,
-        state: { status: 'ready', value: PREVIEW_QUOTA },
-      });
-      return;
+      const next: BookingQuotaState = {
+        status: 'ready',
+        value: PREVIEW_QUOTA,
+      };
+      setStored({ key: requestKey, state: next });
+      return next;
     }
 
-    const controller = new AbortController();
-    let active = true;
     setStored({ key: requestKey, state: { status: 'loading' } });
+    try {
+      const value = await getBookingQuotaContext(eventId, token, signal);
+      const next: BookingQuotaState = { status: 'ready', value };
+      if (requestIdRef.current === requestId && !signal?.aborted) {
+        setStored({ key: requestKey, state: next });
+      }
+      return next;
+    } catch (cause: unknown) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') {
+        return { status: 'idle' };
+      }
+      const next: BookingQuotaState = {
+        status: 'error',
+        message:
+          cause instanceof Error
+            ? cause.message
+            : 'ตรวจสอบโควตาการจองไม่สำเร็จ',
+      };
+      if (requestIdRef.current === requestId && !signal?.aborted) {
+        setStored({ key: requestKey, state: next });
+      }
+      return next;
+    }
+  }, [eventId, preview, requestKey, token]);
 
-    getBookingQuotaContext(eventId, token, controller.signal)
-      .then((value) => {
-        if (active) {
-          setStored({
-            key: requestKey,
-            state: { status: 'ready', value },
-          });
-        }
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        if (active) {
-          setStored({
-            key: requestKey,
-            state: {
-              status: 'error',
-              message:
-                cause instanceof Error
-                  ? cause.message
-                  : 'ตรวจสอบโควตาการจองไม่สำเร็จ',
-            },
-          });
-        }
-      });
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
-    return () => {
-      active = false;
-      controller.abort();
+  const refresh = useCallback(() => load(), [load]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
     };
-  }, [eventId, preview, reloadCount, requestKey, token]);
-
-  const refresh = useCallback(() => setReloadCount((count) => count + 1), []);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refresh]);
   const state: BookingQuotaState =
     stored.key === requestKey
       ? stored.state
