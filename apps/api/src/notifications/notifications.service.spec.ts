@@ -338,16 +338,13 @@ describe('NotificationsService', () => {
     error.mockRestore();
   });
 
-  it('creates an in-app invitation for the booking owner when review eligibility begins', async () => {
+  it('creates an in-app invitation immediately for the booking owner', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
-        event: {
-          name: 'งานเกษตร มทส. 2569',
-          endDate: new Date('2026-08-18T00:00:00.000Z'),
-          endTime: '23:59',
-        },
+        status: BookingStatus.PENDING_PAYMENT,
+        event: { name: 'งานเกษตร มทส. 2569' },
         booth: { code: 'A05' },
       },
     ]);
@@ -360,15 +357,10 @@ describe('NotificationsService', () => {
     );
 
     expect(bookingFindMany).toHaveBeenCalledWith({
-      where: {
-        status: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
-        },
-      },
       select: {
         id: true,
         vendorUserId: true,
-        event: { select: { name: true, endDate: true, endTime: true } },
+        event: { select: { name: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],

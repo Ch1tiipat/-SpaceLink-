@@ -1765,15 +1765,29 @@ describe('BookingsService', () => {
       await expect(
         service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
       ).resolves.toMatchObject({ status: BookingStatus.CANCELLED });
-      expect(bookingUpdateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            bookingEndDate: {
-              gte: new Date('2026-09-11T17:00:00.000Z'),
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          vendorUserId: VENDOR_ID,
+          OR: [
+            { status: BookingStatus.CONFIRMED },
+            {
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { gt: new Date('2026-09-12T10:00:00.000Z') },
             },
-          }),
-        }),
-      );
+          ],
+          bookingEndDate: {
+            gte: new Date('2026-09-11T17:00:00.000Z'),
+          },
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledByUserId: VENDOR_ID,
+          cancelledByRole: CancelledByRole.VENDOR,
+          cancelReason: CANCEL_DTO.cancelReason,
+          cancelledAt: new Date('2026-09-12T10:00:00.000Z'),
+        },
+      });
     });
 
     it('records an expired pending hold as a system cancellation', async () => {
