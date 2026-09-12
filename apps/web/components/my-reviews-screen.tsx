@@ -37,6 +37,7 @@ function previewReviews(): MyReview[] {
       rating: 5,
       comment: 'ทำเลดี · พื้นที่สะอาด · เข้าออกสะดวก',
       createdAt: '2026-09-05T10:00:00.000Z',
+      status: 'PUBLISHED',
       context: {
         bookingCode: 'local-preview-completed-booking',
         event: { name: 'งานเกษตร มทส. 2569', slug: 'demo-event' },
@@ -362,6 +363,13 @@ function ReviewCard({ review }: { review: MyReview }) {
             <p className="mt-1 break-words text-sm text-muted">
               {zoneName} · บูธ {context.booth.code}
             </p>
+          ) : null}
+          {review.status !== 'PUBLISHED' ? (
+            <span className="mt-3 inline-flex rounded-full border border-[#ead8b7] bg-[#fff8e8] px-3 py-1 text-xs font-bold text-[#895b08]">
+              {review.status === 'HIDDEN'
+                ? 'ถูกซ่อนโดยผู้จัดงาน'
+                : 'ถูกลบโดยผู้จัดงาน'}
+            </span>
           ) : null}
         </div>
 

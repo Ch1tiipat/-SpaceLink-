@@ -63,6 +63,8 @@ const bookingListInclude = {
       id: true,
       slug: true,
       name: true,
+      endDate: true,
+      endTime: true,
       organization: { select: { promptpayId: true } },
     },
   },
@@ -104,7 +106,13 @@ type BookingListRecord = Prisma.BookingGetPayload<{
 }>;
 type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
   boothPrice: string;
-  event: { id: string; slug: string; name: string };
+  event: {
+    id: string;
+    slug: string;
+    name: string;
+    endDate: Date;
+    endTime: string | null;
+  };
   paymentQrDataUri: string | null;
 };
 type AdminBookingRecord = Prisma.BookingGetPayload<{
@@ -1455,7 +1463,13 @@ export class BookingsService {
     return {
       ...rest,
       boothPrice: boothPrice.toString(),
-      event: { id: event.id, slug: event.slug, name: event.name },
+      event: {
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        endDate: event.endDate,
+        endTime: event.endTime,
+      },
       paymentQrDataUri,
     };
   }

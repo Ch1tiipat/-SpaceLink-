@@ -60,7 +60,12 @@ const PREVIEW_BOOKINGS: MyBooking[] = [
     createdAt: '2026-08-31T00:00:00.000Z',
     updatedAt: '2026-08-31T00:00:00.000Z',
     paymentQrDataUri: null,
-    event: { id: 'preview-event', name: 'Future Tech Expo 2026' },
+    event: {
+      id: 'preview-event',
+      name: 'Future Tech Expo 2026',
+      endDate: '2026-09-12T00:00:00.000Z',
+      endTime: '18:00',
+    },
     booth: {
       id: 'preview-booth-a01',
       code: 'A01',

@@ -74,7 +74,7 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
     const combinedComment = [...tags, comment.trim()].filter(Boolean).join(' · ');
     try {
       if (state.status !== 'ready') return;
-      if (!state.isPreview) await createReview({ targetType: 'BOOTH', targetId: booking.booth.id, rating, ...(combinedComment ? { comment: combinedComment } : {}) }, state.token);
+      if (!state.isPreview) await createReview({ bookingId: booking.id, targetType: 'BOOTH', targetId: booking.booth.id, rating, ...(combinedComment ? { comment: combinedComment } : {}) }, state.token);
       setSuccess(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'ไม่สามารถบันทึกรีวิวได้');

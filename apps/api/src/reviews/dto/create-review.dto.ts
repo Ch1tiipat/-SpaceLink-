@@ -11,6 +11,9 @@ import {
 import { UUID_SHAPE } from '../../common/utils/uuid.util';
 
 export class CreateReviewDto {
+  @Matches(UUID_SHAPE)
+  bookingId!: string;
+
   @IsIn(['BOOTH', 'ZONE'])
   targetType!: 'BOOTH' | 'ZONE';
 

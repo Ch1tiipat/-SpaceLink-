@@ -13,14 +13,17 @@ import {
   MapPin,
   Navigation,
   ParkingCircle,
+  Star,
   Store,
 } from 'lucide-react';
 import {
   getEventMap,
   getEventMapBySlug,
+  getEventReviews,
   getVenueLocation,
   type EventInformationType,
   type EventMap,
+  type EventReviewsPage,
   type VenueLocation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
@@ -84,6 +87,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   } | null>(null);
   const data = result?.eventId === eventId ? result.data : null;
   const error = result?.eventId === eventId ? result.error : null;
+  const [reviews, setReviews] = useState<{
+    eventId: string;
+    data: EventReviewsPage | null;
+    error: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -110,6 +118,26 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       controller.abort();
     };
   }, [eventId, router]);
+
+  useEffect(() => {
+    const resolvedEventId = data?.event.id;
+    if (!resolvedEventId) return;
+    const controller = new AbortController();
+    setReviews({ eventId: resolvedEventId, data: null, error: null });
+    getEventReviews(resolvedEventId, 1, 10, controller.signal)
+      .then((reviewData) => {
+        setReviews({ eventId: resolvedEventId, data: reviewData, error: null });
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setReviews({
+          eventId: resolvedEventId,
+          data: null,
+          error: cause instanceof Error ? cause.message : 'โหลดรีวิวไม่สำเร็จ',
+        });
+      });
+    return () => controller.abort();
+  }, [data?.event.id]);
 
   if (!data && !error) {
     return (
@@ -320,8 +348,45 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           />
         </DetailSection>
 
-        <DetailSection kicker="EVENT REVIEWS" title="รีวิวจากผู้เข้าร่วมงาน" count="0.0 ★">
-          <EmptyState text="Event นี้ยังไม่มีรีวิวจาก API" />
+        <DetailSection
+          kicker="EVENT REVIEWS"
+          title="รีวิวจากผู้เข้าร่วมงาน"
+          count={
+            reviews?.eventId === event.id && reviews.data
+              ? `${reviews.data.average?.toFixed(1) ?? '0.0'} ★ · ${reviews.data.count} รีวิว`
+              : undefined
+          }
+        >
+          {!reviews || reviews.eventId !== event.id || (!reviews.data && !reviews.error) ? (
+            <div className="grid gap-3" aria-label="กำลังโหลดรีวิว">
+              {[1, 2].map((item) => <div key={item} className="skeleton h-32 rounded-[18px]" />)}
+            </div>
+          ) : reviews.error ? (
+            <p role="alert" className="text-sm font-bold text-danger">{reviews.error}</p>
+          ) : reviews.data && reviews.data.items.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {reviews.data.items.map((review) => (
+                <article key={review.id} className="rounded-[18px] border border-line bg-[#fcfbfd] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-extrabold">ผู้ใช้ SpaceLink</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#fff8dc] px-3 py-1.5 text-sm font-black text-[#9a6700]">
+                      <Star className="h-4 w-4 fill-current" aria-hidden /> {review.rating}/5
+                    </span>
+                  </div>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-muted">
+                    {review.comment?.trim() || 'ไม่ได้เขียนความคิดเห็นเพิ่มเติม'}
+                  </p>
+                  {review.booking ? (
+                    <p className="mt-3 text-xs text-muted">
+                      บูธ {review.booking.booth.code} · {review.booking.booth.zone.name ?? review.booking.booth.zone.code}
+                    </p>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="Event นี้ยังไม่มีรีวิว" />
+          )}
         </DetailSection>
 
         <section className="mt-5 grid gap-5 lg:grid-cols-[.85fr_1.15fr]">

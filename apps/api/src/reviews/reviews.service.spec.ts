@@ -1,14 +1,26 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BookingStatus, Prisma, ReviewTargetType } from '@prisma/client';
+import {
+  BookingStatus,
+  Prisma,
+  ReviewStatus,
+  ReviewTargetType,
+} from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
-import { ReviewsService } from './reviews.service';
+import { isEventEnded, ReviewsService } from './reviews.service';
 
 const userId = '11111111-1111-4111-8111-111111111111';
-const targetId = '22222222-2222-4222-8222-222222222222';
-const reviewId = '33333333-3333-4333-8333-333333333333';
+const bookingId = '22222222-2222-4222-8222-222222222222';
+const targetId = '33333333-3333-4333-8333-333333333333';
+const zoneId = '44444444-4444-4444-8444-444444444444';
+const eventId = '55555555-5555-4555-8555-555555555555';
+const organizationId = '66666666-6666-4666-8666-666666666666';
+const reviewId = '77777777-7777-4777-8777-777777777777';
+
 const dto: CreateReviewDto = {
+  bookingId,
   targetType: 'BOOTH',
   targetId,
   rating: 5,
@@ -16,78 +28,134 @@ const dto: CreateReviewDto = {
 };
 
 const aggregate = jest.fn();
-const bookingFindFirst = jest.fn();
-const reviewFindFirst = jest.fn();
-const reviewCreate = jest.fn();
-const reviewUpdate = jest.fn();
 const reviewCount = jest.fn();
 const reviewFindMany = jest.fn();
+const reviewFindUnique = jest.fn();
+const reviewUpdateMany = jest.fn();
 const bookingFindMany = jest.fn();
+const eventFindMany = jest.fn();
+const transactionBookingFindUnique = jest.fn();
+const transactionReviewFindUnique = jest.fn();
+const transactionReviewCreate = jest.fn();
+const transactionReviewUpdate = jest.fn();
 const transactionClient = {
-  booking: { findFirst: bookingFindFirst },
+  booking: { findUnique: transactionBookingFindUnique },
   review: {
-    findFirst: reviewFindFirst,
-    create: reviewCreate,
-    update: reviewUpdate,
+    findUnique: transactionReviewFindUnique,
+    create: transactionReviewCreate,
+    update: transactionReviewUpdate,
   },
 };
 const prismaTransaction = jest.fn();
+const recordAuditLog = jest.fn();
 const mockPrismaService = {
-  review: { aggregate, count: reviewCount, findMany: reviewFindMany },
+  review: {
+    aggregate,
+    count: reviewCount,
+    findMany: reviewFindMany,
+    findUnique: reviewFindUnique,
+    updateMany: reviewUpdateMany,
+  },
   booking: { findMany: bookingFindMany },
+  event: { findMany: eventFindMany },
   $transaction: prismaTransaction,
 };
 
-function bookingEligibilityWhere(): {
-  bookingEndDate: { lte: Date };
-} {
-  const [args] = bookingFindFirst.mock.calls[0] as [
-    { where: { bookingEndDate: { lte: Date } } },
-  ];
-  return args.where;
+function eligibleBooking(status: BookingStatus = BookingStatus.CONFIRMED) {
+  return {
+    id: bookingId,
+    vendorUserId: userId,
+    boothId: targetId,
+    status,
+    eventId,
+    event: {
+      organizationId,
+      endDate: new Date('2026-09-05T00:00:00.000Z'),
+      endTime: '23:00',
+    },
+    booth: { zoneId },
+  };
 }
+
+describe('isEventEnded', () => {
+  const endDate = new Date('2026-09-05T00:00:00.000Z');
+
+  it.each([null, 'invalid', '25:00'])(
+    'falls back to 23:59 Bangkok when endTime is %p',
+    (endTime) => {
+      expect(
+        isEventEnded(
+          { endDate, endTime },
+          new Date('2026-09-05T16:58:59.000Z'),
+        ),
+      ).toBe(false);
+      expect(
+        isEventEnded(
+          { endDate, endTime },
+          new Date('2026-09-05T16:59:00.000Z'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('uses the exact event time across Bangkok midnight', () => {
+    expect(
+      isEventEnded(
+        { endDate, endTime: '00:15' },
+        new Date('2026-09-04T17:14:59.000Z'),
+      ),
+    ).toBe(false);
+    expect(
+      isEventEnded(
+        { endDate, endTime: '00:15' },
+        new Date('2026-09-04T17:15:00.000Z'),
+      ),
+    ).toBe(true);
+  });
+});
 
 describe('ReviewsService', () => {
   let service: ReviewsService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    jest.useFakeTimers().setSystemTime(new Date('2026-09-05T17:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-05T16:00:00.000Z'));
     aggregate.mockResolvedValue({
       _avg: { rating: null },
       _count: { rating: 0 },
     });
-    bookingFindFirst.mockResolvedValue({ id: 'eligible-booking' });
-    reviewFindFirst.mockResolvedValue(null);
-    reviewCreate.mockResolvedValue({ id: reviewId });
-    reviewUpdate.mockResolvedValue({ id: reviewId });
     reviewCount.mockResolvedValue(0);
     reviewFindMany.mockResolvedValue([]);
+    reviewFindUnique.mockResolvedValue({
+      id: reviewId,
+      status: ReviewStatus.PUBLISHED,
+    });
+    reviewUpdateMany.mockResolvedValue({ count: 1 });
     bookingFindMany.mockResolvedValue([]);
+    eventFindMany.mockResolvedValue([]);
+    transactionBookingFindUnique.mockResolvedValue(eligibleBooking());
+    transactionReviewFindUnique.mockResolvedValue(null);
+    transactionReviewCreate.mockResolvedValue({ id: reviewId });
+    transactionReviewUpdate.mockResolvedValue({ id: reviewId });
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(transactionClient as unknown as Prisma.TransactionClient),
     );
+    recordAuditLog.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReviewsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: AuditLogsService, useValue: { record: recordAuditLog } },
       ],
     }).compile();
-
-    service = module.get<ReviewsService>(ReviewsService);
+    service = module.get(ReviewsService);
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  afterEach(() => jest.useRealTimers());
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
-  it('returns the live average and review count for any target type', async () => {
+  it('counts only published reviews in a target average', async () => {
     aggregate.mockResolvedValue({
       _avg: { rating: 4.25 },
       _count: { rating: 8 },
@@ -97,263 +165,274 @@ describe('ReviewsService', () => {
       service.getAverage(ReviewTargetType.SHOP, targetId),
     ).resolves.toEqual({ average: 4.25, count: 8 });
     expect(aggregate).toHaveBeenCalledWith({
-      where: { targetType: ReviewTargetType.SHOP, targetId },
+      where: {
+        targetType: ReviewTargetType.SHOP,
+        targetId,
+        status: ReviewStatus.PUBLISHED,
+      },
       _avg: { rating: true },
       _count: { rating: true },
     });
   });
 
-  it('lists only the authenticated user reviews with pagination and owned booking context', async () => {
+  it('returns only published event reviews with public pagination', async () => {
+    aggregate.mockResolvedValue({
+      _avg: { rating: 4.5 },
+      _count: { rating: 2 },
+    });
+    reviewFindMany.mockResolvedValue([{ id: reviewId, rating: 5 }]);
+
+    await expect(service.getForEvent(eventId, 1, 1)).resolves.toEqual({
+      average: 4.5,
+      count: 2,
+      items: [{ id: reviewId, rating: 5 }],
+      page: 1,
+      limit: 1,
+      hasMore: true,
+    });
+    expect(reviewFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventId, status: ReviewStatus.PUBLISHED },
+        skip: 0,
+        take: 1,
+      }),
+    );
+  });
+
+  it('returns the booking-linked context and moderation status in My Reviews', async () => {
     const createdAt = new Date('2026-09-05T10:00:00.000Z');
-    reviewCount.mockResolvedValue(3);
+    reviewCount.mockResolvedValue(1);
     reviewFindMany.mockResolvedValue([
       {
         id: reviewId,
         targetType: ReviewTargetType.BOOTH,
         targetId,
         rating: 5,
-        comment: 'พื้นที่สะอาด',
+        comment: 'ดีมาก',
         createdAt,
-      },
-    ]);
-    bookingFindMany.mockResolvedValue([
-      {
-        bookingCode: 'BK-REVIEW01',
-        boothId: targetId,
-        event: { name: 'งานทดสอบ', slug: 'review-event' },
-        booth: {
-          code: 'A01',
-          zone: {
-            id: '44444444-4444-4444-8444-444444444444',
-            code: 'ZONE-A',
-            name: 'โซนอาหาร',
+        status: ReviewStatus.HIDDEN,
+        booking: {
+          bookingCode: 'BK-001',
+          event: { name: 'งานทดสอบ', slug: 'test-event' },
+          booth: {
+            code: 'A01',
+            zone: { code: 'A', name: 'โซนอาหาร' },
           },
         },
       },
     ]);
 
-    await expect(service.getMine(userId, 2, 1)).resolves.toEqual({
+    await expect(service.getMine(userId, 1, 10)).resolves.toEqual({
       items: [
         {
           id: reviewId,
           targetType: ReviewTargetType.BOOTH,
           rating: 5,
-          comment: 'พื้นที่สะอาด',
+          comment: 'ดีมาก',
           createdAt,
+          status: ReviewStatus.HIDDEN,
           context: {
-            bookingCode: 'BK-REVIEW01',
-            event: { name: 'งานทดสอบ', slug: 'review-event' },
+            bookingCode: 'BK-001',
+            event: { name: 'งานทดสอบ', slug: 'test-event' },
             booth: { code: 'A01' },
-            zone: {
-              code: 'ZONE-A',
-              name: 'โซนอาหาร',
-            },
+            zone: { code: 'A', name: 'โซนอาหาร' },
           },
         },
       ],
-      page: 2,
-      limit: 1,
-      total: 3,
-      hasMore: true,
+      page: 1,
+      limit: 10,
+      total: 1,
+      hasMore: false,
     });
-    expect(reviewFindMany).toHaveBeenCalledWith({
-      where: { reviewerUserId: userId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      skip: 1,
-      take: 1,
-      select: {
-        id: true,
-        targetType: true,
-        targetId: true,
-        rating: true,
-        comment: true,
-        createdAt: true,
-      },
-    });
-    expect(bookingFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          vendorUserId: userId,
-          OR: [{ boothId: { in: [targetId] } }],
-        },
-      }),
-    );
-  });
-
-  it('does not expose another user booking while resolving review context', async () => {
-    reviewCount.mockResolvedValue(1);
-    reviewFindMany.mockResolvedValue([
-      {
-        id: reviewId,
-        targetType: ReviewTargetType.ZONE,
-        targetId,
-        rating: 4,
-        comment: null,
-        createdAt: new Date('2026-09-05T10:00:00.000Z'),
-      },
-    ]);
-
-    const result = await service.getMine(userId, 1, 10);
-
-    expect(bookingFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          vendorUserId: userId,
-          OR: [{ booth: { zoneId: { in: [targetId] } } }],
-        },
-      }),
-    );
-    expect(result.items[0].context).toBeNull();
-  });
-
-  it('skips booking lookup for review types without booking context', async () => {
-    reviewCount.mockResolvedValue(1);
-    reviewFindMany.mockResolvedValue([
-      {
-        id: reviewId,
-        targetType: ReviewTargetType.SHOP,
-        targetId,
-        rating: 3,
-        comment: null,
-        createdAt: new Date('2026-09-05T10:00:00.000Z'),
-      },
-    ]);
-
-    const result = await service.getMine(userId, 1, 10);
-
     expect(bookingFindMany).not.toHaveBeenCalled();
-    expect(result.items[0].context).toBeNull();
   });
 
-  it('creates a booth review through a serializable transaction', async () => {
-    await expect(service.create(userId, dto)).resolves.toEqual({
-      id: reviewId,
+  it('lists all moderation statuses for an organization without reviewer PII', async () => {
+    reviewCount.mockResolvedValue(1);
+    reviewFindMany.mockResolvedValue([
+      { id: reviewId, status: ReviewStatus.DELETED },
+    ]);
+    eventFindMany.mockResolvedValue([{ id: eventId, name: 'งานทดสอบ' }]);
+
+    await service.listForOrganization(organizationId, {
+      eventId,
+      rating: 2,
+      page: 1,
+      limit: 25,
     });
 
-    expect(prismaTransaction).toHaveBeenCalledWith(expect.any(Function), {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
-    expect(bookingFindFirst).toHaveBeenCalledWith({
-      where: {
-        vendorUserId: userId,
-        status: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+    const call = (
+      reviewFindMany.mock.lastCall as unknown as [
+        {
+          where: Prisma.ReviewWhereInput;
+          select: Record<string, unknown>;
         },
-        bookingEndDate: { lte: new Date('2026-09-05T00:00:00.000Z') },
-        boothId: targetId,
-      },
-      select: { id: true },
-    });
-    expect(reviewCreate).toHaveBeenCalledWith({
-      data: {
-        rating: dto.rating,
-        comment: dto.comment,
-        reviewerDisplayName: undefined,
-        reviewerUserId: userId,
-        targetType: dto.targetType,
-        targetId,
-      },
-    });
+      ]
+    )[0];
+    expect(call.where).toEqual({ organizationId, eventId, rating: 2 });
+    expect(call.select).not.toHaveProperty('reviewer');
+    expect(call.select).not.toHaveProperty('reviewerUserId');
+    expect(call.select).not.toHaveProperty('reviewerDisplayName');
   });
 
-  it('derives zone eligibility through the booked booth', async () => {
-    const zoneDto: CreateReviewDto = {
-      targetType: 'ZONE',
-      targetId,
-      rating: 4,
-    };
+  it.each([BookingStatus.CONFIRMED, BookingStatus.COMPLETED])(
+    'creates one booking-scoped review for %s',
+    async (status) => {
+      transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
 
-    await service.create(userId, zoneDto);
-
-    expect(bookingFindFirst).toHaveBeenCalledWith({
-      where: {
-        vendorUserId: userId,
-        status: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
+      await expect(service.create(userId, dto)).resolves.toEqual({
+        id: reviewId,
+      });
+      expect(transactionReviewCreate).toHaveBeenCalledWith({
+        data: {
+          rating: dto.rating,
+          comment: dto.comment,
+          reviewerDisplayName: undefined,
+          reviewerUserId: userId,
+          targetType: dto.targetType,
+          targetId,
+          bookingId,
+          eventId,
+          organizationId,
+          status: ReviewStatus.PUBLISHED,
         },
-        bookingEndDate: { lte: new Date('2026-09-05T00:00:00.000Z') },
-        booth: { zoneId: targetId },
-      },
-      select: { id: true },
+      });
+    },
+  );
+
+  it('rejects an unknown or another user booking', async () => {
+    transactionBookingFindUnique.mockResolvedValue({
+      ...eligibleBooking(),
+      vendorUserId: 'another-user',
     });
-  });
-
-  it('rejects a review one hour before the Bangkok-midnight cutoff', async () => {
-    jest.setSystemTime(new Date('2026-09-05T16:00:00.000Z'));
-    bookingFindFirst.mockResolvedValue(null);
-
     await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-    expect(bookingEligibilityWhere().bookingEndDate.lte).toEqual(
-      new Date('2026-09-04T23:00:00.000Z'),
+    expect(transactionReviewFindUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['BOOTH', zoneId],
+    ['ZONE', targetId],
+  ] as const)(
+    'rejects a mismatched %s target',
+    async (targetType, mismatchedId) => {
+      await expect(
+        service.create(userId, { ...dto, targetType, targetId: mismatchedId }),
+      ).rejects.toThrow('พื้นที่รีวิวไม่ตรงกับการจอง');
+    },
+  );
+
+  it('rejects a review before the exact event end time', async () => {
+    transactionBookingFindUnique.mockResolvedValue({
+      ...eligibleBooking(),
+      event: { ...eligibleBooking().event, endTime: '23:01' },
+    });
+    await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
+      ForbiddenException,
     );
   });
 
-  it('allows a review exactly at the Bangkok-midnight cutoff', async () => {
-    await expect(service.create(userId, dto)).resolves.toEqual({
+  it.each([
+    BookingStatus.PENDING_PAYMENT,
+    BookingStatus.CANCELLED,
+    BookingStatus.NO_SHOW,
+  ])('rejects booking status %s', async (status) => {
+    transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
+    await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it.each([ReviewStatus.PUBLISHED, ReviewStatus.HIDDEN])(
+    'updates content but preserves an existing %s status',
+    async (status) => {
+      transactionReviewFindUnique.mockResolvedValue({ id: reviewId, status });
+      await service.create(userId, dto);
+      expect(transactionReviewUpdate).toHaveBeenCalledWith({
+        where: { id: reviewId },
+        data: {
+          rating: dto.rating,
+          comment: dto.comment,
+          reviewerDisplayName: undefined,
+        },
+      });
+      expect(transactionReviewCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects resubmission of a deleted review without writing', async () => {
+    transactionReviewFindUnique.mockResolvedValue({
       id: reviewId,
+      status: ReviewStatus.DELETED,
     });
-    expect(bookingEligibilityWhere().bookingEndDate.lte).toEqual(
-      new Date('2026-09-05T00:00:00.000Z'),
+    await expect(service.create(userId, dto)).rejects.toEqual(
+      new ConflictException('รีวิวนี้ถูกลบแล้ว ไม่สามารถส่งใหม่ได้'),
     );
+    expect(transactionReviewUpdate).not.toHaveBeenCalled();
+    expect(transactionReviewCreate).not.toHaveBeenCalled();
   });
 
-  it('rejects a vendor without an eligible booking before reading reviews', async () => {
-    bookingFindFirst.mockResolvedValue(null);
+  it.each([
+    ['hide', ReviewStatus.PUBLISHED, ReviewStatus.HIDDEN, 'review.hidden'],
+    ['restore', ReviewStatus.HIDDEN, ReviewStatus.PUBLISHED, 'review.restored'],
+    [
+      'softDelete',
+      ReviewStatus.PUBLISHED,
+      ReviewStatus.DELETED,
+      'review.deleted',
+    ],
+  ] as const)(
+    '%s changes status and records the complete moderation audit',
+    async (method, previousStatus, newStatus, action) => {
+      reviewFindUnique
+        .mockResolvedValueOnce({ id: reviewId, status: previousStatus })
+        .mockResolvedValueOnce({ id: reviewId, status: newStatus });
+      await service[method](reviewId, userId, 'เหตุผลทดสอบ');
+      expect(reviewUpdateMany).toHaveBeenCalledWith({
+        where: { id: reviewId, status: previousStatus },
+        data: { status: newStatus },
+      });
+      expect(recordAuditLog).toHaveBeenCalledWith({
+        actorUserId: userId,
+        action,
+        targetType: 'REVIEW',
+        targetId: reviewId,
+        metadata: {
+          reason: 'เหตุผลทดสอบ',
+          previousStatus,
+          newStatus,
+        },
+      });
+    },
+  );
 
-    await expect(service.create(userId, dto)).rejects.toThrow(
-      'ต้องมีการจองที่จบงานแล้วกับพื้นที่นี้ก่อนถึงจะให้คะแนนได้',
-    );
-    expect(reviewFindFirst).not.toHaveBeenCalled();
-    expect(reviewCreate).not.toHaveBeenCalled();
-  });
-
-  it('updates the existing review without auto-filling the display name', async () => {
-    reviewFindFirst.mockResolvedValue({ id: reviewId });
-
-    await service.create(userId, dto);
-
-    expect(reviewUpdate).toHaveBeenCalledWith({
-      where: { id: reviewId },
-      data: {
-        rating: dto.rating,
-        comment: dto.comment,
-        reviewerDisplayName: undefined,
-      },
+  it('enforces strict moderation transitions with a conflict', async () => {
+    reviewFindUnique.mockResolvedValue({
+      id: reviewId,
+      status: ReviewStatus.HIDDEN,
     });
-    expect(reviewCreate).not.toHaveBeenCalled();
+    await expect(service.hide(reviewId, userId, 'ซ้ำ')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(reviewUpdateMany).not.toHaveBeenCalled();
+    expect(recordAuditLog).not.toHaveBeenCalled();
   });
 
-  it('retries a serializable transaction conflict before saving', async () => {
-    const serializationError = new Prisma.PrismaClientKnownRequestError(
-      'Transaction write conflict',
-      { code: 'P2034', clientVersion: 'test' },
-    );
+  it('retries a serializable transaction conflict', async () => {
+    const error = new Prisma.PrismaClientKnownRequestError('conflict', {
+      code: 'P2034',
+      clientVersion: 'test',
+    });
     prismaTransaction
-      .mockRejectedValueOnce(serializationError)
+      .mockRejectedValueOnce(error)
       .mockImplementationOnce(
         (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
           operation(transactionClient as unknown as Prisma.TransactionClient),
       );
-
     await expect(service.create(userId, dto)).resolves.toEqual({
       id: reviewId,
     });
     expect(prismaTransaction).toHaveBeenCalledTimes(2);
-    expect(reviewCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns a clear conflict after three serialization failures', async () => {
-    const serializationError = new Prisma.PrismaClientKnownRequestError(
-      'Transaction write conflict',
-      { code: 'P2034', clientVersion: 'test' },
-    );
-    prismaTransaction.mockRejectedValue(serializationError);
-
-    await expect(service.create(userId, dto)).rejects.toEqual(
-      new ConflictException('มีการให้คะแนนพร้อมกัน กรุณาลองใหม่อีกครั้ง'),
-    );
-    expect(prismaTransaction).toHaveBeenCalledTimes(3);
   });
 });
