@@ -5,7 +5,6 @@ import {
   MembershipRole,
   NotificationType,
   Prisma,
-  ReviewTargetType,
   UserRole,
   type Notification,
 } from '@prisma/client';
@@ -20,7 +19,6 @@ const OTHER_ORGANIZATION_ID = '44444444-4444-4444-8444-444444444444';
 const NOTIFICATION_ID = '55555555-5555-4555-8555-555555555555';
 const REVIEW_BOOKING_ID = '66666666-6666-4666-8666-666666666666';
 const OLDER_REVIEW_BOOKING_ID = '77777777-7777-4777-8777-777777777777';
-const REVIEW_BOOTH_ID = '88888888-8888-4888-8888-888888888888';
 const CREATED_AT = new Date('2026-08-18T00:00:00.000Z');
 
 const INPUT = {
@@ -345,8 +343,11 @@ describe('NotificationsService', () => {
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
-        boothId: REVIEW_BOOTH_ID,
-        event: { name: 'งานเกษตร มทส. 2569' },
+        event: {
+          name: 'งานเกษตร มทส. 2569',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
     ]);
@@ -363,24 +364,18 @@ describe('NotificationsService', () => {
         status: {
           in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
         },
-        bookingEndDate: { lte: new Date('2026-08-18T00:30:00.000Z') },
       },
       select: {
         id: true,
         vendorUserId: true,
-        boothId: true,
-        event: { select: { name: true } },
+        event: { select: { name: true, endDate: true, endTime: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
     expect(reviewFindMany).toHaveBeenCalledWith({
-      where: {
-        reviewerUserId: { in: [USER_ID] },
-        targetType: ReviewTargetType.BOOTH,
-        targetId: { in: [REVIEW_BOOTH_ID] },
-      },
-      select: { reviewerUserId: true, targetId: true },
+      where: { bookingId: { in: [REVIEW_BOOKING_ID] } },
+      select: { bookingId: true },
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [
@@ -396,19 +391,20 @@ describe('NotificationsService', () => {
     });
   });
 
-  it('does not invite a vendor who already reviewed the booth', async () => {
+  it('does not invite a vendor who already reviewed the booking', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
-        boothId: REVIEW_BOOTH_ID,
-        event: { name: 'งานเกษตร มทส. 2569' },
+        event: {
+          name: 'งานเกษตร มทส. 2569',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
     ]);
-    reviewFindMany.mockResolvedValue([
-      { reviewerUserId: USER_ID, targetId: REVIEW_BOOTH_ID },
-    ]);
+    reviewFindMany.mockResolvedValue([{ bookingId: REVIEW_BOOKING_ID }]);
     notificationFindMany.mockResolvedValue([]);
 
     await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
@@ -417,20 +413,26 @@ describe('NotificationsService', () => {
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
-  it('deduplicates retries by the real user-and-booth review unit', async () => {
+  it('keeps invitations separate when the same vendor books another event', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
-        boothId: REVIEW_BOOTH_ID,
-        event: { name: 'งานใหม่' },
+        event: {
+          name: 'งานใหม่',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
       {
         id: OLDER_REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
-        boothId: REVIEW_BOOTH_ID,
-        event: { name: 'งานเดิม' },
+        event: {
+          name: 'งานเดิม',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
     ]);
@@ -439,10 +441,13 @@ describe('NotificationsService', () => {
       { userId: USER_ID, relatedEntityId: OLDER_REVIEW_BOOKING_ID },
     ]);
 
+    notificationCreateMany.mockResolvedValue({ count: 1 });
     await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
-      0,
+      1,
     );
-    expect(notificationCreateMany).not.toHaveBeenCalled();
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ relatedEntityId: REVIEW_BOOKING_ID })],
+    });
   });
 
   it('retries a serializable review-notification transaction conflict', async () => {

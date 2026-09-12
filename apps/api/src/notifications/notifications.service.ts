@@ -5,12 +5,11 @@ import {
   MembershipRole,
   NotificationType,
   Prisma,
-  ReviewTargetType,
   UserRole,
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { reviewEligibleBookingWhere } from '../reviews/reviews.service';
+import { isEventEnded } from '../reviews/reviews.service';
 import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
@@ -347,36 +346,33 @@ export class NotificationsService {
   private async createReviewEligibilityNotificationsWithinTransaction(
     transaction: Prisma.TransactionClient,
   ): Promise<number> {
-    const eligibleBookings = await transaction.booking.findMany({
-      where: reviewEligibleBookingWhere(),
+    const candidateBookings = await transaction.booking.findMany({
+      where: {
+        status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
+      },
       select: {
         id: true,
         vendorUserId: true,
-        boothId: true,
-        event: { select: { name: true } },
+        event: { select: { name: true, endDate: true, endTime: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
+    const eligibleBookings = candidateBookings.filter((booking) =>
+      isEventEnded(booking.event),
+    );
 
     if (eligibleBookings.length === 0) return 0;
 
     const userIds = [
       ...new Set(eligibleBookings.map(({ vendorUserId }) => vendorUserId)),
     ];
-    const boothIds = [
-      ...new Set(eligibleBookings.map(({ boothId }) => boothId)),
-    ];
     const bookingIds = eligibleBookings.map(({ id }) => id);
 
     const [reviews, existingNotifications] = await Promise.all([
       transaction.review.findMany({
-        where: {
-          reviewerUserId: { in: userIds },
-          targetType: ReviewTargetType.BOOTH,
-          targetId: { in: boothIds },
-        },
-        select: { reviewerUserId: true, targetId: true },
+        where: { bookingId: { in: bookingIds } },
+        select: { bookingId: true },
       }),
       transaction.notification.findMany({
         where: {
@@ -388,12 +384,8 @@ export class NotificationsService {
       }),
     ]);
 
-    const eligibilityKey = (userId: string, boothId: string) =>
-      `${userId}:${boothId}`;
     const reviewedKeys = new Set(
-      reviews.flatMap(({ reviewerUserId, targetId }) =>
-        reviewerUserId ? [eligibilityKey(reviewerUserId, targetId)] : [],
-      ),
+      reviews.flatMap(({ bookingId }) => (bookingId ? [bookingId] : [])),
     );
     const bookingById = new Map(
       eligibleBookings.map((booking) => [booking.id, booking]),
@@ -403,14 +395,12 @@ export class NotificationsService {
         const booking = relatedEntityId
           ? bookingById.get(relatedEntityId)
           : undefined;
-        return booking && booking.vendorUserId === userId
-          ? [eligibilityKey(userId, booking.boothId)]
-          : [];
+        return booking && booking.vendorUserId === userId ? [booking.id] : [];
       }),
     );
     const selectedKeys = new Set<string>();
     const invitations = eligibleBookings.flatMap((booking) => {
-      const key = eligibilityKey(booking.vendorUserId, booking.boothId);
+      const key = booking.id;
       if (
         reviewedKeys.has(key) ||
         invitedKeys.has(key) ||

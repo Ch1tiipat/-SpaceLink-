@@ -110,6 +110,12 @@ enum ReviewTargetType {
   ORGANIZATION
 }
 
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  DELETED
+}
+
 enum PenaltyReason {
   NO_SHOW
   RULE_VIOLATION
@@ -179,6 +185,7 @@ model Organization {
   supportTickets SupportTicket[]
   paymentGroups  BookingPaymentGroup[]
   quotaGrants    BoothQuotaGrant[]
+  reviews        Review[]
   orgConfig      OrgConfig?
 
   @@map("organization")
@@ -403,6 +410,7 @@ model Event {
   joinInformation    EventJoinInformation[]
   information        EventInformation[]
   quotaGrants        BoothQuotaGrant[]
+  reviews            Review[]
 
   @@index([organizationId])
   @@index([venueId])
@@ -570,6 +578,7 @@ model Booking {
   refundRequests RefundRequest[]
   supportTickets SupportTicket[]
   quotaGrant     BoothQuotaGrant?
+  review         Review?
 
   @@unique([eventId, boothId])
   @@index([vendorUserId])
@@ -705,10 +714,19 @@ model Review {
   rating              Int
   comment             String?
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  bookingId           String?          @unique @map("booking_id") @db.Uuid
+  eventId             String?          @map("event_id") @db.Uuid
+  organizationId      String?          @map("organization_id") @db.Uuid
+  status              ReviewStatus     @default(PUBLISHED)
 
-  reviewer User? @relation(fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  reviewer     User?         @relation(fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  event        Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([targetType, targetId])
+  @@index([eventId, status])
+  @@index([organizationId, status])
   @@map("review")
 }
 

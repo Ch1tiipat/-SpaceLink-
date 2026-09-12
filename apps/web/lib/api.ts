@@ -215,6 +215,8 @@ export type MyBooking = BookingRecord & {
     /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
     slug?: string;
     name: string;
+    endDate: string;
+    endTime: string | null;
   };
   booth: {
     id: string;
@@ -231,6 +233,7 @@ export type CreateBookingInput = {
 };
 
 export type ReviewTargetType = "BOOTH" | "ZONE" | "SHOP" | "ORGANIZATION";
+export type ReviewStatus = "PUBLISHED" | "HIDDEN" | "DELETED";
 
 export type AverageRating = {
   average: number | null;
@@ -238,6 +241,7 @@ export type AverageRating = {
 };
 
 export type CreateReviewInput = {
+  bookingId: string;
   targetType: "BOOTH" | "ZONE";
   targetId: string;
   rating: number;
@@ -251,6 +255,7 @@ export type MyReview = {
   rating: number;
   comment: string | null;
   createdAt: string;
+  status: ReviewStatus;
   context: {
     bookingCode: string;
     event: { name: string; slug: string };
@@ -265,6 +270,63 @@ export type MyReviewsPage = {
   limit: number;
   total: number;
   hasMore: boolean;
+};
+
+export type EventReview = {
+  id: string;
+  targetType: ReviewTargetType;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  booking: {
+    booth: {
+      code: string;
+      zone: { code: string; name: string | null };
+    };
+  } | null;
+};
+
+export type EventReviewsPage = {
+  average: number | null;
+  count: number;
+  items: EventReview[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+};
+
+export type AdminReview = {
+  id: string;
+  targetType: ReviewTargetType;
+  rating: number;
+  comment: string | null;
+  status: ReviewStatus;
+  createdAt: string;
+  event: { id: string; name: string } | null;
+  booking: {
+    bookingCode: string;
+    booth: {
+      code: string;
+      zone: { code: string; name: string | null };
+    };
+  } | null;
+};
+
+export type AdminReviewFilters = {
+  eventId?: string;
+  status?: ReviewStatus;
+  rating?: number;
+  page?: number;
+  limit?: number;
+};
+
+export type AdminReviewsPage = {
+  items: AdminReview[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  filters: { events: Array<{ id: string; name: string }> };
 };
 
 export type PenaltyReason =
@@ -2749,6 +2811,75 @@ export function getMyReviews(
   return getJson<MyReviewsPage>(
     `/reviews/me?page=${page}&limit=${limit}`,
     { signal, token },
+  );
+}
+
+export function getEventReviews(
+  eventId: string,
+  page = 1,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<EventReviewsPage> {
+  return getJson<EventReviewsPage>(
+    `/reviews/events/${encodeURIComponent(eventId)}?page=${page}&limit=${limit}`,
+    { signal },
+  );
+}
+
+export function getOrganizationReviews(
+  organizationId: string,
+  token: string,
+  filters: AdminReviewFilters = {},
+  signal?: AbortSignal,
+): Promise<AdminReviewsPage> {
+  const query = new URLSearchParams();
+  if (filters.eventId) query.set("eventId", filters.eventId);
+  if (filters.status) query.set("status", filters.status);
+  if (filters.rating) query.set("rating", String(filters.rating));
+  query.set("page", String(filters.page ?? 1));
+  query.set("limit", String(filters.limit ?? 25));
+  return getJson<AdminReviewsPage>(
+    `/reviews/organizations/${encodeURIComponent(organizationId)}?${query.toString()}`,
+    { signal, token },
+  );
+}
+
+export function hideReview(
+  reviewId: string,
+  reason: string,
+  token: string,
+): Promise<AdminReview> {
+  return patchJson<AdminReview>(
+    `/reviews/${encodeURIComponent(reviewId)}/hide`,
+    { reason },
+    { token },
+    "ไม่สามารถซ่อนรีวิวได้",
+  );
+}
+
+export function restoreReview(
+  reviewId: string,
+  reason: string,
+  token: string,
+): Promise<AdminReview> {
+  return patchJson<AdminReview>(
+    `/reviews/${encodeURIComponent(reviewId)}/restore`,
+    { reason },
+    { token },
+    "ไม่สามารถคืนสถานะรีวิวได้",
+  );
+}
+
+export function deleteReview(
+  reviewId: string,
+  reason: string,
+  token: string,
+): Promise<AdminReview> {
+  return deleteJsonWithBody<AdminReview>(
+    `/reviews/${encodeURIComponent(reviewId)}`,
+    { reason },
+    { token },
+    "ไม่สามารถลบรีวิวได้",
   );
 }
 

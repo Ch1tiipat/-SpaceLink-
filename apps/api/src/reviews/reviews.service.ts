@@ -2,35 +2,48 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, Prisma, ReviewTargetType } from '@prisma/client';
+import {
+  BookingStatus,
+  Prisma,
+  ReviewStatus,
+  ReviewTargetType,
+} from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminReviewsQueryDto } from './dto/admin-reviews-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-const REVIEW_ELIGIBLE_OFFSET_HOURS = 17;
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
+const REVIEWABLE_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.CONFIRMED,
+  BookingStatus.COMPLETED,
+];
 
-export function reviewEligibleBookingWhere(
+export function isEventEnded(
+  event: { endDate: Date; endTime: string | null },
   now = new Date(),
-): Prisma.BookingWhereInput {
-  return {
-    status: {
-      in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED],
-    },
-    bookingEndDate: {
-      lte: new Date(now.getTime() - REVIEW_ELIGIBLE_OFFSET_HOURS * MS_PER_HOUR),
-    },
-  };
+): boolean {
+  const dateKey = event.endDate.toISOString().slice(0, 10);
+  const timePart =
+    event.endTime && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.endTime)
+      ? event.endTime
+      : '23:59';
+  const endInstant = new Date(`${dateKey}T${timePart}:00+07:00`);
+  return endInstant.getTime() <= now.getTime();
 }
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogsService,
+  ) {}
 
   async getAverage(targetType: ReviewTargetType, targetId: string) {
     const result = await this.prisma.review.aggregate({
-      where: { targetType, targetId },
+      where: { targetType, targetId, status: ReviewStatus.PUBLISHED },
       _avg: { rating: true },
       _count: { rating: true },
     });
@@ -38,6 +51,53 @@ export class ReviewsService {
     return {
       average: result._avg.rating,
       count: result._count.rating,
+    };
+  }
+
+  async getForEvent(eventId: string, page: number, limit: number) {
+    const where: Prisma.ReviewWhereInput = {
+      eventId,
+      status: ReviewStatus.PUBLISHED,
+    };
+    const [summary, items] = await Promise.all([
+      this.prisma.review.aggregate({
+        where,
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.review.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          targetType: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          booking: {
+            select: {
+              booth: {
+                select: {
+                  code: true,
+                  zone: { select: { code: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    const count = summary._count.rating;
+
+    return {
+      average: summary._avg.rating,
+      count,
+      items,
+      page,
+      limit,
+      hasMore: page * limit < count,
     };
   }
 
@@ -57,14 +117,28 @@ export class ReviewsService {
           rating: true,
           comment: true,
           createdAt: true,
+          status: true,
+          booking: {
+            select: {
+              bookingCode: true,
+              event: { select: { name: true, slug: true } },
+              booth: {
+                select: {
+                  code: true,
+                  zone: { select: { code: true, name: true } },
+                },
+              },
+            },
+          },
         },
       }),
     ]);
 
-    const boothIds = reviews
+    const legacyReviews = reviews.filter((review) => !review.booking);
+    const boothIds = legacyReviews
       .filter((review) => review.targetType === ReviewTargetType.BOOTH)
       .map((review) => review.targetId);
-    const zoneIds = reviews
+    const zoneIds = legacyReviews
       .filter((review) => review.targetType === ReviewTargetType.ZONE)
       .map((review) => review.targetId);
     const targetFilters: Prisma.BookingWhereInput[] = [];
@@ -73,14 +147,11 @@ export class ReviewsService {
       targetFilters.push({ booth: { zoneId: { in: zoneIds } } });
     }
 
-    const bookings =
+    const legacyBookings =
       targetFilters.length === 0
         ? []
         : await this.prisma.booking.findMany({
-            where: {
-              vendorUserId: userId,
-              OR: targetFilters,
-            },
+            where: { vendorUserId: userId, OR: targetFilters },
             orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
             select: {
               bookingCode: true,
@@ -95,21 +166,26 @@ export class ReviewsService {
             },
           });
 
-    const contextByTarget = new Map<string, (typeof bookings)[number]>();
-    for (const booking of bookings) {
+    const legacyContextByTarget = new Map<
+      string,
+      (typeof legacyBookings)[number]
+    >();
+    for (const booking of legacyBookings) {
       const boothKey = `${ReviewTargetType.BOOTH}:${booking.boothId}`;
       const zoneKey = `${ReviewTargetType.ZONE}:${booking.booth.zone.id}`;
-      if (!contextByTarget.has(boothKey)) {
-        contextByTarget.set(boothKey, booking);
+      if (!legacyContextByTarget.has(boothKey)) {
+        legacyContextByTarget.set(boothKey, booking);
       }
-      if (!contextByTarget.has(zoneKey)) {
-        contextByTarget.set(zoneKey, booking);
+      if (!legacyContextByTarget.has(zoneKey)) {
+        legacyContextByTarget.set(zoneKey, booking);
       }
     }
 
     return {
-      items: reviews.map(({ targetId, ...review }) => {
-        const context = contextByTarget.get(`${review.targetType}:${targetId}`);
+      items: reviews.map(({ targetId, booking, ...review }) => {
+        const context =
+          booking ??
+          legacyContextByTarget.get(`${review.targetType}:${targetId}`);
         return {
           ...review,
           context: context
@@ -129,6 +205,61 @@ export class ReviewsService {
       limit,
       total,
       hasMore: page * limit < total,
+    };
+  }
+
+  async listForOrganization(
+    organizationId: string,
+    query: AdminReviewsQueryDto,
+  ) {
+    const where: Prisma.ReviewWhereInput = {
+      organizationId,
+      ...(query.eventId ? { eventId: query.eventId } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.rating ? { rating: query.rating } : {}),
+    };
+    const [total, items, events] = await Promise.all([
+      this.prisma.review.count({ where }),
+      this.prisma.review.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: {
+          id: true,
+          targetType: true,
+          rating: true,
+          comment: true,
+          status: true,
+          createdAt: true,
+          event: { select: { id: true, name: true } },
+          booking: {
+            select: {
+              bookingCode: true,
+              booth: {
+                select: {
+                  code: true,
+                  zone: { select: { code: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.event.findMany({
+        where: { organizationId },
+        orderBy: [{ startDate: 'desc' }, { name: 'asc' }],
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    return {
+      items,
+      page: query.page,
+      limit: query.limit,
+      total,
+      hasMore: query.page * query.limit < total,
+      filters: { events },
     };
   }
 
@@ -161,36 +292,92 @@ export class ReviewsService {
     throw new ConflictException('มีการให้คะแนนพร้อมกัน กรุณาลองใหม่อีกครั้ง');
   }
 
+  async hide(reviewId: string, actorUserId: string, reason: string) {
+    return this.moderate(
+      reviewId,
+      actorUserId,
+      reason,
+      ReviewStatus.HIDDEN,
+      'review.hidden',
+      [ReviewStatus.PUBLISHED],
+    );
+  }
+
+  async restore(reviewId: string, actorUserId: string, reason: string) {
+    return this.moderate(
+      reviewId,
+      actorUserId,
+      reason,
+      ReviewStatus.PUBLISHED,
+      'review.restored',
+      [ReviewStatus.HIDDEN],
+    );
+  }
+
+  async softDelete(reviewId: string, actorUserId: string, reason: string) {
+    return this.moderate(
+      reviewId,
+      actorUserId,
+      reason,
+      ReviewStatus.DELETED,
+      'review.deleted',
+      [ReviewStatus.PUBLISHED, ReviewStatus.HIDDEN],
+    );
+  }
+
   private async createWithinTransaction(
     transaction: Prisma.TransactionClient,
     userId: string,
     dto: CreateReviewDto,
   ) {
-    const eligible = await transaction.booking.findFirst({
-      where: {
-        ...reviewEligibleBookingWhere(),
-        vendorUserId: userId,
-        ...(dto.targetType === 'BOOTH'
-          ? { boothId: dto.targetId }
-          : { booth: { zoneId: dto.targetId } }),
+    const booking = await transaction.booking.findUnique({
+      where: { id: dto.bookingId },
+      select: {
+        id: true,
+        vendorUserId: true,
+        boothId: true,
+        status: true,
+        eventId: true,
+        event: {
+          select: {
+            organizationId: true,
+            endDate: true,
+            endTime: true,
+          },
+        },
+        booth: { select: { zoneId: true } },
       },
-      select: { id: true },
     });
 
-    if (!eligible) {
+    if (!booking || booking.vendorUserId !== userId) {
+      throw new ForbiddenException('การจองนี้ไม่อนุญาตให้บัญชีนี้รีวิว');
+    }
+
+    const targetMatches =
+      dto.targetType === 'BOOTH'
+        ? booking.boothId === dto.targetId
+        : booking.booth.zoneId === dto.targetId;
+    if (!targetMatches) {
+      throw new ForbiddenException('พื้นที่รีวิวไม่ตรงกับการจอง');
+    }
+
+    if (
+      !REVIEWABLE_BOOKING_STATUSES.includes(booking.status) ||
+      !isEventEnded(booking.event)
+    ) {
       throw new ForbiddenException(
-        'ต้องมีการจองที่จบงานแล้วกับพื้นที่นี้ก่อนถึงจะให้คะแนนได้',
+        'สามารถให้คะแนนได้หลังงานสิ้นสุดและการจองได้รับการยืนยันแล้วเท่านั้น',
       );
     }
 
-    const existing = await transaction.review.findFirst({
-      where: {
-        reviewerUserId: userId,
-        targetType: dto.targetType,
-        targetId: dto.targetId,
-      },
-      select: { id: true },
+    const existing = await transaction.review.findUnique({
+      where: { bookingId: booking.id },
+      select: { id: true, status: true },
     });
+    if (existing?.status === ReviewStatus.DELETED) {
+      throw new ConflictException('รีวิวนี้ถูกลบแล้ว ไม่สามารถส่งใหม่ได้');
+    }
+
     const data = {
       rating: dto.rating,
       comment: dto.comment,
@@ -205,7 +392,60 @@ export class ReviewsService {
             reviewerUserId: userId,
             targetType: dto.targetType,
             targetId: dto.targetId,
+            bookingId: booking.id,
+            eventId: booking.eventId,
+            organizationId: booking.event.organizationId,
+            status: ReviewStatus.PUBLISHED,
           },
         });
+  }
+
+  private async moderate(
+    reviewId: string,
+    actorUserId: string,
+    reason: string,
+    newStatus: ReviewStatus,
+    action: string,
+    allowedStatuses: ReviewStatus[],
+  ) {
+    const review = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { id: true, status: true },
+    });
+    if (!review) throw new NotFoundException('ไม่พบรีวิว');
+    if (!allowedStatuses.includes(review.status)) {
+      throw new ConflictException('สถานะรีวิวไม่อนุญาตให้ดำเนินการนี้');
+    }
+
+    const changed = await this.prisma.review.updateMany({
+      where: { id: reviewId, status: review.status },
+      data: { status: newStatus },
+    });
+    if (changed.count !== 1) {
+      throw new ConflictException('สถานะรีวิวมีการเปลี่ยนแปลง กรุณาลองใหม่');
+    }
+
+    await this.auditLogs.record({
+      actorUserId,
+      action,
+      targetType: 'REVIEW',
+      targetId: reviewId,
+      metadata: {
+        reason,
+        previousStatus: review.status,
+        newStatus,
+      },
+    });
+    return this.prisma.review.findUnique({
+      where: { id: reviewId },
+      select: {
+        id: true,
+        targetType: true,
+        rating: true,
+        comment: true,
+        status: true,
+        createdAt: true,
+      },
+    });
   }
 }

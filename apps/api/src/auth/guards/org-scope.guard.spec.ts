@@ -20,6 +20,7 @@ const EVENT_ID = '44444444-4444-4444-8444-444444444444';
 const ZONE_ID = '55555555-5555-4555-8555-555555555555';
 const BOOKING_ID = '66666666-6666-4666-8666-666666666666';
 const TICKET_ID = '77777777-7777-4777-8777-777777777777';
+const REVIEW_ID = '88888888-8888-4888-8888-888888888888';
 
 /**
  * A real controller carrying real decorators, read back through a real
@@ -63,6 +64,11 @@ class TestController {
     // Route target; the guard only ever reads its metadata.
   }
 
+  @OrgScope('reviewId')
+  byReview(this: void) {
+    // Route target; the guard only ever reads its metadata.
+  }
+
   unscoped(this: void) {
     // No @OrgScope — the guard must let this through untouched.
   }
@@ -98,6 +104,7 @@ describe('OrgScopeGuard', () => {
     booth: { findUnique: jest.Mock };
     booking: { findUnique: jest.Mock };
     supportTicket: { findUnique: jest.Mock };
+    review: { findUnique: jest.Mock };
     orgMembership: { findUnique: jest.Mock };
   };
   let guard: OrgScopeGuard;
@@ -111,6 +118,7 @@ describe('OrgScopeGuard', () => {
       booth: { findUnique: jest.fn() },
       booking: { findUnique: jest.fn() },
       supportTicket: { findUnique: jest.fn() },
+      review: { findUnique: jest.fn() },
       orgMembership: { findUnique: jest.fn() },
     };
     prisma.organization.findUnique.mockResolvedValue({
@@ -651,6 +659,42 @@ describe('OrgScopeGuard', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
+    expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('resolves a review by reading its own organizationId', async () => {
+    prisma.review.findUnique.mockResolvedValue({ organizationId: ORG_ID });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+    const request: RequestStub = {
+      params: { reviewId: REVIEW_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byReview, request),
+      ),
+    ).resolves.toBe(true);
+
+    expect(prisma.review.findUnique).toHaveBeenCalledWith({
+      where: { id: REVIEW_ID },
+      select: { organizationId: true },
+    });
+    expect(request.organizationId).toBe(ORG_ID);
+  });
+
+  it('answers 404 for a legacy review with no organization', async () => {
+    prisma.review.findUnique.mockResolvedValue({ organizationId: null });
+    const request: RequestStub = {
+      params: { reviewId: REVIEW_ID },
+      user: createUser('user-1', UserRole.ORG_ADMIN),
+    };
+
+    await expect(
+      guard.canActivate(
+        createContext(TestController.prototype.byReview, request),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.orgMembership.findUnique).not.toHaveBeenCalled();
   });
 });

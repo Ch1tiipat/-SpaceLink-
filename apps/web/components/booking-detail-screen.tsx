@@ -12,6 +12,7 @@ import {
   type MyBooking,
 } from '@/lib/api';
 import { isUuid } from '@/lib/route-identifier';
+import { isBookingReviewEligible } from '@/lib/review-eligibility';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview, UX_PREVIEW_SHOP } from '@/lib/ux-preview';
 
@@ -60,13 +61,7 @@ export function formatBookingDate(value: string): string {
   return dateFormatter.format(new Date(value));
 }
 
-export function isBookingReviewEligible(booking: MyBooking): boolean {
-  const eligibleFrom = new Date(booking.bookingEndDate).getTime() + 17 * 60 * 60 * 1000;
-  return (
-    (booking.status === 'CONFIRMED' || booking.status === 'COMPLETED') &&
-    eligibleFrom <= Date.now()
-  );
-}
+export { isBookingReviewEligible };
 
 function createPreviewBooking(bookingId: string): MyBooking | null {
   const previewStatuses: Record<string, BookingStatus> = {
@@ -116,6 +111,8 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
       id: 'demo-event',
       slug: 'demo-event',
       name: 'งานเกษตร มทส. 2569',
+      endDate: new Date(now + (completed ? -2 : 22) * 86_400_000).toISOString(),
+      endTime: '20:00',
     },
     booth: {
       id: 'demo-booth-a01',
