@@ -145,6 +145,7 @@ describe('SupportTicketsService', () => {
       code: 'A03',
       widthM: new Prisma.Decimal('3'),
       heightM: new Prisma.Decimal('2.5'),
+      zone: { code: 'B', name: 'โซนแฟชั่น' },
     });
     supportTicketCreate.mockResolvedValue(CREATED_TICKET);
     ticketMessageCreate.mockResolvedValue({ id: 'ticket-message-1' });
@@ -343,7 +344,7 @@ describe('SupportTicketsService', () => {
   });
 
   describe('create', () => {
-    it('opens a ticket and its first message in one transaction', async () => {
+    it('accepts an event booking in another zone and writes the requested zone', async () => {
       const result = await service.create(CREATE_DTO, VENDOR_ID);
 
       expect(result).toEqual(CREATED_TICKET);
@@ -354,7 +355,6 @@ describe('SupportTicketsService', () => {
           status: {
             in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
           },
-          booth: { zoneId: ZONE_ID },
         },
         select: {
           id: true,
@@ -374,12 +374,23 @@ describe('SupportTicketsService', () => {
           id: BOOTH_ID,
           zoneId: ZONE_ID,
           status: BoothStatus.AVAILABLE,
+          zone: {
+            venue: {
+              events: {
+                some: {
+                  id: EVENT_ID,
+                  organizationId: ORGANIZATION_ID,
+                },
+              },
+            },
+          },
         },
         select: {
           id: true,
           code: true,
           widthM: true,
           heightM: true,
+          zone: { select: { code: true, name: true } },
         },
       });
       expect(bookingFindFirst).toHaveBeenCalledWith({
@@ -424,7 +435,7 @@ describe('SupportTicketsService', () => {
           message: [
             'ประเภทคำร้อง: ขอโควต้าบูธเพิ่ม',
             'งาน: งานทดสอบ',
-            'โซน: โซนอาหาร',
+            'โซน: โซนแฟชั่น',
             'บูธที่ต้องการเพิ่ม: A03 (3 × 2.5 เมตร)',
             'บูธปัจจุบัน: A01 (BK-ONE)',
             '',
@@ -446,21 +457,22 @@ describe('SupportTicketsService', () => {
       expect(args.data.userId).toBe(VENDOR_ID);
     });
 
-    it('returns 404 when the vendor has no active booking in that event and zone', async () => {
+    it('returns 404 when the vendor has no active booking in that event', async () => {
       bookingFindMany.mockResolvedValue([]);
 
       await expect(
         service.create(CREATE_DTO, VENDOR_ID),
       ).rejects.toBeInstanceOf(NotFoundException);
       await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(
-        'ไม่พบการจองของคุณในงานและโซนที่เลือก',
+        'ไม่พบการจองของคุณในงานที่เลือก',
       );
       expect(supportTicketCreate).not.toHaveBeenCalled();
       expect(ticketMessageCreate).not.toHaveBeenCalled();
+      expect(boothFindFirst).not.toHaveBeenCalled();
       expect(createForRole).not.toHaveBeenCalled();
     });
 
-    it('returns 404 when the requested booth is outside the selected zone', async () => {
+    it('returns 404 when the booth, zone, or event venue relationship is invalid', async () => {
       boothFindFirst.mockResolvedValue(null);
 
       await expect(service.create(CREATE_DTO, VENDOR_ID)).rejects.toThrow(

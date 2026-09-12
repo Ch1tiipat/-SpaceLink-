@@ -3,7 +3,11 @@ const boothSelectionAssert: typeof import('node:assert/strict') = require(
   'node:assert/strict'
 );
 const { test: boothSelectionTest }: typeof import('node:test') = require('node:test');
-const { decideBoothSelectionAccess } = require(
+const {
+  canAttemptBoothSelection,
+  decideBoothQuota,
+  decideBoothSelectionAccess,
+} = require(
   './booth-selection-policy.ts'
 ) as typeof import('./booth-selection-policy');
 
@@ -53,4 +57,41 @@ boothSelectionTest('continues only for a signed-in vendor with a shop', () => {
     }),
     'continue',
   );
+});
+
+boothSelectionTest('opens the quota request only when no quota remains', () => {
+  boothSelectionAssert.equal(
+    decideBoothQuota({
+      selectedCount: 0,
+      effectiveSelectionLimit: 0,
+      remainingQuota: 0,
+    }),
+    'open-quota-request',
+  );
+  boothSelectionAssert.equal(
+    decideBoothQuota({
+      selectedCount: 2,
+      effectiveSelectionLimit: 2,
+      remainingQuota: 4,
+    }),
+    'show-selection-limit',
+  );
+});
+
+boothSelectionTest('continues while the effective selection limit has room', () => {
+  boothSelectionAssert.equal(
+    decideBoothQuota({
+      selectedCount: 1,
+      effectiveSelectionLimit: 2,
+      remainingQuota: 2,
+    }),
+    'continue',
+  );
+});
+
+boothSelectionTest('never sends unavailable booth states into the quota flow', () => {
+  boothSelectionAssert.equal(canAttemptBoothSelection('AVAILABLE'), true);
+  for (const availability of ['HELD', 'BOOKED', 'UNAVAILABLE'] as const) {
+    boothSelectionAssert.equal(canAttemptBoothSelection(availability), false);
+  }
 });

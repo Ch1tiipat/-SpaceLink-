@@ -177,7 +177,6 @@ export class SupportTicketsService {
             status: {
               in: [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED],
             },
-            booth: { zoneId },
           },
           select: {
             id: true,
@@ -193,20 +192,33 @@ export class SupportTicketsService {
           orderBy: { createdAt: 'asc' },
         });
         if (bookings.length === 0) {
-          throw new NotFoundException('ไม่พบการจองของคุณในงานและโซนที่เลือก');
+          throw new NotFoundException('ไม่พบการจองของคุณในงานที่เลือก');
         }
+
+        const context = bookings[0];
 
         const requestedBooth = await transaction.booth.findFirst({
           where: {
             id: boothId,
             zoneId,
             status: BoothStatus.AVAILABLE,
+            zone: {
+              venue: {
+                events: {
+                  some: {
+                    id: eventId,
+                    organizationId: context.event.organizationId,
+                  },
+                },
+              },
+            },
           },
           select: {
             id: true,
             code: true,
             widthM: true,
             heightM: true,
+            zone: { select: { code: true, name: true } },
           },
         });
         if (!requestedBooth) {
@@ -229,7 +241,6 @@ export class SupportTicketsService {
           );
         }
 
-        const context = bookings[0];
         organizationId = context.event.organizationId;
         // A quota ticket carries no event column of its own, and the event id
         // the vendor typed is validated here and then thrown away. Pinning one
@@ -242,7 +253,7 @@ export class SupportTicketsService {
         contextualMessage = [
           'ประเภทคำร้อง: ขอโควต้าบูธเพิ่ม',
           `งาน: ${context.event.name}`,
-          `โซน: ${context.booth.zone.name ?? context.booth.zone.code}`,
+          `โซน: ${requestedBooth.zone.name ?? requestedBooth.zone.code}`,
           `บูธที่ต้องการเพิ่ม: ${requestedBooth.code} (${this.formatBoothSize(
             requestedBooth.widthM,
             requestedBooth.heightM,
