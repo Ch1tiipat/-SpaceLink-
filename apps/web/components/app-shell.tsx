@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   Bell,
@@ -25,7 +28,6 @@ import {
   Megaphone,
   Menu,
   MessageCircle,
-  Orbit,
   Phone,
   RotateCcw,
   Send,
@@ -284,6 +286,8 @@ const BARE_ROUTES = new Set(["/login", "/register"]);
 const DISMISSED_BROADCAST_KEY = "spacelink:dismissed-system-broadcast-id";
 const SELECTED_ADMIN_ORGANIZATION_KEY =
   "spacelink:selected-admin-organization-id";
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -301,6 +305,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     "loading" | "ready" | "error"
   >("loading");
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const mobileSidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
   >(null);
@@ -329,6 +335,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     adminRole === "SUPER_ADMIN" ? superAdminCatalogStatus : "ready";
   const isAdminRoute = pathname.startsWith("/admin");
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
+
+  const closeMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    const closeAtDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) closeMobileSidebar();
+    };
+    desktopQuery.addEventListener("change", closeAtDesktop);
+    return () => desktopQuery.removeEventListener("change", closeAtDesktop);
+  }, [closeMobileSidebar, mobileSidebarOpen]);
 
   useEffect(() => {
     if (adminRole !== "SUPER_ADMIN") {
@@ -533,6 +553,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace("/");
   }
 
+  function requestSignOut() {
+    closeMobileSidebar();
+    setSignOutConfirmOpen(true);
+  }
+
   function dismissBroadcast() {
     if (!activeBroadcast) return;
     sessionStorage.setItem(DISMISSED_BROADCAST_KEY, activeBroadcast.id);
@@ -607,7 +632,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             navGroups={navGroups}
             collapsed={sidebarCollapsed}
             collapsedGroups={collapsedNavGroups}
-            onSignOut={() => setSignOutConfirmOpen(true)}
+            onSignOut={requestSignOut}
             onToggle={() => setSidebarCollapsed((current) => !current)}
             onToggleGroup={toggleNavGroup}
           />
@@ -625,6 +650,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             hasSidebar={hasPrivateNavigation}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={() => setSidebarCollapsed(false)}
+            mobileSidebarOpen={mobileSidebarOpen}
+            mobileSidebarTriggerRef={mobileSidebarTriggerRef}
+            onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
             showTenantSwitcher={isAdmin && isAdminRoute}
             organizations={organizations}
             selectedOrganizationId={selectedOrganizationId}
@@ -632,7 +660,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             showUnreadNotificationDot={
               unreadNotificationCount !== null && unreadNotificationCount > 0
             }
-            onRequestSignOut={() => setSignOutConfirmOpen(true)}
+            onRequestSignOut={requestSignOut}
           />
           {/* The viewport minus the topbar, so a short page still fills the
               screen without overflowing it — the pages themselves no longer
@@ -661,6 +689,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           }
         />
       )}
+      {hasPrivateNavigation ? (
+        <MobileSidebar
+          open={mobileSidebarOpen}
+          pathname={pathname}
+          navGroups={navGroups}
+          collapsedGroups={collapsedNavGroups}
+          returnFocusRef={mobileSidebarTriggerRef}
+          onClose={closeMobileSidebar}
+          onNavigate={closeMobileSidebar}
+          onSignOut={requestSignOut}
+          onToggleGroup={toggleNavGroup}
+        />
+      ) : null}
       <SignOutConfirmDialog
         open={signOutConfirmOpen}
         onCancel={() => setSignOutConfirmOpen(false)}
@@ -764,39 +805,13 @@ function Sidebar({
         </button>
       </div>
 
-      <div className="grid gap-0.5 overflow-y-auto pb-3">
-        {navGroups.map((group) => {
-          const groupCollapsed = collapsedGroups.has(group.label);
-          return (
-            <div key={group.label}>
-              <button
-                type="button"
-                onClick={() => onToggleGroup(group.label)}
-                aria-expanded={!groupCollapsed}
-                className="flex w-full items-center justify-between px-3 pb-[7px] pt-[13px] text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC] transition hover:text-violet"
-              >
-                <span>{group.label}</span>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${groupCollapsed ? "-rotate-90" : ""}`}
-                  aria-hidden
-                />
-              </button>
-              {!groupCollapsed ? (
-                <nav className="grid gap-[3px]">
-                  {group.items.map((item) => (
-                    <SidebarItem
-                      key={item.label}
-                      item={item}
-                      pathname={pathname}
-                      collapsed={collapsed}
-                    />
-                  ))}
-                </nav>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+      <SidebarNavigation
+        pathname={pathname}
+        navGroups={navGroups}
+        collapsed={collapsed}
+        collapsedGroups={collapsedGroups}
+        onToggleGroup={onToggleGroup}
+      />
 
       <div className="mt-auto border-t border-line px-2.5 pb-0.5 pt-4">
         <button
@@ -816,14 +831,193 @@ function Sidebar({
   );
 }
 
+function SidebarNavigation({
+  pathname,
+  navGroups,
+  collapsed,
+  collapsedGroups,
+  onNavigate,
+  onToggleGroup,
+}: {
+  pathname: string;
+  navGroups: NavGroup[];
+  collapsed: boolean;
+  collapsedGroups: Set<string>;
+  onNavigate?: () => void;
+  onToggleGroup: (groupLabel: string) => void;
+}) {
+  return (
+    <div className="grid gap-0.5 overflow-y-auto pb-3">
+      {navGroups.map((group) => {
+        const groupCollapsed = collapsedGroups.has(group.label);
+        return (
+          <div key={group.label}>
+            <button
+              type="button"
+              onClick={() => onToggleGroup(group.label)}
+              aria-expanded={!groupCollapsed}
+              className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC] transition hover:text-violet"
+            >
+              <span>{group.label}</span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${groupCollapsed ? "-rotate-90" : ""}`}
+                aria-hidden
+              />
+            </button>
+            {!groupCollapsed ? (
+              <nav className="grid gap-[3px]" aria-label={group.label}>
+                {group.items.map((item) => (
+                  <SidebarItem
+                    key={item.label}
+                    item={item}
+                    pathname={pathname}
+                    collapsed={collapsed}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </nav>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileSidebar({
+  open,
+  pathname,
+  navGroups,
+  collapsedGroups,
+  returnFocusRef,
+  onClose,
+  onNavigate,
+  onSignOut,
+  onToggleGroup,
+}: {
+  open: boolean;
+  pathname: string;
+  navGroups: NavGroup[];
+  collapsedGroups: Set<string>;
+  returnFocusRef: RefObject<HTMLButtonElement>;
+  onClose: () => void;
+  onNavigate: () => void;
+  onSignOut: () => void;
+  onToggleGroup: (groupLabel: string) => void;
+}) {
+  const panelRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const returnFocusElement = returnFocusRef.current;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    function handleKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusableElements = Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+      if (!firstElement || !lastElement) return;
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyboard);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyboard);
+      if (returnFocusElement?.isConnected) returnFocusElement.focus();
+    };
+  }, [onClose, open, returnFocusRef]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-[rgba(24,16,38,.5)] backdrop-blur-[2px] lg:hidden"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="เมนูหลัก"
+        className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#ebe5ef] bg-white px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] shadow-[18px_0_55px_rgba(35,22,56,.2)]"
+      >
+        <div className="flex items-center gap-3 px-2 pb-5">
+          <Link
+            href="/"
+            onClick={onNavigate}
+            aria-label="SpaceLink หน้าแรก"
+            className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-xl font-black tracking-[-0.7px] text-ink"
+          >
+            <BrandMark />
+            <span className="truncate">SpaceLink</span>
+          </Link>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดเมนูหลัก"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#e5deef] bg-white text-[#655d70] transition hover:border-[#d3c6e8] hover:bg-violet-tint hover:text-violet"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+
+        <SidebarNavigation
+          pathname={pathname}
+          navGroups={navGroups}
+          collapsed={false}
+          collapsedGroups={collapsedGroups}
+          onNavigate={onNavigate}
+          onToggleGroup={onToggleGroup}
+        />
+
+        <div className="mt-auto border-t border-line px-2.5 pt-4">
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-[#eadff7] bg-[#faf7ff] px-4 py-3 text-left text-sm font-extrabold text-[#6331c4] transition hover:border-[#d7c4ef] hover:bg-violet-tint"
+          >
+            <LogOut aria-hidden className="h-[18px] w-[18px]" strokeWidth={2} />
+            ออกจากระบบ
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SidebarItem({
   item,
   pathname,
   collapsed,
+  onNavigate,
 }: {
   item: NavItem;
   pathname: string;
   collapsed: boolean;
+  onNavigate?: () => void;
 }) {
   const Icon = item.icon;
   const shared = `flex min-h-12 w-full items-center rounded-[13px] py-2.5 text-left text-[14px] font-medium transition-colors ${
@@ -850,6 +1044,7 @@ function SidebarItem({
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
@@ -878,6 +1073,9 @@ function Topbar({
   hasSidebar,
   sidebarCollapsed,
   onToggleSidebar,
+  mobileSidebarOpen,
+  mobileSidebarTriggerRef,
+  onOpenMobileSidebar,
   showTenantSwitcher,
   organizations,
   selectedOrganizationId,
@@ -889,6 +1087,9 @@ function Topbar({
   hasSidebar: boolean;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  mobileSidebarOpen: boolean;
+  mobileSidebarTriggerRef: RefObject<HTMLButtonElement>;
+  onOpenMobileSidebar: () => void;
   showTenantSwitcher: boolean;
   organizations: AdminOrganization[];
   selectedOrganizationId: string;
@@ -900,13 +1101,31 @@ function Topbar({
     <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ebe5ef] bg-white/95 px-[18px] shadow-[0_5px_20px_rgba(61,43,88,0.025)] backdrop-blur-xl lg:h-[72px] lg:px-[26px]">
       {/* The sidebar carries the brand from `lg` up; below that it is the only
           thing identifying the page, so it appears here instead. */}
-      <Link
-        href="/"
-        className={`flex items-center gap-2.5 ${hasSidebar ? "lg:hidden" : ""}`}
-      >
-        <BrandMark />
-        <span className="text-lg font-bold tracking-[-0.5px]">SpaceLink</span>
-      </Link>
+      <div className={`flex min-w-0 items-center gap-2 ${hasSidebar ? "lg:hidden" : ""}`}>
+        {hasSidebar ? (
+          <button
+            ref={mobileSidebarTriggerRef}
+            type="button"
+            onClick={onOpenMobileSidebar}
+            aria-label="เปิดเมนูหลัก"
+            aria-haspopup="dialog"
+            aria-expanded={mobileSidebarOpen}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#e5deef] bg-white text-[#655d70] transition hover:border-[#d3c6e8] hover:bg-violet-tint hover:text-violet lg:hidden"
+          >
+            <Menu className="h-5 w-5" aria-hidden />
+          </button>
+        ) : null}
+        <Link
+          href="/"
+          aria-label="SpaceLink หน้าแรก"
+          className="flex min-w-0 items-center gap-2.5"
+        >
+          <BrandMark />
+          <span className="hidden text-lg font-bold tracking-[-0.5px] min-[390px]:inline">
+            SpaceLink
+          </span>
+        </Link>
+      </div>
       {hasSidebar && sidebarCollapsed ? (
         <button
           type="button"
@@ -2161,6 +2380,8 @@ function findRecommendedBooth(eventMap: EventMap | null, boothId: string) {
 }
 
 function UserFooter() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer
       className="border-t border-white/10 bg-[#211b2f] text-white"
@@ -2174,9 +2395,7 @@ function UserFooter() {
               className="inline-flex items-center gap-3"
               aria-label="SpaceLink หน้าแรก"
             >
-              <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#9f7aea,#6d28d9)] text-sm font-black text-white shadow-[0_10px_25px_rgba(124,58,237,.25)]">
-                SL
-              </span>
+              <BrandMark lightBackground />
               <strong className="text-lg font-black tracking-[-.02em]">
                 SpaceLink
               </strong>
@@ -2200,20 +2419,27 @@ function UserFooter() {
           </FooterColumn>
 
           <FooterColumn title="ติดต่อ SpaceLink">
-            <a href="tel:+6644224000">โทร 044-224-000</a>
-            <span>LINE Official</span>
-            <span>Facebook Page</span>
+            <a href="tel:+66935275899">โทร 093-527-5899</a>
+            <a
+              href="https://www.facebook.com/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Facebook Page
+            </a>
           </FooterColumn>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-sm text-white/45">
-          <span>© 2026 SpaceLink · Multi-tenant Event Space Platform</span>
+          <span>
+            © {currentYear} SpaceLink · Multi-tenant Event Space Platform
+          </span>
           <div className="flex flex-wrap gap-x-2 gap-y-1">
-            <span>ความเป็นส่วนตัว</span>
+            <Link href="/privacy">ความเป็นส่วนตัว</Link>
             <span>·</span>
-            <span>เงื่อนไขการใช้งาน</span>
+            <Link href="/terms">เงื่อนไขการใช้งาน</Link>
             <span>·</span>
-            <span>การเข้าถึงสำหรับทุกคน</span>
+            <Link href="/accessibility">การเข้าถึงสำหรับทุกคน</Link>
           </div>
         </div>
       </div>
@@ -2410,10 +2636,24 @@ function BottomNav({
   );
 }
 
-function BrandMark() {
+function BrandMark({ lightBackground = false }: { lightBackground?: boolean }) {
   return (
-    <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#9F7AEA] to-[#6D28D9] text-white shadow-[0_8px_18px_#7C3AED42]">
-      <Orbit className="h-[19px] w-[19px]" strokeWidth={2} />
+    <span
+      aria-hidden
+      className={`grid h-[38px] w-[38px] shrink-0 place-items-center overflow-hidden rounded-xl p-0.5 ${
+        lightBackground
+          ? "bg-white shadow-[0_10px_25px_rgba(0,0,0,.2)]"
+          : "bg-white shadow-[0_8px_18px_#7C3AED2e]"
+      }`}
+    >
+      <Image
+        src="/brand/spacelink-mark.png"
+        alt=""
+        width={34}
+        height={34}
+        sizes="34px"
+        className="h-[34px] w-[34px] object-contain"
+      />
     </span>
   );
 }
