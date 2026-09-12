@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --test lib/push-registration.test.ts lib/facebook-embed.test.ts lib/admin-organization-access.test.ts lib/otp-input.test.ts lib/event-cover.test.ts lib/admin-transaction-filters.test.ts lib/admin-booking-timeline.test.ts lib/review-eligibility.test.ts"
+    "test": "node --experimental-strip-types --test lib/push-registration.test.ts lib/facebook-embed.test.ts lib/admin-organization-access.test.ts lib/otp-input.test.ts lib/event-cover.test.ts lib/admin-transaction-filters.test.ts lib/admin-booking-timeline.test.ts lib/review-eligibility.test.ts lib/booth-selection-policy.test.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-thai": "^5.3.0",
