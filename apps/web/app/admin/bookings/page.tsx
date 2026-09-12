@@ -1,5 +1,5 @@
-import { AdminBookingsScreen } from '@/components/admin-bookings-screen';
+import { redirect } from 'next/navigation';
 
 export default function AdminBookingsPage() {
-  return <AdminBookingsScreen />;
+  redirect('/admin/transactions?tab=bookings');
 }

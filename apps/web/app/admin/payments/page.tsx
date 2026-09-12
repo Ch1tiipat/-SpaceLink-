@@ -1,5 +1,5 @@
-import { AdminPaymentsScreen } from '@/components/admin-payments-screen';
+import { redirect } from 'next/navigation';
 
 export default function AdminPaymentsPage() {
-  return <AdminPaymentsScreen />;
+  redirect('/admin/transactions?tab=payments');
 }

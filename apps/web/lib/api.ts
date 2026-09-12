@@ -657,6 +657,95 @@ export type UpdatePlatformBillingConfigInput = Omit<
  * admin projection as the platform overview, already filtered by membership. */
 export type AdminOrganizationBooking = SuperAdminBooking;
 
+export type AdminTransactionView = 'BOOKINGS' | 'PAYMENTS' | 'REFUNDS' | 'VENDORS';
+export type AdminPaymentStatus = 'EXEMPT' | 'AWAITING_SLIP' | 'VERIFIED' | 'FAILED';
+export type AdminRefundStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+
+export type AdminTransactionBooking = {
+  id: string;
+  bookingCode: string;
+  bookingStatus: BookingStatus;
+  paymentStatus: AdminPaymentStatus;
+  refundStatus: AdminRefundStatus;
+  boothPrice: string;
+  createdAt: string;
+  paymentEffectiveAt: string;
+  event: { id: string; name: string };
+  zone: { id: string; code: string; name: string | null };
+  booth: { id: string; code: string };
+  vendor: { id: string; fullName: string; email: string; phone: string | null };
+  shop: { id: string; name: string };
+  paymentGroup: {
+    id: string;
+    paymentCode: string;
+    status: PaymentGroupStatus;
+    totalAmount: string;
+  } | null;
+};
+
+export type AdminTransactionRefund = AdminOrganizationRefund & {
+  payoutMethod: string | null;
+  payoutPromptPayId: string | null;
+  payoutBankName: string | null;
+  payoutAccountNumber: string | null;
+  payoutAccountName: string | null;
+  requestedBy: { id: string; fullName: string; email: string };
+  reviewedBy: { id: string; fullName: string; email: string } | null;
+  payoutNameMismatch: boolean;
+  pendingSince: string | null;
+  booking: AdminTransactionBooking;
+};
+
+export type AdminTransactionVendor = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  shops: Array<{ id: string; name: string }>;
+  bookingCount: number;
+  confirmedCount: number;
+  lastBookingAt: string;
+};
+
+export type AdminTransactionSummary = {
+  bookings: number;
+  payments: Record<AdminPaymentStatus, number>;
+  refunds: Record<AdminRefundStatus, number>;
+  vendors: number;
+  shops: number;
+};
+
+export type AdminTransactionResponse = {
+  view: AdminTransactionView;
+  summary: AdminTransactionSummary;
+  filters: {
+    events: Array<{ id: string; name: string }>;
+    zones: Array<{ id: string; code: string; name: string | null }>;
+    vendors: Array<{ id: string; fullName: string; email: string }>;
+    shops: Array<{ id: string; name: string }>;
+  };
+  page: number;
+  pageSize: number;
+  total: number;
+  items: Array<AdminTransactionBooking | AdminTransactionRefund | AdminTransactionVendor>;
+};
+
+export type AdminTransactionQuery = {
+  view: AdminTransactionView;
+  eventId?: string;
+  zoneId?: string;
+  vendorUserId?: string;
+  shopId?: string;
+  bookingStatus?: BookingStatus;
+  paymentStatus?: AdminPaymentStatus;
+  refundStatus?: AdminRefundStatus;
+  from?: string;
+  to?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
+
 export type AdminSlipAccess = {
   viewUrl: string;
   downloadUrl: string;
@@ -1923,6 +2012,22 @@ export function getAdminOrganizationBookings(
 ): Promise<AdminOrganizationBooking[]> {
   return getJson<AdminOrganizationBooking[]>(
     `/organizations/${encodeURIComponent(organizationId)}/bookings`,
+    { signal, token },
+  );
+}
+
+export function getAdminTransactions(
+  organizationId: string,
+  query: AdminTransactionQuery,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminTransactionResponse> {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  });
+  return getJson<AdminTransactionResponse>(
+    `/organizations/${encodeURIComponent(organizationId)}/transactions?${params.toString()}`,
     { signal, token },
   );
 }
