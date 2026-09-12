@@ -2,8 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react';
+import { Sparkles, Store, X } from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
 import {
   getEventMap,
@@ -14,6 +21,7 @@ import {
   type ZoneRecommendation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { decideBoothSelectionAccess } from '@/lib/booth-selection-policy';
 import { isUuid } from '@/lib/route-identifier';
 import { useBookingQuota } from '@/lib/use-booking-quota';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
@@ -29,6 +37,8 @@ const moneyFormatter = new Intl.NumberFormat('th-TH', {
   maximumFractionDigits: 2,
 });
 
+type BookingAccessDialog = 'signed-out' | 'missing-shop' | null;
+
 export function EventMapScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,6 +49,9 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedBoothIds, setSelectedBoothIds] = useState<string[]>([]);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [bookingAccessDialog, setBookingAccessDialog] =
+    useState<BookingAccessDialog>(null);
+  const bookingAccessTriggerRef = useRef<HTMLElement | SVGElement | null>(null);
   const [recommendation, setRecommendation] = useState<ZoneRecommendation | null>(null);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationIsEmpty, setRecommendationIsEmpty] = useState(false);
@@ -48,6 +61,10 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     data?.event.id ?? null,
     vendorToken,
     canUseUxPreview(),
+  );
+  const closeBookingAccessDialog = useCallback(
+    () => setBookingAccessDialog(null),
+    [],
   );
 
   useEffect(() => {
@@ -187,15 +204,36 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   function toggleBooth(booth: EventZone['booths'][number]) {
     if (booth.availability !== 'AVAILABLE') return;
-    if (selectedBoothIds.includes(booth.id)) {
+    const accessDecision = decideBoothSelectionAccess({
+      isSelected: selectedBoothIds.includes(booth.id),
+      vendorStatus: vendor.status,
+      hasShop: vendor.status === 'ready' && vendor.shop !== null,
+    });
+    if (accessDecision === 'remove-selection') {
       setSelectedBoothIds((current) =>
         current.filter((boothId) => boothId !== booth.id),
       );
       setSelectionError(null);
       return;
     }
-    if (vendor.status !== 'ready') {
-      setSelectionError('กรุณาเข้าสู่ระบบก่อนเลือกบูธ');
+    if (accessDecision === 'open-sign-in') {
+      bookingAccessTriggerRef.current =
+        document.activeElement instanceof HTMLElement ||
+        document.activeElement instanceof SVGElement
+          ? document.activeElement
+          : null;
+      setBookingAccessDialog((current) => current ?? 'signed-out');
+      setSelectionError(null);
+      return;
+    }
+    if (accessDecision === 'open-create-shop') {
+      bookingAccessTriggerRef.current =
+        document.activeElement instanceof HTMLElement ||
+        document.activeElement instanceof SVGElement
+          ? document.activeElement
+          : null;
+      setBookingAccessDialog((current) => current ?? 'missing-shop');
+      setSelectionError(null);
       return;
     }
     if (quota.status === 'loading' || quota.status === 'idle') {
@@ -489,7 +527,126 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           </section>
         ) : null}
       </div>
+      <BookingAccessModal
+        kind={bookingAccessDialog}
+        triggerRef={bookingAccessTriggerRef}
+        onClose={closeBookingAccessDialog}
+      />
     </main>
+  );
+}
+
+function BookingAccessModal({
+  kind,
+  triggerRef,
+  onClose,
+}: {
+  kind: BookingAccessDialog;
+  triggerRef: MutableRefObject<HTMLElement | SVGElement | null>;
+  onClose: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!kind) return;
+    const trigger = triggerRef.current;
+    closeButtonRef.current?.focus();
+
+    function handleKeyboard(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyboard);
+    return () => {
+      document.removeEventListener('keydown', handleKeyboard);
+      if (trigger?.isConnected && 'focus' in trigger) trigger.focus();
+    };
+  }, [kind, onClose, triggerRef]);
+
+  if (!kind) return null;
+  const missingShop = kind === 'missing-shop';
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(24,16,38,.52)] p-5 backdrop-blur-[3px]">
+      <button
+        type="button"
+        aria-label="ปิดข้อความก่อนเลือกบูธ"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-access-title"
+        aria-describedby="booking-access-description"
+        className="relative w-full max-w-[440px] rounded-[26px] border border-[#e7def2] bg-white p-6 shadow-[0_28px_80px_rgba(28,14,47,.32)]"
+      >
+        <button
+          ref={closeButtonRef}
+          type="button"
+          onClick={onClose}
+          aria-label="ปิดข้อความก่อนเลือกบูธ"
+          className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-xl border border-line text-muted transition hover:border-violet hover:text-violet"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        <span className="grid h-14 w-14 place-items-center rounded-[20px] bg-violet-tint text-violet">
+          <Store className="h-6 w-6" aria-hidden />
+        </span>
+        <h2 id="booking-access-title" className="mt-5 pr-12 text-xl font-black text-ink">
+          {missingShop ? 'ยังไม่มีร้านค้าสำหรับทำรายการจอง' : 'เข้าสู่ระบบก่อนเลือกบูธ'}
+        </h2>
+        <p id="booking-access-description" className="mt-2 text-sm leading-6 text-muted">
+          {missingShop
+            ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าก่อนเลือกจองบูธ'
+            : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
+        </p>
+        <div className={`mt-6 grid gap-3 ${missingShop ? 'sm:grid-cols-2' : 'grid-cols-2'}`}>
+          {missingShop ? (
+            <>
+              <button type="button" onClick={onClose} className="sl-action-secondary justify-center">
+                ยกเลิก
+              </button>
+              <Link href="/profile" onClick={onClose} className="sl-action-primary justify-center">
+                สร้างร้านค้า
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/register" onClick={onClose} className="sl-action-secondary justify-center">
+                สมัครสมาชิก
+              </Link>
+              <Link href="/login" onClick={onClose} className="sl-action-primary justify-center">
+                เข้าสู่ระบบ
+              </Link>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

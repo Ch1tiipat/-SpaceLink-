@@ -1635,23 +1635,6 @@ function FloatingSupport({
             </span>
           </button>
           <a
-            href="https://line.me/R/ti/p/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="ติดต่อผ่าน LINE"
-            className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#c8ead4]"
-          >
-            <span>
-              <strong className="block text-sm text-ink">LINE</strong>
-              <small className="mt-1 block text-xs text-muted">
-                @spacelink
-              </small>
-            </span>
-            <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#20b955] text-white">
-              <MessageCircle className="h-5 w-5" aria-hidden />
-            </span>
-          </a>
-          <a
             href="https://www.facebook.com/"
             target="_blank"
             rel="noreferrer"
@@ -1667,14 +1650,14 @@ function FloatingSupport({
             </span>
           </a>
           <a
-            href="tel:+6644223000"
+            href="tel:+66935275899"
             aria-label="โทรหาเจ้าหน้าที่ SpaceLink"
             className="flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#bfe3d4]"
           >
             <span>
               <strong className="block text-sm text-ink">โทรหาเรา</strong>
               <small className="mt-1 block text-xs text-muted">
-                044-223-000
+                093-527-5899
               </small>
             </span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[#278b68] text-white">

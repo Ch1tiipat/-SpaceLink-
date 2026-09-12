@@ -268,6 +268,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="งานหรือสถานที่"
             placeholder="เลือกงานหรือสถานที่"
+            className="[&_button]:min-h-[66px]"
             value={query}
             onChange={(value) => {
               setQuery(value);
@@ -278,6 +279,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="พื้นที่"
             placeholder="ทุกพื้นที่"
+            className="[&_button]:min-h-[66px]"
             value={area}
             onChange={(value) => {
               setArea(value);
@@ -288,6 +290,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="หมวดสินค้า"
             placeholder="ทุกหมวดสินค้า"
+            className="[&_button]:min-h-[66px]"
             value={categoryId}
             onChange={(value) => {
               setCategoryId(value);
