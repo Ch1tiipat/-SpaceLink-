@@ -746,6 +746,90 @@ export type AdminTransactionQuery = {
   pageSize?: number;
 };
 
+export type AdminTransactionTimelineItem = {
+  type:
+    | 'BOOKING_CREATED'
+    | 'PAYMENT_GROUP_CREATED'
+    | 'SLIP_VERIFIED'
+    | 'SLIP_FAILED'
+    | 'BOOKING_CONFIRMED'
+    | 'BOOKING_CANCELLED'
+    | 'PAYMENT_GROUP_CONFIRMED'
+    | 'PAYMENT_GROUP_CANCELLED'
+    | 'REFUND_REQUESTED'
+    | 'REFUND_REVIEWED'
+    | 'REFUND_PROCESSED';
+  timestamp: string;
+  entityId: string;
+  status?: string;
+  amount?: string;
+};
+
+export type AdminTransactionBookingDetail = {
+  booking: {
+    id: string;
+    bookingCode: string;
+    status: BookingStatus;
+    bookingStartDate: string;
+    bookingEndDate: string;
+    boothPrice: string;
+    isPaymentExempt: boolean;
+    paymentExemptReason: string | null;
+    holdExpiresAt: string | null;
+    confirmedAt: string | null;
+    cancelledByUserId: string | null;
+    cancelledByRole: string | null;
+    cancelReason: string | null;
+    cancelledAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  event: { id: string; name: string; organizationId: string };
+  zone: { id: string; code: string; name: string | null };
+  booth: { id: string; code: string };
+  vendor: { id: string; fullName: string; email: string; phone: string | null };
+  shop: { id: string; name: string };
+  payment: {
+    status: AdminPaymentStatus;
+    effectiveAt: string;
+    group: {
+      id: string;
+      paymentCode: string;
+      totalAmount: string;
+      status: PaymentGroupStatus;
+      holdExpiresAt: string | null;
+      confirmedAt: string | null;
+      cancelledAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    } | null;
+    slips: Array<{
+      id: string;
+      source: 'BOOKING' | 'PAYMENT_GROUP';
+      status: SlipVerificationStatus;
+      amount: string;
+      transRef: string | null;
+      sendingBank: string | null;
+      senderName: string | null;
+      receiverName: string | null;
+      verifiedAt: string | null;
+      createdAt: string;
+    }>;
+  };
+  refunds: Array<AdminOrganizationRefund & {
+    payoutMethod: string | null;
+    payoutPromptPayId: string | null;
+    payoutBankName: string | null;
+    payoutAccountNumber: string | null;
+    payoutAccountName: string | null;
+    requestedBy: { id: string; fullName: string; email: string };
+    reviewedBy: { id: string; fullName: string; email: string } | null;
+    payoutNameMismatch: boolean;
+    pendingSince: string | null;
+  }>;
+  timeline: AdminTransactionTimelineItem[];
+};
+
 export type AdminSlipAccess = {
   viewUrl: string;
   downloadUrl: string;
@@ -2028,6 +2112,18 @@ export function getAdminTransactions(
   });
   return getJson<AdminTransactionResponse>(
     `/organizations/${encodeURIComponent(organizationId)}/transactions?${params.toString()}`,
+    { signal, token },
+  );
+}
+
+export function getAdminTransactionBookingDetail(
+  organizationId: string,
+  bookingId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminTransactionBookingDetail> {
+  return getJson<AdminTransactionBookingDetail>(
+    `/organizations/${encodeURIComponent(organizationId)}/transactions/bookings/${encodeURIComponent(bookingId)}`,
     { signal, token },
   );
 }
