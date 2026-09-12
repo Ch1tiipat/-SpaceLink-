@@ -10,6 +10,17 @@ export type BoothSelectionAccessDecision =
   | 'open-create-shop'
   | 'continue';
 
+export type BoothQuotaDecision =
+  | 'open-quota-request'
+  | 'show-selection-limit'
+  | 'continue';
+
+export type SelectableBoothAvailability =
+  | 'AVAILABLE'
+  | 'HELD'
+  | 'BOOKED'
+  | 'UNAVAILABLE';
+
 /**
  * Keeps the account gate for booth selection independent from rendering. A
  * selected booth can always be removed; adding one requires both a resolved
@@ -28,4 +39,25 @@ export function decideBoothSelectionAccess({
   if (vendorStatus !== 'ready') return 'open-sign-in';
   if (!hasShop) return 'open-create-shop';
   return 'continue';
+}
+
+export function decideBoothQuota({
+  selectedCount,
+  effectiveSelectionLimit,
+  remainingQuota,
+}: {
+  selectedCount: number;
+  effectiveSelectionLimit: number;
+  remainingQuota: number;
+}): BoothQuotaDecision {
+  if (selectedCount < effectiveSelectionLimit) return 'continue';
+  return remainingQuota === 0
+    ? 'open-quota-request'
+    : 'show-selection-limit';
+}
+
+export function canAttemptBoothSelection(
+  availability: SelectableBoothAvailability,
+): boolean {
+  return availability === 'AVAILABLE';
 }

@@ -1,8 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Suspense,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,9 +22,11 @@ import {
   createOrganizationAdminSupportTicket,
   createSupportTicket,
   getBooths,
+  getEventMap,
   getMyBookings,
   getMe,
   type BoothOption,
+  type EventMap,
   type MyBooking,
   type SupportTicketRecord,
   type UserRole,
@@ -25,6 +34,13 @@ import {
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
+import {
+  parseQuotaRequestQuery,
+  resolveQuotaRequestContext,
+  type ParsedQuotaRequestQuery,
+  type QuotaBoothOption,
+  type QuotaRequestOption,
+} from '@/lib/quota-request-context';
 
 type AccessState =
   | { status: 'loading' }
@@ -106,8 +122,77 @@ const PREVIEW_BOOTH_OPTIONS: BoothOption[] = [
   },
 ];
 
+const PREVIEW_EVENT_MAP = {
+  event: {
+    id: 'preview-event',
+    slug: 'preview-event',
+    name: 'Future Tech Expo 2026',
+    description: null,
+    startDate: '2026-09-10T00:00:00.000Z',
+    endDate: '2026-09-12T00:00:00.000Z',
+    startTime: '09:00',
+    endTime: '18:00',
+    bannerUrl: null,
+    galleryUrls: [],
+    status: 'ONGOING',
+    mapImageUrl: null,
+    contactPhone: null,
+    contactEmail: null,
+    organization: {
+      id: 'preview-organization',
+      name: 'องค์กรตัวอย่าง',
+      contactEmail: 'preview@spacelink.local',
+      contactPhone: null,
+      facebookUrl: null,
+      lineUrl: null,
+      logoUrl: null,
+    },
+    venue: { id: 'preview-venue', name: 'พื้นที่ตัวอย่าง', address: null },
+    policy: null,
+    joinInformation: [],
+    information: [],
+  },
+  zones: [
+    {
+      id: 'preview-zone-a',
+      code: 'A',
+      name: 'โซนอาหาร',
+      description: null,
+      posX: null,
+      posY: null,
+      categories: [],
+      booths: PREVIEW_BOOTH_OPTIONS.map((booth) => ({
+        ...booth,
+        availability:
+          booth.id === 'preview-booth-a03' ? ('BOOKED' as const) : ('AVAILABLE' as const),
+        tier: null,
+        occupant: null,
+      })),
+    },
+  ],
+} as EventMap;
+
 export function SupportTicketScreen() {
+  return (
+    <Suspense
+      fallback={
+        <section className="sl-surface mt-8 p-6" aria-busy="true">
+          <p className="text-sm font-semibold text-muted">กำลังเตรียมแบบฟอร์มช่วยเหลือ</p>
+        </section>
+      }
+    >
+      <SupportTicketScreenContent />
+    </Suspense>
+  );
+}
+
+function SupportTicketScreenContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const quotaRequestQuery = useMemo(
+    () => parseQuotaRequestQuery(searchParams),
+    [searchParams],
+  );
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
 
   useEffect(() => {
@@ -190,6 +275,7 @@ export function SupportTicketScreen() {
       <VendorTicketForm
         token={access.token}
         preview={access.token === UX_PREVIEW_TOKEN}
+        quotaRequestQuery={quotaRequestQuery}
       />
     );
   }
@@ -201,17 +287,30 @@ export function SupportTicketScreen() {
   return <SuperAdminSupportPointer />;
 }
 
-function VendorTicketForm({ token, preview }: { token: string; preview: boolean }) {
+function VendorTicketForm({
+  token,
+  preview,
+  quotaRequestQuery,
+}: {
+  token: string;
+  preview: boolean;
+  quotaRequestQuery: ParsedQuotaRequestQuery;
+}) {
   const [requestType, setRequestType] =
     useState<VendorRequestType>('QUOTA_INCREASE');
   const [bookings, setBookings] = useState<MyBooking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [quotaContext, setQuotaContext] = useState('');
-  const [boothOptions, setBoothOptions] = useState<BoothOption[]>([]);
+  const [boothOptions, setBoothOptions] = useState<QuotaBoothOption[]>([]);
   const [loadingBooths, setLoadingBooths] = useState(false);
   const [boothError, setBoothError] = useState<string | null>(null);
   const [requestedBoothId, setRequestedBoothId] = useState('');
+  const [contextOption, setContextOption] = useState<QuotaRequestOption | null>(null);
+  const [contextBooths, setContextBooths] = useState<QuotaBoothOption[]>([]);
+  const [contextRequestedBoothId, setContextRequestedBoothId] = useState('');
+  const [contextNotice, setContextNotice] = useState<string | null>(null);
+  const [contextError, setContextError] = useState<string | null>(null);
   const [issueBookingId, setIssueBookingId] = useState('');
   const [subject, setSubject] = useState('ขอโควต้าบูธเพิ่ม');
   const [message, setMessage] = useState('');
@@ -222,7 +321,7 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
   const activeBookings = bookings.filter((booking) =>
     ACTIVE_BOOKING_STATUSES.has(booking.status),
   );
-  const quotaOptions = Array.from(
+  const bookingQuotaOptions = Array.from(
     new Map(
       activeBookings.map((booking) => {
         const key = `${booking.event.id}:${booking.booth.zone.id}`;
@@ -234,9 +333,17 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
             eventName: booking.event.name,
             zoneId: booking.booth.zone.id,
             zoneName: booking.booth.zone.name ?? booking.booth.zone.code,
+            source: 'booking' as const,
           },
         ];
       }),
+    ).values(),
+  );
+  const quotaOptions = Array.from(
+    new Map(
+      [...bookingQuotaOptions, ...(contextOption ? [contextOption] : [])].map(
+        (option) => [option.key, option],
+      ),
     ).values(),
   );
   const selectedQuotaOption = quotaOptions.find(
@@ -247,7 +354,8 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
     ? activeBookings.filter(
         (booking) =>
           booking.event.id === selectedQuotaOption.eventId &&
-          booking.booth.zone.id === selectedQuotaOption.zoneId,
+          (selectedQuotaOption.source === 'context' ||
+            booking.booth.zone.id === selectedQuotaOption.zoneId),
       )
     : [];
 
@@ -262,6 +370,43 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
           : await getMyBookings(token, controller.signal);
         if (!active) return;
         setBookings(loaded);
+        setContextOption(null);
+        setContextBooths([]);
+        setContextRequestedBoothId('');
+        setContextNotice(null);
+        setContextError(null);
+
+        if (quotaRequestQuery.status === 'invalid') {
+          setQuotaContext('');
+          setContextError(quotaRequestQuery.message);
+          return;
+        }
+        if (quotaRequestQuery.status === 'ready') {
+          const eventMap = preview && quotaRequestQuery.value.eventId === 'preview-event'
+            ? PREVIEW_EVENT_MAP
+            : await getEventMap(
+                quotaRequestQuery.value.eventId,
+                controller.signal,
+              );
+          if (!active) return;
+          const resolved = resolveQuotaRequestContext({
+            query: quotaRequestQuery.value,
+            eventMap,
+            bookings: loaded,
+          });
+          if (resolved.status === 'error') {
+            setQuotaContext('');
+            setContextError(resolved.message);
+            return;
+          }
+          setContextOption(resolved.option);
+          setContextBooths(resolved.booths);
+          setContextRequestedBoothId(resolved.requestedBoothId);
+          setContextNotice(resolved.notice);
+          setQuotaContext(resolved.option.key);
+          return;
+        }
+
         const firstActive = loaded.find((booking) =>
           ACTIVE_BOOKING_STATUSES.has(booking.status),
         );
@@ -286,13 +431,21 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
       active = false;
       controller.abort();
     };
-  }, [preview, token]);
+  }, [preview, quotaRequestQuery, token]);
 
   useEffect(() => {
     if (requestType !== 'QUOTA_INCREASE' || !selectedQuotaZoneId) {
       setBoothOptions([]);
       setRequestedBoothId('');
       setBoothError(null);
+      return;
+    }
+
+    if (contextOption?.key === quotaContext) {
+      setBoothOptions(contextBooths);
+      setRequestedBoothId(contextRequestedBoothId);
+      setBoothError(contextNotice);
+      setLoadingBooths(false);
       return;
     }
 
@@ -330,7 +483,16 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
       active = false;
       controller.abort();
     };
-  }, [preview, requestType, selectedQuotaZoneId]);
+  }, [
+    contextBooths,
+    contextNotice,
+    contextOption,
+    contextRequestedBoothId,
+    preview,
+    quotaContext,
+    requestType,
+    selectedQuotaZoneId,
+  ]);
 
   function changeRequestType(nextType: VendorRequestType) {
     setRequestType(nextType);
@@ -445,6 +607,7 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
 
         {requestType === 'QUOTA_INCREASE' ? (
           <>
+            {contextError ? <ErrorMessage message={contextError} /> : null}
             <Field label="งานและโซนที่จองอยู่">
               <select
                 value={quotaContext}
@@ -492,7 +655,9 @@ function VendorTicketForm({ token, preview }: { token: string; preview: boolean 
             {selectedQuotaBookings.length > 0 ? (
               <div className="rounded-2xl border border-[#ded5eb] bg-violet-tint/50 p-4">
                 <p className="text-sm font-extrabold text-ink">
-                  บูธที่คุณจองในงานและโซนนี้
+                  {selectedQuotaOption?.source === 'context'
+                    ? 'บูธที่คุณจองใน Event นี้'
+                    : 'บูธที่คุณจองในงานและโซนนี้'}
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {selectedQuotaBookings.map((booking) => (
@@ -774,7 +939,7 @@ function bookingStatusLabel(status: MyBooking['status']): string {
   return labels[status];
 }
 
-function formatBoothSize(booth: BoothOption): string {
+function formatBoothSize(booth: QuotaBoothOption): string {
   return booth.widthM && booth.heightM
     ? `${booth.widthM} × ${booth.heightM} เมตร`
     : 'ไม่ระบุขนาด';

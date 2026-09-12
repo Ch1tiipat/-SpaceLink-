@@ -10,7 +10,7 @@ import {
   useState,
   type MutableRefObject,
 } from 'react';
-import { Sparkles, Store, X } from 'lucide-react';
+import { Gauge, Sparkles, Store, X } from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
 import {
   getEventMap,
@@ -21,7 +21,11 @@ import {
   type ZoneRecommendation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
-import { decideBoothSelectionAccess } from '@/lib/booth-selection-policy';
+import {
+  canAttemptBoothSelection,
+  decideBoothQuota,
+  decideBoothSelectionAccess,
+} from '@/lib/booth-selection-policy';
 import { isUuid } from '@/lib/route-identifier';
 import { useBookingQuota } from '@/lib/use-booking-quota';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
@@ -37,7 +41,18 @@ const moneyFormatter = new Intl.NumberFormat('th-TH', {
   maximumFractionDigits: 2,
 });
 
-type BookingAccessDialog = 'signed-out' | 'missing-shop' | null;
+type BookingAccessDialog =
+  | { kind: 'signed-out' }
+  | { kind: 'missing-shop' }
+  | {
+      kind: 'quota-full';
+      eventId: string;
+      zoneId: string;
+      boothId: string;
+      activeBookingCount: number;
+      configuredQuota: number;
+    }
+  | null;
 
 export function EventMapScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
@@ -203,7 +218,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }
 
   function toggleBooth(booth: EventZone['booths'][number]) {
-    if (booth.availability !== 'AVAILABLE') return;
+    if (!canAttemptBoothSelection(booth.availability)) return;
     const accessDecision = decideBoothSelectionAccess({
       isSelected: selectedBoothIds.includes(booth.id),
       vendorStatus: vendor.status,
@@ -222,7 +237,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         document.activeElement instanceof SVGElement
           ? document.activeElement
           : null;
-      setBookingAccessDialog((current) => current ?? 'signed-out');
+      setBookingAccessDialog((current) => current ?? { kind: 'signed-out' });
       setSelectionError(null);
       return;
     }
@@ -232,7 +247,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         document.activeElement instanceof SVGElement
           ? document.activeElement
           : null;
-      setBookingAccessDialog((current) => current ?? 'missing-shop');
+      setBookingAccessDialog((current) => current ?? { kind: 'missing-shop' });
       setSelectionError(null);
       return;
     }
@@ -244,11 +259,35 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       setSelectionError('ตรวจสอบโควตาไม่สำเร็จ กรุณาลองใหม่');
       return;
     }
-    if (selectedBoothIds.length >= quota.value.effectiveSelectionLimit) {
+    const quotaDecision = decideBoothQuota({
+      selectedCount: selectedBoothIds.length,
+      effectiveSelectionLimit: quota.value.effectiveSelectionLimit,
+      remainingQuota: quota.value.remainingQuota,
+    });
+    if (quotaDecision === 'open-quota-request') {
+      const zone = data?.zones.find((candidate) => candidate.id === booth.zoneId);
+      if (!data || !zone) return;
+      bookingAccessTriggerRef.current =
+        document.activeElement instanceof HTMLElement ||
+        document.activeElement instanceof SVGElement
+          ? document.activeElement
+          : null;
+      setBookingAccessDialog((current) =>
+        current ?? {
+          kind: 'quota-full',
+          eventId: data.event.id,
+          zoneId: zone.id,
+          boothId: booth.id,
+          activeBookingCount: quota.value.activeBookingCount,
+          configuredQuota: quota.value.configuredQuota,
+        },
+      );
+      setSelectionError(null);
+      return;
+    }
+    if (quotaDecision === 'show-selection-limit') {
       setSelectionError(
-        quota.value.remainingQuota === 0
-          ? 'คุณใช้โควตาการจองสำหรับงานนี้ครบแล้ว'
-          : `เลือกได้สูงสุด ${quota.value.effectiveSelectionLimit} บูธตามโควตาคงเหลือ`,
+        `เลือกได้สูงสุด ${quota.value.effectiveSelectionLimit} บูธตามโควตาคงเหลือ`,
       );
       return;
     }
@@ -256,13 +295,18 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     setSelectionError(null);
   }
 
-  function continueToBooking() {
+  async function continueToBooking() {
     if (!data || selectedBooths.length === 0) return;
+    const latestQuota = await refreshQuota();
     if (
-      quota.status !== 'ready' ||
-      selectedBooths.length > quota.value.effectiveSelectionLimit
+      latestQuota.status !== 'ready' ||
+      selectedBooths.length > latestQuota.value.effectiveSelectionLimit
     ) {
-      setSelectionError('กรุณารอให้ระบบตรวจสอบโควตาก่อนดำเนินการต่อ');
+      setSelectionError(
+        latestQuota.status === 'ready' && latestQuota.value.remainingQuota === 0
+          ? 'โควตาล่าสุดเต็มแล้ว กรุณาส่งคำขอเพิ่มโควตา'
+          : 'ตรวจสอบโควตาล่าสุดไม่สำเร็จ กรุณาลองใหม่',
+      );
       return;
     }
     const boothCodes = selectedBooths
@@ -499,7 +543,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
               <button
                 type="button"
-                onClick={continueToBooking}
+                onClick={() => void continueToBooking()}
                 disabled={selectedBooths.length === 0 || quota.status !== 'ready'}
                 className="sl-action-primary min-w-[170px] disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -514,7 +558,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             {quota.status === 'error' ? (
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-[#b42318]">
                 <span role="alert">{quota.message}</span>
-                <button type="button" onClick={refreshQuota} className="font-bold underline">
+                <button type="button" onClick={() => void refreshQuota()} className="font-bold underline">
                   ลองตรวจสอบอีกครั้ง
                 </button>
               </div>
@@ -586,13 +630,15 @@ function BookingAccessModal({
   }, [kind, onClose, triggerRef]);
 
   if (!kind) return null;
-  const missingShop = kind === 'missing-shop';
+  const missingShop = kind.kind === 'missing-shop';
+  const quotaFull = kind.kind === 'quota-full';
+  const closeLabel = quotaFull ? 'ปิดข้อความโควตาเต็ม' : 'ปิดข้อความก่อนเลือกบูธ';
 
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(24,16,38,.52)] p-5 backdrop-blur-[3px]">
       <button
         type="button"
-        aria-label="ปิดข้อความก่อนเลือกบูธ"
+        aria-label={closeLabel}
         className="absolute inset-0"
         onClick={onClose}
       />
@@ -608,24 +654,49 @@ function BookingAccessModal({
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          aria-label="ปิดข้อความก่อนเลือกบูธ"
+          aria-label={closeLabel}
           className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-xl border border-line text-muted transition hover:border-violet hover:text-violet"
         >
           <X className="h-5 w-5" aria-hidden />
         </button>
         <span className="grid h-14 w-14 place-items-center rounded-[20px] bg-violet-tint text-violet">
-          <Store className="h-6 w-6" aria-hidden />
+          {quotaFull ? (
+            <Gauge className="h-6 w-6" aria-hidden />
+          ) : (
+            <Store className="h-6 w-6" aria-hidden />
+          )}
         </span>
         <h2 id="booking-access-title" className="mt-5 pr-12 text-xl font-black text-ink">
-          {missingShop ? 'ยังไม่มีร้านค้าสำหรับทำรายการจอง' : 'เข้าสู่ระบบก่อนเลือกบูธ'}
+          {quotaFull
+            ? 'โควตาการจองบูธเต็มแล้ว'
+            : missingShop
+              ? 'ยังไม่มีร้านค้าสำหรับทำรายการจอง'
+              : 'เข้าสู่ระบบก่อนเลือกบูธ'}
         </h2>
         <p id="booking-access-description" className="mt-2 text-sm leading-6 text-muted">
-          {missingShop
-            ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าก่อนเลือกจองบูธ'
-            : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
+          {quotaFull
+            ? `คุณใช้โควตาครบ ${kind.activeBookingCount}/${kind.configuredQuota} บูธสำหรับ Event นี้ หากต้องการจองเพิ่ม กรุณาส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
+            : missingShop
+              ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าก่อนเลือกจองบูธ'
+              : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
         </p>
-        <div className={`mt-6 grid gap-3 ${missingShop ? 'sm:grid-cols-2' : 'grid-cols-2'}`}>
-          {missingShop ? (
+        <div
+          className={`mt-6 grid gap-3 ${missingShop || quotaFull ? 'sm:grid-cols-2' : 'grid-cols-2'}`}
+        >
+          {quotaFull ? (
+            <>
+              <Link href="/bookings" onClick={onClose} className="sl-action-secondary justify-center">
+                ดูการจองของฉัน
+              </Link>
+              <Link
+                href={`/help?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
+                onClick={onClose}
+                className="sl-action-primary justify-center"
+              >
+                ขอโควตาเพิ่ม
+              </Link>
+            </>
+          ) : missingShop ? (
             <>
               <button type="button" onClick={onClose} className="sl-action-secondary justify-center">
                 ยกเลิก
