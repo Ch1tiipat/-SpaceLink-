@@ -132,9 +132,12 @@ export function OtpInput({
           onPaste={handlePaste}
           onFocus={() => {
             // Keeps `value` dense: clicking box 4 of an empty code lands on
-            // box 1 instead of opening a gap.
-            if (index > value.length) {
-              focusAt(value.length);
+            // box 1 instead of opening a gap. Reads the ref, not the `value`
+            // prop — `focusAt` fires this handler synchronously, before
+            // React re-renders with the digit that was just typed, so the
+            // prop is one step stale on the very first digit of a fresh code.
+            if (index > currentValue.current.length) {
+              focusAt(currentValue.current.length);
             }
           }}
           className={`h-[54px] w-full min-w-0 rounded-2xl border bg-white text-center text-xl font-bold tabular-nums text-ink transition-colors disabled:bg-mist disabled:text-muted ${
