@@ -2242,6 +2242,47 @@ export function getSuperAdminOrganizations(
   });
 }
 
+export async function exportSuperAdminOrganizations(
+  token: string,
+): Promise<Blob> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/organizations/export`, {
+      headers: {
+        Accept: 'text/csv',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch {
+    throw new ApiError(
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่อส่งออกข้อมูลองค์กรได้ กรุณาลองใหม่อีกครั้ง',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+    throw new ApiError(
+      detail || 'ส่งออกข้อมูลองค์กรไม่สำเร็จ',
+      response.status,
+    );
+  }
+
+  return response.blob();
+}
+
 export function getPlatformBillingConfig(
   token: string,
   signal?: AbortSignal,

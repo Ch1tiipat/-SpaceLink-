@@ -4,6 +4,7 @@ import { MembershipRole, OrgStatus, Prisma, UserRole } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  escapeCsvCell,
   OrganizationsService,
   PUBLIC_ORGANIZATION_SELECT,
 } from './organizations.service';
@@ -73,6 +74,25 @@ const MEMBERSHIP = {
   canManageZones: false,
   joinedAt: JOINED_AT,
 };
+
+describe('escapeCsvCell', () => {
+  it.each([
+    ['plain text', 'plain text'],
+    ['', ''],
+    [null, ''],
+    [undefined, ''],
+    ['value,with,commas', '"value,with,commas"'],
+    ['value "quoted"', '"value ""quoted"""'],
+    ['two\nlines', '"two\nlines"'],
+    ['=1+1', "'=1+1"],
+    ['+441234', "'+441234"],
+    ['-10', "'-10"],
+    ['@command', "'@command"],
+    ['=SUM(A1,B1)', '"\'=SUM(A1,B1)"'],
+  ] as const)('escapes %p as %p', (value, expected) => {
+    expect(escapeCsvCell(value)).toBe(expected);
+  });
+});
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
@@ -171,6 +191,47 @@ describe('OrganizationsService', () => {
     expect(organizationFindUnique).toHaveBeenCalledWith({
       where: { id: '00000000-0000-4000-8000-000000000001' },
       select: PUBLIC_ORGANIZATION_SELECT,
+    });
+  });
+
+  it('exports every organization in created order as safe UTF-8 CSV', async () => {
+    organizationFindMany.mockResolvedValue([
+      {
+        name: '=SUM(A1,B1)',
+        contactEmail: 'first@example.com',
+        contactPhone: null,
+        status: OrgStatus.ACTIVE,
+        facebookUrl: 'https://facebook.com/first',
+        lineUrl: null,
+        createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      },
+      {
+        name: 'ตลาดนัด "ไทย"',
+        contactEmail: 'second@example.com',
+        contactPhone: '+66812345678',
+        status: OrgStatus.INACTIVE,
+        facebookUrl: null,
+        lineUrl: '@spacelink',
+        createdAt: new Date('2026-02-03T04:05:06.000Z'),
+      },
+    ]);
+
+    await expect(service.exportCsv()).resolves.toBe(
+      '\uFEFFname,contactEmail,contactPhone,status,facebookUrl,lineUrl,createdAt\r\n' +
+        '"\'=SUM(A1,B1)",first@example.com,,ACTIVE,https://facebook.com/first,,2026-01-02T03:04:05.000Z\r\n' +
+        '"ตลาดนัด ""ไทย""",second@example.com,\'+66812345678,INACTIVE,,\'@spacelink,2026-02-03T04:05:06.000Z',
+    );
+    expect(organizationFindMany).toHaveBeenCalledWith({
+      select: {
+        name: true,
+        contactEmail: true,
+        contactPhone: true,
+        status: true,
+        facebookUrl: true,
+        lineUrl: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
     });
   });
 
