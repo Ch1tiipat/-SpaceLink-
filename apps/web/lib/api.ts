@@ -1067,6 +1067,14 @@ export type CreateAdminVenueInput = {
   googleMapsUrl?: string;
 };
 
+export type UpdateAdminVenueInput = {
+  name?: string;
+  description?: string;
+  address?: string;
+  googleMapsUrl?: string | null;
+  status?: AdminVenue['status'];
+};
+
 export type VenueLocation = Pick<
   AdminVenue,
   'id' | 'name' | 'address' | 'latitude' | 'longitude' | 'googleMapsUrl'
@@ -1496,6 +1504,30 @@ export function updateAdminVenueMapsLink(
     input,
     { token },
     "ไม่สามารถบันทึกลิงก์ Google Maps ได้",
+  );
+}
+
+export function updateAdminVenue(
+  venueId: string,
+  input: UpdateAdminVenueInput,
+  token: string,
+): Promise<AdminVenue> {
+  return patchJson<AdminVenue>(
+    "/venues/" + encodeURIComponent(venueId),
+    input,
+    { token },
+    "ไม่สามารถแก้ไขสถานที่ได้",
+  );
+}
+
+export function deleteAdminVenue(
+  venueId: string,
+  token: string,
+): Promise<AdminVenue> {
+  return deleteJson<AdminVenue>(
+    "/venues/" + encodeURIComponent(venueId),
+    { token },
+    "ไม่สามารถลบสถานที่ได้",
   );
 }
 
