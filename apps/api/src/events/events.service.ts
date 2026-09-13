@@ -135,6 +135,37 @@ export class EventsService {
     return this.prisma.event.findMany();
   }
 
+  async getSavedEventIds(userId: string): Promise<string[]> {
+    const savedEvents = await this.prisma.savedEvent.findMany({
+      where: { userId },
+      select: { eventId: true },
+    });
+
+    return savedEvents.map(({ eventId }) => eventId);
+  }
+
+  async saveEvent(eventId: string, userId: string): Promise<void> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    await this.prisma.savedEvent.upsert({
+      where: { userId_eventId: { userId, eventId } },
+      create: { userId, eventId },
+      update: {},
+    });
+  }
+
+  async unsaveEvent(eventId: string, userId: string): Promise<void> {
+    await this.prisma.savedEvent.deleteMany({
+      where: { userId, eventId },
+    });
+  }
+
   async findByOrganization(organizationId: string) {
     const events = await this.prisma.event.findMany({
       where: { organizationId },

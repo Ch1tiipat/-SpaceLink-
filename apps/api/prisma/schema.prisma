@@ -222,8 +222,23 @@ model User {
   auditLogs           AuditLog[]
   quotaGrantsReceived BoothQuotaGrant[]   @relation("QuotaGrantVendor")
   quotaGrantsIssued   BoothQuotaGrant[]   @relation("QuotaGrantGrantedBy")
+  savedEvents         SavedEvent[]
 
   @@map("app_user")
+}
+
+model SavedEvent {
+  id        String   @id @default(uuid()) @map("saved_event_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  eventId   String   @map("event_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@map("saved_event")
 }
 
 model PushSubscription {
@@ -411,6 +426,7 @@ model Event {
   information        EventInformation[]
   quotaGrants        BoothQuotaGrant[]
   reviews            Review[]
+  savedByUsers       SavedEvent[]
 
   @@index([organizationId])
   @@index([venueId])

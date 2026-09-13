@@ -1350,6 +1350,10 @@ async function sendJson<T>(
     throw new ApiError(detail || fallbackMessage, response.status);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -1410,6 +1414,10 @@ async function deleteJson<T>(
       ? payload.message.join(', ')
       : payload?.message;
     throw new ApiError(detail || fallbackMessage, response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -1796,6 +1804,30 @@ export function createSystemBroadcast(
 
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
   return getJson<DiscoveryEvent[]>('/events/discovery', { signal });
+}
+
+export function getSavedEventIds(
+  token: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  return getJson<string[]>('/events/saved', { signal, token });
+}
+
+export function saveEvent(eventId: string, token: string): Promise<void> {
+  return postJson<void>(
+    `/events/${encodeURIComponent(eventId)}/save`,
+    {},
+    { token },
+    'บันทึก Event ไม่สำเร็จ',
+  );
+}
+
+export function unsaveEvent(eventId: string, token: string): Promise<void> {
+  return deleteJson<void>(
+    `/events/${encodeURIComponent(eventId)}/save`,
+    { token },
+    'เลิกบันทึก Event ไม่สำเร็จ',
+  );
 }
 
 export function getEventMap(
