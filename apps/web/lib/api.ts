@@ -715,10 +715,6 @@ export type UpdatePlatformBillingConfigInput = Omit<
   "id" | "updatedAt"
 >;
 
-/** The organization booking endpoint intentionally returns the same safe
- * admin projection as the platform overview, already filtered by membership. */
-export type AdminOrganizationBooking = SuperAdminBooking;
-
 export type AdminTransactionView = 'BOOKINGS' | 'PAYMENTS' | 'REFUNDS' | 'VENDORS';
 export type AdminPaymentStatus = 'EXEMPT' | 'AWAITING_SLIP' | 'VERIFIED' | 'FAILED';
 export type AdminRefundStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
@@ -1079,15 +1075,6 @@ export type VenueLocation = Pick<
   AdminVenue,
   'id' | 'name' | 'address' | 'latitude' | 'longitude' | 'googleMapsUrl'
 >;
-
-export type UpdateAdminVenueLocationInput = {
-  latitude: string;
-  longitude: string;
-};
-
-export type UpdateAdminVenueMapsLinkInput = {
-  googleMapsUrl: string | null;
-};
 
 export type AdminZone = {
   id: string;
@@ -1478,32 +1465,6 @@ export function getVenueLocation(
   return getJson<VenueLocation>(
     "/venues/" + encodeURIComponent(venueId),
     { signal },
-  );
-}
-
-export function updateAdminVenueLocation(
-  venueId: string,
-  input: UpdateAdminVenueLocationInput,
-  token: string,
-): Promise<AdminVenue> {
-  return patchJson<AdminVenue>(
-    "/venues/" + encodeURIComponent(venueId),
-    input,
-    { token },
-    "ไม่สามารถบันทึกพิกัดสถานที่ได้",
-  );
-}
-
-export function updateAdminVenueMapsLink(
-  venueId: string,
-  input: UpdateAdminVenueMapsLinkInput,
-  token: string,
-): Promise<AdminVenue> {
-  return patchJson<AdminVenue>(
-    "/venues/" + encodeURIComponent(venueId),
-    input,
-    { token },
-    "ไม่สามารถบันทึกลิงก์ Google Maps ได้",
   );
 }
 
@@ -2203,17 +2164,6 @@ export async function uploadAdminEventBanner(
   return (await response.json()) as AdminOrganizationEvent;
 }
 
-export function getAdminOrganizationBookings(
-  organizationId: string,
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminOrganizationBooking[]> {
-  return getJson<AdminOrganizationBooking[]>(
-    `/organizations/${encodeURIComponent(organizationId)}/bookings`,
-    { signal, token },
-  );
-}
-
 export function getAdminTransactions(
   organizationId: string,
   query: AdminTransactionQuery,
@@ -2249,17 +2199,6 @@ export function getAdminBookingSlipAccess(
   return getJson<AdminSlipAccess>(
     `/bookings/${encodeURIComponent(bookingId)}/slip`,
     { token },
-  );
-}
-
-export function getAdminOrganizationRefunds(
-  organizationId: string,
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminOrganizationRefund[]> {
-  return getJson<AdminOrganizationRefund[]>(
-    `/organizations/${encodeURIComponent(organizationId)}/refunds`,
-    { signal, token },
   );
 }
 
