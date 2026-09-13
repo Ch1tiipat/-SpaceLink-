@@ -10,7 +10,6 @@ import {
   Edit3,
   ExternalLink,
   Loader2,
-  MapPin,
   Plus,
   Save,
   Trash2,
@@ -21,14 +20,14 @@ import {
   createAdminVenue,
   createAdminZone,
   deleteAdminBooth,
+  deleteAdminVenue,
   deleteAdminZone,
   getAdminBooths,
   getAdminVenues,
   getAdminZones,
   getMe,
   updateAdminBooth,
-  updateAdminVenueLocation,
-  updateAdminVenueMapsLink,
+  updateAdminVenue,
   updateAdminZone,
   type AdminBooth,
   type AdminBoothStatus,
@@ -43,11 +42,6 @@ import { useAdminOrganizationSelection } from '@/components/app-shell';
 
 type AccessState = 'loading' | 'allowed' | 'denied';
 type EditorMode = 'create' | 'edit';
-
-type VenueLocationDraft = {
-  latitude: string;
-  longitude: string;
-};
 
 type VenueDraft = {
   name: string;
@@ -94,11 +88,6 @@ const EMPTY_BOOTH: BoothDraft = {
   status: 'AVAILABLE',
 };
 
-const EMPTY_VENUE_LOCATION: VenueLocationDraft = {
-  latitude: '',
-  longitude: '',
-};
-
 const EMPTY_VENUE: VenueDraft = {
   name: '',
   description: '',
@@ -128,19 +117,17 @@ export function AdminZoneBoothScreen() {
   const [loadingBooths, setLoadingBooths] = useState(false);
   const [creatingVenue, setCreatingVenue] = useState(false);
   const [showVenueForm, setShowVenueForm] = useState(false);
+  const [venueMode, setVenueMode] = useState<EditorMode>('create');
   const [saving, setSaving] = useState(false);
-  const [savingVenue, setSavingVenue] = useState(false);
-  const [savingMapsLink, setSavingMapsLink] = useState(false);
+  const [savingVenueStatus, setSavingVenueStatus] = useState(false);
+  const [deletingVenue, setDeletingVenue] = useState(false);
   const [zoneMode, setZoneMode] = useState<EditorMode>('create');
   const [boothMode, setBoothMode] = useState<EditorMode>('create');
   const [editingZoneId, setEditingZoneId] = useState('');
   const [editingBoothId, setEditingBoothId] = useState('');
   const [zoneDraft, setZoneDraft] = useState<ZoneDraft>(EMPTY_ZONE);
   const [boothDraft, setBoothDraft] = useState<BoothDraft>(EMPTY_BOOTH);
-  const [venueLocationDraft, setVenueLocationDraft] =
-    useState<VenueLocationDraft>(EMPTY_VENUE_LOCATION);
   const [venueDraft, setVenueDraft] = useState<VenueDraft>(EMPTY_VENUE);
-  const [venueMapsLinkDraft, setVenueMapsLinkDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -221,19 +208,6 @@ export function AdminZoneBoothScreen() {
   }, [access, selectedOrganizationId, token]);
 
   useEffect(() => {
-    const selectedVenue = venues.find((venue) => venue.id === venueId);
-    setVenueLocationDraft(
-      selectedVenue
-        ? {
-            latitude: selectedVenue.latitude ?? '',
-            longitude: selectedVenue.longitude ?? '',
-          }
-        : EMPTY_VENUE_LOCATION,
-    );
-    setVenueMapsLinkDraft(selectedVenue?.googleMapsUrl ?? '');
-  }, [venueId, venues]);
-
-  useEffect(() => {
     if (!token || !venueId) {
       setZones([]);
       setZoneId('');
@@ -302,6 +276,27 @@ export function AdminZoneBoothScreen() {
     setZoneMode('create');
     setEditingZoneId('');
     setZoneDraft(EMPTY_ZONE);
+    clearFeedback();
+  }
+
+  function startCreateVenue() {
+    setVenueMode('create');
+    setVenueDraft(EMPTY_VENUE);
+    setShowVenueForm(true);
+    clearFeedback();
+  }
+
+  function startEditVenue() {
+    const venue = venues.find((row) => row.id === venueId);
+    if (!venue) return;
+    setVenueMode('edit');
+    setVenueDraft({
+      name: venue.name,
+      description: venue.description ?? '',
+      address: venue.address ?? '',
+      googleMapsUrl: venue.googleMapsUrl ?? '',
+    });
+    setShowVenueForm(true);
     clearFeedback();
   }
 
@@ -382,43 +377,6 @@ export function AdminZoneBoothScreen() {
     }
   }
 
-  async function submitVenueLocation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const latitude = venueLocationDraft.latitude.trim();
-    const longitude = venueLocationDraft.longitude.trim();
-
-    if (!venueId) {
-      setError('กรุณาเลือกสถานที่จัดงาน');
-      return;
-    }
-    if (!isCoordinate(latitude, -90, 90)) {
-      setError('Latitude ต้องอยู่ระหว่าง -90 ถึง 90 และมีทศนิยมไม่เกิน 6 ตำแหน่ง');
-      return;
-    }
-    if (!isCoordinate(longitude, -180, 180)) {
-      setError('Longitude ต้องอยู่ระหว่าง -180 ถึง 180 และมีทศนิยมไม่เกิน 6 ตำแหน่ง');
-      return;
-    }
-
-    setSavingVenue(true);
-    clearFeedback();
-    try {
-      const saved = await updateAdminVenueLocation(
-        venueId,
-        { latitude, longitude },
-        token,
-      );
-      setVenues((current) =>
-        current.map((venue) => (venue.id === saved.id ? saved : venue)),
-      );
-      setSuccess('บันทึกพิกัดสถานที่เรียบร้อยแล้ว');
-    } catch (cause) {
-      setError(describeError(cause, 'ไม่สามารถบันทึกพิกัดสถานที่ได้'));
-    } finally {
-      setSavingVenue(false);
-    }
-  }
-
   async function submitVenue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = venueDraft.name.trim();
@@ -448,16 +406,27 @@ export function AdminZoneBoothScreen() {
     setCreatingVenue(true);
     clearFeedback();
     try {
-      const saved = await createAdminVenue(
-        selectedOrganizationId,
-        payload,
-        token,
+      const saved =
+        venueMode === 'edit'
+          ? await updateAdminVenue(
+              venueId,
+              { ...payload, googleMapsUrl },
+              token,
+            )
+          : await createAdminVenue(selectedOrganizationId, payload, token);
+      setVenues((current) =>
+        venueMode === 'edit'
+          ? current.map((venue) => (venue.id === saved.id ? saved : venue))
+          : [...current, saved],
       );
-      setVenues((current) => [...current, saved]);
       setVenueId(saved.id);
       setVenueDraft(EMPTY_VENUE);
       setShowVenueForm(false);
-      setSuccess('สร้างสถานที่เรียบร้อยแล้ว คุณสามารถเพิ่มพิกัด โซน และบูธต่อได้');
+      setSuccess(
+        venueMode === 'edit'
+          ? 'แก้ไขสถานที่เรียบร้อยแล้ว'
+          : 'สร้างสถานที่เรียบร้อยแล้ว คุณสามารถเพิ่มโซนและบูธต่อได้',
+      );
     } catch (cause) {
       setError(describeError(cause, 'ไม่สามารถสร้างสถานที่ได้'));
     } finally {
@@ -465,52 +434,54 @@ export function AdminZoneBoothScreen() {
     }
   }
 
-  function openVenueMapsLink() {
-    const googleMapsUrl = validHttpsUrl(venueMapsLinkDraft);
-    if (!googleMapsUrl) {
-      setError('กรุณากรอกลิงก์ HTTPS ที่ถูกต้องและยาวไม่เกิน 500 ตัวอักษร');
-      return;
-    }
-
-    clearFeedback();
-    const opened = window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
-    if (opened) opened.opener = null;
-  }
-
-  async function submitVenueMapsLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = venueMapsLinkDraft.trim();
-    const googleMapsUrl = value ? validHttpsUrl(value) : null;
-
-    if (!venueId) {
-      setError('กรุณาเลือกสถานที่จัดงาน');
-      return;
-    }
-    if (value && !googleMapsUrl) {
-      setError('กรุณากรอกลิงก์ HTTPS ที่ถูกต้องและยาวไม่เกิน 500 ตัวอักษร');
-      return;
-    }
-
-    setSavingMapsLink(true);
+  async function toggleVenueStatus() {
+    const venue = venues.find((row) => row.id === venueId);
+    if (!venue) return;
+    const nextStatus = venue.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED';
+    setSavingVenueStatus(true);
     clearFeedback();
     try {
-      const saved = await updateAdminVenueMapsLink(
-        venueId,
-        { googleMapsUrl },
-        token,
-      );
+      const saved = await updateAdminVenue(venue.id, { status: nextStatus }, token);
       setVenues((current) =>
-        current.map((venue) => (venue.id === saved.id ? saved : venue)),
+        current.map((row) => (row.id === saved.id ? saved : row)),
       );
       setSuccess(
-        googleMapsUrl
-          ? 'บันทึกลิงก์ Google Maps เรียบร้อยแล้ว'
-          : 'ลบลิงก์ Google Maps เรียบร้อยแล้ว',
+        nextStatus === 'ARCHIVED'
+          ? 'ปิดใช้งานสถานที่เรียบร้อยแล้ว'
+          : 'เปิดใช้งานสถานที่อีกครั้งเรียบร้อยแล้ว',
       );
     } catch (cause) {
-      setError(describeError(cause, 'ไม่สามารถบันทึกลิงก์ Google Maps ได้'));
+      setError(describeError(cause, 'ไม่สามารถเปลี่ยนสถานะสถานที่ได้'));
     } finally {
-      setSavingMapsLink(false);
+      setSavingVenueStatus(false);
+    }
+  }
+
+  async function removeVenue() {
+    const venue = venues.find((row) => row.id === venueId);
+    if (!venue) return;
+    if (!window.confirm(`ลบสถานที่ “${venue.name}” ถาวรหรือไม่? การดำเนินการนี้ย้อนกลับไม่ได้`)) {
+      return;
+    }
+    setDeletingVenue(true);
+    clearFeedback();
+    try {
+      await deleteAdminVenue(venue.id, token);
+      const remaining = venues.filter((row) => row.id !== venue.id);
+      setVenues(remaining);
+      setVenueId(remaining[0]?.id ?? '');
+      setShowVenueForm(remaining.length === 0);
+      setVenueMode('create');
+      setVenueDraft(EMPTY_VENUE);
+      setSuccess('ลบสถานที่เรียบร้อยแล้ว');
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError && cause.status === 409
+          ? 'ลบสถานที่ไม่ได้ เพราะยังมี Event โซน บูธ หรือการจองที่เกี่ยวข้อง กรุณาปิดใช้งานแทน'
+          : describeError(cause, 'ไม่สามารถลบสถานที่ได้'),
+      );
+    } finally {
+      setDeletingVenue(false);
     }
   }
 
@@ -605,6 +576,8 @@ export function AdminZoneBoothScreen() {
     );
   }
 
+  const selectedVenue = venues.find((venue) => venue.id === venueId);
+
   return (
     <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
       <div className="mx-auto max-w-7xl">
@@ -644,15 +617,21 @@ export function AdminZoneBoothScreen() {
             </label>
             <button
               type="button"
-              onClick={() => {
-                setShowVenueForm((current) => !current);
-                clearFeedback();
-              }}
+              onClick={startCreateVenue}
               disabled={!selectedOrganizationId || creatingVenue}
               className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-violet px-5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-4 w-4" aria-hidden />
-              {showVenueForm ? 'ปิดแบบฟอร์ม' : 'สร้างสถานที่'}
+              สร้างสถานที่
+            </button>
+            <button
+              type="button"
+              onClick={startEditVenue}
+              disabled={!selectedVenue || creatingVenue}
+              className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-violet px-5 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Edit3 className="h-4 w-4" aria-hidden />
+              แก้ไขสถานที่
             </button>
           </div>
           <p className="mt-3 text-xs leading-5 text-muted">
@@ -660,9 +639,11 @@ export function AdminZoneBoothScreen() {
           </p>
           {showVenueForm && (
             <form onSubmit={submitVenue} className="mt-5 rounded-2xl border border-violet/20 bg-[#faf7ff] p-4">
-              <h2 className="font-black text-ink">สร้างสถานที่ใหม่</h2>
+              <h2 className="font-black text-ink">
+                {venueMode === 'edit' ? 'แก้ไขสถานที่' : 'สร้างสถานที่ใหม่'}
+              </h2>
               <p className="mt-1 text-xs leading-5 text-muted">
-                กรอกชื่อสถานที่ก่อน แล้วจึงเพิ่มพิกัด โซน และบูธหลังสร้างสำเร็จ
+                กรอกข้อมูลสถานที่และลิงก์ Google Maps สำหรับเปิดดูตำแหน่งจริง
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-extrabold text-ink">
@@ -717,14 +698,19 @@ export function AdminZoneBoothScreen() {
                   className="flex items-center gap-2 rounded-xl bg-[#15803d] px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creatingVenue ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
-                  {creatingVenue ? 'กำลังสร้าง...' : 'บันทึกสถานที่'}
+                  {creatingVenue
+                    ? 'กำลังบันทึก...'
+                    : venueMode === 'edit'
+                      ? 'บันทึกการแก้ไข'
+                      : 'บันทึกสถานที่'}
                 </button>
-                {venues.length > 0 && (
+                {(venues.length > 0 || venueMode === 'edit') && (
                   <button
                     type="button"
                     onClick={() => {
                       setVenueDraft(EMPTY_VENUE);
                       setShowVenueForm(false);
+                      setVenueMode('create');
                       clearFeedback();
                     }}
                     className="rounded-xl border border-line px-4 py-2.5 text-xs font-extrabold text-ink"
@@ -735,92 +721,44 @@ export function AdminZoneBoothScreen() {
               </div>
             </form>
           )}
-          <form
-            onSubmit={submitVenueLocation}
-            className="mt-5 border-t border-line pt-5"
-          >
-            <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
-                <MapPin className="h-5 w-5" aria-hidden />
-              </span>
-              <div>
-                <h2 className="font-black text-ink">พิกัดแผนที่สถานที่</h2>
-                <p className="mt-1 text-xs leading-5 text-muted">
-                  กรอกพิกัดจริงจาก Google Maps เพื่อแสดงตำแหน่งในหน้า Event
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 grid max-w-xl gap-3 sm:grid-cols-2">
-              <Field
-                label="Latitude *"
-                value={venueLocationDraft.latitude}
-                onChange={(latitude) =>
-                  setVenueLocationDraft((current) => ({ ...current, latitude }))
-                }
-                placeholder="เช่น 14.882936"
-              />
-              <Field
-                label="Longitude *"
-                value={venueLocationDraft.longitude}
-                onChange={(longitude) =>
-                  setVenueLocationDraft((current) => ({ ...current, longitude }))
-                }
-                placeholder="เช่น 102.018120"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={savingVenue || !venueId}
-              className="mt-4 flex items-center gap-2 rounded-xl bg-violet px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" aria-hidden />
-              {savingVenue ? 'กำลังบันทึก...' : 'บันทึกพิกัดสถานที่'}
-            </button>
-          </form>
-          <form onSubmit={submitVenueMapsLink} className="mt-5 border-t border-line pt-5">
-            <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
-                <ExternalLink className="h-5 w-5" aria-hidden />
-              </span>
-              <div>
-                <h2 className="font-black text-ink">ลิงก์ Google Maps</h2>
-                <p className="mt-1 text-xs leading-5 text-muted">
-                  เพิ่มลิงก์แชร์แยกจากพิกัด และตรวจลิงก์ก่อนบันทึกได้
-                </p>
-              </div>
-            </div>
-            <label className="mt-4 block max-w-xl text-xs font-extrabold text-ink">
-              ลิงก์ Google Maps
-              <input
-                type="url"
-                inputMode="url"
-                maxLength={500}
-                value={venueMapsLinkDraft}
-                onChange={(event) => setVenueMapsLinkDraft(event.target.value)}
-                placeholder="https://maps.app.goo.gl/..."
-                className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
-              />
-            </label>
-            <div className="mt-4 flex flex-wrap gap-2">
+          {selectedVenue && !showVenueForm && (
+            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-5">
+              {selectedVenue.googleMapsUrl && (
+                <a
+                  href={selectedVenue.googleMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 rounded-xl border border-violet px-4 py-2.5 text-xs font-extrabold text-violet"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden />
+                  เปิดใน Google Maps
+                </a>
+              )}
               <button
                 type="button"
-                onClick={openVenueMapsLink}
-                disabled={!venueMapsLinkDraft.trim() || savingMapsLink}
-                className="flex items-center gap-2 rounded-xl border border-violet px-4 py-2.5 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void toggleVenueStatus()}
+                disabled={savingVenueStatus || deletingVenue}
+                className="flex items-center gap-2 rounded-xl border border-[#c99523] px-4 py-2.5 text-xs font-extrabold text-[#895b08] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ExternalLink className="h-4 w-4" aria-hidden />
-                เปิดใน Google Maps
+                {savingVenueStatus ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
+                {selectedVenue.status === 'ARCHIVED'
+                  ? 'เปิดใช้งานอีกครั้ง'
+                  : 'ปิดใช้งานสถานที่'}
               </button>
               <button
-                type="submit"
-                disabled={savingMapsLink || !venueId}
-                className="flex items-center gap-2 rounded-xl bg-violet px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                onClick={() => void removeVenue()}
+                disabled={deletingVenue || savingVenueStatus}
+                className="flex items-center gap-2 rounded-xl border border-danger px-4 py-2.5 text-xs font-extrabold text-danger disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Save className="h-4 w-4" aria-hidden />
-                {savingMapsLink ? 'กำลังบันทึก...' : 'บันทึกลิงก์ Google Maps'}
+                {deletingVenue ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+                ลบสถานที่ถาวร
               </button>
+              <p className="w-full text-xs leading-5 text-muted">
+                สถานที่ที่มี Event โซน บูธ หรือการจองอยู่จะลบถาวรไม่ได้ กรุณาปิดใช้งานแทน
+              </p>
             </div>
-          </form>
+          )}
           {error && <Feedback tone="error">{error}</Feedback>}
           {success && <Feedback tone="success">{success}</Feedback>}
         </section>
@@ -1148,12 +1086,6 @@ function optionalNumber<Key extends string>(key: Key, value: string): Partial<Re
 
 function isMoney(value: string): boolean {
   return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value.trim());
-}
-
-function isCoordinate(value: string, min: number, max: number): boolean {
-  if (!/^-?\d{1,3}(\.\d{1,6})?$/.test(value)) return false;
-  const coordinate = Number(value);
-  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max;
 }
 
 function validHttpsUrl(value: string): string | null {
