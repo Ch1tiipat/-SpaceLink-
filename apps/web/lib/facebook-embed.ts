@@ -125,16 +125,12 @@ export function classifyFacebookUrl(
   }
 
   const pageUrl = canonicalPage(url);
-  return pageUrl
-    ? { kind: 'page', sourceUrl: pageUrl }
-    : { kind: 'invalid' };
+  return pageUrl ? { kind: 'page', sourceUrl: pageUrl } : { kind: 'invalid' };
 }
 
 export function getFacebookEmbeddedPost(
   value: string | null,
 ): FacebookEmbeddedPost | null {
   const classification = classifyFacebookUrl(value);
-  return classification.kind === 'embedded-post'
-    ? classification.post
-    : null;
+  return classification.kind === 'embedded-post' ? classification.post : null;
 }

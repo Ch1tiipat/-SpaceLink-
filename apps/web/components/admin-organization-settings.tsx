@@ -97,7 +97,8 @@ export function AdminOrganizationSettings() {
         setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) setAccess('denied');
       }
     })();
@@ -121,9 +122,7 @@ export function AdminOrganizationSettings() {
     setFacebookUrl(organization.facebookUrl ?? '');
     setLineUrl(organization.lineUrl ?? '');
     setCurrentBookingQuota(organization.bookingQuotaPerVendor);
-    setBookingQuotaInput(
-      organization.bookingQuotaPerVendor?.toString() ?? '',
-    );
+    setBookingQuotaInput(organization.bookingQuotaPerVendor?.toString() ?? '');
   }, [access, organizations, selectedOrganizationId]);
 
   useEffect(() => {
@@ -153,7 +152,9 @@ export function AdminOrganizationSettings() {
     setSuccess(null);
 
     if (!PROMPTPAY_PATTERN.test(promptpayId)) {
-      setError('กรุณากรอกเบอร์โทรศัพท์ เลขบัตรประชาชน หรือเลข e-Wallet ที่เป็นตัวเลข 10, 13 หรือ 15 หลัก');
+      setError(
+        'กรุณากรอกเบอร์โทรศัพท์ เลขบัตรประชาชน หรือเลข e-Wallet ที่เป็นตัวเลข 10, 13 หรือ 15 หลัก',
+      );
       return;
     }
 
@@ -167,7 +168,11 @@ export function AdminOrganizationSettings() {
       setPromptpayId(updated.promptpayId ?? '');
       setSuccess('บันทึกหมายเลข PromptPay เรียบร้อยแล้ว');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'บันทึกหมายเลข PromptPay ไม่สำเร็จ');
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'บันทึกหมายเลข PromptPay ไม่สำเร็จ',
+      );
     } finally {
       setSaving(false);
     }
@@ -303,7 +308,9 @@ export function AdminOrganizationSettings() {
         <div className="shell py-20 text-center">
           <ShieldCheck className="mx-auto h-12 w-12 text-violet" aria-hidden />
           <h1 className="mt-5 text-2xl font-black">
-            {noOrganization ? 'ยังไม่มีองค์กรที่ดูแล' : 'ไม่มีสิทธิ์เข้าถึงหน้านี้'}
+            {noOrganization
+              ? 'ยังไม่มีองค์กรที่ดูแล'
+              : 'ไม่มีสิทธิ์เข้าถึงหน้านี้'}
           </h1>
           <p className="mt-3 text-muted">
             {noOrganization
@@ -349,226 +356,247 @@ export function AdminOrganizationSettings() {
           <div className="grid gap-6">
             {canManageOrganizationFinance ? (
               <>
-            <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
-                <Landmark className="h-5 w-5" aria-hidden />
-              </span>
-              <div>
-                <h2 className="text-xl font-black">หมายเลข PromptPay</h2>
-                <p className="text-sm text-muted">รองรับเบอร์โทรศัพท์ เลขบัตรประชาชน และ e-Wallet</p>
-              </div>
-            </div>
-
-            <label className="mt-7 block text-sm font-bold" htmlFor="promptpay-id">
-              หมายเลขรับเงิน
-            </label>
-            <input
-              id="promptpay-id"
-              name="promptpayId"
-              className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3.5 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={15}
-              value={promptpayId}
-              onChange={(event) => {
-                setPromptpayId(event.target.value.replace(/\D/g, ''));
-                setError(null);
-                setSuccess(null);
-              }}
-              placeholder="เช่น 0812345678"
-              aria-describedby="promptpay-help promptpay-feedback"
-            />
-            <p id="promptpay-help" className="mt-2 text-xs text-muted">
-              กรอกตัวเลข 10, 13 หรือ 15 หลัก ระบบจะไม่แสดงหมายเลขนี้ใน API สาธารณะ
-            </p>
-
-            <div id="promptpay-feedback" aria-live="polite">
-              {error ? <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
-              {success ? <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{success}</p> : null}
-            </div>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
-            </button>
-            </form>
-
-            <form
-              className="sl-surface p-6 sm:p-8"
-              onSubmit={handleSocialSubmit}
-            >
-              <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
-                  <MessageCircle className="h-5 w-5" aria-hidden />
-                </span>
-                <div>
-                  <h2 className="text-xl font-black">ช่องทางติดต่อผู้จัดงาน</h2>
-                  <p className="text-sm text-muted">
-                    แสดง Facebook, ข่าวจากโพสต์สาธารณะ และ LINE ในหน้า Event
-                  </p>
-                </div>
-              </div>
-
-              <label
-                className="mt-7 block text-sm font-bold"
-                htmlFor="organization-facebook-url"
-              >
-                ลิงก์ Facebook Page หรือ Public Post
-              </label>
-              <div className="relative mt-2">
-                <Link2
-                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
-                  aria-hidden
-                />
-                <input
-                  id="organization-facebook-url"
-                  name="facebookUrl"
-                  type="url"
-                  inputMode="url"
-                  autoComplete="url"
-                  maxLength={2048}
-                  className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
-                  value={facebookUrl}
-                  onChange={(event) => {
-                    setFacebookUrl(event.target.value);
-                    setSocialError(null);
-                    setSocialSuccess(null);
-                  }}
-                  placeholder="https://www.facebook.com/permalink.php?story_fbid=...&id=..."
-                  aria-describedby="organization-facebook-url-help"
-                />
-              </div>
-              <p
-                id="organization-facebook-url-help"
-                className="mt-2 text-xs leading-5 text-muted"
-              >
-                วาง URL ของ Public Post โดยตรง ไม่ต้องวางโค้ด iframe
-                ระบบจะแสดง Official Facebook Embed ส่วนลิงก์ Page
-                จะแสดงเป็นปุ่มติดต่อเท่านั้น โพสต์ต้องเป็น Public
-                และอาจหายเมื่อเจ้าของลบโพสต์หรือเปลี่ยนผู้ชม
-              </p>
-
-              <div className="mt-4" aria-live="polite">
-                {facebookPreview.kind === 'empty' ? (
-                  <p className="rounded-2xl bg-[#f8f5fb] px-4 py-3 text-sm text-muted">
-                    ไม่บังคับกรอก หากเว้นว่าง หน้า Event จะไม่แสดงส่วน Facebook
-                  </p>
-                ) : null}
-                {facebookPreview.kind === 'page' ? (
-                  <div className="rounded-2xl border border-violet/15 bg-violet-tint px-4 py-3 text-sm text-[#51445e]">
-                    <p className="font-extrabold text-violet">
-                      ตรวจพบ Facebook Page
-                    </p>
-                    <p className="mt-1 leading-6">
-                      URL นี้จะแสดงเป็นปุ่มติดต่อเท่านั้น ไม่ถูกฝังเป็นข่าวในหน้า Event
-                    </p>
-                    <a
-                      href={facebookPreview.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex font-bold text-violet underline underline-offset-4"
-                    >
-                      เปิดหน้า Facebook เพื่อตรวจสอบ
-                    </a>
-                  </div>
-                ) : null}
-                {facebookPreview.kind === 'embedded-post' ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                    <p className="text-sm font-extrabold text-emerald-800">
-                      ตรวจพบ Public Post — จะแสดงเป็นข่าวแบบ Embed ในหน้า Event
-                    </p>
-                    <div className="mx-auto mt-4 w-full max-w-[500px] overflow-hidden rounded-xl bg-white">
-                      <iframe
-                        title="ตัวอย่างโพสต์ Facebook ก่อนบันทึก"
-                        src={facebookPreview.post.embedUrl}
-                        width={500}
-                        height={673}
-                        loading="lazy"
-                        className="block w-full max-w-[500px]"
-                      />
+                <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
+                      <Landmark className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h2 className="text-xl font-black">หมายเลข PromptPay</h2>
+                      <p className="text-sm text-muted">
+                        รองรับเบอร์โทรศัพท์ เลขบัตรประชาชน และ e-Wallet
+                      </p>
                     </div>
-                    <a
-                      href={facebookPreview.post.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex text-sm font-bold text-emerald-800 underline underline-offset-4"
-                    >
-                      เปิดโพสต์ต้นฉบับ
-                    </a>
                   </div>
-                ) : null}
-                {facebookPreview.kind === 'invalid' ? (
-                  <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
-                    URL นี้ไม่รองรับ กรุณาใช้ HTTPS จาก facebook.com โดยตรง
-                    ห้ามวาง iframe, URL Plugin, โดเมนเลียนแบบ, credential หรือ custom port
-                  </p>
-                ) : null}
-              </div>
 
-              <label
-                className="mt-5 block text-sm font-bold"
-                htmlFor="organization-line-url"
-              >
-                ลิงก์ LINE
-              </label>
-              <div className="relative mt-2">
-                <Link2
-                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
-                  aria-hidden
-                />
-                <input
-                  id="organization-line-url"
-                  name="lineUrl"
-                  type="url"
-                  inputMode="url"
-                  autoComplete="url"
-                  className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
-                  value={lineUrl}
-                  onChange={(event) => {
-                    setLineUrl(event.target.value);
-                    setSocialError(null);
-                    setSocialSuccess(null);
-                  }}
-                  placeholder="https://line.me/R/ti/p/@your-account"
-                />
-              </div>
-              <p className="mt-3 text-xs leading-5 text-muted">
-                ไม่บังคับกรอก เมื่อลบค่าแล้วบันทึก ปุ่มช่องทางนั้นจะไม่แสดงในหน้า Event
-              </p>
-
-              <div aria-live="polite">
-                {socialError ? (
-                  <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    {socialError}
+                  <label
+                    className="mt-7 block text-sm font-bold"
+                    htmlFor="promptpay-id"
+                  >
+                    หมายเลขรับเงิน
+                  </label>
+                  <input
+                    id="promptpay-id"
+                    name="promptpayId"
+                    className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3.5 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={15}
+                    value={promptpayId}
+                    onChange={(event) => {
+                      setPromptpayId(event.target.value.replace(/\D/g, ''));
+                      setError(null);
+                      setSuccess(null);
+                    }}
+                    placeholder="เช่น 0812345678"
+                    aria-describedby="promptpay-help promptpay-feedback"
+                  />
+                  <p id="promptpay-help" className="mt-2 text-xs text-muted">
+                    กรอกตัวเลข 10, 13 หรือ 15 หลัก ระบบจะไม่แสดงหมายเลขนี้ใน API
+                    สาธารณะ
                   </p>
-                ) : null}
-                {socialSuccess ? (
-                  <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    <p className="font-bold">{socialSuccess}</p>
-                    <a
-                      href="/"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex font-extrabold underline underline-offset-4"
-                    >
-                      เปิดหน้าค้นหา Event เพื่อตรวจผล
-                    </a>
+
+                  <div id="promptpay-feedback" aria-live="polite">
+                    {error ? (
+                      <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                        {error}
+                      </p>
+                    ) : null}
+                    {success ? (
+                      <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                        {success}
+                      </p>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <button
-                type="submit"
-                disabled={socialSaving}
-                className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {socialSaving ? 'กำลังบันทึก...' : 'บันทึกช่องทางติดต่อ'}
-              </button>
-            </form>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+                  </button>
+                </form>
+
+                <form
+                  className="sl-surface p-6 sm:p-8"
+                  onSubmit={handleSocialSubmit}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-tint text-violet">
+                      <MessageCircle className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h2 className="text-xl font-black">
+                        ช่องทางติดต่อผู้จัดงาน
+                      </h2>
+                      <p className="text-sm text-muted">
+                        แสดง Facebook, ข่าวจากโพสต์สาธารณะ และ LINE ในหน้า Event
+                      </p>
+                    </div>
+                  </div>
+
+                  <label
+                    className="mt-7 block text-sm font-bold"
+                    htmlFor="organization-facebook-url"
+                  >
+                    ลิงก์ Facebook Page หรือ Public Post
+                  </label>
+                  <div className="relative mt-2">
+                    <Link2
+                      className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                      aria-hidden
+                    />
+                    <input
+                      id="organization-facebook-url"
+                      name="facebookUrl"
+                      type="url"
+                      inputMode="url"
+                      autoComplete="url"
+                      maxLength={2048}
+                      className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                      value={facebookUrl}
+                      onChange={(event) => {
+                        setFacebookUrl(event.target.value);
+                        setSocialError(null);
+                        setSocialSuccess(null);
+                      }}
+                      placeholder="https://www.facebook.com/permalink.php?story_fbid=...&id=..."
+                      aria-describedby="organization-facebook-url-help"
+                    />
+                  </div>
+                  <p
+                    id="organization-facebook-url-help"
+                    className="mt-2 text-xs leading-5 text-muted"
+                  >
+                    วาง URL ของ Public Post โดยตรง ไม่ต้องวางโค้ด iframe
+                    ระบบจะแสดง Official Facebook Embed ส่วนลิงก์ Page
+                    จะแสดงเป็นปุ่มติดต่อเท่านั้น โพสต์ต้องเป็น Public
+                    และอาจหายเมื่อเจ้าของลบโพสต์หรือเปลี่ยนผู้ชม
+                  </p>
+
+                  <div className="mt-4" aria-live="polite">
+                    {facebookPreview.kind === 'empty' ? (
+                      <p className="rounded-2xl bg-[#f8f5fb] px-4 py-3 text-sm text-muted">
+                        ไม่บังคับกรอก หากเว้นว่าง หน้า Event จะไม่แสดงส่วน
+                        Facebook
+                      </p>
+                    ) : null}
+                    {facebookPreview.kind === 'page' ? (
+                      <div className="rounded-2xl border border-violet/15 bg-violet-tint px-4 py-3 text-sm text-[#51445e]">
+                        <p className="font-extrabold text-violet">
+                          ตรวจพบ Facebook Page
+                        </p>
+                        <p className="mt-1 leading-6">
+                          URL นี้จะแสดงเป็นปุ่มติดต่อเท่านั้น
+                          ไม่ถูกฝังเป็นข่าวในหน้า Event
+                        </p>
+                        <a
+                          href={facebookPreview.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex font-bold text-violet underline underline-offset-4"
+                        >
+                          เปิดหน้า Facebook เพื่อตรวจสอบ
+                        </a>
+                      </div>
+                    ) : null}
+                    {facebookPreview.kind === 'embedded-post' ? (
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                        <p className="text-sm font-extrabold text-emerald-800">
+                          ตรวจพบ Public Post — จะแสดงเป็นข่าวแบบ Embed ในหน้า
+                          Event
+                        </p>
+                        <div className="mx-auto mt-4 w-full max-w-[500px] overflow-hidden rounded-xl bg-white">
+                          <iframe
+                            title="ตัวอย่างโพสต์ Facebook ก่อนบันทึก"
+                            src={facebookPreview.post.embedUrl}
+                            width={500}
+                            height={673}
+                            loading="lazy"
+                            className="block w-full max-w-[500px]"
+                          />
+                        </div>
+                        <a
+                          href={facebookPreview.post.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex text-sm font-bold text-emerald-800 underline underline-offset-4"
+                        >
+                          เปิดโพสต์ต้นฉบับ
+                        </a>
+                      </div>
+                    ) : null}
+                    {facebookPreview.kind === 'invalid' ? (
+                      <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
+                        URL นี้ไม่รองรับ กรุณาใช้ HTTPS จาก facebook.com โดยตรง
+                        ห้ามวาง iframe, URL Plugin, โดเมนเลียนแบบ, credential
+                        หรือ custom port
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <label
+                    className="mt-5 block text-sm font-bold"
+                    htmlFor="organization-line-url"
+                  >
+                    ลิงก์ LINE
+                  </label>
+                  <div className="relative mt-2">
+                    <Link2
+                      className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                      aria-hidden
+                    />
+                    <input
+                      id="organization-line-url"
+                      name="lineUrl"
+                      type="url"
+                      inputMode="url"
+                      autoComplete="url"
+                      className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+                      value={lineUrl}
+                      onChange={(event) => {
+                        setLineUrl(event.target.value);
+                        setSocialError(null);
+                        setSocialSuccess(null);
+                      }}
+                      placeholder="https://line.me/R/ti/p/@your-account"
+                    />
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-muted">
+                    ไม่บังคับกรอก เมื่อลบค่าแล้วบันทึก
+                    ปุ่มช่องทางนั้นจะไม่แสดงในหน้า Event
+                  </p>
+
+                  <div aria-live="polite">
+                    {socialError ? (
+                      <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                        {socialError}
+                      </p>
+                    ) : null}
+                    {socialSuccess ? (
+                      <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        <p className="font-bold">{socialSuccess}</p>
+                        <a
+                          href="/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex font-extrabold underline underline-offset-4"
+                        >
+                          เปิดหน้าค้นหา Event เพื่อตรวจผล
+                        </a>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={socialSaving}
+                    className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {socialSaving ? 'กำลังบันทึก...' : 'บันทึกช่องทางติดต่อ'}
+                  </button>
+                </form>
               </>
             ) : null}
 
@@ -582,7 +610,9 @@ export function AdminOrganizationSettings() {
                     <Gauge className="h-5 w-5" aria-hidden />
                   </span>
                   <div>
-                    <h2 className="text-xl font-black">โควตาการจองต่ออีเวนต์</h2>
+                    <h2 className="text-xl font-black">
+                      โควตาการจองต่ออีเวนต์
+                    </h2>
                     <p className="text-sm text-muted">
                       จำกัดจำนวนบูธที่ผู้ขายหนึ่งรายจองได้ในแต่ละอีเวนต์
                     </p>
@@ -622,7 +652,8 @@ export function AdminOrganizationSettings() {
                   aria-describedby="booking-quota-help booking-quota-feedback"
                 />
                 <p id="booking-quota-help" className="mt-2 text-xs text-muted">
-                  กำหนดเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป โดย 0 หมายถึงไม่อนุญาตให้จอง
+                  กำหนดเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป โดย 0
+                  หมายถึงไม่อนุญาตให้จอง
                 </p>
 
                 <div id="booking-quota-feedback" aria-live="polite">

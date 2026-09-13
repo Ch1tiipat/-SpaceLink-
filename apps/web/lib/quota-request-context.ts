@@ -82,7 +82,9 @@ export function resolveQuotaRequestContext({
     };
   }
 
-  const zone = eventMap.zones.find((candidate) => candidate.id === query.zoneId);
+  const zone = eventMap.zones.find(
+    (candidate) => candidate.id === query.zoneId,
+  );
   if (!zone) {
     return { status: 'error', message: 'ไม่พบ Zone ตามลิงก์คำขอโควตา' };
   }

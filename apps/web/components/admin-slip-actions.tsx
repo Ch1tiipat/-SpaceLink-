@@ -40,9 +40,7 @@ export function AdminSlipActions({
       anchor.click();
       anchor.remove();
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'ไม่สามารถเปิดสลิปได้',
-      );
+      setError(cause instanceof Error ? cause.message : 'ไม่สามารถเปิดสลิปได้');
     } finally {
       setLoading(null);
     }

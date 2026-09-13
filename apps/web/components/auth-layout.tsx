@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import { CalendarCheck2, MapPinned, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import type { ReactNode } from 'react';
+import { CalendarCheck2, MapPinned, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 
 type AuthLayoutProps = {
   /** Small pill above the headline. */
@@ -33,7 +33,11 @@ export function AuthLayout({
       {/* On phones the form is the primary task. Keep only a compact brand
           header instead of repeating the desktop marketing panel above it. */}
       <header className="flex min-h-[68px] items-center justify-between border-b border-[#ebe5ef] bg-white px-5 py-3.5 lg:hidden">
-        <Link href="/" className="flex items-center gap-3" aria-label="SpaceLink หน้าแรก">
+        <Link
+          href="/"
+          className="flex items-center gap-3"
+          aria-label="SpaceLink หน้าแรก"
+        >
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[#9f7aea] to-violet text-lg font-black text-white shadow-[0_8px_20px_rgba(124,58,237,.24)]">
             S
           </span>
@@ -102,9 +106,9 @@ export function AuthLayout({
 
 function AuthBenefits() {
   const benefits = [
-    { icon: MapPinned, label: "เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง" },
-    { icon: CalendarCheck2, label: "ติดตามการจองและกำหนดชำระเงินในที่เดียว" },
-    { icon: ShieldCheck, label: "เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน" },
+    { icon: MapPinned, label: 'เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง' },
+    { icon: CalendarCheck2, label: 'ติดตามการจองและกำหนดชำระเงินในที่เดียว' },
+    { icon: ShieldCheck, label: 'เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน' },
   ];
 
   return (

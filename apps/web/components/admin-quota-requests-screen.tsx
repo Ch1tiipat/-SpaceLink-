@@ -73,7 +73,8 @@ export function AdminQuotaRequestsScreen() {
         if (!active) return;
         setTickets(rows);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setTickets([]);
           setError(
@@ -139,7 +140,12 @@ export function AdminQuotaRequestsScreen() {
         />
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <AdminMetric icon={Inbox} label="รอตรวจสอบ" value={openCount} tone="amber" />
+          <AdminMetric
+            icon={Inbox}
+            label="รอตรวจสอบ"
+            value={openCount}
+            tone="amber"
+          />
           <AdminMetric
             icon={Loader2}
             label="กำลังดำเนินการ"
@@ -293,7 +299,8 @@ function TicketDecisionPanel({
         if (!active) return;
         setDetail(row);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setDetail(null);
           setError(
@@ -481,8 +488,8 @@ function TicketDecisionPanel({
               </div>
 
               <p className="text-xs leading-5 text-muted">
-                การอนุมัติจะให้สิทธิ์จองเพิ่ม 1
-                บูธเท่านั้น ระบบจะไม่จองบูธให้ผู้ขายโดยอัตโนมัติ
+                การอนุมัติจะให้สิทธิ์จองเพิ่ม 1 บูธเท่านั้น
+                ระบบจะไม่จองบูธให้ผู้ขายโดยอัตโนมัติ
                 และสิทธิ์นี้ใช้ได้จนกว่างานจะปิดรับจอง
               </p>
             </div>

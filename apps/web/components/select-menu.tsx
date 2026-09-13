@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
 export type SelectMenuOption = {

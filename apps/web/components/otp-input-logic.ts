@@ -52,10 +52,7 @@ export function backspaceOtpValue(
   index: number,
 ): OtpTransition {
   const digits = normalizeOtpValue(currentValue).split('');
-  const safeIndex = Math.max(
-    0,
-    Math.min(index, digits.length, OTP_LENGTH - 1),
-  );
+  const safeIndex = Math.max(0, Math.min(index, digits.length, OTP_LENGTH - 1));
 
   if (digits[safeIndex]) {
     digits.splice(safeIndex, 1);

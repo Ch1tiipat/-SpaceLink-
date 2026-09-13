@@ -1,8 +1,4 @@
-import type {
-  CurrentUser,
-  SuperAdminOrganization,
-  UserRole,
-} from './api';
+import type { CurrentUser, SuperAdminOrganization, UserRole } from './api';
 
 type MembershipOrganization = CurrentUser['organizations'][number];
 

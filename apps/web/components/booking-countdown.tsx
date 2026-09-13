@@ -11,7 +11,10 @@ type BookingCountdownProps = {
 
 function secondsUntil(expiresAt: string | null): number {
   if (!expiresAt) return 0;
-  return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  return Math.max(
+    0,
+    Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000),
+  );
 }
 
 export function BookingCountdown({

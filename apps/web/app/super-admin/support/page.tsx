@@ -1,5 +1,5 @@
-import { Suspense } from "react";
-import { SuperAdminSupportScreen } from "@/components/super-admin/super-admin-support-screen";
+import { Suspense } from 'react';
+import { SuperAdminSupportScreen } from '@/components/super-admin/super-admin-support-screen';
 
 export default function SuperAdminSupportPage() {
   return (

@@ -70,7 +70,8 @@ export function AdminDashboard() {
         setOrganizations(me.organizations);
         setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) setAccess('denied');
       }
     })();
@@ -99,16 +100,17 @@ export function AdminDashboard() {
     setLoadingSummary(true);
     setError(null);
 
-    void getAdminDashboardSummary(
-      organizationId,
-      token,
-      controller.signal,
-    )
+    void getAdminDashboardSummary(organizationId, token, controller.signal)
       .then(setSummary)
       .catch((cause) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         setSummary(null);
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูล Dashboard ไม่สำเร็จ');
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'โหลดข้อมูล Dashboard ไม่สำเร็จ',
+        );
       })
       .finally(() => {
         // A stale request aborted by a fast org switch still settles its
@@ -170,7 +172,7 @@ export function AdminDashboard() {
               <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
                 ภาพรวมองค์กร
               </h1>
-               <p className="mt-3 text-muted">
+              <p className="mt-3 text-muted">
                 ติดตามการจอง พื้นที่ และ Event ขององค์กรที่เลือก
               </p>
             </div>
@@ -193,7 +195,9 @@ export function AdminDashboard() {
 
         <div className="mt-6 flex items-center gap-2 text-sm text-muted">
           <Building2 className="h-4 w-4 text-violet" aria-hidden />
-          <span>ข้อมูลของ {selectedOrganization?.name ?? 'องค์กรที่เลือก'}</span>
+          <span>
+            ข้อมูลของ {selectedOrganization?.name ?? 'องค์กรที่เลือก'}
+          </span>
         </div>
 
         {loadingSummary ? (
@@ -205,28 +209,79 @@ export function AdminDashboard() {
         ) : error || !summary ? (
           <section className="mt-5 rounded-[24px] border border-red-100 bg-red-50 p-6 text-red-700">
             <h2 className="font-black">โหลด Dashboard ไม่สำเร็จ</h2>
-            <p className="mt-2 text-sm">{error ?? 'ไม่พบข้อมูลสรุปขององค์กร'}</p>
+            <p className="mt-2 text-sm">
+              {error ?? 'ไม่พบข้อมูลสรุปขององค์กร'}
+            </p>
           </section>
         ) : (
           <>
-            <SectionTitle title="สถานะการจอง" description="จำนวน Booking ขององค์กร แยกตามสถานะหลัก" />
+            <SectionTitle
+              title="สถานะการจอง"
+              description="จำนวน Booking ขององค์กร แยกตามสถานะหลัก"
+            />
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <MetricCard icon={Clock3} label="รอชำระเงิน" value={summary.bookings.pendingPayment} tone="amber" />
-              <MetricCard icon={CheckCircle2} label="ยืนยันแล้ว" value={summary.bookings.confirmed} tone="green" />
-              <MetricCard icon={Ban} label="ยกเลิกแล้ว" value={summary.bookings.cancelled} tone="red" />
+              <MetricCard
+                icon={Clock3}
+                label="รอชำระเงิน"
+                value={summary.bookings.pendingPayment}
+                tone="amber"
+              />
+              <MetricCard
+                icon={CheckCircle2}
+                label="ยืนยันแล้ว"
+                value={summary.bookings.confirmed}
+                tone="green"
+              />
+              <MetricCard
+                icon={Ban}
+                label="ยกเลิกแล้ว"
+                value={summary.bookings.cancelled}
+                tone="red"
+              />
             </div>
 
-            <SectionTitle title="พื้นที่ขององค์กร" description="จำนวนสถานที่ โซน และบูธทั้งหมด" />
+            <SectionTitle
+              title="พื้นที่ขององค์กร"
+              description="จำนวนสถานที่ โซน และบูธทั้งหมด"
+            />
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <MetricCard icon={Building2} label="สถานที่" value={summary.resources.venues} tone="violet" />
-              <MetricCard icon={MapPinned} label="โซน" value={summary.resources.zones} tone="blue" />
-              <MetricCard icon={Store} label="บูธ" value={summary.resources.booths} tone="slate" />
+              <MetricCard
+                icon={Building2}
+                label="สถานที่"
+                value={summary.resources.venues}
+                tone="violet"
+              />
+              <MetricCard
+                icon={MapPinned}
+                label="โซน"
+                value={summary.resources.zones}
+                tone="blue"
+              />
+              <MetricCard
+                icon={Store}
+                label="บูธ"
+                value={summary.resources.booths}
+                tone="slate"
+              />
             </div>
 
-            <SectionTitle title="Event" description="งานที่เผยแพร่และงานที่กำลังจะมาถึง" />
+            <SectionTitle
+              title="Event"
+              description="งานที่เผยแพร่และงานที่กำลังจะมาถึง"
+            />
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <MetricCard icon={CalendarCheck2} label="เผยแพร่แล้ว" value={summary.events.published} tone="violet" />
-              <MetricCard icon={CalendarClock} label="กำลังจะมาถึง" value={summary.events.upcoming} tone="blue" />
+              <MetricCard
+                icon={CalendarCheck2}
+                label="เผยแพร่แล้ว"
+                value={summary.events.published}
+                tone="violet"
+              />
+              <MetricCard
+                icon={CalendarClock}
+                label="กำลังจะมาถึง"
+                value={summary.events.upcoming}
+                tone="blue"
+              />
             </div>
           </>
         )}
@@ -235,7 +290,13 @@ export function AdminDashboard() {
   );
 }
 
-function SectionTitle({ title, description }: { title: string; description: string }) {
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <div className="mt-9">
       <h2 className="text-xl font-black">{title}</h2>
@@ -266,11 +327,15 @@ function MetricCard({
 }) {
   return (
     <article className="sl-surface p-5">
-      <span className={`grid h-11 w-11 place-items-center rounded-2xl ${TONES[tone]}`}>
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-2xl ${TONES[tone]}`}
+      >
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <p className="mt-5 text-sm font-bold text-muted">{label}</p>
-      <p className="mt-1 text-3xl font-black tracking-[-0.04em]">{value.toLocaleString('th-TH')}</p>
+      <p className="mt-1 text-3xl font-black tracking-[-0.04em]">
+        {value.toLocaleString('th-TH')}
+      </p>
     </article>
   );
 }

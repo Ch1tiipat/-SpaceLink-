@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node runs this TypeScript test directly. */
 const assert: typeof import('node:assert/strict') = require('node:assert/strict');
 const { test }: typeof import('node:test') = require('node:test');
-const {
-  buildAdminOrganizationCatalog,
-  selectAdminOrganizationId,
-} = require('./admin-organization-access.ts') as typeof import('./admin-organization-access');
+const { buildAdminOrganizationCatalog, selectAdminOrganizationId } =
+  require('./admin-organization-access.ts') as typeof import('./admin-organization-access');
 import type { CurrentUser, SuperAdminOrganization } from './api';
 
 type MembershipOrganization = CurrentUser['organizations'][number];
@@ -57,11 +55,7 @@ test('ORG_ADMIN catalog keeps membership access and permissions', () => {
 
 test('SUPER_ADMIN catalog uses all organizations without fake membership', () => {
   assert.deepEqual(
-    buildAdminOrganizationCatalog(
-      'SUPER_ADMIN',
-      [],
-      [platformOrganization],
-    ),
+    buildAdminOrganizationCatalog('SUPER_ADMIN', [], [platformOrganization]),
     [
       {
         id: 'platform-org',

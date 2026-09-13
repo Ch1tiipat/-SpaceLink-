@@ -1,5 +1,5 @@
-import { Suspense } from "react";
-import { SuperAdminUsersScreen } from "@/components/super-admin/super-admin-users-screen";
+import { Suspense } from 'react';
+import { SuperAdminUsersScreen } from '@/components/super-admin/super-admin-users-screen';
 
 export default function SuperAdminUsersPage() {
   return (

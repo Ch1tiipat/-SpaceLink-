@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BellRing,
@@ -14,8 +14,8 @@ import {
   ShieldCheck,
   Store,
   type LucideIcon,
-} from "lucide-react";
-import { SelectMenu, type SelectMenuOption } from "@/components/select-menu";
+} from 'lucide-react';
+import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import {
   getEventMap,
   getEvents,
@@ -23,26 +23,26 @@ import {
   type AdminAnnouncement,
   type DiscoveryEvent,
   type EventZone,
-} from "@/lib/api";
-import { isEventBookable } from "@/lib/event-booking-rules";
-import { getEventCoverUrl } from "@/lib/event-cover";
+} from '@/lib/api';
+import { isEventBookable } from '@/lib/event-booking-rules';
+import { getEventCoverUrl } from '@/lib/event-cover';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
-type UpdateFilter = "all" | "event" | "announcement";
+type UpdateFilter = 'all' | 'event' | 'announcement';
 type Update =
-  | { kind: "event"; event: DiscoveryEvent }
-  | { kind: "announcement"; announcement: PublicAnnouncement };
+  | { kind: 'event'; event: DiscoveryEvent }
+  | { kind: 'announcement'; announcement: PublicAnnouncement };
 
-const dateFormatter = new Intl.DateTimeFormat("th-TH", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
+const dateFormatter = new Intl.DateTimeFormat('th-TH', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
 });
 
 function provinceFromAddress(address: string): string {
   const prefixed = /จังหวัด(\S+)/.exec(address);
   if (prefixed) return prefixed[1];
-  if (address.includes("กรุงเทพมหานคร")) return "กรุงเทพมหานคร";
+  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
   return address;
 }
 
@@ -67,10 +67,10 @@ function isEventEnded(endDate: string, now = new Date()) {
 export default function DiscoveryPage() {
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
-  const [query, setQuery] = useState("");
-  const [area, setArea] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [updateFilter, setUpdateFilter] = useState<UpdateFilter>("all");
+  const [query, setQuery] = useState('');
+  const [area, setArea] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [updateFilter, setUpdateFilter] = useState<UpdateFilter>('all');
   const [searchApplied, setSearchApplied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
@@ -82,10 +82,10 @@ export default function DiscoveryPage() {
     getEvents(controller.signal)
       .then(setEvents)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         setError(
-          cause instanceof Error ? cause.message : "โหลดข้อมูลไม่สำเร็จ",
+          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
         );
       })
       .finally(() => setLoading(false));
@@ -120,7 +120,7 @@ export default function DiscoveryPage() {
         setAnnouncements(
           results
             .flatMap((result) =>
-              result.status === "fulfilled" ? result.value : [],
+              result.status === 'fulfilled' ? result.value : [],
             )
             .sort(
               (left, right) =>
@@ -138,44 +138,48 @@ export default function DiscoveryPage() {
   const filters = useMemo(
     () => ({
       events: uniqueOptions(
-        events.filter((event) => !isEventEnded(event.endDate)).map((event) => ({
-          value: event.name,
-          label: event.name,
-          hint: event.venue.name,
-        })),
+        events
+          .filter((event) => !isEventEnded(event.endDate))
+          .map((event) => ({
+            value: event.name,
+            label: event.name,
+            hint: event.venue.name,
+          })),
       ),
       areas: uniqueOptions(
         events
           .filter((event) => !isEventEnded(event.endDate))
           .filter((event) => event.venue.address)
           .map((event) => {
-            const province = provinceFromAddress(event.venue.address ?? "");
+            const province = provinceFromAddress(event.venue.address ?? '');
             return { value: province, label: province };
           }),
       ),
       categories: uniqueOptions(
-        events.filter((event) => !isEventEnded(event.endDate)).flatMap((event) =>
-          event.categories.map((category) => ({
-            value: category.id,
-            label: category.name,
-          })),
-        ),
+        events
+          .filter((event) => !isEventEnded(event.endDate))
+          .flatMap((event) =>
+            event.categories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            })),
+          ),
       ),
     }),
     [events],
   );
 
   const visibleEvents = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase("th");
+    const keyword = query.trim().toLocaleLowerCase('th');
     return events.filter((event) => {
       if (isEventEnded(event.endDate)) return false;
       const searchable =
-        `${event.name} ${event.description ?? ""} ${event.organization.name} ${event.venue.name}`.toLocaleLowerCase(
-          "th",
+        `${event.name} ${event.description ?? ''} ${event.organization.name} ${event.venue.name}`.toLocaleLowerCase(
+          'th',
         );
       return (
         (!keyword || searchable.includes(keyword)) &&
-        (!area || provinceFromAddress(event.venue.address ?? "") === area) &&
+        (!area || provinceFromAddress(event.venue.address ?? '') === area) &&
         (!categoryId ||
           event.categories.some((category) => category.id === categoryId))
       );
@@ -184,19 +188,21 @@ export default function DiscoveryPage() {
 
   const updates = useMemo<Update[]>(() => {
     if (searchApplied) {
-      return visibleEvents.map((event) => ({ kind: "event", event }));
+      return visibleEvents.map((event) => ({ kind: 'event', event }));
     }
 
     return [
       ...events
         .filter((event) => !isEventEnded(event.endDate))
-        .map((event): Update => ({ kind: "event", event })),
-      ...announcements.map((announcement): Update => ({
-        kind: "announcement",
-        announcement,
-      })),
+        .map((event): Update => ({ kind: 'event', event })),
+      ...announcements.map(
+        (announcement): Update => ({
+          kind: 'announcement',
+          announcement,
+        }),
+      ),
     ].filter(
-      (update) => updateFilter === "all" || update.kind === updateFilter,
+      (update) => updateFilter === 'all' || update.kind === updateFilter,
     );
   }, [announcements, events, searchApplied, updateFilter, visibleEvents]);
 
@@ -205,7 +211,7 @@ export default function DiscoveryPage() {
     if (!scroller) return;
     scroller.scrollBy({
       left: direction * Math.max(scroller.clientWidth * 0.82, 280),
-      behavior: "smooth",
+      behavior: 'smooth',
     });
   }
 
@@ -213,8 +219,8 @@ export default function DiscoveryPage() {
     setSearchApplied(true);
     window.requestAnimationFrame(() => {
       document
-        .getElementById("latest-updates")
-        ?.scrollIntoView({ block: "start" });
+        .getElementById('latest-updates')
+        ?.scrollIntoView({ block: 'start' });
     });
   }
 
@@ -274,7 +280,7 @@ export default function DiscoveryPage() {
               setQuery(value);
               setSearchApplied(false);
             }}
-            options={withAllOption(filters.events, "งานหรือสถานที่ทั้งหมด")}
+            options={withAllOption(filters.events, 'งานหรือสถานที่ทั้งหมด')}
           />
           <SelectMenu
             label="พื้นที่"
@@ -285,7 +291,7 @@ export default function DiscoveryPage() {
               setArea(value);
               setSearchApplied(false);
             }}
-            options={withAllOption(filters.areas, "ทุกพื้นที่")}
+            options={withAllOption(filters.areas, 'ทุกพื้นที่')}
           />
           <SelectMenu
             label="หมวดสินค้า"
@@ -296,7 +302,7 @@ export default function DiscoveryPage() {
               setCategoryId(value);
               setSearchApplied(false);
             }}
-            options={withAllOption(filters.categories, "ทุกหมวดสินค้า")}
+            options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')}
           />
           <button
             type="submit"
@@ -319,7 +325,7 @@ export default function DiscoveryPage() {
               id="latest-heading"
               className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
             >
-              {searchApplied ? "ผลการค้นหา Event" : "ข่าวสารและ Event ล่าสุด"}
+              {searchApplied ? 'ผลการค้นหา Event' : 'ข่าวสารและ Event ล่าสุด'}
             </h2>
             <p className="mt-1 text-xs text-muted">
               {searchApplied
@@ -335,9 +341,9 @@ export default function DiscoveryPage() {
             >
               {(
                 [
-                  ["all", "ทั้งหมด"],
-                  ["event", "Event"],
-                  ["announcement", "ประกาศ"],
+                  ['all', 'ทั้งหมด'],
+                  ['event', 'Event'],
+                  ['announcement', 'ประกาศ'],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -348,7 +354,7 @@ export default function DiscoveryPage() {
                     setSearchApplied(false);
                     setUpdateFilter(value);
                   }}
-                  className={`sl-chip min-h-9 px-4 ${updateFilter === value ? "!border-violet !bg-violet !text-white" : ""}`}
+                  className={`sl-chip min-h-9 px-4 ${updateFilter === value ? '!border-violet !bg-violet !text-white' : ''}`}
                 >
                   {label}
                 </button>
@@ -407,7 +413,7 @@ export default function DiscoveryPage() {
             {updates.map((update, index) => (
               <div
                 key={
-                  update.kind === "event"
+                  update.kind === 'event'
                     ? update.event.id
                     : update.announcement.id
                 }
@@ -433,13 +439,13 @@ export default function DiscoveryPage() {
 
 function LatestCard({ update, index }: { update: Update; index: number }) {
   const tones = [
-    "bg-[linear-gradient(135deg,#3b176c,#8959f3,#3a8079)]",
-    "bg-[linear-gradient(135deg,#187250,#64a76e)]",
-    "bg-[linear-gradient(135deg,#994b34,#e89a58)]",
+    'bg-[linear-gradient(135deg,#3b176c,#8959f3,#3a8079)]',
+    'bg-[linear-gradient(135deg,#187250,#64a76e)]',
+    'bg-[linear-gradient(135deg,#994b34,#e89a58)]',
   ];
   const cover = tones[index % tones.length];
 
-  if (update.kind === "announcement") {
+  if (update.kind === 'announcement') {
     return (
       <article className="sl-surface relative h-full overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
         <div
@@ -481,14 +487,14 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
         <strong className="text-[23px]">{formatDateRange(event)}</strong>
       </div>
       <span
-        className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? "bg-[#ecfff3] text-[#16723f]" : "bg-[#f1eef2] text-[#756c79]"}`}
+        className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}
       >
-        {bookable ? "เปิดจอง" : "ปิดรับจอง"}
+        {bookable ? 'เปิดจอง' : 'ปิดรับจอง'}
       </span>
       <div className="p-[17px]">
         <h3 className="text-[15px] font-extrabold">{event.name}</h3>
         <p className="mt-1.5 min-h-[38px] text-sm leading-[1.65] text-muted">
-          {event.venue.name} · {provinceFromAddress(event.venue.address ?? "")}
+          {event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}
         </p>
         <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">
           ดูรายละเอียด →
@@ -511,7 +517,7 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
         setZones(featured.length === 3 ? featured : map.zones.slice(0, 3));
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         setZones([]);
       });
@@ -539,7 +545,7 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
       <div className="mt-[18px] grid gap-4 lg:grid-cols-3">
         {zones.map((zone) => {
           const available = zone.booths.filter(
-            (booth) => booth.availability === "AVAILABLE",
+            (booth) => booth.availability === 'AVAILABLE',
           ).length;
           return (
             <Link
@@ -579,31 +585,33 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
     action: string;
   }> = [
     {
-      number: "01",
-      title: "ค้นหา Event ที่เหมาะกับร้าน",
+      number: '01',
+      title: 'ค้นหา Event ที่เหมาะกับร้าน',
       description:
-        "ค้นหาจากชื่องาน พื้นที่ หรือหมวดสินค้า เพื่อดูงานที่ตรงกับรูปแบบร้านของคุณ",
+        'ค้นหาจากชื่องาน พื้นที่ หรือหมวดสินค้า เพื่อดูงานที่ตรงกับรูปแบบร้านของคุณ',
       icon: CalendarSearch,
-      href: "#eventSearch",
-      action: "เริ่มค้นหา",
+      href: '#eventSearch',
+      action: 'เริ่มค้นหา',
     },
     {
-      number: "02",
-      title: "เลือก Zone และ Booth จากแผนผัง",
+      number: '02',
+      title: 'เลือก Zone และ Booth จากแผนผัง',
       description:
-        "ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย",
+        'ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย',
       icon: MapPinned,
-      href: event ? `/events/${encodeURIComponent(event.slug)}/map` : "#latest-updates",
-      action: "ดูตัวอย่างแผนผัง",
+      href: event
+        ? `/events/${encodeURIComponent(event.slug)}/map`
+        : '#latest-updates',
+      action: 'ดูตัวอย่างแผนผัง',
     },
     {
-      number: "03",
-      title: "ชำระเงินและติดตามสถานะ",
+      number: '03',
+      title: 'ชำระเงินและติดตามสถานะ',
       description:
-        "ตรวจสอบรายละเอียดการจอง ส่งหลักฐานการชำระเงิน และติดตามสถานะได้ในที่เดียว",
+        'ตรวจสอบรายละเอียดการจอง ส่งหลักฐานการชำระเงิน และติดตามสถานะได้ในที่เดียว',
       icon: CreditCard,
-      href: "/bookings",
-      action: "ดูการจองของฉัน",
+      href: '/bookings',
+      action: 'ดูการจองของฉัน',
     },
   ];
 
@@ -672,23 +680,23 @@ function PlatformBenefits() {
     icon: LucideIcon;
   }> = [
     {
-      title: "ข้อมูลบูธชัดเจน",
-      description: "ดูตำแหน่ง ราคา และสถานะว่างจากแผนผังของผู้จัดงาน",
+      title: 'ข้อมูลบูธชัดเจน',
+      description: 'ดูตำแหน่ง ราคา และสถานะว่างจากแผนผังของผู้จัดงาน',
       icon: MapPinned,
     },
     {
-      title: "จัดการร้านได้ในโปรไฟล์เดียว",
-      description: "เตรียมข้อมูลร้านและใช้ประกอบการจองพื้นที่ของคุณ",
+      title: 'จัดการร้านได้ในโปรไฟล์เดียว',
+      description: 'เตรียมข้อมูลร้านและใช้ประกอบการจองพื้นที่ของคุณ',
       icon: Store,
     },
     {
-      title: "ไม่พลาดสถานะสำคัญ",
-      description: "ติดตามการจอง การชำระเงิน และการแจ้งเตือนจากระบบ",
+      title: 'ไม่พลาดสถานะสำคัญ',
+      description: 'ติดตามการจอง การชำระเงิน และการแจ้งเตือนจากระบบ',
       icon: BellRing,
     },
     {
-      title: "มีช่องทางช่วยเหลือ",
-      description: "เปิดหน้าช่วยเหลือเมื่อมีคำถามเกี่ยวกับการใช้งานและการจอง",
+      title: 'มีช่องทางช่วยเหลือ',
+      description: 'เปิดหน้าช่วยเหลือเมื่อมีคำถามเกี่ยวกับการใช้งานและการจอง',
       icon: Headphones,
     },
   ];
@@ -829,5 +837,5 @@ function withAllOption(
   options: FilterOption[],
   allLabel: string,
 ): SelectMenuOption[] {
-  return [{ value: "", label: allLabel }, ...options];
+  return [{ value: '', label: allLabel }, ...options];
 }

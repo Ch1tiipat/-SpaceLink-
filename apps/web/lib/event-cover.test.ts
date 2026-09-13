@@ -1,11 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node runs this test directly. */
-const coverAssert: typeof import('node:assert/strict') = require(
-  'node:assert/strict',
-);
+const coverAssert: typeof import('node:assert/strict') = require('node:assert/strict');
 const { test: coverTest }: typeof import('node:test') = require('node:test');
-const { EVENT_COVER_FALLBACK, getEventCoverUrl } = require(
-  './event-cover.ts',
-) as typeof import('./event-cover');
+const { EVENT_COVER_FALLBACK, getEventCoverUrl } =
+  require('./event-cover.ts') as typeof import('./event-cover');
 
 coverTest('uses a validated HTTPS event cover', () => {
   coverAssert.equal(

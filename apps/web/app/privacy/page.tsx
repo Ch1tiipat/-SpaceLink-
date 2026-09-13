@@ -1,5 +1,5 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 export default function PrivacyPage() {
   return (
@@ -29,9 +29,9 @@ export default function PrivacyPage() {
 
           <LegalSection title="วัตถุประสงค์การใช้ข้อมูล">
             <p>
-              ใช้เพื่อยืนยันตัวตน แสดงข้อมูล Event และบูธ ดำเนินการจองและชำระเงิน
-              แจ้งสถานะ ให้ความช่วยเหลือ ป้องกันการใช้งานที่ไม่เหมาะสม
-              และปรับปรุงความน่าเชื่อถือของบริการ
+              ใช้เพื่อยืนยันตัวตน แสดงข้อมูล Event และบูธ
+              ดำเนินการจองและชำระเงิน แจ้งสถานะ ให้ความช่วยเหลือ
+              ป้องกันการใช้งานที่ไม่เหมาะสม และปรับปรุงความน่าเชื่อถือของบริการ
             </p>
           </LegalSection>
 
@@ -47,7 +47,8 @@ export default function PrivacyPage() {
           <LegalSection title="ระยะเวลาเก็บรักษาและความปลอดภัย">
             <p>
               เก็บข้อมูลตามระยะเวลาที่จำเป็นต่อการให้บริการ การตรวจสอบรายการ
-              และข้อกำหนดที่เกี่ยวข้อง แล้วจึงลบหรือทำให้ไม่สามารถระบุตัวบุคคลได้
+              และข้อกำหนดที่เกี่ยวข้อง
+              แล้วจึงลบหรือทำให้ไม่สามารถระบุตัวบุคคลได้
               โครงงานใช้การควบคุมสิทธิ์และมาตรการทางเทคนิคตามขอบเขตที่พัฒนา
               แต่ไม่มีระบบออนไลน์ใดรับประกันความปลอดภัยได้ทั้งหมด
             </p>
@@ -56,11 +57,20 @@ export default function PrivacyPage() {
           <LegalSection title="สิทธิและช่องทางติดต่อ">
             <p>
               คุณสามารถขอตรวจสอบ แก้ไข หรือลบข้อมูลที่ระบบรองรับ
-              และสอบถามการใช้ข้อมูลผ่านหน้า{" "}
-              <Link href="/help" className="font-extrabold text-violet underline-offset-4 hover:underline">
+              และสอบถามการใช้ข้อมูลผ่านหน้า{' '}
+              <Link
+                href="/help"
+                className="font-extrabold text-violet underline-offset-4 hover:underline"
+              >
                 ศูนย์ช่วยเหลือ
-              </Link>{" "}
-              หรือโทร <a className="font-extrabold text-violet underline-offset-4 hover:underline" href="tel:+66935275899">093-527-5899</a>
+              </Link>{' '}
+              หรือโทร{' '}
+              <a
+                className="font-extrabold text-violet underline-offset-4 hover:underline"
+                href="tel:+66935275899"
+              >
+                093-527-5899
+              </a>
               การดำเนินการบางอย่างอาจต้องยืนยันตัวตนและอาจถูกจำกัดเมื่อจำเป็นต้องเก็บข้อมูลรายการไว้
             </p>
           </LegalSection>
@@ -68,9 +78,15 @@ export default function PrivacyPage() {
 
         <LegalNotice>
           เอกสารนี้เป็นฉบับเบื้องต้นสำหรับโครงงานมหาวิทยาลัย ไม่ใช่คำรับรองว่า
-          SpaceLink ผ่านการตรวจตาม PDPA หรือมาตรฐานอื่น และควรให้ผู้เชี่ยวชาญด้านกฎหมายตรวจทานก่อนนำไปใช้จริง
-          อ่านแนวทางประกอบได้จาก{" "}
-          <a href="https://gppc.pdpc.or.th/wp-content/uploads/GPPC-PDPC_Register_Privacy-Notice-%E0%B8%89%E0%B8%9A%E0%B8%B1%E0%B8%A2%E0%B9%88%E0%B8%AD_05062024.pdf" target="_blank" rel="noreferrer" className="font-extrabold underline underline-offset-4">
+          SpaceLink ผ่านการตรวจตาม PDPA หรือมาตรฐานอื่น
+          และควรให้ผู้เชี่ยวชาญด้านกฎหมายตรวจทานก่อนนำไปใช้จริง
+          อ่านแนวทางประกอบได้จาก{' '}
+          <a
+            href="https://gppc.pdpc.or.th/wp-content/uploads/GPPC-PDPC_Register_Privacy-Notice-%E0%B8%89%E0%B8%9A%E0%B8%B1%E0%B8%A2%E0%B9%88%E0%B8%AD_05062024.pdf"
+            target="_blank"
+            rel="noreferrer"
+            className="font-extrabold underline underline-offset-4"
+          >
             สำนักงานคณะกรรมการคุ้มครองข้อมูลส่วนบุคคล
           </a>
         </LegalNotice>
@@ -79,11 +95,19 @@ export default function PrivacyPage() {
   );
 }
 
-function LegalSection({ title, children }: { title: string; children: ReactNode }) {
+function LegalSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section className="sl-surface p-6 sm:p-8">
       <h2 className="text-xl font-black text-ink">{title}</h2>
-      <div className="mt-3 max-w-4xl text-sm leading-7 text-muted sm:text-base">{children}</div>
+      <div className="mt-3 max-w-4xl text-sm leading-7 text-muted sm:text-base">
+        {children}
+      </div>
     </section>
   );
 }

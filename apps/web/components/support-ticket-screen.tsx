@@ -164,7 +164,9 @@ const PREVIEW_EVENT_MAP = {
       booths: PREVIEW_BOOTH_OPTIONS.map((booth) => ({
         ...booth,
         availability:
-          booth.id === 'preview-booth-a03' ? ('BOOKED' as const) : ('AVAILABLE' as const),
+          booth.id === 'preview-booth-a03'
+            ? ('BOOKED' as const)
+            : ('AVAILABLE' as const),
         tier: null,
         occupant: null,
       })),
@@ -177,7 +179,9 @@ export function SupportTicketScreen() {
     <Suspense
       fallback={
         <section className="sl-surface mt-8 p-6" aria-busy="true">
-          <p className="text-sm font-semibold text-muted">กำลังเตรียมแบบฟอร์มช่วยเหลือ</p>
+          <p className="text-sm font-semibold text-muted">
+            กำลังเตรียมแบบฟอร์มช่วยเหลือ
+          </p>
         </section>
       }
     >
@@ -217,7 +221,8 @@ function SupportTicketScreenContent() {
         const me = await getMe(token, controller.signal);
         if (active) setAccess({ status: 'ready', token, role: me.role });
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setAccess({
             status: 'error',
@@ -236,7 +241,9 @@ function SupportTicketScreenContent() {
   if (access.status === 'loading') {
     return (
       <section className="sl-surface mt-8 p-6" aria-busy="true">
-        <p className="text-sm font-semibold text-muted">กำลังตรวจสอบสิทธิ์สำหรับคำร้องขอโควตา</p>
+        <p className="text-sm font-semibold text-muted">
+          กำลังตรวจสอบสิทธิ์สำหรับคำร้องขอโควตา
+        </p>
       </section>
     );
   }
@@ -244,7 +251,9 @@ function SupportTicketScreenContent() {
   if (access.status === 'signed-out') {
     return (
       <section className="sl-soft-surface mt-8 p-6 sm:p-8">
-        <h2 className="text-xl font-black text-ink">คำร้องขอเพิ่มโควตาการจอง</h2>
+        <h2 className="text-xl font-black text-ink">
+          คำร้องขอเพิ่มโควตาการจอง
+        </h2>
         <p className="mt-2 text-sm leading-6 text-muted">
           กรุณาเข้าสู่ระบบก่อนส่งหรือตรวจสอบคำร้อง
         </p>
@@ -306,7 +315,9 @@ function VendorTicketForm({
   const [loadingBooths, setLoadingBooths] = useState(false);
   const [boothError, setBoothError] = useState<string | null>(null);
   const [requestedBoothId, setRequestedBoothId] = useState('');
-  const [contextOption, setContextOption] = useState<QuotaRequestOption | null>(null);
+  const [contextOption, setContextOption] = useState<QuotaRequestOption | null>(
+    null,
+  );
   const [contextBooths, setContextBooths] = useState<QuotaBoothOption[]>([]);
   const [contextRequestedBoothId, setContextRequestedBoothId] = useState('');
   const [contextNotice, setContextNotice] = useState<string | null>(null);
@@ -382,12 +393,13 @@ function VendorTicketForm({
           return;
         }
         if (quotaRequestQuery.status === 'ready') {
-          const eventMap = preview && quotaRequestQuery.value.eventId === 'preview-event'
-            ? PREVIEW_EVENT_MAP
-            : await getEventMap(
-                quotaRequestQuery.value.eventId,
-                controller.signal,
-              );
+          const eventMap =
+            preview && quotaRequestQuery.value.eventId === 'preview-event'
+              ? PREVIEW_EVENT_MAP
+              : await getEventMap(
+                  quotaRequestQuery.value.eventId,
+                  controller.signal,
+                );
           if (!active) return;
           const resolved = resolveQuotaRequestContext({
             query: quotaRequestQuery.value,
@@ -416,11 +428,10 @@ function VendorTicketForm({
           );
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
-          setBookingsError(
-            describeError(cause, 'โหลดข้อมูลการจองไม่สำเร็จ'),
-          );
+          setBookingsError(describeError(cause, 'โหลดข้อมูลการจองไม่สำเร็จ'));
         }
       } finally {
         if (active) setLoadingBookings(false);
@@ -468,7 +479,8 @@ function VendorTicketForm({
         setBoothOptions(available);
         setRequestedBoothId(available[0]?.id ?? '');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setBoothError(describeError(cause, 'โหลดข้อมูลบูธไม่สำเร็จ'));
           setBoothOptions([]);
@@ -496,9 +508,7 @@ function VendorTicketForm({
 
   function changeRequestType(nextType: VendorRequestType) {
     setRequestType(nextType);
-    setSubject(
-      nextType === 'QUOTA_INCREASE' ? 'ขอโควต้าบูธเพิ่ม' : '',
-    );
+    setSubject(nextType === 'QUOTA_INCREASE' ? 'ขอโควต้าบูธเพิ่ม' : '');
     setMessage('');
     setError(null);
     setTicket(null);
@@ -533,8 +543,7 @@ function VendorTicketForm({
             userId: 'preview-vendor',
             organizationId: null,
             bookingId: null,
-            type:
-              requestType === 'QUOTA_INCREASE' ? 'OTHER' : 'ISSUE_REPORT',
+            type: requestType === 'QUOTA_INCREASE' ? 'OTHER' : 'ISSUE_REPORT',
             subject,
             status: 'OPEN' as const,
             createdAt: new Date().toISOString(),
@@ -570,18 +579,27 @@ function VendorTicketForm({
   }
 
   return (
-    <section aria-labelledby="vendor-request-heading" className="sl-surface mt-8 p-6 sm:p-8">
+    <section
+      aria-labelledby="vendor-request-heading"
+      className="sl-surface mt-8 p-6 sm:p-8"
+    >
       <div className="flex items-start gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
           <Send className="h-5 w-5" aria-hidden />
         </span>
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Vendor request</p>
-          <h2 id="vendor-request-heading" className="mt-1 text-2xl font-black text-ink">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+            Vendor request
+          </p>
+          <h2
+            id="vendor-request-heading"
+            className="mt-1 text-2xl font-black text-ink"
+          >
             ติดต่อและขอความช่วยเหลือ
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            เลือกส่งคำขอเพิ่มโควต้าบูธ หรือติดต่อปัญหาที่ต้องการให้ผู้ดูแลช่วยตรวจสอบ
+            เลือกส่งคำขอเพิ่มโควต้าบูธ
+            หรือติดต่อปัญหาที่ต้องการให้ผู้ดูแลช่วยตรวจสอบ
           </p>
           {preview ? (
             <p className="mt-3 rounded-xl bg-violet-tint px-3 py-2 text-xs font-semibold text-violet">
@@ -638,7 +656,9 @@ function VendorTicketForm({
                 required
               >
                 <option value="">
-                  {loadingBooths ? 'กำลังโหลดบูธ...' : 'เลือกบูธที่ต้องการเพิ่ม'}
+                  {loadingBooths
+                    ? 'กำลังโหลดบูธ...'
+                    : 'เลือกบูธที่ต้องการเพิ่ม'}
                 </option>
                 {boothOptions.map((booth) => (
                   <option key={booth.id} value={booth.id}>
@@ -648,7 +668,9 @@ function VendorTicketForm({
               </select>
             </Field>
 
-            {!loadingBooths && selectedQuotaZoneId && boothOptions.length === 0 ? (
+            {!loadingBooths &&
+            selectedQuotaZoneId &&
+            boothOptions.length === 0 ? (
               <ErrorMessage message="ยังไม่มีบูธว่างในโซนนี้" />
             ) : null}
 
@@ -669,7 +691,8 @@ function VendorTicketForm({
                         บูธ {booking.booth.code}
                       </p>
                       <p className="mt-1 text-xs text-muted">
-                        {booking.bookingCode} · {bookingStatusLabel(booking.status)}
+                        {booking.bookingCode} ·{' '}
+                        {bookingStatusLabel(booking.status)}
                       </p>
                     </div>
                   ))}
@@ -692,14 +715,17 @@ function VendorTicketForm({
               <option value="">ไม่เกี่ยวข้องกับการจอง</option>
               {bookings.map((booking) => (
                 <option key={booking.id} value={booking.id}>
-                  {booking.bookingCode} — {booking.event.name} — บูธ {booking.booth.code}
+                  {booking.bookingCode} — {booking.event.name} — บูธ{' '}
+                  {booking.booth.code}
                 </option>
               ))}
             </select>
           </Field>
         )}
 
-        <Field label={requestType === 'ISSUE_REPORT' ? 'หัวข้อปัญหา' : 'หัวข้อคำขอ'}>
+        <Field
+          label={requestType === 'ISSUE_REPORT' ? 'หัวข้อปัญหา' : 'หัวข้อคำขอ'}
+        >
           <input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
@@ -732,11 +758,16 @@ function VendorTicketForm({
         {error && <ErrorMessage message={error} />}
         {ticket && (
           <SuccessMessage>
-            ส่งคำร้องเรียบร้อยแล้ว Ticket ID: <strong className="break-all">{ticket.id}</strong>
+            ส่งคำร้องเรียบร้อยแล้ว Ticket ID:{' '}
+            <strong className="break-all">{ticket.id}</strong>
           </SuccessMessage>
         )}
 
-        <button type="submit" disabled={submitting} className="sl-action-primary w-fit disabled:opacity-60">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="sl-action-primary w-fit disabled:opacity-60"
+        >
           {submitting
             ? 'กำลังส่งคำร้อง...'
             : requestType === 'QUOTA_INCREASE'
@@ -872,26 +903,41 @@ function OrganizationAdminTicketForm({ token }: { token: string }) {
  */
 function SuperAdminSupportPointer() {
   return (
-    <section aria-labelledby="support-console-heading" className="sl-surface mt-8 p-6 sm:p-8">
+    <section
+      aria-labelledby="support-console-heading"
+      className="sl-surface mt-8 p-6 sm:p-8"
+    >
       <div className="flex items-start gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
           <ShieldCheck className="h-5 w-5" aria-hidden />
         </span>
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Support</p>
-          <h2 id="support-console-heading" className="mt-1 text-2xl font-black text-ink">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+            Support
+          </p>
+          <h2
+            id="support-console-heading"
+            className="mt-1 text-2xl font-black text-ink"
+          >
             จัดการคำร้องได้ที่หน้าเฉพาะ
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            คำร้องขอเพิ่มโควตาของแต่ละองค์กรอยู่ที่หน้า &ldquo;คำร้องขอเพิ่มโควตาบูธ&rdquo; ในเมนูผู้ดูแลองค์กร
+            คำร้องขอเพิ่มโควตาของแต่ละองค์กรอยู่ที่หน้า
+            &ldquo;คำร้องขอเพิ่มโควตาบูธ&rdquo; ในเมนูผู้ดูแลองค์กร
             ส่วนคำร้องทั้งระบบอยู่ในคอนโซล Super Admin
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link href="/admin/quota-requests" className="sl-action-primary w-fit">
+            <Link
+              href="/admin/quota-requests"
+              className="sl-action-primary w-fit"
+            >
               <ClipboardCheck className="h-4 w-4" aria-hidden />
               ไปที่คำร้องขอเพิ่มโควตา
             </Link>
-            <Link href="/super-admin/support" className="sl-action-secondary w-fit">
+            <Link
+              href="/super-admin/support"
+              className="sl-action-secondary w-fit"
+            >
               คำร้องทั้งระบบ
             </Link>
           </div>
@@ -912,7 +958,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ErrorMessage({ message }: { message: string }) {
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+    >
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <span>{message}</span>
     </div>
@@ -921,7 +970,10 @@ function ErrorMessage({ message }: { message: string }) {
 
 function SuccessMessage({ children }: { children: ReactNode }) {
   return (
-    <div role="status" className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+    <div
+      role="status"
+      className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
+    >
       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <span>{children}</span>
     </div>

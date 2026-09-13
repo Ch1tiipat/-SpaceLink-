@@ -1,10 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  getBookingQuotaContext,
-  type BookingQuotaContext,
-} from '@/lib/api';
+import { getBookingQuotaContext, type BookingQuotaContext } from '@/lib/api';
 
 export type BookingQuotaState =
   | { status: 'idle' }
@@ -37,47 +34,50 @@ export function useBookingQuota(
   }>({ key: null, state: { status: 'idle' } });
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async (signal?: AbortSignal): Promise<BookingQuotaState> => {
-    const requestId = ++requestIdRef.current;
-    if (!eventId || !token) {
-      const next: BookingQuotaState = { status: 'idle' };
-      setStored({ key: null, state: next });
-      return next;
-    }
-    if (preview) {
-      const next: BookingQuotaState = {
-        status: 'ready',
-        value: PREVIEW_QUOTA,
-      };
-      setStored({ key: requestKey, state: next });
-      return next;
-    }
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<BookingQuotaState> => {
+      const requestId = ++requestIdRef.current;
+      if (!eventId || !token) {
+        const next: BookingQuotaState = { status: 'idle' };
+        setStored({ key: null, state: next });
+        return next;
+      }
+      if (preview) {
+        const next: BookingQuotaState = {
+          status: 'ready',
+          value: PREVIEW_QUOTA,
+        };
+        setStored({ key: requestKey, state: next });
+        return next;
+      }
 
-    setStored({ key: requestKey, state: { status: 'loading' } });
-    try {
-      const value = await getBookingQuotaContext(eventId, token, signal);
-      const next: BookingQuotaState = { status: 'ready', value };
-      if (requestIdRef.current === requestId && !signal?.aborted) {
-        setStored({ key: requestKey, state: next });
+      setStored({ key: requestKey, state: { status: 'loading' } });
+      try {
+        const value = await getBookingQuotaContext(eventId, token, signal);
+        const next: BookingQuotaState = { status: 'ready', value };
+        if (requestIdRef.current === requestId && !signal?.aborted) {
+          setStored({ key: requestKey, state: next });
+        }
+        return next;
+      } catch (cause: unknown) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          return { status: 'idle' };
+        }
+        const next: BookingQuotaState = {
+          status: 'error',
+          message:
+            cause instanceof Error
+              ? cause.message
+              : 'ตรวจสอบโควตาการจองไม่สำเร็จ',
+        };
+        if (requestIdRef.current === requestId && !signal?.aborted) {
+          setStored({ key: requestKey, state: next });
+        }
+        return next;
       }
-      return next;
-    } catch (cause: unknown) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') {
-        return { status: 'idle' };
-      }
-      const next: BookingQuotaState = {
-        status: 'error',
-        message:
-          cause instanceof Error
-            ? cause.message
-            : 'ตรวจสอบโควตาการจองไม่สำเร็จ',
-      };
-      if (requestIdRef.current === requestId && !signal?.aborted) {
-        setStored({ key: requestKey, state: next });
-      }
-      return next;
-    }
-  }, [eventId, preview, requestKey, token]);
+    },
+    [eventId, preview, requestKey, token],
+  );
 
   useEffect(() => {
     const controller = new AbortController();

@@ -19,10 +19,13 @@ export function AdminTeamManagement() {
   const [error, setError] = useState('');
   const isOwner = organization?.membershipRole === 'OWNER';
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    if (!token || !organizationId) return;
-    setMembers(await getOrganizationTeam(organizationId, token, signal));
-  }, [organizationId, token]);
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!token || !organizationId) return;
+      setMembers(await getOrganizationTeam(organizationId, token, signal));
+    },
+    [organizationId, token],
+  );
 
   useEffect(() => {
     if (access !== 'allowed' || !token || !organizationId) return;
@@ -30,7 +33,9 @@ export function AdminTeamManagement() {
     setError('');
     void refresh(controller.signal).catch((cause: unknown) => {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setError(cause instanceof Error ? cause.message : 'โหลดรายชื่อทีมไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'โหลดรายชื่อทีมไม่สำเร็จ',
+      );
     });
     return () => controller.abort();
   }, [access, organizationId, refresh, token]);
@@ -45,7 +50,9 @@ export function AdminTeamManagement() {
       setEmail('');
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'เพิ่มผู้ดูแลไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'เพิ่มผู้ดูแลไม่สำเร็จ',
+      );
     } finally {
       setBusyId('');
     }
@@ -67,22 +74,29 @@ export function AdminTeamManagement() {
               ? !member.canManagePayments
               : member.canManagePayments,
           canManageZones:
-            key === 'canManageZones' ? !member.canManageZones : member.canManageZones,
+            key === 'canManageZones'
+              ? !member.canManageZones
+              : member.canManageZones,
         },
         token,
       );
       setMembers((current) =>
-        current.map((item) => (item.id === member.id ? { ...item, ...updated } : item)),
+        current.map((item) =>
+          item.id === member.id ? { ...item, ...updated } : item,
+        ),
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'เปลี่ยนสิทธิ์ไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'เปลี่ยนสิทธิ์ไม่สำเร็จ',
+      );
     } finally {
       setBusyId('');
     }
   }
 
   async function removeAdmin(member: OrganizationTeamMember) {
-    if (!window.confirm(`ถอด ${member.user.fullName} ออกจากทีมผู้ดูแลหรือไม่`)) return;
+    if (!window.confirm(`ถอด ${member.user.fullName} ออกจากทีมผู้ดูแลหรือไม่`))
+      return;
     setBusyId(member.id);
     setError('');
     try {
@@ -112,7 +126,10 @@ export function AdminTeamManagement() {
       </div>
 
       {isOwner ? (
-        <form className="mt-6 flex flex-col gap-3 sm:flex-row" onSubmit={handleAdd}>
+        <form
+          className="mt-6 flex flex-col gap-3 sm:flex-row"
+          onSubmit={handleAdd}
+        >
           <input
             type="email"
             required
@@ -137,7 +154,10 @@ export function AdminTeamManagement() {
       )}
 
       {error ? (
-        <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700" aria-live="polite">
+        <p
+          className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+          aria-live="polite"
+        >
           {error}
         </p>
       ) : null}
@@ -147,7 +167,10 @@ export function AdminTeamManagement() {
           const owner = member.role === 'OWNER';
           const disabled = !isOwner || owner || busyId === member.id;
           return (
-            <article key={member.id} className="rounded-2xl border border-line p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <article
+              key={member.id}
+              className="rounded-2xl border border-line p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
+            >
               <div>
                 <p className="font-black text-ink">{member.user.fullName}</p>
                 <p className="mt-1 text-xs text-muted">{member.user.email}</p>
@@ -159,10 +182,30 @@ export function AdminTeamManagement() {
               <div className="mt-4 flex flex-wrap items-center gap-3 sm:mt-0">
                 {!owner ? (
                   <>
-                    <PermissionToggle label="ดูแลการเงิน" checked={member.canManagePayments} disabled={disabled} onChange={() => void updatePermission(member, 'canManagePayments')} />
-                    <PermissionToggle label="ดูแลโซน" checked={member.canManageZones} disabled={disabled} onChange={() => void updatePermission(member, 'canManageZones')} />
+                    <PermissionToggle
+                      label="ดูแลการเงิน"
+                      checked={member.canManagePayments}
+                      disabled={disabled}
+                      onChange={() =>
+                        void updatePermission(member, 'canManagePayments')
+                      }
+                    />
+                    <PermissionToggle
+                      label="ดูแลโซน"
+                      checked={member.canManageZones}
+                      disabled={disabled}
+                      onChange={() =>
+                        void updatePermission(member, 'canManageZones')
+                      }
+                    />
                     {isOwner ? (
-                      <button type="button" disabled={disabled} onClick={() => void removeAdmin(member)} className="grid h-10 w-10 place-items-center rounded-xl border border-red-200 text-red-600 disabled:opacity-50" aria-label={`ถอด ${member.user.fullName}`}>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => void removeAdmin(member)}
+                        className="grid h-10 w-10 place-items-center rounded-xl border border-red-200 text-red-600 disabled:opacity-50"
+                        aria-label={`ถอด ${member.user.fullName}`}
+                      >
                         <Trash2 className="h-4 w-4" aria-hidden />
                       </button>
                     ) : null}
@@ -177,10 +220,26 @@ export function AdminTeamManagement() {
   );
 }
 
-function PermissionToggle({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: () => void }) {
+function PermissionToggle({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: () => void;
+}) {
   return (
     <label className="flex items-center gap-2 text-sm font-bold text-[#5f5668]">
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} className="h-4 w-4 accent-violet" />
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="h-4 w-4 accent-violet"
+      />
       {label}
     </label>
   );

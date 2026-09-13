@@ -132,11 +132,13 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
           <UploadCloud className="h-5 w-5" aria-hidden />
         </span>
         <div className="space-y-1">
-        <h2 className="text-lg font-extrabold text-ink">แนบหลักฐานการชำระเงิน</h2>
-        <p className="text-sm leading-6 text-muted">
-          เลือกรูปสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB ระบบจะตรวจสอบสลิป
-          โดยอัตโนมัติ
-        </p>
+          <h2 className="text-lg font-extrabold text-ink">
+            แนบหลักฐานการชำระเงิน
+          </h2>
+          <p className="text-sm leading-6 text-muted">
+            เลือกรูปสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB ระบบจะตรวจสอบสลิป
+            โดยอัตโนมัติ
+          </p>
         </div>
       </div>
 
@@ -184,7 +186,10 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
                   {formatFileSize(file.size)} · พร้อมอัปโหลด
                 </p>
               </div>
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald" aria-hidden />
+              <CheckCircle2
+                className="h-5 w-5 shrink-0 text-emerald"
+                aria-hidden
+              />
             </div>
           ) : null}
         </div>
@@ -225,7 +230,10 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
           {isUploading ? 'กำลังอัปโหลดและตรวจสอบ…' : 'อัปโหลดสลิป'}
         </button>
         <p className="flex items-center justify-center gap-1.5 text-center text-sm leading-5 text-muted">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald" aria-hidden />
+          <ShieldCheck
+            className="h-3.5 w-3.5 shrink-0 text-emerald"
+            aria-hidden
+          />
           ระบบใช้ไฟล์นี้เพื่อตรวจสอบการชำระเงินของการจองรายการนี้เท่านั้น
         </p>
       </form>
@@ -264,9 +272,7 @@ export function PaymentGroupSlipUploadPanel({
       targetId={`group-${paymentGroupId}`}
       disabled={disabled}
       upload={(file) => uploadPaymentGroupSlip(paymentGroupId, file, token)}
-      isConfirmed={(response) =>
-        response.paymentGroup.status === 'CONFIRMED'
-      }
+      isConfirmed={(response) => response.paymentGroup.status === 'CONFIRMED'}
       onResult={onResult}
       onConfirmed={onConfirmed}
     />

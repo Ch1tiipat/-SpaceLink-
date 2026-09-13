@@ -43,9 +43,16 @@ export function describeAdminTimelineItem(item: {
   };
 }
 
-export function timelineTone(type: AdminTimelineType): 'green' | 'red' | 'amber' | 'violet' {
+export function timelineTone(
+  type: AdminTimelineType,
+): 'green' | 'red' | 'amber' | 'violet' {
   if (type === 'SLIP_FAILED' || type.includes('CANCELLED')) return 'red';
-  if (type.includes('CONFIRMED') || type === 'SLIP_VERIFIED' || type === 'REFUND_PROCESSED') return 'green';
+  if (
+    type.includes('CONFIRMED') ||
+    type === 'SLIP_VERIFIED' ||
+    type === 'REFUND_PROCESSED'
+  )
+    return 'green';
   if (type === 'REFUND_REQUESTED' || type === 'REFUND_REVIEWED') return 'amber';
   return 'violet';
 }

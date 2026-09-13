@@ -9,11 +9,7 @@ import {
   isBookingCancellationOpen,
   isBookingReviewEligible,
 } from '@/components/booking-detail-screen';
-import {
-  getMyBookings,
-  type BookingStatus,
-  type MyBooking,
-} from '@/lib/api';
+import { getMyBookings, type BookingStatus, type MyBooking } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   getUxPreviewMode,
@@ -71,7 +67,9 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
 function formatMoney(value: string): string {
   const [whole, fraction] = value.split('.');
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return fraction && !/^0+$/.test(fraction) ? `${grouped}.${fraction}` : grouped;
+  return fraction && !/^0+$/.test(fraction)
+    ? `${grouped}.${fraction}`
+    : grouped;
 }
 
 function isExpired(booking: MyBooking): boolean {
@@ -110,14 +108,14 @@ export function MyBookingsScreen() {
       const items = await getMyBookings(token, signal);
       setBookings(items);
       setExpiredIds(
-        new Set(items.filter((booking) => isExpired(booking)).map(({ id }) => id)),
+        new Set(
+          items.filter((booking) => isExpired(booking)).map(({ id }) => id),
+        ),
       );
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       setLoadError(
-        cause instanceof Error
-          ? cause.message
-          : 'ไม่สามารถโหลดรายการจองได้',
+        cause instanceof Error ? cause.message : 'ไม่สามารถโหลดรายการจองได้',
       );
     } finally {
       setIsLoading(false);
@@ -214,16 +212,18 @@ export function MyBookingsScreen() {
     setExpiredIds((current) => new Set(current).add(bookingId));
     if (access.status !== 'ready') return;
 
-    for (let attempt = 0; attempt < HOLD_STATUS_REFRESH_ATTEMPTS; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < HOLD_STATUS_REFRESH_ATTEMPTS;
+      attempt += 1
+    ) {
       try {
         const items = await getMyBookings(access.token);
         const refreshed = items.find((booking) => booking.id === bookingId);
         setBookings(items);
         setExpiredIds(
           new Set(
-            items
-              .filter((booking) => isExpired(booking))
-              .map(({ id }) => id),
+            items.filter((booking) => isExpired(booking)).map(({ id }) => id),
           ),
         );
 
@@ -276,7 +276,8 @@ export function MyBookingsScreen() {
       }
 
       const difference =
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime();
       return sortOrder === 'oldest' ? -difference : difference;
     });
   }, [bookings, query, sortOrder, statusFilter]);
@@ -286,9 +287,7 @@ export function MyBookingsScreen() {
       <div className="shell py-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="sl-kicker">
-              My bookings
-            </span>
+            <span className="sl-kicker">My bookings</span>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
               การจองของฉัน
             </h1>
@@ -296,13 +295,19 @@ export function MyBookingsScreen() {
               ตรวจสอบสถานะ ชำระเงิน หรือยกเลิกการจองที่ยังดำเนินการอยู่
             </p>
           </div>
-          <Link href="/" className="sl-action-secondary mt-4 text-violet sm:mt-0">
+          <Link
+            href="/"
+            className="sl-action-secondary mt-4 text-violet sm:mt-0"
+          >
             ค้นหา Event เพิ่ม
           </Link>
         </div>
 
         {access.status === 'ready' && !isLoading && !loadError ? (
-          <section className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="สรุปการจอง">
+          <section
+            className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4"
+            aria-label="สรุปการจอง"
+          >
             {[
               ['การจองทั้งหมด', bookings.length, 'bg-[#f4efff] text-violet'],
               ['รอชำระเงิน', pendingCount, 'bg-[#edf6ff] text-[#1d67a8]'],
@@ -311,11 +316,19 @@ export function MyBookingsScreen() {
             ].map(([label, value, tone]) => (
               <div key={label} className="sl-soft-surface p-4 sm:p-5">
                 <span className="text-xs font-bold text-muted">{label}</span>
-                <strong className={`mt-3 grid h-11 w-11 place-items-center rounded-2xl px-3 text-lg ${tone}`}>
+                <strong
+                  className={`mt-3 grid h-11 w-11 place-items-center rounded-2xl px-3 text-lg ${tone}`}
+                >
                   {value}
                 </strong>
                 <p className="mt-2 text-sm font-extrabold tracking-[.1em] text-muted">
-                  {label === 'การจองทั้งหมด' ? 'ALL BOOKINGS' : label === 'รอชำระเงิน' ? 'PENDING' : label === 'ยืนยันแล้ว' ? 'CONFIRMED' : 'COMPLETED'}
+                  {label === 'การจองทั้งหมด'
+                    ? 'ALL BOOKINGS'
+                    : label === 'รอชำระเงิน'
+                      ? 'PENDING'
+                      : label === 'ยืนยันแล้ว'
+                        ? 'CONFIRMED'
+                        : 'COMPLETED'}
                 </p>
               </div>
             ))}
@@ -340,7 +353,9 @@ export function MyBookingsScreen() {
                 <span className="sr-only">เรียงรายการจอง</span>
                 <select
                   value={sortOrder}
-                  onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+                  onChange={(event) =>
+                    setSortOrder(event.target.value as SortOrder)
+                  }
                   className="min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base font-bold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
                 >
                   <option value="newest">ล่าสุดก่อน</option>
@@ -375,7 +390,9 @@ export function MyBookingsScreen() {
                     }`}
                   >
                     {filter.label}
-                    <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-sm ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}>
+                    <span
+                      className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-sm ${active ? 'bg-violet text-white' : 'bg-[#f1eef5]'}`}
+                    >
                       {count}
                     </span>
                   </button>
@@ -388,7 +405,9 @@ export function MyBookingsScreen() {
         {access.status === 'signed-out' && (
           <section className="sl-surface mt-8 p-8 text-center">
             <h2 className="text-xl font-bold">กรุณาเข้าสู่ระบบก่อน</h2>
-            <p className="mt-2 text-muted">รายการจองจะแสดงเฉพาะของบัญชีผู้ขายปัจจุบัน</p>
+            <p className="mt-2 text-muted">
+              รายการจองจะแสดงเฉพาะของบัญชีผู้ขายปัจจุบัน
+            </p>
             <Link href="/login" className="sl-action-primary mt-6">
               เข้าสู่ระบบ
             </Link>
@@ -396,23 +415,35 @@ export function MyBookingsScreen() {
         )}
 
         {access.status === 'error' && (
-          <p role="alert" className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]">
+          <p
+            role="alert"
+            className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]"
+          >
             {access.message}
           </p>
         )}
 
-        {access.status !== 'signed-out' && access.status !== 'error' && isLoading && (
-          <div className="mt-8 grid gap-5">
-            <div className="skeleton h-64 rounded-[28px]" />
-            <div className="skeleton h-64 rounded-[28px]" />
-          </div>
-        )}
+        {access.status !== 'signed-out' &&
+          access.status !== 'error' &&
+          isLoading && (
+            <div className="mt-8 grid gap-5">
+              <div className="skeleton h-64 rounded-[28px]" />
+              <div className="skeleton h-64 rounded-[28px]" />
+            </div>
+          )}
 
         {loadError && !isLoading && (
-          <div className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]" role="alert">
+          <div
+            className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]"
+            role="alert"
+          >
             <p>{loadError}</p>
             {access.status === 'ready' && (
-              <button type="button" onClick={() => void refreshBookings(access.token)} className="mt-3 font-bold underline">
+              <button
+                type="button"
+                onClick={() => void refreshBookings(access.token)}
+                className="mt-3 font-bold underline"
+              >
                 ลองโหลดอีกครั้ง
               </button>
             )}
@@ -425,7 +456,9 @@ export function MyBookingsScreen() {
           bookings.length === 0 && (
             <section className="sl-surface mt-8 p-10 text-center">
               <h2 className="text-xl font-bold">ยังไม่มีรายการจอง</h2>
-              <p className="mt-2 text-muted">เลือก Event และบูธที่เหมาะกับร้านของคุณเพื่อเริ่มต้น</p>
+              <p className="mt-2 text-muted">
+                เลือก Event และบูธที่เหมาะกับร้านของคุณเพื่อเริ่มต้น
+              </p>
             </section>
           )}
 
@@ -433,7 +466,9 @@ export function MyBookingsScreen() {
           <div className="mt-8 grid gap-6">
             {bookings.length > 0 && visibleBookings.length === 0 && (
               <section className="sl-surface p-10 text-center">
-                <h2 className="text-xl font-bold">ไม่พบรายการที่ตรงกับตัวกรอง</h2>
+                <h2 className="text-xl font-bold">
+                  ไม่พบรายการที่ตรงกับตัวกรอง
+                </h2>
                 <p className="mt-2 text-muted">
                   ลองเปลี่ยนคำค้นหาหรือเลือกดูสถานะอื่น
                 </p>
@@ -450,13 +485,16 @@ export function MyBookingsScreen() {
               </section>
             )}
             {visibleBookings.map((booking) => {
-              const holdExpired = expiredIds.has(booking.id) || isExpired(booking);
+              const holdExpired =
+                expiredIds.has(booking.id) || isExpired(booking);
               return (
                 <article key={booking.id} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}>
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}
+                        >
                           {statusLabel[booking.status]}
                         </span>
                         {isNearCancelDeadline(booking) ? (
@@ -465,7 +503,9 @@ export function MyBookingsScreen() {
                           </span>
                         ) : null}
                       </div>
-                      <h2 className="mt-3 text-xl font-bold">{booking.event.name}</h2>
+                      <h2 className="mt-3 text-xl font-bold">
+                        {booking.event.name}
+                      </h2>
                       <p className="mt-1 text-sm text-muted">
                         รหัสการจอง {booking.bookingCode}
                       </p>
@@ -492,11 +532,15 @@ export function MyBookingsScreen() {
                     />
                     <BookingDetail
                       label="วันเริ่มงาน"
-                      value={dateFormatter.format(new Date(booking.bookingStartDate))}
+                      value={dateFormatter.format(
+                        new Date(booking.bookingStartDate),
+                      )}
                     />
                     <BookingDetail
                       label="วันสิ้นสุด"
-                      value={dateFormatter.format(new Date(booking.bookingEndDate))}
+                      value={dateFormatter.format(
+                        new Date(booking.bookingEndDate),
+                      )}
                     />
                   </dl>
 
@@ -507,10 +551,16 @@ export function MyBookingsScreen() {
                   ) : null}
 
                   <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-5">
-                    <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} className="sl-action-secondary text-violet">
+                    <Link
+                      href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
+                      className="sl-action-secondary text-violet"
+                    >
                       ดูรายละเอียด
                     </Link>
-                    <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary text-violet">
+                    <Link
+                      href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
+                      className="sl-action-secondary text-violet"
+                    >
                       ดู Event
                     </Link>
                     {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
@@ -525,11 +575,17 @@ export function MyBookingsScreen() {
                         ชำระเงิน
                       </Link>
                     ) : null}
-                    <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">
+                    <Link
+                      href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`}
+                      className="sl-action-secondary text-violet"
+                    >
                       ดู Zone Map
                     </Link>
                     {isBookingReviewEligible(booking) ? (
-                      <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`} className="sl-action-secondary text-violet">
+                      <Link
+                        href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`}
+                        className="sl-action-secondary text-violet"
+                      >
                         รีวิวพื้นที่
                       </Link>
                     ) : null}
@@ -540,7 +596,6 @@ export function MyBookingsScreen() {
                       เหตุผลที่ยกเลิก: {booking.cancelReason}
                     </p>
                   )}
-
                 </article>
               );
             })}
