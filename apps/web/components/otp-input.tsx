@@ -1,6 +1,11 @@
 'use client';
 
-import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from 'react';
 import {
   backspaceOtpValue,
   changeOtpValue,

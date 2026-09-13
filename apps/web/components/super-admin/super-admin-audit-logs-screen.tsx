@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import Link from "next/link";
+import Link from 'next/link';
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,43 +11,43 @@ import {
   ScrollText,
   Target,
   UserRound,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   getSuperAdminAuditLogs,
   type SuperAdminAuditAction,
   type SuperAdminAuditLog,
-} from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 const PAGE_SIZE = 25;
 const ACTIONS: SuperAdminAuditAction[] = [
-  "ORGANIZATION_CREATED",
-  "ORGANIZATION_STATUS_UPDATED",
-  "ORG_ADMIN_GRANTED",
-  "ORG_ADMIN_REVOKED",
-  "PLATFORM_CONFIG_UPDATED",
+  'ORGANIZATION_CREATED',
+  'ORGANIZATION_STATUS_UPDATED',
+  'ORG_ADMIN_GRANTED',
+  'ORG_ADMIN_REVOKED',
+  'PLATFORM_CONFIG_UPDATED',
 ];
-const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Bangkok",
+const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Bangkok',
 });
 
 export function SuperAdminAuditLogsScreen() {
   const [logs, setLogs] = useState<SuperAdminAuditLog[]>([]);
-  const [action, setAction] = useState<"ALL" | SuperAdminAuditAction>("ALL");
+  const [action, setAction] = useState<'ALL' | SuperAdminAuditAction>('ALL');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     setLoading(true);
-    setError("");
+    setError('');
 
     void (async () => {
       try {
@@ -55,14 +55,14 @@ export function SuperAdminAuditLogsScreen() {
         const rows = await getSuperAdminAuditLogs(
           token,
           controller.signal,
-          action === "ALL" ? {} : { action },
+          action === 'ALL' ? {} : { action },
         );
         if (active) setLogs(rows);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active)
-          setError(errorMessage(cause, "โหลดประวัติการดำเนินการไม่สำเร็จ"));
+          setError(errorMessage(cause, 'โหลดประวัติการดำเนินการไม่สำเร็จ'));
       } finally {
         if (active) setLoading(false);
       }
@@ -79,10 +79,10 @@ export function SuperAdminAuditLogsScreen() {
   const counts = useMemo(
     () => ({
       total: logs.length,
-      organizations: logs.filter((log) => log.targetType === "ORGANIZATION")
+      organizations: logs.filter((log) => log.targetType === 'ORGANIZATION')
         .length,
-      users: logs.filter((log) => log.targetType === "USER").length,
-      platform: logs.filter((log) => log.targetType === "PLATFORM_CONFIG")
+      users: logs.filter((log) => log.targetType === 'USER').length,
+      platform: logs.filter((log) => log.targetType === 'PLATFORM_CONFIG')
         .length,
     }),
     [logs],
@@ -114,7 +114,7 @@ export function SuperAdminAuditLogsScreen() {
           disabled={loading}
           className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] disabled:opacity-55"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           โหลดข้อมูลใหม่
         </button>
       </header>
@@ -158,7 +158,7 @@ export function SuperAdminAuditLogsScreen() {
               <select
                 value={action}
                 onChange={(event) =>
-                  setAction(event.target.value as "ALL" | SuperAdminAuditAction)
+                  setAction(event.target.value as 'ALL' | SuperAdminAuditAction)
                 }
                 className="min-h-9 flex-1 bg-transparent text-sm text-[#28202f] outline-none"
               >
@@ -187,14 +187,14 @@ export function SuperAdminAuditLogsScreen() {
         ) : logs.length === 0 ? (
           <StatePanel
             title={
-              action === "ALL"
-                ? "ยังไม่มีกิจกรรมในระบบ"
-                : "ไม่พบกิจกรรมประเภทนี้"
+              action === 'ALL'
+                ? 'ยังไม่มีกิจกรรมในระบบ'
+                : 'ไม่พบกิจกรรมประเภทนี้'
             }
             detail={
-              action === "ALL"
-                ? "รายการจะปรากฏเมื่อผู้ดูแลระบบดำเนินการที่มี Audit log"
-                : "ลองเลือกการกระทำอื่นหรือแสดงทุกการกระทำ"
+              action === 'ALL'
+                ? 'รายการจะปรากฏเมื่อผู้ดูแลระบบดำเนินการที่มี Audit log'
+                : 'ลองเลือกการกระทำอื่นหรือแสดงทุกการกระทำ'
             }
           />
         ) : (
@@ -213,7 +213,10 @@ export function SuperAdminAuditLogsScreen() {
                 {visibleRows.map((log) => {
                   const metadata = formatMetadata(log.metadata);
                   return (
-                    <tr key={log.id} className="border-t border-[#f0ebf3] align-top">
+                    <tr
+                      key={log.id}
+                      className="border-t border-[#f0ebf3] align-top"
+                    >
                       <td className="whitespace-nowrap px-5 py-4">
                         <span className="inline-flex items-center gap-1.5 text-xs text-[#716675]">
                           <Clock3 className="h-3.5 w-3.5 text-[#9b6be1]" />
@@ -224,7 +227,7 @@ export function SuperAdminAuditLogsScreen() {
                       </td>
                       <td className="px-3 py-4">
                         <strong className="block text-[#242032]">
-                          {log.actor.fullName || "ไม่ระบุชื่อ"}
+                          {log.actor.fullName || 'ไม่ระบุชื่อ'}
                         </strong>
                         <span className="mt-1 block text-xs text-[#82788b]">
                           {log.actor.email}
@@ -250,7 +253,9 @@ export function SuperAdminAuditLogsScreen() {
                             </pre>
                           </details>
                         ) : (
-                          <span className="text-xs text-[#aaa1ad]">ไม่มีข้อมูล</span>
+                          <span className="text-xs text-[#aaa1ad]">
+                            ไม่มีข้อมูล
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -286,7 +291,7 @@ function TargetCell({ log }: { log: SuperAdminAuditLog }) {
     </>
   );
 
-  return log.targetType === "ORGANIZATION" ? (
+  return log.targetType === 'ORGANIZATION' ? (
     <Link
       href="/super-admin/organizations"
       className="block rounded-lg px-2 py-1.5 transition hover:bg-[#f2eaff]"
@@ -300,11 +305,11 @@ function TargetCell({ log }: { log: SuperAdminAuditLog }) {
 
 function ActionPill({ action }: { action: SuperAdminAuditAction }) {
   const styles: Record<SuperAdminAuditAction, string> = {
-    ORGANIZATION_CREATED: "bg-[#ecfdf3] text-[#166534]",
-    ORGANIZATION_STATUS_UPDATED: "bg-[#fff7ed] text-[#92400e]",
-    ORG_ADMIN_GRANTED: "bg-[#f2eaff] text-[#6d28d9]",
-    ORG_ADMIN_REVOKED: "bg-[#fff1f2] text-[#b91c1c]",
-    PLATFORM_CONFIG_UPDATED: "bg-[#eef4ff] text-[#1d4ed8]",
+    ORGANIZATION_CREATED: 'bg-[#ecfdf3] text-[#166534]',
+    ORGANIZATION_STATUS_UPDATED: 'bg-[#fff7ed] text-[#92400e]',
+    ORG_ADMIN_GRANTED: 'bg-[#f2eaff] text-[#6d28d9]',
+    ORG_ADMIN_REVOKED: 'bg-[#fff1f2] text-[#b91c1c]',
+    PLATFORM_CONFIG_UPDATED: 'bg-[#eef4ff] text-[#1d4ed8]',
   };
   return (
     <span
@@ -337,7 +342,7 @@ function SummaryCard({
           <div className="mt-1 h-6 w-12 animate-pulse rounded bg-[#eee8f4]" />
         ) : (
           <strong className="mt-0.5 block text-xl text-[#242032]">
-            {value.toLocaleString("th-TH")}
+            {value.toLocaleString('th-TH')}
           </strong>
         )}
       </div>
@@ -361,8 +366,8 @@ function Pagination({
   return (
     <footer className="flex flex-col gap-3 border-t border-[#ebe4ef] bg-[#fdfbff] px-5 py-3.5 text-xs text-[#82788b] sm:flex-row sm:items-center sm:justify-between">
       <span>
-        แสดง {first.toLocaleString("th-TH")}–{last.toLocaleString("th-TH")} จาก{" "}
-        {total.toLocaleString("th-TH")} รายการ
+        แสดง {first.toLocaleString('th-TH')}–{last.toLocaleString('th-TH')} จาก{' '}
+        {total.toLocaleString('th-TH')} รายการ
       </span>
       <div className="flex items-center gap-2">
         <button
@@ -406,7 +411,9 @@ function StatePanel({
         <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#f2eaff] text-[#6d28d9]">
           <ScrollText className="h-5 w-5" />
         </span>
-        <h2 className="mb-1 mt-4 text-base font-black text-[#312939]">{title}</h2>
+        <h2 className="mb-1 mt-4 text-base font-black text-[#312939]">
+          {title}
+        </h2>
         <p className="m-0 text-sm text-[#82788b]">{detail}</p>
         {action ? (
           <button
@@ -426,7 +433,10 @@ function TableSkeleton() {
   return (
     <div className="grid gap-3 p-5">
       {[1, 2, 3, 4, 5].map((item) => (
-        <div key={item} className="h-14 animate-pulse rounded-lg bg-[#f2edf8]" />
+        <div
+          key={item}
+          className="h-14 animate-pulse rounded-lg bg-[#f2edf8]"
+        />
       ))}
     </div>
   );
@@ -434,28 +444,28 @@ function TableSkeleton() {
 
 function actionLabel(action: SuperAdminAuditAction) {
   const labels: Record<SuperAdminAuditAction, string> = {
-    ORGANIZATION_CREATED: "สร้างองค์กรใหม่",
-    ORGANIZATION_STATUS_UPDATED: "เปลี่ยนสถานะองค์กร",
-    ORG_ADMIN_GRANTED: "มอบสิทธิ์ผู้ดูแลองค์กร",
-    ORG_ADMIN_REVOKED: "ถอนสิทธิ์ผู้ดูแลองค์กร",
-    PLATFORM_CONFIG_UPDATED: "อัปเดตการตั้งค่าแพลตฟอร์ม",
+    ORGANIZATION_CREATED: 'สร้างองค์กรใหม่',
+    ORGANIZATION_STATUS_UPDATED: 'เปลี่ยนสถานะองค์กร',
+    ORG_ADMIN_GRANTED: 'มอบสิทธิ์ผู้ดูแลองค์กร',
+    ORG_ADMIN_REVOKED: 'ถอนสิทธิ์ผู้ดูแลองค์กร',
+    PLATFORM_CONFIG_UPDATED: 'อัปเดตการตั้งค่าแพลตฟอร์ม',
   };
   return labels[action];
 }
 
-function targetLabel(targetType: SuperAdminAuditLog["targetType"]) {
+function targetLabel(targetType: SuperAdminAuditLog['targetType']) {
   return {
-    ORGANIZATION: "องค์กร",
-    USER: "ผู้ใช้",
-    PLATFORM_CONFIG: "การตั้งค่าแพลตฟอร์ม",
+    ORGANIZATION: 'องค์กร',
+    USER: 'ผู้ใช้',
+    PLATFORM_CONFIG: 'การตั้งค่าแพลตฟอร์ม',
   }[targetType];
 }
 
 function formatMetadata(metadata: unknown) {
-  if (metadata === null || metadata === undefined) return "";
-  if (typeof metadata === "string") return metadata;
+  if (metadata === null || metadata === undefined) return '';
+  if (typeof metadata === 'string') return metadata;
   try {
-    return JSON.stringify(metadata, null, 2) ?? "";
+    return JSON.stringify(metadata, null, 2) ?? '';
   } catch {
     return String(metadata);
   }
@@ -465,8 +475,7 @@ async function getAccessToken() {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token)
-    throw new Error("ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่");
+  if (!token) throw new Error('ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่');
   return token;
 }
 

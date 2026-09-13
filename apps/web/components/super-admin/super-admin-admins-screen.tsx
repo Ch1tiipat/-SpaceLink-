@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
 import {
   Building2,
   ChevronLeft,
@@ -9,31 +9,31 @@ import {
   Search,
   ShieldCheck,
   UsersRound,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   getSuperAdminCompanyAdmins,
   updateSuperAdminQuotaPermission,
   type SuperAdminCompanyAdmin,
-} from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 const PAGE_SIZE = 25;
-const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Bangkok",
+const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Bangkok',
 });
 
 export function SuperAdminAdminsScreen() {
   const router = useRouter();
   const [admins, setAdmins] = useState<SuperAdminCompanyAdmin[]>([]);
-  const [query, setQuery] = useState("");
-  const [organizationId, setOrganizationId] = useState("ALL");
+  const [query, setQuery] = useState('');
+  const [organizationId, setOrganizationId] = useState('ALL');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [updatingMembershipIds, setUpdatingMembershipIds] = useState<
     Set<string>
   >(new Set());
@@ -46,21 +46,18 @@ export function SuperAdminAdminsScreen() {
     const controller = new AbortController();
     let active = true;
     setLoading(true);
-    setError("");
+    setError('');
 
     void (async () => {
       try {
         const token = await getAccessToken();
-        const rows = await getSuperAdminCompanyAdmins(
-          token,
-          controller.signal,
-        );
+        const rows = await getSuperAdminCompanyAdmins(token, controller.signal);
         if (active) setAdmins(rows);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active)
-          setError(errorMessage(cause, "โหลดข้อมูลผู้ดูแลองค์กรไม่สำเร็จ"));
+          setError(errorMessage(cause, 'โหลดข้อมูลผู้ดูแลองค์กรไม่สำเร็จ'));
       } finally {
         if (active) setLoading(false);
       }
@@ -82,7 +79,7 @@ export function SuperAdminAdminsScreen() {
     return [...unique.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((left, right) =>
-        left.name.localeCompare(right.name, "th-TH", { sensitivity: "base" }),
+        left.name.localeCompare(right.name, 'th-TH', { sensitivity: 'base' }),
       );
   }, [admins]);
 
@@ -92,18 +89,15 @@ export function SuperAdminAdminsScreen() {
   );
 
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("th-TH");
+    const normalized = query.trim().toLocaleLowerCase('th-TH');
     return admins.filter((admin) => {
       const matchesOrganization =
-        organizationId === "ALL" ||
-        admin.organization.id === organizationId;
+        organizationId === 'ALL' || admin.organization.id === organizationId;
       const matchesQuery =
         !normalized ||
-        admin.user.fullName.toLocaleLowerCase("th-TH").includes(normalized) ||
-        admin.user.email.toLocaleLowerCase("th-TH").includes(normalized) ||
-        admin.organization.name
-          .toLocaleLowerCase("th-TH")
-          .includes(normalized);
+        admin.user.fullName.toLocaleLowerCase('th-TH').includes(normalized) ||
+        admin.user.email.toLocaleLowerCase('th-TH').includes(normalized) ||
+        admin.organization.name.toLocaleLowerCase('th-TH').includes(normalized);
       return matchesOrganization && matchesQuery;
     });
   }, [admins, organizationId, query]);
@@ -114,7 +108,7 @@ export function SuperAdminAdminsScreen() {
     (safePage - 1) * PAGE_SIZE,
     safePage * PAGE_SIZE,
   );
-  const hasFilters = query.trim().length > 0 || organizationId !== "ALL";
+  const hasFilters = query.trim().length > 0 || organizationId !== 'ALL';
 
   function openUser(userId: string) {
     router.push(`/super-admin/users?id=${encodeURIComponent(userId)}`);
@@ -147,7 +141,7 @@ export function SuperAdminAdminsScreen() {
     } catch (cause) {
       setPermissionErrors((current) => ({
         ...current,
-        [admin.id]: errorMessage(cause, "เปลี่ยนสิทธิ์แก้โควตาไม่สำเร็จ"),
+        [admin.id]: errorMessage(cause, 'เปลี่ยนสิทธิ์แก้โควตาไม่สำเร็จ'),
       }));
     } finally {
       setUpdatingMembershipIds((current) => {
@@ -178,7 +172,7 @@ export function SuperAdminAdminsScreen() {
           disabled={loading}
           className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] disabled:opacity-55"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           โหลดข้อมูลใหม่
         </button>
       </header>
@@ -241,8 +235,8 @@ export function SuperAdminAdminsScreen() {
             type="button"
             disabled={!hasFilters}
             onClick={() => {
-              setQuery("");
-              setOrganizationId("ALL");
+              setQuery('');
+              setOrganizationId('ALL');
             }}
             className="min-h-10 rounded-[9px] border border-[#e7dfea] bg-white px-3 text-xs font-bold text-[#716675] disabled:opacity-45"
           >
@@ -262,13 +256,13 @@ export function SuperAdminAdminsScreen() {
           <StatePanel
             title={
               hasFilters
-                ? "ไม่พบผู้ดูแลที่ตรงกับตัวกรอง"
-                : "ยังไม่มีแอดมินองค์กรในระบบ"
+                ? 'ไม่พบผู้ดูแลที่ตรงกับตัวกรอง'
+                : 'ยังไม่มีแอดมินองค์กรในระบบ'
             }
             detail={
               hasFilters
-                ? "ลองเปลี่ยนคำค้นหาหรือเลือกองค์กรอื่น"
-                : "รายการจะแสดงเมื่อมีการมอบสิทธิ์ผู้ดูแลองค์กร"
+                ? 'ลองเปลี่ยนคำค้นหาหรือเลือกองค์กรอื่น'
+                : 'รายการจะแสดงเมื่อมีการมอบสิทธิ์ผู้ดูแลองค์กร'
             }
           />
         ) : (
@@ -293,7 +287,7 @@ export function SuperAdminAdminsScreen() {
                     aria-label={`เปิดข้อมูลผู้ใช้ ${admin.user.fullName}`}
                     onClick={() => openUser(admin.user.id)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
+                      if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         openUser(admin.user.id);
                       }
@@ -334,7 +328,7 @@ export function SuperAdminAdminsScreen() {
                         type="button"
                         role="switch"
                         aria-checked={admin.canEditQuota}
-                        aria-label={`${admin.canEditQuota ? "ปิด" : "เปิด"}สิทธิ์แก้โควตาของ ${admin.user.fullName} ใน ${admin.organization.name}`}
+                        aria-label={`${admin.canEditQuota ? 'ปิด' : 'เปิด'}สิทธิ์แก้โควตาของ ${admin.user.fullName} ใน ${admin.organization.name}`}
                         disabled={updatingMembershipIds.has(admin.id)}
                         onClick={() => void toggleQuotaPermission(admin)}
                         className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs font-bold text-[#62576c] disabled:cursor-wait disabled:opacity-60"
@@ -342,20 +336,20 @@ export function SuperAdminAdminsScreen() {
                         <span
                           aria-hidden
                           className={`relative h-6 w-11 rounded-full transition ${
-                            admin.canEditQuota ? "bg-[#6d28d9]" : "bg-[#d9d1de]"
+                            admin.canEditQuota ? 'bg-[#6d28d9]' : 'bg-[#d9d1de]'
                           }`}
                         >
                           <span
                             className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${
-                              admin.canEditQuota ? "left-6" : "left-1"
+                              admin.canEditQuota ? 'left-6' : 'left-1'
                             }`}
                           />
                         </span>
                         {updatingMembershipIds.has(admin.id)
-                          ? "กำลังบันทึก..."
+                          ? 'กำลังบันทึก...'
                           : admin.canEditQuota
-                            ? "เปิด"
-                            : "ปิด"}
+                            ? 'เปิด'
+                            : 'ปิด'}
                       </button>
                       {permissionErrors[admin.id] ? (
                         <p className="mt-1 max-w-[180px] text-[11px] font-bold text-red-700">
@@ -408,7 +402,7 @@ function SummaryCard({
           <div className="mt-1 h-6 w-12 animate-pulse rounded bg-[#eee8f4]" />
         ) : (
           <strong className="mt-0.5 block text-xl text-[#242032]">
-            {value.toLocaleString("th-TH")}
+            {value.toLocaleString('th-TH')}
           </strong>
         )}
       </div>
@@ -419,7 +413,7 @@ function SummaryCard({
 function AdminAvatar({ name }: { name: string }) {
   return (
     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#f1eaff] text-xs font-extrabold text-[#6d28d9]">
-      {name.trim().charAt(0).toUpperCase() || "A"}
+      {name.trim().charAt(0).toUpperCase() || 'A'}
     </span>
   );
 }
@@ -440,8 +434,8 @@ function Pagination({
   return (
     <footer className="flex flex-col gap-3 border-t border-[#ebe4ef] bg-[#fdfbff] px-5 py-3.5 text-xs text-[#82788b] sm:flex-row sm:items-center sm:justify-between">
       <span>
-        แสดง {first.toLocaleString("th-TH")}–{last.toLocaleString("th-TH")} จาก{" "}
-        {total.toLocaleString("th-TH")} รายการ
+        แสดง {first.toLocaleString('th-TH')}–{last.toLocaleString('th-TH')} จาก{' '}
+        {total.toLocaleString('th-TH')} รายการ
       </span>
       <div className="flex items-center gap-2">
         <button
@@ -485,7 +479,9 @@ function StatePanel({
         <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#f2eaff] text-[#6d28d9]">
           <ShieldCheck className="h-5 w-5" />
         </span>
-        <h2 className="mb-1 mt-4 text-base font-black text-[#312939]">{title}</h2>
+        <h2 className="mb-1 mt-4 text-base font-black text-[#312939]">
+          {title}
+        </h2>
         <p className="m-0 text-sm text-[#82788b]">{detail}</p>
         {action ? (
           <button
@@ -505,7 +501,10 @@ function TableSkeleton() {
   return (
     <div className="grid gap-3 p-5">
       {[1, 2, 3, 4, 5].map((item) => (
-        <div key={item} className="h-14 animate-pulse rounded-lg bg-[#f2edf8]" />
+        <div
+          key={item}
+          className="h-14 animate-pulse rounded-lg bg-[#f2edf8]"
+        />
       ))}
     </div>
   );
@@ -515,8 +514,7 @@ async function getAccessToken() {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token)
-    throw new Error("ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่");
+  if (!token) throw new Error('ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่');
   return token;
 }
 

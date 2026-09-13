@@ -2,12 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import {
-  AlertCircle,
-  Building2,
-  Loader2,
-  type LucideIcon,
-} from 'lucide-react';
+import { AlertCircle, Building2, Loader2, type LucideIcon } from 'lucide-react';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { getMe, type CurrentUser } from '@/lib/api';
 import {
@@ -22,9 +17,7 @@ export type AdminAccessState =
   | 'denied'
   | 'no-organization';
 
-export function useAdminPageAccess(
-  requiredPermission?: 'payments' | 'zones',
-): {
+export function useAdminPageAccess(requiredPermission?: 'payments' | 'zones'): {
   access: AdminAccessState;
   token: string;
   organizationId: string;
@@ -66,7 +59,8 @@ export function useAdminPageAccess(
         setUserRole(me.role);
         setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) setAccess('denied');
       }
     })();
@@ -123,7 +117,10 @@ export function AdminAccessGate({
     return (
       <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f7fb] px-5 py-12">
         <section className="max-w-lg rounded-[24px] border border-[#ebe5ef] bg-white p-8 text-center shadow-[0_18px_45px_rgba(54,36,91,0.07)]">
-          <AlertCircle className="mx-auto h-11 w-11 text-[#dc2626]" aria-hidden />
+          <AlertCircle
+            className="mx-auto h-11 w-11 text-[#dc2626]"
+            aria-hidden
+          />
           <h1 className="mt-4 text-2xl font-black text-ink">
             {access === 'no-organization'
               ? 'ยังไม่มีองค์กรที่ดูแล'
@@ -205,7 +202,9 @@ export function AdminPanel({
       {title || description || actions ? (
         <div className="flex flex-col justify-between gap-3 border-b border-[#eee9f3] px-5 py-4 sm:flex-row sm:items-center">
           <div>
-            {title ? <h2 className="text-base font-black text-ink">{title}</h2> : null}
+            {title ? (
+              <h2 className="text-base font-black text-ink">{title}</h2>
+            ) : null}
             {description ? (
               <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
             ) : null}
@@ -241,7 +240,9 @@ export function AdminMetric({
 
   return (
     <article className="rounded-[18px] border border-[#e8e1ee] bg-white p-5 shadow-[0_10px_28px_rgba(54,36,91,0.04)]">
-      <span className={`grid h-11 w-11 place-items-center rounded-[14px] ${tones[tone]}`}>
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-[14px] ${tones[tone]}`}
+      >
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <p className="mt-4 text-xs font-bold text-muted">{label}</p>
@@ -288,7 +289,10 @@ export function AdminPageState({ label }: { label: string }) {
 
 export function AdminError({ message }: { message: string }) {
   return (
-    <p role="alert" className="m-5 rounded-2xl bg-[#fff1f2] px-4 py-3 text-sm font-bold text-[#b42318]">
+    <p
+      role="alert"
+      className="m-5 rounded-2xl bg-[#fff1f2] px-4 py-3 text-sm font-bold text-[#b42318]"
+    >
       {message}
     </p>
   );

@@ -175,5 +175,7 @@ export function describeUnexpectedSendError(cause: unknown): AuthErrorMessage {
     return { text: cause.message };
   }
 
-  return { text: 'ส่งรหัสยืนยันไม่สำเร็จ ตรวจสอบอีเมลอีกครั้งแล้วกดส่งรหัสใหม่' };
+  return {
+    text: 'ส่งรหัสยืนยันไม่สำเร็จ ตรวจสอบอีเมลอีกครั้งแล้วกดส่งรหัสใหม่',
+  };
 }

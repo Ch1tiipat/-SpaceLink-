@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
   useCallback,
@@ -13,7 +13,7 @@ import {
   useState,
   type ReactNode,
   type RefObject,
-} from "react";
+} from 'react';
 import {
   Bell,
   CalendarDays,
@@ -39,8 +39,8 @@ import {
   UserRound,
   X,
   type LucideIcon,
-} from "lucide-react";
-import { useAuthState, type AuthState } from "@/lib/use-auth-state";
+} from 'lucide-react';
+import { useAuthState, type AuthState } from '@/lib/use-auth-state';
 import {
   askSupportAssistant,
   getEventMap,
@@ -60,14 +60,14 @@ import {
   type CurrentUser,
   type VendorShop,
   type ZoneRecommendation,
-} from "@/lib/api";
+} from '@/lib/api';
 import {
   buildAdminOrganizationCatalog,
   selectAdminOrganizationId,
   type AdminOrganization,
-} from "@/lib/admin-organization-access";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { isEventBookable } from "@/lib/event-booking-rules";
+} from '@/lib/admin-organization-access';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { isEventBookable } from '@/lib/event-booking-rules';
 import {
   canUseUxPreview,
   getUxPreviewMode,
@@ -78,7 +78,7 @@ import {
   subscribeToUxPreviewShop,
   type UxPreviewMode,
   type UxPreviewShopMode,
-} from "@/lib/ux-preview";
+} from '@/lib/ux-preview';
 
 /**
  * A destination that exists, or one the design calls for that has no route
@@ -88,30 +88,30 @@ import {
  */
 type NavItem =
   | {
-      kind: "link";
+      kind: 'link';
       label: string;
       href: string;
       icon: LucideIcon;
       matches: (pathname: string) => boolean;
     }
-  | { kind: "soon"; label: string; icon: LucideIcon };
+  | { kind: 'soon'; label: string; icon: LucideIcon };
 
 type NavGroup = { label: string; items: NavItem[] };
 type AdminOrganizationContextValue = {
   organizations: AdminOrganization[];
-  catalogStatus: "loading" | "ready" | "error";
+  catalogStatus: 'loading' | 'ready' | 'error';
   selectedOrganizationId: string;
   selectOrganization: (organizationId: string) => void;
 };
 
 const AdminOrganizationContext = createContext<AdminOrganizationContextValue>({
   organizations: [],
-  catalogStatus: "ready",
-  selectedOrganizationId: "",
+  catalogStatus: 'ready',
+  selectedOrganizationId: '',
   selectOrganization: () => undefined,
 });
 const NO_ADMIN_ORGANIZATIONS: AdminOrganization[] = [];
-const NO_ADMIN_MEMBERSHIPS: CurrentUser["organizations"] = [];
+const NO_ADMIN_MEMBERSHIPS: CurrentUser['organizations'] = [];
 
 export function useAdminOrganizationSelection() {
   return useContext(AdminOrganizationContext);
@@ -124,136 +124,136 @@ export function useAdminOrganizationSelection() {
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Explore",
+    label: 'Explore',
     items: [
       {
-        kind: "link",
-        label: "หน้าหลัก",
-        href: "/",
+        kind: 'link',
+        label: 'หน้าหลัก',
+        href: '/',
         icon: House,
         // Event pages are reached from discovery and have no nav item of their
         // own, so they keep the section they were entered from highlighted.
         matches: (pathname) =>
-          pathname === "/" || pathname.startsWith("/events"),
+          pathname === '/' || pathname.startsWith('/events'),
       },
     ],
   },
   {
-    label: "My Space",
+    label: 'My Space',
     items: [
       {
-        kind: "link",
-        label: "การจองของฉัน",
-        href: "/bookings",
+        kind: 'link',
+        label: 'การจองของฉัน',
+        href: '/bookings',
         icon: Ticket,
-        matches: (pathname) => pathname.startsWith("/bookings"),
+        matches: (pathname) => pathname.startsWith('/bookings'),
       },
       {
-        kind: "link",
-        label: "การแจ้งเตือน",
-        href: "/notifications",
+        kind: 'link',
+        label: 'การแจ้งเตือน',
+        href: '/notifications',
         icon: Bell,
-        matches: (pathname) => pathname.startsWith("/notifications"),
+        matches: (pathname) => pathname.startsWith('/notifications'),
       },
       {
-        kind: "link",
-        label: "ช่วยเหลือ",
-        href: "/help",
+        kind: 'link',
+        label: 'ช่วยเหลือ',
+        href: '/help',
         icon: MessageCircle,
-        matches: (pathname) => pathname.startsWith("/help"),
+        matches: (pathname) => pathname.startsWith('/help'),
       },
     ],
   },
   {
-    label: "Account",
+    label: 'Account',
     items: [
       {
-        kind: "link",
-        label: "โปรไฟล์",
-        href: "/profile",
+        kind: 'link',
+        label: 'โปรไฟล์',
+        href: '/profile',
         icon: UserRound,
-        matches: (pathname) => pathname.startsWith("/profile"),
+        matches: (pathname) => pathname.startsWith('/profile'),
       },
       {
-        kind: "link",
-        label: "การรีวิวของฉัน",
-        href: "/reviews",
+        kind: 'link',
+        label: 'การรีวิวของฉัน',
+        href: '/reviews',
         icon: Star,
-        matches: (pathname) => pathname.startsWith("/reviews"),
+        matches: (pathname) => pathname.startsWith('/reviews'),
       },
     ],
   },
 ];
 
 const ADMIN_NAV_GROUP: NavGroup = {
-  label: "Admin",
+  label: 'Admin',
   items: [
     {
-      kind: "link",
-      label: "ภาพรวม",
-      href: "/admin/dashboard",
+      kind: 'link',
+      label: 'ภาพรวม',
+      href: '/admin/dashboard',
       icon: LayoutDashboard,
-      matches: (pathname) => pathname.startsWith("/admin/dashboard"),
+      matches: (pathname) => pathname.startsWith('/admin/dashboard'),
     },
     {
-      kind: "link",
-      label: "อีเวนต์",
-      href: "/admin/events",
+      kind: 'link',
+      label: 'อีเวนต์',
+      href: '/admin/events',
       icon: CalendarDays,
-      matches: (pathname) => pathname.startsWith("/admin/events"),
+      matches: (pathname) => pathname.startsWith('/admin/events'),
     },
     {
-      kind: "link",
-      label: "การเงินและการจอง",
-      href: "/admin/transactions",
+      kind: 'link',
+      label: 'การเงินและการจอง',
+      href: '/admin/transactions',
       icon: Ticket,
       matches: (pathname) =>
-        pathname.startsWith("/admin/transactions") ||
-        pathname.startsWith("/admin/bookings") ||
-        pathname.startsWith("/admin/payments") ||
-        pathname.startsWith("/admin/vendors"),
+        pathname.startsWith('/admin/transactions') ||
+        pathname.startsWith('/admin/bookings') ||
+        pathname.startsWith('/admin/payments') ||
+        pathname.startsWith('/admin/vendors'),
     },
     {
-      kind: "link",
-      label: "โซนและบูธ",
-      href: "/admin/zones",
+      kind: 'link',
+      label: 'โซนและบูธ',
+      href: '/admin/zones',
       icon: MapPinned,
-      matches: (pathname) => pathname.startsWith("/admin/zones"),
+      matches: (pathname) => pathname.startsWith('/admin/zones'),
     },
     {
-      kind: "link",
-      label: "ออกแบบแผนผัง",
-      href: "/admin/map-designer",
+      kind: 'link',
+      label: 'ออกแบบแผนผัง',
+      href: '/admin/map-designer',
       icon: Map,
-      matches: (pathname) => pathname.startsWith("/admin/map-designer"),
+      matches: (pathname) => pathname.startsWith('/admin/map-designer'),
     },
     {
-      kind: "link",
-      label: "ประกาศ",
-      href: "/admin/announcements",
+      kind: 'link',
+      label: 'ประกาศ',
+      href: '/admin/announcements',
       icon: Megaphone,
-      matches: (pathname) => pathname.startsWith("/admin/announcements"),
+      matches: (pathname) => pathname.startsWith('/admin/announcements'),
     },
     {
-      kind: "link",
-      label: "รีวิว",
-      href: "/admin/reviews",
+      kind: 'link',
+      label: 'รีวิว',
+      href: '/admin/reviews',
       icon: Star,
-      matches: (pathname) => pathname.startsWith("/admin/reviews"),
+      matches: (pathname) => pathname.startsWith('/admin/reviews'),
     },
     {
-      kind: "link",
-      label: "ข้อมูลองค์กร",
-      href: "/admin/organization",
+      kind: 'link',
+      label: 'ข้อมูลองค์กร',
+      href: '/admin/organization',
       icon: Landmark,
-      matches: (pathname) => pathname.startsWith("/admin/organization"),
+      matches: (pathname) => pathname.startsWith('/admin/organization'),
     },
     {
-      kind: "link",
-      label: "คำร้องขอโควตา",
-      href: "/admin/quota-requests",
+      kind: 'link',
+      label: 'คำร้องขอโควตา',
+      href: '/admin/quota-requests',
       icon: Inbox,
-      matches: (pathname) => pathname.startsWith("/admin/quota-requests"),
+      matches: (pathname) => pathname.startsWith('/admin/quota-requests'),
     },
   ],
 };
@@ -261,10 +261,10 @@ const ADMIN_NAV_GROUP: NavGroup = {
 const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
   ...NAV_GROUPS[1],
   items: NAV_GROUPS[1].items
-    .filter((item) => item.kind !== "link" || item.href !== "/bookings")
+    .filter((item) => item.kind !== 'link' || item.href !== '/bookings')
     .map((item) =>
-      item.kind === "link" && item.href === "/help"
-        ? { ...item, label: "ส่งคำร้องถึง Super Admin" }
+      item.kind === 'link' && item.href === '/help'
+        ? { ...item, label: 'ส่งคำร้องถึง Super Admin' }
         : item,
     ),
 };
@@ -282,10 +282,10 @@ const BOTTOM_NAV: NavItem[] = [
  * while signed out, where a sidebar offering การจองของฉัน would be pointing at
  * a page the visitor cannot open yet.
  */
-const BARE_ROUTES = new Set(["/login", "/register"]);
-const DISMISSED_BROADCAST_KEY = "spacelink:dismissed-system-broadcast-id";
+const BARE_ROUTES = new Set(['/login', '/register']);
+const DISMISSED_BROADCAST_KEY = 'spacelink:dismissed-system-broadcast-id';
 const SELECTED_ADMIN_ORGANIZATION_KEY =
-  "spacelink:selected-admin-organization-id";
+  'spacelink:selected-admin-organization-id';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -297,13 +297,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsedNavGroups, setCollapsedNavGroups] = useState<Set<string>>(
     () => new Set(),
   );
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState('');
   const [superAdminOrganizations, setSuperAdminOrganizations] = useState<
     Awaited<ReturnType<typeof getSuperAdminOrganizations>>
   >([]);
   const [superAdminCatalogStatus, setSuperAdminCatalogStatus] = useState<
-    "loading" | "ready" | "error"
-  >("loading");
+    'loading' | 'ready' | 'error'
+  >('loading');
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mobileSidebarTriggerRef = useRef<HTMLButtonElement>(null);
@@ -314,12 +314,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     useState<SystemBroadcast | null>(null);
 
   const isAdmin =
-    auth.status === "signed-in" &&
-    (auth.role === "ORG_ADMIN" || auth.role === "SUPER_ADMIN");
+    auth.status === 'signed-in' &&
+    (auth.role === 'ORG_ADMIN' || auth.role === 'SUPER_ADMIN');
   const adminRole = isAdmin ? auth.role : null;
-  const membershipOrganizations = auth.status === "signed-in"
-    ? auth.organizations
-    : NO_ADMIN_MEMBERSHIPS;
+  const membershipOrganizations =
+    auth.status === 'signed-in' ? auth.organizations : NO_ADMIN_MEMBERSHIPS;
   const organizations = useMemo(
     () =>
       adminRole
@@ -332,9 +331,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     [adminRole, membershipOrganizations, superAdminOrganizations],
   );
   const catalogStatus =
-    adminRole === "SUPER_ADMIN" ? superAdminCatalogStatus : "ready";
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isSuperAdminRoute = pathname.startsWith("/super-admin");
+    adminRole === 'SUPER_ADMIN' ? superAdminCatalogStatus : 'ready';
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isSuperAdminRoute = pathname.startsWith('/super-admin');
 
   const closeMobileSidebar = useCallback(() => {
     setMobileSidebarOpen(false);
@@ -342,41 +341,42 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!mobileSidebarOpen) return;
-    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    const desktopQuery = window.matchMedia('(min-width: 1024px)');
     const closeAtDesktop = (event: MediaQueryListEvent) => {
       if (event.matches) closeMobileSidebar();
     };
-    desktopQuery.addEventListener("change", closeAtDesktop);
-    return () => desktopQuery.removeEventListener("change", closeAtDesktop);
+    desktopQuery.addEventListener('change', closeAtDesktop);
+    return () => desktopQuery.removeEventListener('change', closeAtDesktop);
   }, [closeMobileSidebar, mobileSidebarOpen]);
 
   useEffect(() => {
-    if (adminRole !== "SUPER_ADMIN") {
+    if (adminRole !== 'SUPER_ADMIN') {
       setSuperAdminOrganizations([]);
-      setSuperAdminCatalogStatus("ready");
+      setSuperAdminCatalogStatus('ready');
       return;
     }
 
     const controller = new AbortController();
     let active = true;
-    setSuperAdminCatalogStatus("loading");
+    setSuperAdminCatalogStatus('loading');
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) throw new Error("Missing authenticated session");
+        if (!token) throw new Error('Missing authenticated session');
 
         const rows = await getSuperAdminOrganizations(token, controller.signal);
         if (!active) return;
         setSuperAdminOrganizations(rows);
-        setSuperAdminCatalogStatus("ready");
+        setSuperAdminCatalogStatus('ready');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setSuperAdminOrganizations([]);
-          setSuperAdminCatalogStatus("error");
+          setSuperAdminCatalogStatus('error');
         }
       }
     })();
@@ -388,14 +388,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [adminRole]);
 
   useEffect(() => {
-    if (!isAdmin || catalogStatus !== "ready" || organizations.length === 0) {
-      setSelectedOrganizationId("");
+    if (!isAdmin || catalogStatus !== 'ready' || organizations.length === 0) {
+      setSelectedOrganizationId('');
       return;
     }
 
     const syncOrganization = () => {
       const query = new URLSearchParams(window.location.search);
-      const requestedId = query.get("organization");
+      const requestedId = query.get('organization');
       const storedId = window.sessionStorage.getItem(
         SELECTED_ADMIN_ORGANIZATION_KEY,
       );
@@ -409,20 +409,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       window.sessionStorage.setItem(SELECTED_ADMIN_ORGANIZATION_KEY, nextId);
 
       if (isAdminRoute && requestedId) {
-        query.delete("organization");
+        query.delete('organization');
         const suffix = query.toString();
         router.replace(suffix ? `${pathname}?${suffix}` : pathname);
       }
     };
 
     syncOrganization();
-    window.addEventListener("popstate", syncOrganization);
-    return () => window.removeEventListener("popstate", syncOrganization);
+    window.addEventListener('popstate', syncOrganization);
+    return () => window.removeEventListener('popstate', syncOrganization);
   }, [catalogStatus, isAdmin, isAdminRoute, organizations, pathname, router]);
 
   useEffect(() => {
     setUnreadNotificationCount(null);
-    if (auth.status !== "signed-in") return;
+    if (auth.status !== 'signed-in') return;
 
     let active = true;
     let controller: AbortController | null = null;
@@ -436,7 +436,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         const token = data.session?.access_token;
         if (!active || !token) return;
 
-        if (pathname.startsWith("/notifications")) {
+        if (pathname.startsWith('/notifications')) {
           await markAllNotificationsRead(token);
           if (active) setUnreadNotificationCount(0);
           return;
@@ -448,14 +448,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         );
         if (active) setUnreadNotificationCount(result.count);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active) setUnreadNotificationCount(null);
       }
     }
 
     void refreshUnreadCount();
-    if (pathname.startsWith("/notifications")) {
+    if (pathname.startsWith('/notifications')) {
       return () => {
         active = false;
         controller?.abort();
@@ -463,26 +463,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
 
     const refreshInterval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshUnreadCount();
+      if (document.visibilityState === 'visible') void refreshUnreadCount();
     }, 30_000);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshUnreadCount();
+      if (document.visibilityState === 'visible') void refreshUnreadCount();
     };
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       active = false;
       controller?.abort();
       window.clearInterval(refreshInterval);
-      window.removeEventListener("focus", refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [auth.status, pathname]);
 
   useEffect(() => {
     setActiveBroadcast(null);
-    if (auth.status !== "signed-in") return;
+    if (auth.status !== 'signed-in') return;
 
     const controller = new AbortController();
     let active = true;
@@ -504,7 +504,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }
         setActiveBroadcast(broadcast);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError") {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
           return;
         }
         // A broadcast is supplemental. A temporary failure must not block the
@@ -531,8 +531,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       organizationId,
     );
     const query = new URLSearchParams(window.location.search);
-    if (query.has("organization")) {
-      query.delete("organization");
+    if (query.has('organization')) {
+      query.delete('organization');
       const suffix = query.toString();
       router.replace(suffix ? `${pathname}?${suffix}` : pathname);
     }
@@ -550,7 +550,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   function confirmSignOut() {
     setSignOutConfirmOpen(false);
     signOut();
-    router.replace("/");
+    router.replace('/');
   }
 
   function requestSignOut() {
@@ -582,18 +582,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  const hasPrivateNavigation = auth.status === "signed-in";
+  const hasPrivateNavigation = auth.status === 'signed-in';
   const selectedOrganization = organizations.find(
     (organization) => organization.id === selectedOrganizationId,
   );
   const visibleAdminItems = ADMIN_NAV_GROUP.items.filter((item) => {
-    if (adminRole === "SUPER_ADMIN") return true;
-    if (selectedOrganization?.membershipRole === "OWNER") return true;
-    if (item.kind !== "link") return true;
-    if (item.href === "/admin/transactions") {
+    if (adminRole === 'SUPER_ADMIN') return true;
+    if (selectedOrganization?.membershipRole === 'OWNER') return true;
+    if (item.kind !== 'link') return true;
+    if (item.href === '/admin/transactions') {
       return selectedOrganization?.canManagePayments === true;
     }
-    if (["/admin/zones", "/admin/map-designer"].includes(item.href)) {
+    if (['/admin/zones', '/admin/map-designer'].includes(item.href)) {
       return selectedOrganization?.canManageZones === true;
     }
     return true;
@@ -620,10 +620,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           hasPrivateNavigation
             ? `grid min-h-screen transition-[grid-template-columns] duration-300 ${
                 sidebarCollapsed
-                  ? "lg:grid-cols-[minmax(0,1fr)]"
-                  : "lg:grid-cols-[280px_minmax(0,1fr)]"
+                  ? 'lg:grid-cols-[minmax(0,1fr)]'
+                  : 'lg:grid-cols-[280px_minmax(0,1fr)]'
               }`
-            : "min-h-screen"
+            : 'min-h-screen'
         }
       >
         {hasPrivateNavigation && !sidebarCollapsed && (
@@ -670,8 +670,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div
             className={`min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)] ${
               hasPrivateNavigation
-                ? "pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0"
-                : ""
+                ? 'pb-[calc(72px+env(safe-area-inset-bottom))] lg:pb-0'
+                : ''
             }`}
           >
             {children}
@@ -727,8 +727,12 @@ function SystemBroadcastBanner({
     >
       <Megaphone className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1">
-        <strong className="block text-sm font-extrabold">{broadcast.title}</strong>
-        <p className="mt-0.5 text-sm leading-5 text-white/90">{broadcast.body}</p>
+        <strong className="block text-sm font-extrabold">
+          {broadcast.title}
+        </strong>
+        <p className="mt-0.5 text-sm leading-5 text-white/90">
+          {broadcast.body}
+        </p>
       </div>
       <button
         type="button"
@@ -780,14 +784,14 @@ function Sidebar({
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#ebe5ef] bg-white px-4 py-6 shadow-[8px_0_30px_rgba(69,49,99,0.025)] lg:flex">
       <div
         className={`flex pb-7 ${
-          collapsed ? "flex-col items-center gap-3" : "items-center gap-2"
+          collapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'
         }`}
       >
         <Link
           href="/"
-          aria-label={collapsed ? "SpaceLink หน้าแรก" : undefined}
+          aria-label={collapsed ? 'SpaceLink หน้าแรก' : undefined}
           className={`flex min-w-0 items-center text-xl font-black tracking-[-0.7px] text-ink ${
-            collapsed ? "justify-center" : "flex-1 gap-3 px-2"
+            collapsed ? 'justify-center' : 'flex-1 gap-3 px-2'
           }`}
         >
           <BrandMark />
@@ -796,9 +800,9 @@ function Sidebar({
         <button
           type="button"
           onClick={onToggle}
-          aria-label={collapsed ? "เปิดแถบเมนู" : "ย่อแถบเมนู"}
+          aria-label={collapsed ? 'เปิดแถบเมนู' : 'ย่อแถบเมนู'}
           aria-expanded={!collapsed}
-          title={collapsed ? "เปิดแถบเมนู" : "ย่อแถบเมนู"}
+          title={collapsed ? 'เปิดแถบเมนู' : 'ย่อแถบเมนู'}
           className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#ece7f3] bg-white text-[#655D70] shadow-[0_6px_18px_rgba(54,36,91,0.05)] transition hover:border-[#d9cdf3] hover:bg-violet-tint hover:text-violet"
         >
           <Menu className="h-5 w-5" aria-hidden />
@@ -817,14 +821,14 @@ function Sidebar({
         <button
           type="button"
           onClick={onSignOut}
-          aria-label={collapsed ? "ออกจากระบบ" : undefined}
-          title={collapsed ? "ออกจากระบบ" : undefined}
+          aria-label={collapsed ? 'ออกจากระบบ' : undefined}
+          title={collapsed ? 'ออกจากระบบ' : undefined}
           className={`flex min-h-11 w-full items-center rounded-2xl border border-[#eadff7] bg-[#faf7ff] py-3 text-left text-sm font-extrabold text-[#6331c4] transition hover:border-[#d7c4ef] hover:bg-violet-tint ${
-            collapsed ? "justify-center px-2" : "gap-3 px-4"
+            collapsed ? 'justify-center px-2' : 'gap-3 px-4'
           }`}
         >
           <LogOut aria-hidden className="h-[18px] w-[18px]" strokeWidth={2} />
-          {!collapsed && "ออกจากระบบ"}
+          {!collapsed && 'ออกจากระบบ'}
         </button>
       </div>
     </aside>
@@ -860,7 +864,7 @@ function SidebarNavigation({
             >
               <span>{group.label}</span>
               <ChevronDown
-                className={`h-4 w-4 transition-transform ${groupCollapsed ? "-rotate-90" : ""}`}
+                className={`h-4 w-4 transition-transform ${groupCollapsed ? '-rotate-90' : ''}`}
                 aria-hidden
               />
             </button>
@@ -912,19 +916,20 @@ function MobileSidebar({
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     const returnFocusElement = returnFocusRef.current;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
     closeButtonRef.current?.focus();
 
     function handleKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
         return;
       }
-      if (event.key !== "Tab") return;
+      if (event.key !== 'Tab') return;
 
       const focusableElements = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
+        panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ??
+          [],
       );
       const firstElement = focusableElements[0];
       const lastElement = focusableElements.at(-1);
@@ -939,10 +944,10 @@ function MobileSidebar({
       }
     }
 
-    document.addEventListener("keydown", handleKeyboard);
+    document.addEventListener('keydown', handleKeyboard);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyboard);
+      document.removeEventListener('keydown', handleKeyboard);
       if (returnFocusElement?.isConnected) returnFocusElement.focus();
     };
   }, [onClose, open, returnFocusRef]);
@@ -1021,10 +1026,10 @@ function SidebarItem({
 }) {
   const Icon = item.icon;
   const shared = `flex min-h-12 w-full items-center rounded-[13px] py-2.5 text-left text-[14px] font-medium transition-colors ${
-    collapsed ? "justify-center px-2" : "gap-[11px] px-3.5"
+    collapsed ? 'justify-center px-2' : 'gap-[11px] px-3.5'
   }`;
 
-  if (item.kind === "soon") {
+  if (item.kind === 'soon') {
     return (
       <button
         type="button"
@@ -1045,13 +1050,13 @@ function SidebarItem({
     <Link
       href={item.href}
       onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
+      aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
       className={`${shared} ${
         active
-          ? "bg-[#f4edfc] font-semibold text-[#6d28d9]"
-          : "text-[#817884] hover:bg-[#faf7ff] hover:text-[#6d28d9]"
+          ? 'bg-[#f4edfc] font-semibold text-[#6d28d9]'
+          : 'text-[#817884] hover:bg-[#faf7ff] hover:text-[#6d28d9]'
       }`}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
@@ -1101,7 +1106,9 @@ function Topbar({
     <header className="sticky top-0 z-20 flex h-[63px] items-center justify-between gap-3 border-b border-[#ebe5ef] bg-white/95 px-[18px] shadow-[0_5px_20px_rgba(61,43,88,0.025)] backdrop-blur-xl lg:h-[72px] lg:px-[26px]">
       {/* The sidebar carries the brand from `lg` up; below that it is the only
           thing identifying the page, so it appears here instead. */}
-      <div className={`flex min-w-0 items-center gap-2 ${hasSidebar ? "lg:hidden" : ""}`}>
+      <div
+        className={`flex min-w-0 items-center gap-2 ${hasSidebar ? 'lg:hidden' : ''}`}
+      >
         {hasSidebar ? (
           <button
             ref={mobileSidebarTriggerRef}
@@ -1160,7 +1167,7 @@ function Topbar({
           </label>
         )}
 
-        {auth.status === "signed-in" && (
+        {auth.status === 'signed-in' && (
           <Link
             href="/notifications"
             aria-label="เปิดการแจ้งเตือน"
@@ -1176,7 +1183,7 @@ function Topbar({
           </Link>
         )}
 
-        {auth.status === "loading" && (
+        {auth.status === 'loading' && (
           // Holds the footprint the resolved state will take, so the topbar
           // does not jump when it arrives.
           <span
@@ -1185,7 +1192,7 @@ function Topbar({
           />
         )}
 
-        {auth.status === "signed-out" && (
+        {auth.status === 'signed-out' && (
           <>
             <Link
               href="/login"
@@ -1202,7 +1209,7 @@ function Topbar({
           </>
         )}
 
-        {auth.status === "signed-in" && (
+        {auth.status === 'signed-in' && (
           <AccountMenu
             fullName={auth.fullName}
             compact={showTenantSwitcher}
@@ -1234,14 +1241,14 @@ function AccountMenu({
     }
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === 'Escape') setOpen(false);
     }
 
-    document.addEventListener("pointerdown", closeOnOutsidePress);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePress);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      document.removeEventListener('keydown', closeOnEscape);
     };
   }, [open]);
 
@@ -1258,7 +1265,7 @@ function AccountMenu({
         <Avatar name={fullName} className="h-[28px] w-[28px] text-sm" />
         <span
           className={`max-w-[84px] truncate sm:max-w-[180px] ${
-            compact ? "hidden md:inline" : ""
+            compact ? 'hidden md:inline' : ''
           }`}
         >
           {fullName}
@@ -1305,20 +1312,20 @@ function AccountMenu({
 }
 
 const UX_REVIEW_ROUTES = [
-  ["หน้าแรก", "/"],
-  ["รายละเอียดงาน", "/events/demo-event"],
-  ["แผนผังโซน", "/events/demo-event/map"],
-  ["เลือกบูธ", "/events/demo-event/book"],
-  ["การจอง", "/bookings"],
-  ["รายละเอียดจอง", "/bookings/local-preview-confirmed-booking"],
-  ["ชำระเงิน", "/bookings/local-preview-booking/payment"],
-  ["รีวิว", "/bookings/local-preview-completed-booking/review"],
-  ["รีวิวของฉัน", "/reviews"],
-  ["แจ้งเตือน", "/notifications"],
-  ["ช่วยเหลือ", "/help"],
-  ["โปรไฟล์", "/profile"],
-  ["เข้าสู่ระบบ", "/login"],
-  ["สมัครสมาชิก", "/register"],
+  ['หน้าแรก', '/'],
+  ['รายละเอียดงาน', '/events/demo-event'],
+  ['แผนผังโซน', '/events/demo-event/map'],
+  ['เลือกบูธ', '/events/demo-event/book'],
+  ['การจอง', '/bookings'],
+  ['รายละเอียดจอง', '/bookings/local-preview-confirmed-booking'],
+  ['ชำระเงิน', '/bookings/local-preview-booking/payment'],
+  ['รีวิว', '/bookings/local-preview-completed-booking/review'],
+  ['รีวิวของฉัน', '/reviews'],
+  ['แจ้งเตือน', '/notifications'],
+  ['ช่วยเหลือ', '/help'],
+  ['โปรไฟล์', '/profile'],
+  ['เข้าสู่ระบบ', '/login'],
+  ['สมัครสมาชิก', '/register'],
 ] as const;
 
 function UxReviewPanel({
@@ -1329,13 +1336,13 @@ function UxReviewPanel({
   pathname: string;
 }) {
   const [available, setAvailable] = useState(false);
-  const [mode, setMode] = useState<UxPreviewMode>("signed-out");
-  const [shopMode, setShopMode] = useState<UxPreviewShopMode>("with-shop");
+  const [mode, setMode] = useState<UxPreviewMode>('signed-out');
+  const [shopMode, setShopMode] = useState<UxPreviewShopMode>('with-shop');
 
   useEffect(() => {
     if (!canUseUxPreview()) return;
     setAvailable(true);
-    setMode(getUxPreviewMode() ?? "signed-out");
+    setMode(getUxPreviewMode() ?? 'signed-out');
     setShopMode(getUxPreviewShopMode());
     const unsubscribeAuth = subscribeToUxPreview(setMode);
     const unsubscribeShop = subscribeToUxPreviewShop(setShopMode);
@@ -1350,8 +1357,8 @@ function UxReviewPanel({
   return (
     <details className="fixed bottom-[84px] left-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8cef0] bg-white/95 shadow-[0_18px_50px_rgba(44,27,76,0.2)] backdrop-blur-xl lg:bottom-4">
       <summary className="cursor-pointer list-none px-4 py-3 text-sm font-extrabold text-violet">
-        ตรวจ UX/UI ·{" "}
-        {auth.status === "signed-in" ? "เข้าสู่ระบบแล้ว" : "ผู้เยี่ยมชม"}
+        ตรวจ UX/UI ·{' '}
+        {auth.status === 'signed-in' ? 'เข้าสู่ระบบแล้ว' : 'ผู้เยี่ยมชม'}
       </summary>
       <div className="border-t border-line p-3">
         <p className="text-xs leading-5 text-muted">
@@ -1360,8 +1367,8 @@ function UxReviewPanel({
         <div className="mt-3 grid grid-cols-2 gap-2">
           {(
             [
-              ["signed-out", "ยังไม่เข้าสู่ระบบ"],
-              ["signed-in", "เข้าสู่ระบบแล้ว"],
+              ['signed-out', 'ยังไม่เข้าสู่ระบบ'],
+              ['signed-in', 'เข้าสู่ระบบแล้ว'],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -1373,20 +1380,20 @@ function UxReviewPanel({
               }}
               className={`rounded-xl px-3 py-2 text-xs font-bold ${
                 mode === value
-                  ? "bg-violet text-white"
-                  : "border border-line bg-white text-ink"
+                  ? 'bg-violet text-white'
+                  : 'border border-line bg-white text-ink'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-        {mode === "signed-in" && (
+        {mode === 'signed-in' && (
           <div className="mt-2 grid grid-cols-2 gap-2">
             {(
               [
-                ["with-shop", "มีโปรไฟล์ร้าน"],
-                ["no-shop", "ยังไม่มีร้าน"],
+                ['with-shop', 'มีโปรไฟล์ร้าน'],
+                ['no-shop', 'ยังไม่มีร้าน'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -1398,8 +1405,8 @@ function UxReviewPanel({
                 }}
                 className={`rounded-xl px-3 py-2 text-xs font-bold ${
                   shopMode === value
-                    ? "bg-[#201b2e] text-white"
-                    : "border border-line bg-white text-ink"
+                    ? 'bg-[#201b2e] text-white'
+                    : 'border border-line bg-white text-ink'
                 }`}
               >
                 {label}
@@ -1417,8 +1424,8 @@ function UxReviewPanel({
               href={href}
               className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                 pathname === href
-                  ? "bg-violet-tint text-violet"
-                  : "bg-[#f7f5fa] text-[#625b6d]"
+                  ? 'bg-violet-tint text-violet'
+                  : 'bg-[#f7f5fa] text-[#625b6d]'
               }`}
             >
               {label}
@@ -1431,26 +1438,26 @@ function UxReviewPanel({
 }
 
 type ZoneAssistantStep =
-  | "idle"
-  | "loading"
-  | "select-event"
-  | "select-zone"
-  | "select-facilities"
-  | "result";
+  | 'idle'
+  | 'loading'
+  | 'select-event'
+  | 'select-zone'
+  | 'select-facilities'
+  | 'result';
 
 type SupportConversationEntry = {
   id: number;
   question: string;
   answer: string;
-  source: SupportAssistantResponse["source"] | null;
+  source: SupportAssistantResponse['source'] | null;
   actions: SupportAssistantAction[];
 };
 
 const ASSISTANT_FACILITIES = [
-  { value: "ปลั๊กไฟ", label: "ปลั๊กไฟ" },
-  { value: "โต๊ะ", label: "โต๊ะ" },
-  { value: "น้ำประปา", label: "น้ำประปา" },
-  { value: "Wi-Fi", label: "Wi-Fi" },
+  { value: 'ปลั๊กไฟ', label: 'ปลั๊กไฟ' },
+  { value: 'โต๊ะ', label: 'โต๊ะ' },
+  { value: 'น้ำประปา', label: 'น้ำประปา' },
+  { value: 'Wi-Fi', label: 'Wi-Fi' },
 ] as const;
 
 function FloatingSupport({
@@ -1461,14 +1468,14 @@ function FloatingSupport({
   hasBottomNav: boolean;
 }) {
   const initialAnswer =
-    "สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ";
-  const [view, setView] = useState<"closed" | "menu" | "chat">("closed");
-  const [assistantMode, setAssistantMode] = useState<"help" | "zone">("help");
-  const [question, setQuestion] = useState("");
-  const [askedQuestion, setAskedQuestion] = useState("");
+    'สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ';
+  const [view, setView] = useState<'closed' | 'menu' | 'chat'>('closed');
+  const [assistantMode, setAssistantMode] = useState<'help' | 'zone'>('help');
+  const [question, setQuestion] = useState('');
+  const [askedQuestion, setAskedQuestion] = useState('');
   const [answer, setAnswer] = useState(initialAnswer);
   const [answerSource, setAnswerSource] = useState<
-    SupportAssistantResponse["source"] | null
+    SupportAssistantResponse['source'] | null
   >(null);
   const [answerActions, setAnswerActions] = useState<SupportAssistantAction[]>(
     [],
@@ -1477,27 +1484,27 @@ function FloatingSupport({
     SupportConversationEntry[]
   >([]);
   const [isAsking, setIsAsking] = useState(false);
-  const [zoneStep, setZoneStep] = useState<ZoneAssistantStep>("idle");
+  const [zoneStep, setZoneStep] = useState<ZoneAssistantStep>('idle');
   const [assistantEvents, setAssistantEvents] = useState<DiscoveryEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<DiscoveryEvent | null>(
     null,
   );
   const [selectedMap, setSelectedMap] = useState<EventMap | null>(null);
-  const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [selectedZoneId, setSelectedZoneId] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState<VendorShop | null>(null);
   const [recommendations, setRecommendations] = useState<ZoneRecommendation[]>(
     [],
   );
-  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const requestController = useRef<AbortController | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const nextMessageId = useRef(1);
 
   const quickQuestions = [
-    "เริ่มจองบูธอย่างไร",
-    "อัปโหลดสลิปที่ไหน",
-    "ติดตามสถานะการจองที่ไหน",
+    'เริ่มจองบูธอย่างไร',
+    'อัปโหลดสลิปที่ไหน',
+    'ติดตามสถานะการจองที่ไหน',
   ];
 
   useEffect(
@@ -1508,11 +1515,11 @@ function FloatingSupport({
   );
 
   useEffect(() => {
-    if (view !== "chat") return;
+    if (view !== 'chat') return;
     const animationFrame = requestAnimationFrame(() => {
       transcriptRef.current?.scrollTo({
         top: transcriptRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: 'smooth',
       });
     });
     return () => cancelAnimationFrame(animationFrame);
@@ -1537,19 +1544,19 @@ function FloatingSupport({
     if (!normalized || isAsking) return;
 
     if (isZoneRecommendationQuestion(normalized)) {
-      setAssistantMode("zone");
+      setAssistantMode('zone');
       await startZoneAssistant(normalized);
       return;
     }
 
     const archivedEntry = archiveCurrentExchange();
-    if (assistantMode === "zone") {
-      setAssistantMode("help");
-      setZoneStep("idle");
+    if (assistantMode === 'zone') {
+      setAssistantMode('help');
+      setZoneStep('idle');
       setAssistantEvents([]);
       setSelectedEvent(null);
       setSelectedMap(null);
-      setSelectedZoneId("");
+      setSelectedZoneId('');
       setSelectedFacilities([]);
       setSelectedShop(null);
       setRecommendations([]);
@@ -1558,8 +1565,8 @@ function FloatingSupport({
     const controller = new AbortController();
     requestController.current = controller;
     setAskedQuestion(normalized);
-    setQuestion("");
-    setAnswer("AI กำลังคิด…");
+    setQuestion('');
+    setAnswer('AI กำลังคิด…');
     setAnswerSource(null);
     setAnswerActions([]);
     setFeedback(null);
@@ -1571,7 +1578,7 @@ function FloatingSupport({
       const accessToken = data.session?.access_token;
       if (error || !accessToken) {
         throw new Error(
-          "กรุณาเข้าสู่ระบบอีกครั้ง เพื่อให้ AI อ่านเฉพาะข้อมูล SpaceLink ของคุณได้อย่างปลอดภัย",
+          'กรุณาเข้าสู่ระบบอีกครั้ง เพื่อให้ AI อ่านเฉพาะข้อมูล SpaceLink ของคุณได้อย่างปลอดภัย',
         );
       }
       const history = supportAssistantHistory([
@@ -1589,11 +1596,11 @@ function FloatingSupport({
       setAnswerSource(result.source);
       setAnswerActions(result.actions ?? []);
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
       setAnswer(
         assistantErrorMessage(
           cause,
-          "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งครับ",
+          'AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้งครับ',
         ),
       );
       setAnswerSource(null);
@@ -1615,26 +1622,26 @@ function FloatingSupport({
     const controller = new AbortController();
     requestController.current = controller;
     setAskedQuestion(nextQuestion);
-    setQuestion("");
+    setQuestion('');
     setAnswerSource(null);
     setAnswerActions([]);
     setFeedback(null);
     setRecommendations([]);
     setSelectedEvent(null);
     setSelectedMap(null);
-    setSelectedZoneId("");
+    setSelectedZoneId('');
     setSelectedFacilities([]);
 
-    if (auth.status !== "signed-in") {
-      setZoneStep("idle");
+    if (auth.status !== 'signed-in') {
+      setZoneStep('idle');
       setAnswer(
-        "กรุณาเข้าสู่ระบบก่อนครับ เพื่อให้ผมอ่านเฉพาะข้อมูลร้านของคุณและแนะนำบูธที่ยังว่างได้อย่างปลอดภัย",
+        'กรุณาเข้าสู่ระบบก่อนครับ เพื่อให้ผมอ่านเฉพาะข้อมูลร้านของคุณและแนะนำบูธที่ยังว่างได้อย่างปลอดภัย',
       );
       return;
     }
 
-    setZoneStep("loading");
-    setAnswer("กำลังตรวจสอบร้านของคุณและโหลด Event ที่เปิดให้เลือก…");
+    setZoneStep('loading');
+    setAnswer('กำลังตรวจสอบร้านของคุณและโหลด Event ที่เปิดให้เลือก…');
     setIsAsking(true);
 
     try {
@@ -1642,7 +1649,7 @@ function FloatingSupport({
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       if (!token) {
-        throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ");
+        throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ');
       }
 
       const [profile, events] = await Promise.all([
@@ -1653,32 +1660,32 @@ function FloatingSupport({
 
       const shop = profile.shops[0];
       if (!shop) {
-        setZoneStep("idle");
+        setZoneStep('idle');
         setAnswer(
-          "ยังไม่พบข้อมูลร้านของคุณครับ กรุณาสร้างโปรไฟล์ร้านและเลือกหมวดสินค้าก่อน แล้วกลับมาขอคำแนะนำอีกครั้ง",
+          'ยังไม่พบข้อมูลร้านของคุณครับ กรุณาสร้างโปรไฟล์ร้านและเลือกหมวดสินค้าก่อน แล้วกลับมาขอคำแนะนำอีกครั้ง',
         );
         return;
       }
       const bookableEvents = events.filter((event) => isEventBookable(event));
       if (bookableEvents.length === 0) {
-        setZoneStep("idle");
-        setAnswer("ตอนนี้ยังไม่มี Event ที่เปิดให้เลือกบูธครับ");
+        setZoneStep('idle');
+        setAnswer('ตอนนี้ยังไม่มี Event ที่เปิดให้เลือกบูธครับ');
         return;
       }
 
       setSelectedShop(shop);
       setAssistantEvents(bookableEvents);
-      setZoneStep("select-event");
+      setZoneStep('select-event');
       setAnswer(
-        `ผมพบร้าน “${shop.name}” และจะใช้หมวดสินค้า ${shop.categories.map((category) => category.name).join(", ") || "ที่บันทึกไว้"} เพื่อวิเคราะห์ครับ เลือก Event ที่สนใจก่อน`,
+        `ผมพบร้าน “${shop.name}” และจะใช้หมวดสินค้า ${shop.categories.map((category) => category.name).join(', ') || 'ที่บันทึกไว้'} เพื่อวิเคราะห์ครับ เลือก Event ที่สนใจก่อน`,
       );
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setZoneStep("idle");
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setZoneStep('idle');
       setAnswer(
         assistantErrorMessage(
           cause,
-          "ไม่สามารถโหลดข้อมูลร้านเพื่อแนะนำโซนได้ กรุณาลองใหม่ครับ",
+          'ไม่สามารถโหลดข้อมูลร้านเพื่อแนะนำโซนได้ กรุณาลองใหม่ครับ',
         ),
       );
     } finally {
@@ -1694,9 +1701,9 @@ function FloatingSupport({
     const controller = new AbortController();
     requestController.current = controller;
     setSelectedEvent(event);
-    setSelectedZoneId("");
+    setSelectedZoneId('');
     setSelectedFacilities([]);
-    setZoneStep("loading");
+    setZoneStep('loading');
     setAnswer(`กำลังโหลดแผนผังของ ${event.name}…`);
     setIsAsking(true);
 
@@ -1704,17 +1711,17 @@ function FloatingSupport({
       const eventMap = await getEventMap(event.id, controller.signal);
       if (controller.signal.aborted) return;
       setSelectedMap(eventMap);
-      setZoneStep("select-zone");
+      setZoneStep('select-zone');
       setAnswer(
-        "สนใจโซนไหนเป็นพิเศษครับ? เลือกโซนได้เลย หรือให้ AI เปรียบเทียบทุกโซนก็ได้",
+        'สนใจโซนไหนเป็นพิเศษครับ? เลือกโซนได้เลย หรือให้ AI เปรียบเทียบทุกโซนก็ได้',
       );
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setZoneStep("select-event");
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setZoneStep('select-event');
       setAnswer(
         cause instanceof Error
           ? cause.message
-          : "โหลดแผนผังไม่สำเร็จ กรุณาเลือก Event อีกครั้งครับ",
+          : 'โหลดแผนผังไม่สำเร็จ กรุณาเลือก Event อีกครั้งครับ',
       );
     } finally {
       if (requestController.current === controller) {
@@ -1727,9 +1734,9 @@ function FloatingSupport({
   function chooseZone(zoneId: string) {
     setSelectedZoneId(zoneId);
     setSelectedFacilities([]);
-    setZoneStep("select-facilities");
+    setZoneStep('select-facilities');
     setAnswer(
-      "ต้องการอุปกรณ์อะไรที่บูธบ้างครับ? เลือกได้หลายรายการ หรือกดประมวลผลได้เลยถ้าไม่จำเป็น",
+      'ต้องการอุปกรณ์อะไรที่บูธบ้างครับ? เลือกได้หลายรายการ หรือกดประมวลผลได้เลยถ้าไม่จำเป็น',
     );
   }
 
@@ -1746,8 +1753,8 @@ function FloatingSupport({
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
-    setZoneStep("loading");
-    setAnswer("กำลังวิเคราะห์หมวดร้าน โซนที่สนใจ อุปกรณ์ และบูธว่างจริง…");
+    setZoneStep('loading');
+    setAnswer('กำลังวิเคราะห์หมวดร้าน โซนที่สนใจ อุปกรณ์ และบูธว่างจริง…');
     setIsAsking(true);
 
     try {
@@ -1755,7 +1762,7 @@ function FloatingSupport({
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       if (!token) {
-        throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ");
+        throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งครับ');
       }
 
       const result = await getZoneRecommendations(
@@ -1773,19 +1780,19 @@ function FloatingSupport({
       if (controller.signal.aborted) return;
 
       setRecommendations(result);
-      setZoneStep("result");
+      setZoneStep('result');
       setAnswer(
         result.length > 0
           ? `พบ ${result.length} บูธที่เหมาะกับร้าน “${selectedShop.name}” จากบูธที่ยังว่างครับ`
-          : "ยังไม่พบบูธว่างที่ตรงกับเงื่อนไขนี้ ลองเลือกทุกโซนหรือลดเงื่อนไขอุปกรณ์ครับ",
+          : 'ยังไม่พบบูธว่างที่ตรงกับเงื่อนไขนี้ ลองเลือกทุกโซนหรือลดเงื่อนไขอุปกรณ์ครับ',
       );
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setZoneStep("select-facilities");
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setZoneStep('select-facilities');
       setAnswer(
         assistantErrorMessage(
           cause,
-          "ประมวลผลคำแนะนำไม่สำเร็จ กรุณาลองใหม่ครับ",
+          'ประมวลผลคำแนะนำไม่สำเร็จ กรุณาลองใหม่ครับ',
         ),
       );
     } finally {
@@ -1799,48 +1806,48 @@ function FloatingSupport({
   function resetAssistant() {
     requestController.current?.abort();
     requestController.current = null;
-    setQuestion("");
-    setAskedQuestion("");
+    setQuestion('');
+    setAskedQuestion('');
     setAnswer(initialAnswer);
     setAnswerSource(null);
     setAnswerActions([]);
     setConversationHistory([]);
     nextMessageId.current = 1;
     setIsAsking(false);
-    setZoneStep("idle");
+    setZoneStep('idle');
     setAssistantEvents([]);
     setSelectedEvent(null);
     setSelectedMap(null);
-    setSelectedZoneId("");
+    setSelectedZoneId('');
     setSelectedFacilities([]);
     setSelectedShop(null);
     setRecommendations([]);
     setFeedback(null);
   }
 
-  function changeAssistantMode(nextMode: "help" | "zone") {
-    if (assistantMode === nextMode && zoneStep !== "result") return;
+  function changeAssistantMode(nextMode: 'help' | 'zone') {
+    if (assistantMode === nextMode && zoneStep !== 'result') return;
     resetAssistant();
     setAssistantMode(nextMode);
-    if (nextMode === "zone") {
-      void startZoneAssistant("ช่วยแนะนำโซนและบูธให้ร้านฉัน", false);
+    if (nextMode === 'zone') {
+      void startZoneAssistant('ช่วยแนะนำโซนและบูธให้ร้านฉัน', false);
     }
   }
 
-  const expanded = view !== "closed";
+  const expanded = view !== 'closed';
 
   return (
     <div
-      className={`sl-floating-support fixed z-[75] ${hasBottomNav ? "sl-floating-support--with-bottom-nav" : ""}`}
+      className={`sl-floating-support fixed z-[75] ${hasBottomNav ? 'sl-floating-support--with-bottom-nav' : ''}`}
     >
-      {view === "menu" ? (
+      {view === 'menu' ? (
         <section
           aria-label="ช่องทางติดต่อ SpaceLink"
           className="mb-3 grid w-[min(305px,calc(100vw-32px))] gap-2"
         >
           <button
             type="button"
-            onClick={() => setView("chat")}
+            onClick={() => setView('chat')}
             className="group flex min-h-[70px] items-center justify-end gap-3 rounded-[18px] border border-line bg-white px-2.5 text-right shadow-[0_10px_28px_rgba(45,27,82,.10)] transition hover:-translate-y-0.5 hover:border-[#d3c3ef]"
           >
             <span>
@@ -1886,7 +1893,7 @@ function FloatingSupport({
         </section>
       ) : null}
 
-      {view === "chat" ? (
+      {view === 'chat' ? (
         <section
           aria-label="AI ช่วยคุณได้ SpaceLink"
           aria-busy={isAsking}
@@ -1912,10 +1919,10 @@ function FloatingSupport({
               <button
                 type="button"
                 onClick={() => {
-                  if (assistantMode === "zone") {
+                  if (assistantMode === 'zone') {
                     resetAssistant();
                     void startZoneAssistant(
-                      "ช่วยแนะนำโซนและบูธให้ร้านฉัน",
+                      'ช่วยแนะนำโซนและบูธให้ร้านฉัน',
                       false,
                     );
                   } else {
@@ -1930,7 +1937,7 @@ function FloatingSupport({
               </button>
               <button
                 type="button"
-                onClick={() => setView("closed")}
+                onClick={() => setView('closed')}
                 aria-label="ปิดหน้าต่าง AI ช่วยคุณได้"
                 className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-line text-muted transition hover:border-violet hover:bg-violet-tint hover:text-violet"
               >
@@ -1944,8 +1951,8 @@ function FloatingSupport({
             >
               {(
                 [
-                  ["help", "ถามข้อมูล"],
-                  ["zone", "แนะนำโซน"],
+                  ['help', 'ถามข้อมูล'],
+                  ['zone', 'แนะนำโซน'],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -1955,7 +1962,7 @@ function FloatingSupport({
                   aria-selected={assistantMode === mode}
                   disabled={isAsking}
                   onClick={() => changeAssistantMode(mode)}
-                  className={`min-h-10 rounded-[12px] px-3 text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60 ${assistantMode === mode ? "bg-violet text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]" : "text-[#675d70] hover:text-violet"}`}
+                  className={`min-h-10 rounded-[12px] px-3 text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60 ${assistantMode === mode ? 'bg-violet text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]' : 'text-[#675d70] hover:text-violet'}`}
                 >
                   {label}
                 </button>
@@ -1999,9 +2006,9 @@ function FloatingSupport({
                       <p className="whitespace-pre-line">{entry.answer}</p>
                       {entry.source ? (
                         <small className="mt-2 block border-t border-[#eeeaf4] pt-2 text-[10px] font-bold text-muted">
-                          {entry.source === "AI_GEMINI"
-                            ? "ประมวลผลโดย AI จากข้อมูล SpaceLink"
-                            : "คำตอบสำรองจากข้อมูล SpaceLink"}
+                          {entry.source === 'AI_GEMINI'
+                            ? 'ประมวลผลโดย AI จากข้อมูล SpaceLink'
+                            : 'คำตอบสำรองจากข้อมูล SpaceLink'}
                         </small>
                       ) : null}
                       {entry.actions.length > 0 ? (
@@ -2046,17 +2053,17 @@ function FloatingSupport({
               </span>
               <div className="max-w-[84%]">
                 <strong className="mb-1 block text-[11px] font-extrabold text-violet">
-                  {isAsking ? "SpaceLink AI · กำลังตอบ…" : "SpaceLink AI"}
+                  {isAsking ? 'SpaceLink AI · กำลังตอบ…' : 'SpaceLink AI'}
                 </strong>
                 <div
-                  className={`rounded-[20px_20px_20px_6px] border bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)] ${isAsking ? "border-[#8b5cf6] shadow-[0_0_0_1px_rgba(139,92,246,.12)]" : "border-[#dfe3f3]"}`}
+                  className={`rounded-[20px_20px_20px_6px] border bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)] ${isAsking ? 'border-[#8b5cf6] shadow-[0_0_0_1px_rgba(139,92,246,.12)]' : 'border-[#dfe3f3]'}`}
                 >
                   <p className="whitespace-pre-line">{answer}</p>
                   {answerSource ? (
                     <small className="mt-2 block border-t border-[#eeeaf4] pt-2 text-[10px] font-bold text-muted">
-                      {answerSource === "AI_GEMINI"
-                        ? "ประมวลผลโดย AI จากข้อมูล SpaceLink"
-                        : "คำตอบสำรองจากข้อมูล SpaceLink"}
+                      {answerSource === 'AI_GEMINI'
+                        ? 'ประมวลผลโดย AI จากข้อมูล SpaceLink'
+                        : 'คำตอบสำรองจากข้อมูล SpaceLink'}
                     </small>
                   ) : null}
                   {!isAsking && answerActions.length > 0 ? (
@@ -2089,30 +2096,30 @@ function FloatingSupport({
                 <button
                   type="button"
                   aria-label="คำตอบมีประโยชน์"
-                  aria-pressed={feedback === "up"}
+                  aria-pressed={feedback === 'up'}
                   onClick={() =>
-                    setFeedback((current) => (current === "up" ? null : "up"))
+                    setFeedback((current) => (current === 'up' ? null : 'up'))
                   }
-                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === "up" ? "border-violet bg-violet text-white" : "border-line bg-white text-muted hover:border-violet hover:text-violet"}`}
+                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === 'up' ? 'border-violet bg-violet text-white' : 'border-line bg-white text-muted hover:border-violet hover:text-violet'}`}
                 >
                   <ThumbsUp className="h-4 w-4" aria-hidden />
                 </button>
                 <button
                   type="button"
                   aria-label="คำตอบควรปรับปรุง"
-                  aria-pressed={feedback === "down"}
+                  aria-pressed={feedback === 'down'}
                   onClick={() =>
                     setFeedback((current) =>
-                      current === "down" ? null : "down",
+                      current === 'down' ? null : 'down',
                     )
                   }
-                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === "down" ? "border-violet bg-violet text-white" : "border-line bg-white text-muted hover:border-violet hover:text-violet"}`}
+                  className={`grid h-9 w-9 place-items-center rounded-full border transition ${feedback === 'down' ? 'border-violet bg-violet text-white' : 'border-line bg-white text-muted hover:border-violet hover:text-violet'}`}
                 >
                   <ThumbsDown className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             ) : null}
-            {zoneStep === "select-event" ? (
+            {zoneStep === 'select-event' ? (
               <div className="mt-3 grid gap-2" aria-label="เลือก Event">
                 {assistantEvents.map((event) => (
                   <button
@@ -2130,11 +2137,11 @@ function FloatingSupport({
               </div>
             ) : null}
 
-            {zoneStep === "select-zone" && selectedMap ? (
+            {zoneStep === 'select-zone' && selectedMap ? (
               <div className="mt-3 flex flex-wrap gap-2" aria-label="เลือกโซน">
                 <button
                   type="button"
-                  onClick={() => chooseZone("")}
+                  onClick={() => chooseZone('')}
                   className="rounded-full border border-violet bg-violet px-3 py-2 text-xs font-bold text-white"
                 >
                   ให้ AI เลือกทุกโซน
@@ -2147,13 +2154,13 @@ function FloatingSupport({
                     className="rounded-full border border-[#d9cbed] bg-white px-3 py-2 text-xs font-bold text-violet transition hover:border-violet"
                   >
                     โซน {zone.code}
-                    {zone.name ? ` · ${zone.name}` : ""}
+                    {zone.name ? ` · ${zone.name}` : ''}
                   </button>
                 ))}
               </div>
             ) : null}
 
-            {zoneStep === "select-facilities" ? (
+            {zoneStep === 'select-facilities' ? (
               <div className="mt-3 rounded-2xl border border-[#e5dcf0] bg-white p-3">
                 <div
                   className="flex flex-wrap gap-2"
@@ -2169,7 +2176,7 @@ function FloatingSupport({
                         type="button"
                         aria-pressed={selected}
                         onClick={() => toggleFacility(facility.value)}
-                        className={`rounded-full border px-3 py-2 text-xs font-bold transition ${selected ? "border-violet bg-violet text-white" : "border-[#d9cbed] text-violet hover:border-violet"}`}
+                        className={`rounded-full border px-3 py-2 text-xs font-bold transition ${selected ? 'border-violet bg-violet text-white' : 'border-[#d9cbed] text-violet hover:border-violet'}`}
                       >
                         {facility.label}
                       </button>
@@ -2186,7 +2193,7 @@ function FloatingSupport({
               </div>
             ) : null}
 
-            {zoneStep === "result" && selectedEvent ? (
+            {zoneStep === 'result' && selectedEvent ? (
               <div className="mt-3 grid gap-2" aria-label="บูธที่ AI แนะนำ">
                 {recommendations.map((recommendation, index) => {
                   const matched = findRecommendedBooth(
@@ -2196,18 +2203,18 @@ function FloatingSupport({
                   return (
                     <Link
                       key={recommendation.boothId}
-                      href={`/events/${encodeURIComponent(selectedEvent.slug)}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ""}`}
+                      href={`/events/${encodeURIComponent(selectedEvent.slug)}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ''}`}
                       className="rounded-xl border border-[#d9cbed] bg-white p-3 text-ink transition hover:border-violet hover:bg-[#faf7ff]"
                     >
                       <span className="flex items-center justify-between gap-2">
                         <strong className="text-sm">
-                          {index + 1}. บูธ {matched?.booth.code ?? "ที่แนะนำ"}
-                          {matched ? ` · โซน ${matched.zone.code}` : ""}
+                          {index + 1}. บูธ {matched?.booth.code ?? 'ที่แนะนำ'}
+                          {matched ? ` · โซน ${matched.zone.code}` : ''}
                         </strong>
                         <small className="shrink-0 rounded-full bg-[#f1ebff] px-2 py-1 text-[10px] font-bold text-violet">
-                          {recommendation.source === "AI_GEMINI"
-                            ? "Gemini Flash"
-                            : "Rule-based"}
+                          {recommendation.source === 'AI_GEMINI'
+                            ? 'Gemini Flash'
+                            : 'Rule-based'}
                         </small>
                       </span>
                       <span className="mt-1.5 block text-xs leading-5 text-muted">
@@ -2222,8 +2229,8 @@ function FloatingSupport({
               </div>
             ) : null}
 
-            {zoneStep === "idle" &&
-            auth.status !== "signed-in" &&
+            {zoneStep === 'idle' &&
+            auth.status !== 'signed-in' &&
             isZoneRecommendationQuestion(askedQuestion) ? (
               <Link
                 href="/login"
@@ -2233,8 +2240,8 @@ function FloatingSupport({
               </Link>
             ) : null}
 
-            {assistantMode === "help" &&
-            zoneStep === "idle" &&
+            {assistantMode === 'help' &&
+            zoneStep === 'idle' &&
             conversationHistory.length === 0 &&
             !askedQuestion &&
             answer === initialAnswer ? (
@@ -2269,15 +2276,15 @@ function FloatingSupport({
                 disabled={isAsking}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
+                  if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
                     void askAssistant();
                   }
                 }}
                 placeholder={
-                  assistantMode === "zone"
-                    ? "บอก Event โซน หรืออุปกรณ์ที่ต้องการ"
-                    : "พิมพ์คำถามเกี่ยวกับ SpaceLink"
+                  assistantMode === 'zone'
+                    ? 'บอก Event โซน หรืออุปกรณ์ที่ต้องการ'
+                    : 'พิมพ์คำถามเกี่ยวกับ SpaceLink'
                 }
                 aria-label="พิมพ์คำถามให้ AI ช่วยคุณได้"
                 className="max-h-24 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
@@ -2301,18 +2308,18 @@ function FloatingSupport({
         </section>
       ) : null}
 
-      {view !== "chat" ? (
+      {view !== 'chat' ? (
         <button
           type="button"
           aria-expanded={expanded}
           aria-label={
             expanded
-              ? "ปิดเมนูช่วยเหลือ SpaceLink"
-              : "เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink"
+              ? 'ปิดเมนูช่วยเหลือ SpaceLink'
+              : 'เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink'
           }
-          title={expanded ? "ปิดเมนูช่วยเหลือ" : "AI ช่วยคุณได้ · ติดต่อเรา"}
+          title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'AI ช่วยคุณได้ · ติดต่อเรา'}
           onClick={() =>
-            setView((current) => (current === "closed" ? "menu" : "closed"))
+            setView((current) => (current === 'closed' ? 'menu' : 'closed'))
           }
           className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
         >
@@ -2342,8 +2349,8 @@ function supportAssistantHistory(
         entry.source !== null && entry.question.trim() && entry.answer.trim(),
     )
     .flatMap<SupportAssistantHistoryMessage>((entry) => [
-      { role: "user", text: entry.question.slice(0, 500) },
-      { role: "assistant", text: entry.answer.slice(0, 1000) },
+      { role: 'user', text: entry.question.slice(0, 500) },
+      { role: 'assistant', text: entry.answer.slice(0, 1000) },
     ])
     .slice(-10);
 }
@@ -2353,9 +2360,9 @@ function supportActionDetails(action: SupportAssistantAction) {
     SupportAssistantAction,
     { href: string; label: string }
   > = {
-    OPEN_EVENTS: { href: "/#eventSearch", label: "ดู Event" },
-    OPEN_BOOKINGS: { href: "/bookings", label: "การจองของฉัน" },
-    OPEN_PROFILE: { href: "/profile", label: "เปิดโปรไฟล์" },
+    OPEN_EVENTS: { href: '/#eventSearch', label: 'ดู Event' },
+    OPEN_BOOKINGS: { href: '/bookings', label: 'การจองของฉัน' },
+    OPEN_PROFILE: { href: '/profile', label: 'เปิดโปรไฟล์' },
   };
   return allowedActions[action];
 }
@@ -2363,9 +2370,9 @@ function supportActionDetails(action: SupportAssistantAction) {
 function assistantErrorMessage(cause: unknown, fallback: string) {
   if (
     cause instanceof Error &&
-    cause.message.includes("NEXT_PUBLIC_SUPABASE")
+    cause.message.includes('NEXT_PUBLIC_SUPABASE')
   ) {
-    return "AI ที่ใช้ข้อมูล SpaceLink ของคุณต้องเปิดผ่านระบบที่เชื่อม Supabase และเข้าสู่ระบบด้วยบัญชีจริงครับ";
+    return 'AI ที่ใช้ข้อมูล SpaceLink ของคุณต้องเปิดผ่านระบบที่เชื่อม Supabase และเข้าสู่ระบบด้วยบัญชีจริงครับ';
   }
 
   return cause instanceof Error ? cause.message : fallback;
@@ -2469,13 +2476,13 @@ function SignOutConfirmDialog({
     cancelRef.current?.focus();
 
     function handleDialogKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         onCancel();
         return;
       }
 
-      if (event.key !== "Tab") return;
+      if (event.key !== 'Tab') return;
       const focusableElements = Array.from(
         dialogRef.current?.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -2494,9 +2501,9 @@ function SignOutConfirmDialog({
       }
     }
 
-    document.addEventListener("keydown", handleDialogKeyboard);
+    document.addEventListener('keydown', handleDialogKeyboard);
     return () => {
-      document.removeEventListener("keydown", handleDialogKeyboard);
+      document.removeEventListener('keydown', handleDialogKeyboard);
       const previousFocus = previousFocusRef.current;
       if (previousFocus?.isConnected && previousFocus !== document.body) {
         previousFocus.focus();
@@ -2594,7 +2601,7 @@ function BottomNav({
       {items.map((item) => {
         const Icon = item.icon;
 
-        if (item.kind === "soon") {
+        if (item.kind === 'soon') {
           return (
             <button
               key={item.label}
@@ -2614,15 +2621,15 @@ function BottomNav({
           <Link
             key={item.label}
             href={item.href}
-            aria-current={active ? "page" : undefined}
+            aria-current={active ? 'page' : undefined}
             className={`relative grid min-w-[72px] flex-1 place-items-center gap-0.5 rounded-xl px-1 text-sm transition-colors ${
               active
-                ? "bg-violet-tint font-extrabold text-[#6D28D9]"
-                : "text-[#837B8D]"
+                ? 'bg-violet-tint font-extrabold text-[#6D28D9]'
+                : 'text-[#837B8D]'
             }`}
           >
             <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
-            {item.href === "/notifications" && showUnreadNotificationDot ? (
+            {item.href === '/notifications' && showUnreadNotificationDot ? (
               <span
                 aria-label="มีการแจ้งเตือนใหม่"
                 className="absolute left-[calc(50%+7px)] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#ef4444]"
@@ -2642,8 +2649,8 @@ function BrandMark({ lightBackground = false }: { lightBackground?: boolean }) {
       aria-hidden
       className={`grid h-[38px] w-[38px] shrink-0 place-items-center overflow-hidden rounded-xl p-0.5 ${
         lightBackground
-          ? "bg-white shadow-[0_10px_25px_rgba(0,0,0,.2)]"
-          : "bg-white shadow-[0_8px_18px_#7C3AED2e]"
+          ? 'bg-white shadow-[0_10px_25px_rgba(0,0,0,.2)]'
+          : 'bg-white shadow-[0_8px_18px_#7C3AED2e]'
       }`}
     >
       <Image
@@ -2660,7 +2667,7 @@ function BrandMark({ lightBackground = false }: { lightBackground?: boolean }) {
 
 function Avatar({
   name,
-  className = "",
+  className = '',
 }: {
   name: string;
   className?: string;
@@ -2670,7 +2677,7 @@ function Avatar({
       aria-hidden
       className={`grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] font-bold text-white ${className}`}
     >
-      {[...name.trim()][0] ?? "?"}
+      {[...name.trim()][0] ?? '?'}
     </span>
   );
 }

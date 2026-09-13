@@ -1,5 +1,5 @@
-import { Suspense } from "react";
-import { SuperAdminEventsBookingsScreen } from "@/components/super-admin/super-admin-events-bookings-screen";
+import { Suspense } from 'react';
+import { SuperAdminEventsBookingsScreen } from '@/components/super-admin/super-admin-events-bookings-screen';
 
 export default function SuperAdminEventsBookingsPage() {
   return (

@@ -106,9 +106,7 @@ function displayEventStatus(
 
   const bangkokDay = (date: Date) =>
     Math.floor((date.getTime() + BANGKOK_OFFSET_MS) / DAY_MS);
-  return bangkokDay(eventEnd) < bangkokDay(now)
-    ? 'COMPLETED'
-    : event.status;
+  return bangkokDay(eventEnd) < bangkokDay(now) ? 'COMPLETED' : event.status;
 }
 
 export function AdminEventsScreen() {
@@ -125,8 +123,9 @@ export function AdminEventsScreen() {
   const [busyAction, setBusyAction] = useState('');
   const [galleryEvent, setGalleryEvent] =
     useState<AdminOrganizationEvent | null>(null);
-  const [bannerEvent, setBannerEvent] =
-    useState<AdminOrganizationEvent | null>(null);
+  const [bannerEvent, setBannerEvent] = useState<AdminOrganizationEvent | null>(
+    null,
+  );
   const [joinInfoEvent, setJoinInfoEvent] =
     useState<AdminOrganizationEvent | null>(null);
   const [informationEvent, setInformationEvent] =
@@ -412,146 +411,148 @@ export function AdminEventsScreen() {
                 const displayedStatus = displayEventStatus(event);
                 return (
                   <article
-                  key={event.id}
-                  className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
-                >
-                  <div
-                    role="img"
-                    aria-label={`ภาพปก ${event.name}`}
-                    className="aspect-[16/7] bg-cover bg-center"
-                    style={{
-                      backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.5),rgba(56,101,104,.18)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
-                    }}
-                  />
-                  <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_STYLES[displayedStatus]}`}
-                    >
-                      {STATUS_LABELS[displayedStatus]}
-                    </span>
-                    <span className="text-[11px] font-bold text-muted">
-                      {event.venue.name}
-                    </span>
-                  </div>
-                  <h2 className="mt-4 text-lg font-black text-ink">
-                    {event.name}
-                  </h2>
-                  <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-muted">
-                    {event.description || 'ยังไม่มีรายละเอียดอีเวนต์'}
-                  </p>
-                  <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ebe5ef] pt-4 text-xs">
-                    <div>
-                      <dt className="text-muted">เริ่ม</dt>
-                      <dd className="mt-1 font-extrabold text-ink">
-                        {formatAdminDate(event.startDate)}
-                      </dd>
+                    key={event.id}
+                    className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
+                  >
+                    <div
+                      role="img"
+                      aria-label={`ภาพปก ${event.name}`}
+                      className="aspect-[16/7] bg-cover bg-center"
+                      style={{
+                        backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.5),rgba(56,101,104,.18)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
+                      }}
+                    />
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_STYLES[displayedStatus]}`}
+                        >
+                          {STATUS_LABELS[displayedStatus]}
+                        </span>
+                        <span className="text-[11px] font-bold text-muted">
+                          {event.venue.name}
+                        </span>
+                      </div>
+                      <h2 className="mt-4 text-lg font-black text-ink">
+                        {event.name}
+                      </h2>
+                      <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-muted">
+                        {event.description || 'ยังไม่มีรายละเอียดอีเวนต์'}
+                      </p>
+                      <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ebe5ef] pt-4 text-xs">
+                        <div>
+                          <dt className="text-muted">เริ่ม</dt>
+                          <dd className="mt-1 font-extrabold text-ink">
+                            {formatAdminDate(event.startDate)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted">สิ้นสุด</dt>
+                          <dd className="mt-1 font-extrabold text-ink">
+                            {formatAdminDate(event.endDate)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <div className="mt-4 flex items-center justify-between rounded-xl bg-white px-3 py-2.5 text-xs">
+                        <span className="inline-flex items-center gap-1.5 font-bold text-muted">
+                          <CircleDollarSign
+                            className="h-4 w-4 text-violet"
+                            aria-hidden
+                          />
+                          ค่าบริการแพลตฟอร์ม
+                        </span>
+                        <strong className="text-sm text-ink">
+                          {event.subscription
+                            ? formatBaht(event.subscription.finalPrice)
+                            : 'Event เดิม · ไม่มีบิล'}
+                        </strong>
+                      </div>
+                      {displayedStatus === 'DRAFT' ? (
+                        <button
+                          type="button"
+                          onClick={() => void publishEvent(event)}
+                          disabled={Boolean(busyAction)}
+                          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Send className="h-4 w-4" aria-hidden />
+                          {busyAction === `publish:${event.id}`
+                            ? 'กำลังเผยแพร่...'
+                            : 'เผยแพร่อีเวนต์'}
+                        </button>
+                      ) : null}
+                      {displayedStatus === 'PUBLISHED' ||
+                      displayedStatus === 'ONGOING' ||
+                      displayedStatus === 'CANCELLED' ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void setEventOpenState(
+                              event,
+                              displayedStatus === 'CANCELLED'
+                                ? 'open'
+                                : 'close',
+                            )
+                          }
+                          disabled={Boolean(busyAction)}
+                          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-violet bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Power className="h-4 w-4" aria-hidden />
+                          {busyAction === `open:${event.id}` ||
+                          busyAction === `close:${event.id}`
+                            ? 'กำลังบันทึก...'
+                            : displayedStatus === 'CANCELLED'
+                              ? 'เปิดอีเวนต์อีกครั้ง'
+                              : 'ปิดอีเวนต์'}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setBannerEvent(event)}
+                        disabled={Boolean(busyAction)}
+                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ImageIcon className="h-4 w-4" aria-hidden />
+                        {event.bannerUrl ? 'เปลี่ยน/ลบภาพปก' : 'เพิ่มภาพปก'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGalleryEvent(event)}
+                        disabled={Boolean(busyAction)}
+                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Images className="h-4 w-4" aria-hidden />
+                        จัดการแกลเลอรี ({event.galleryUrls.length}/10)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setJoinInfoEvent(event)}
+                        disabled={Boolean(busyAction)}
+                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Info className="h-4 w-4" aria-hidden />
+                        ข้อมูลก่อนเข้าร่วม ({event.joinInformation.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInformationEvent(event)}
+                        disabled={Boolean(busyAction)}
+                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Info className="h-4 w-4" aria-hidden />
+                        รายละเอียดภายในงาน ({event.information.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteEvent(event)}
+                        disabled={Boolean(busyAction)}
+                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                        {busyAction === `delete:${event.id}`
+                          ? 'กำลังลบ...'
+                          : 'ลบอีเวนต์'}
+                      </button>
                     </div>
-                    <div>
-                      <dt className="text-muted">สิ้นสุด</dt>
-                      <dd className="mt-1 font-extrabold text-ink">
-                        {formatAdminDate(event.endDate)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="mt-4 flex items-center justify-between rounded-xl bg-white px-3 py-2.5 text-xs">
-                    <span className="inline-flex items-center gap-1.5 font-bold text-muted">
-                      <CircleDollarSign
-                        className="h-4 w-4 text-violet"
-                        aria-hidden
-                      />
-                      ค่าบริการแพลตฟอร์ม
-                    </span>
-                    <strong className="text-sm text-ink">
-                      {event.subscription
-                        ? formatBaht(event.subscription.finalPrice)
-                        : 'Event เดิม · ไม่มีบิล'}
-                    </strong>
-                  </div>
-                  {displayedStatus === 'DRAFT' ? (
-                    <button
-                      type="button"
-                      onClick={() => void publishEvent(event)}
-                      disabled={Boolean(busyAction)}
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Send className="h-4 w-4" aria-hidden />
-                      {busyAction === `publish:${event.id}`
-                        ? 'กำลังเผยแพร่...'
-                        : 'เผยแพร่อีเวนต์'}
-                    </button>
-                  ) : null}
-                  {displayedStatus === 'PUBLISHED' ||
-                  displayedStatus === 'ONGOING' ||
-                  displayedStatus === 'CANCELLED' ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void setEventOpenState(
-                          event,
-                          displayedStatus === 'CANCELLED' ? 'open' : 'close',
-                        )
-                      }
-                      disabled={Boolean(busyAction)}
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-violet bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Power className="h-4 w-4" aria-hidden />
-                      {busyAction === `open:${event.id}` ||
-                      busyAction === `close:${event.id}`
-                        ? 'กำลังบันทึก...'
-                        : displayedStatus === 'CANCELLED'
-                          ? 'เปิดอีเวนต์อีกครั้ง'
-                          : 'ปิดอีเวนต์'}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setBannerEvent(event)}
-                    disabled={Boolean(busyAction)}
-                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <ImageIcon className="h-4 w-4" aria-hidden />
-                    {event.bannerUrl ? 'เปลี่ยน/ลบภาพปก' : 'เพิ่มภาพปก'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGalleryEvent(event)}
-                    disabled={Boolean(busyAction)}
-                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Images className="h-4 w-4" aria-hidden />
-                    จัดการแกลเลอรี ({event.galleryUrls.length}/10)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setJoinInfoEvent(event)}
-                    disabled={Boolean(busyAction)}
-                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Info className="h-4 w-4" aria-hidden />
-                    ข้อมูลก่อนเข้าร่วม ({event.joinInformation.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInformationEvent(event)}
-                    disabled={Boolean(busyAction)}
-                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Info className="h-4 w-4" aria-hidden />
-                    รายละเอียดภายในงาน ({event.information.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void deleteEvent(event)}
-                    disabled={Boolean(busyAction)}
-                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#f0c7c3] bg-white px-4 text-xs font-extrabold text-[#b42318] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                    {busyAction === `delete:${event.id}`
-                      ? 'กำลังลบ...'
-                      : 'ลบอีเวนต์'}
-                  </button>
-                  </div>
                   </article>
                 );
               })}
@@ -782,7 +783,10 @@ function EventInformationDialog({
     if (target < 0 || target >= items.length) return;
     const previous = items;
     const nextItems = [...items];
-    [nextItems[index], nextItems[target]] = [nextItems[target], nextItems[index]];
+    [nextItems[index], nextItems[target]] = [
+      nextItems[target],
+      nextItems[index],
+    ];
     const normalized = nextItems.map((item, sortOrder) => ({
       ...item,
       sortOrder,
@@ -868,10 +872,42 @@ function EventInformationDialog({
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-1">
-                    <button type="button" onClick={() => void move(index, -1)} disabled={busy || index === 0} aria-label={`เลื่อน ${item.title} ขึ้น`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => void move(index, 1)} disabled={busy || index === items.length - 1} aria-label={`เลื่อน ${item.title} ลง`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => edit(item)} disabled={busy} aria-label={`แก้ไข ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => void remove(item)} disabled={busy} aria-label={`ลบ ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button
+                      type="button"
+                      onClick={() => void move(index, -1)}
+                      disabled={busy || index === 0}
+                      aria-label={`เลื่อน ${item.title} ขึ้น`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void move(index, 1)}
+                      disabled={busy || index === items.length - 1}
+                      aria-label={`เลื่อน ${item.title} ลง`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => edit(item)}
+                      disabled={busy}
+                      aria-label={`แก้ไข ${item.title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(item)}
+                      disabled={busy}
+                      aria-label={`ลบ ${item.title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               </article>
@@ -907,15 +943,43 @@ function EventInformationDialog({
           </label>
           <label className="mt-3 block text-sm font-bold text-ink">
             หัวข้อ
-            <input value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} maxLength={200} disabled={busy} className={`${INPUT_CLASS} mt-2`} />
+            <input
+              value={title}
+              onChange={(inputEvent) => setTitle(inputEvent.target.value)}
+              maxLength={200}
+              disabled={busy}
+              className={`${INPUT_CLASS} mt-2`}
+            />
           </label>
           <label className="mt-3 block text-sm font-bold text-ink">
             รายละเอียด
-            <textarea value={description} onChange={(inputEvent) => setDescription(inputEvent.target.value)} maxLength={5000} rows={4} disabled={busy} className={`${INPUT_CLASS} mt-2 py-3`} />
+            <textarea
+              value={description}
+              onChange={(inputEvent) => setDescription(inputEvent.target.value)}
+              maxLength={5000}
+              rows={4}
+              disabled={busy}
+              className={`${INPUT_CLASS} mt-2 py-3`}
+            />
           </label>
           <div className="mt-4 flex justify-end gap-2">
-            {editingId ? <button type="button" onClick={resetForm} disabled={busy} className="sl-action-secondary">ยกเลิกแก้ไข</button> : null}
-            <button type="submit" disabled={busy} className="sl-action-primary">{busy ? 'กำลังบันทึก...' : editingId ? 'บันทึกการแก้ไข' : 'เพิ่มรายละเอียด'}</button>
+            {editingId ? (
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={busy}
+                className="sl-action-secondary"
+              >
+                ยกเลิกแก้ไข
+              </button>
+            ) : null}
+            <button type="submit" disabled={busy} className="sl-action-primary">
+              {busy
+                ? 'กำลังบันทึก...'
+                : editingId
+                  ? 'บันทึกการแก้ไข'
+                  : 'เพิ่มรายละเอียด'}
+            </button>
           </div>
         </form>
       </section>
@@ -988,10 +1052,14 @@ function EventJoinInformationDialog({
       resetForm();
       onUpdated(
         nextItems,
-        editingId ? 'แก้ไขข้อมูลก่อนเข้าร่วมงานแล้ว' : 'เพิ่มข้อมูลก่อนเข้าร่วมงานแล้ว',
+        editingId
+          ? 'แก้ไขข้อมูลก่อนเข้าร่วมงานแล้ว'
+          : 'เพิ่มข้อมูลก่อนเข้าร่วมงานแล้ว',
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'บันทึกข้อมูลไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'บันทึกข้อมูลไม่สำเร็จ',
+      );
     } finally {
       setBusy(false);
     }
@@ -1026,8 +1094,14 @@ function EventJoinInformationDialog({
     if (target < 0 || target >= items.length) return;
     const previous = items;
     const nextItems = [...items];
-    [nextItems[index], nextItems[target]] = [nextItems[target], nextItems[index]];
-    const normalized = nextItems.map((item, sortOrder) => ({ ...item, sortOrder }));
+    [nextItems[index], nextItems[target]] = [
+      nextItems[target],
+      nextItems[index],
+    ];
+    const normalized = nextItems.map((item, sortOrder) => ({
+      ...item,
+      sortOrder,
+    }));
     setItems(normalized);
     setBusy(true);
     setError('');
@@ -1042,7 +1116,9 @@ function EventJoinInformationDialog({
       onUpdated(saved, 'บันทึกลำดับข้อมูลแล้ว');
     } catch (cause) {
       setItems(previous);
-      setError(cause instanceof Error ? cause.message : 'จัดลำดับข้อมูลไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'จัดลำดับข้อมูลไม่สำเร็จ',
+      );
     } finally {
       setBusy(false);
     }
@@ -1050,38 +1126,153 @@ function EventJoinInformationDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
-      <section role="dialog" aria-modal="true" aria-labelledby="event-join-info-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-join-info-title"
+        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">Event join information</span>
-            <h2 id="event-join-info-title" className="mt-1 text-xl font-black text-ink">ข้อมูลก่อนเข้าร่วม · {event.name}</h2>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+              Event join information
+            </span>
+            <h2
+              id="event-join-info-title"
+              className="mt-1 text-xl font-black text-ink"
+            >
+              ข้อมูลก่อนเข้าร่วม · {event.name}
+            </h2>
           </div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="ปิดหน้าต่างข้อมูลก่อนเข้าร่วมงาน" className="grid h-10 w-10 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"><X className="h-4 w-4" aria-hidden /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="ปิดหน้าต่างข้อมูลก่อนเข้าร่วมงาน"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
         </div>
 
         {error ? <AdminError message={error} /> : null}
 
         <div className="mt-5 grid gap-3">
-          {items.length === 0 ? <AdminEmpty icon={Info} title="ยังไม่มีข้อมูลก่อนเข้าร่วมงาน" description="เพิ่มเวลา จุดลงทะเบียน ข้อห้าม หรือคำแนะนำสำหรับผู้เข้าร่วม" /> : items.map((item, index) => (
-            <article key={item.id} className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0"><span className="text-xs font-bold text-muted">ลำดับ {index + 1}</span><h3 className="mt-1 break-words font-extrabold text-ink">{item.title}</h3><p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">{item.content}</p></div>
-                <div className="flex shrink-0 gap-1">
-                  <button type="button" onClick={() => void move(index, -1)} disabled={busy || index === 0} aria-label={`เลื่อน ${item.title} ขึ้น`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void move(index, 1)} disabled={busy || index === items.length - 1} aria-label={`เลื่อน ${item.title} ลง`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => edit(item)} disabled={busy} aria-label={`แก้ไข ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void remove(item)} disabled={busy} aria-label={`ลบ ${item.title}`} className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+          {items.length === 0 ? (
+            <AdminEmpty
+              icon={Info}
+              title="ยังไม่มีข้อมูลก่อนเข้าร่วมงาน"
+              description="เพิ่มเวลา จุดลงทะเบียน ข้อห้าม หรือคำแนะนำสำหรับผู้เข้าร่วม"
+            />
+          ) : (
+            items.map((item, index) => (
+              <article
+                key={item.id}
+                className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-muted">
+                      ลำดับ {index + 1}
+                    </span>
+                    <h3 className="mt-1 break-words font-extrabold text-ink">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">
+                      {item.content}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void move(index, -1)}
+                      disabled={busy || index === 0}
+                      aria-label={`เลื่อน ${item.title} ขึ้น`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void move(index, 1)}
+                      disabled={busy || index === items.length - 1}
+                      aria-label={`เลื่อน ${item.title} ลง`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => edit(item)}
+                      disabled={busy}
+                      aria-label={`แก้ไข ${item.title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(item)}
+                      disabled={busy}
+                      aria-label={`ลบ ${item.title}`}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            ))
+          )}
         </div>
 
-        <form onSubmit={(formEvent) => void save(formEvent)} className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4">
-          <h3 className="font-extrabold text-ink">{editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
-          <label className="mt-3 block text-sm font-bold text-ink">หัวข้อ<input value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} maxLength={200} disabled={busy} className={`${INPUT_CLASS} mt-2`} /></label>
-          <label className="mt-3 block text-sm font-bold text-ink">รายละเอียด<textarea value={content} onChange={(inputEvent) => setContent(inputEvent.target.value)} maxLength={5000} rows={4} disabled={busy} className={`${INPUT_CLASS} mt-2 py-3`} /></label>
-          <div className="mt-4 flex justify-end gap-2">{editingId ? <button type="button" onClick={resetForm} disabled={busy} className="sl-action-secondary">ยกเลิกแก้ไข</button> : null}<button type="submit" disabled={busy} className="sl-action-primary">{busy ? 'กำลังบันทึก...' : editingId ? 'บันทึกการแก้ไข' : 'เพิ่มข้อมูล'}</button></div>
+        <form
+          onSubmit={(formEvent) => void save(formEvent)}
+          className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4"
+        >
+          <h3 className="font-extrabold text-ink">
+            {editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}
+          </h3>
+          <label className="mt-3 block text-sm font-bold text-ink">
+            หัวข้อ
+            <input
+              value={title}
+              onChange={(inputEvent) => setTitle(inputEvent.target.value)}
+              maxLength={200}
+              disabled={busy}
+              className={`${INPUT_CLASS} mt-2`}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-bold text-ink">
+            รายละเอียด
+            <textarea
+              value={content}
+              onChange={(inputEvent) => setContent(inputEvent.target.value)}
+              maxLength={5000}
+              rows={4}
+              disabled={busy}
+              className={`${INPUT_CLASS} mt-2 py-3`}
+            />
+          </label>
+          <div className="mt-4 flex justify-end gap-2">
+            {editingId ? (
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={busy}
+                className="sl-action-secondary"
+              >
+                ยกเลิกแก้ไข
+              </button>
+            ) : null}
+            <button type="submit" disabled={busy} className="sl-action-primary">
+              {busy
+                ? 'กำลังบันทึก...'
+                : editingId
+                  ? 'บันทึกการแก้ไข'
+                  : 'เพิ่มข้อมูล'}
+            </button>
+          </div>
         </form>
       </section>
     </div>
@@ -1146,7 +1337,9 @@ function EventBannerDialog({
       setPending(null);
       onUpdated(updated, `บันทึกภาพปก “${event.name}” เรียบร้อยแล้ว`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'อัปโหลดภาพปกไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'อัปโหลดภาพปกไม่สำเร็จ',
+      );
     } finally {
       setBusy('');
     }
@@ -1184,7 +1377,10 @@ function EventBannerDialog({
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
               Event cover
             </span>
-            <h2 id="event-banner-title" className="mt-1 text-xl font-black text-ink">
+            <h2
+              id="event-banner-title"
+              className="mt-1 text-xl font-black text-ink"
+            >
               ภาพปก · {event.name}
             </h2>
             <p className="mt-1 text-sm text-muted">
@@ -1206,7 +1402,9 @@ function EventBannerDialog({
 
         <div
           role="img"
-          aria-label={pending ? `ตัวอย่าง ${pending.file.name}` : `ภาพปก ${event.name}`}
+          aria-label={
+            pending ? `ตัวอย่าง ${pending.file.name}` : `ภาพปก ${event.name}`
+          }
           className="mt-5 aspect-video rounded-[18px] bg-cover bg-center"
           style={{
             backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.38),rgba(56,101,104,.16)),url(${JSON.stringify(pending?.previewUrl ?? getEventCoverUrl(event.bannerUrl))})`,
@@ -1214,7 +1412,9 @@ function EventBannerDialog({
         />
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-40' : ''}`}>
+          <label
+            className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-40' : ''}`}
+          >
             <UploadCloud className="h-4 w-4" aria-hidden />
             {event.bannerUrl ? 'เลือกภาพใหม่' : 'เลือกภาพปก'}
             <input
@@ -1292,7 +1492,9 @@ function EventGalleryDialog({
 
   useEffect(
     () => () => {
-      pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      pendingRef.current.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl),
+      );
     },
     [],
   );
@@ -1360,7 +1562,9 @@ function EventGalleryDialog({
       setSavedUrls(updated.galleryUrls);
       onUpdated(updated, `เพิ่มรูปในแกลเลอรี “${event.name}” เรียบร้อยแล้ว`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'อัปโหลดรูปภาพไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'อัปโหลดรูปภาพไม่สำเร็จ',
+      );
     } finally {
       setBusy('');
     }
@@ -1381,7 +1585,9 @@ function EventGalleryDialog({
       setSavedUrls(updated.galleryUrls);
       onUpdated(updated, `บันทึกลำดับแกลเลอรี “${event.name}” เรียบร้อยแล้ว`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'บันทึกแกลเลอรีไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'บันทึกแกลเลอรีไม่สำเร็จ',
+      );
     } finally {
       setBusy('');
     }
@@ -1400,11 +1606,15 @@ function EventGalleryDialog({
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
               Event gallery
             </span>
-            <h2 id="event-gallery-title" className="mt-1 text-xl font-black text-ink">
+            <h2
+              id="event-gallery-title"
+              className="mt-1 text-xl font-black text-ink"
+            >
               รูปบรรยากาศ · {event.name}
             </h2>
             <p className="mt-1 text-sm text-muted">
-              มี {urls.length + pending.length}/10 รูป · เพิ่มได้อีก {remaining} รูป
+              มี {urls.length + pending.length}/10 รูป · เพิ่มได้อีก {remaining}{' '}
+              รูป
             </p>
           </div>
           <button
@@ -1423,7 +1633,10 @@ function EventGalleryDialog({
         {urls.length > 0 ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {urls.map((url, index) => (
-              <article key={url} className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]">
+              <article
+                key={url}
+                className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
+              >
                 <div
                   role="img"
                   aria-label={`รูปบรรยากาศลำดับ ${index + 1}`}
@@ -1455,7 +1668,11 @@ function EventGalleryDialog({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setUrls((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      onClick={() =>
+                        setUrls((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
                       disabled={Boolean(busy)}
                       aria-label={`ลบรูปที่ ${index + 1}`}
                       className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
@@ -1471,15 +1688,22 @@ function EventGalleryDialog({
 
         {pending.length > 0 ? (
           <div className="mt-5">
-            <h3 className="text-sm font-extrabold text-ink">ตัวอย่างก่อนอัปโหลด</h3>
+            <h3 className="text-sm font-extrabold text-ink">
+              ตัวอย่างก่อนอัปโหลด
+            </h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {pending.map((item, index) => (
-                <article key={item.previewUrl} className="overflow-hidden rounded-[18px] border border-dashed border-violet bg-[#faf7ff]">
+                <article
+                  key={item.previewUrl}
+                  className="overflow-hidden rounded-[18px] border border-dashed border-violet bg-[#faf7ff]"
+                >
                   <div
                     role="img"
                     aria-label={`ตัวอย่าง ${item.file.name}`}
                     className="aspect-[4/3] bg-cover bg-center"
-                    style={{ backgroundImage: `url(${JSON.stringify(item.previewUrl)})` }}
+                    style={{
+                      backgroundImage: `url(${JSON.stringify(item.previewUrl)})`,
+                    }}
                   />
                   <div className="flex items-center justify-between gap-2 p-2">
                     <span className="min-w-0 truncate pl-1 text-xs font-bold text-muted">
@@ -1502,7 +1726,9 @@ function EventGalleryDialog({
         ) : null}
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[#eee9f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${remaining === 0 || busy ? 'pointer-events-none opacity-40' : ''}`}>
+          <label
+            className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${remaining === 0 || busy ? 'pointer-events-none opacity-40' : ''}`}
+          >
             <UploadCloud className="h-4 w-4" aria-hidden />
             เลือกรูปหลายไฟล์
             <input
@@ -1522,11 +1748,17 @@ function EventGalleryDialog({
               type="button"
               onClick={() => void upload()}
               disabled={pending.length === 0 || Boolean(busy) || hasChanges}
-              title={hasChanges ? 'บันทึกลำดับหรือลบรูปก่อนอัปโหลดรูปใหม่' : undefined}
+              title={
+                hasChanges
+                  ? 'บันทึกลำดับหรือลบรูปก่อนอัปโหลดรูปใหม่'
+                  : undefined
+              }
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-40"
             >
               <UploadCloud className="h-4 w-4" aria-hidden />
-              {busy === 'upload' ? 'กำลังอัปโหลด…' : `อัปโหลด ${pending.length} รูป`}
+              {busy === 'upload'
+                ? 'กำลังอัปโหลด…'
+                : `อัปโหลด ${pending.length} รูป`}
             </button>
             <button
               type="button"
@@ -1773,17 +2005,25 @@ function CreateEventDialog({
           </Field>
 
           <div className="sm:col-span-2">
-            <span className="text-sm font-bold text-ink">ภาพปกอีเวนต์ (ไม่บังคับ)</span>
+            <span className="text-sm font-bold text-ink">
+              ภาพปกอีเวนต์ (ไม่บังคับ)
+            </span>
             <div
               role="img"
-              aria-label={banner ? `ตัวอย่าง ${banner.file.name}` : 'ตัวอย่างภาพปกเริ่มต้น'}
+              aria-label={
+                banner
+                  ? `ตัวอย่าง ${banner.file.name}`
+                  : 'ตัวอย่างภาพปกเริ่มต้น'
+              }
               className="mt-2 aspect-video w-full rounded-[18px] bg-cover bg-center"
               style={{
                 backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.38),rgba(56,101,104,.16)),url(${JSON.stringify(banner?.previewUrl ?? getEventCoverUrl(null))})`,
               }}
             />
             <div className="mt-3 flex flex-wrap gap-2">
-              <label className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-50' : ''}`}>
+              <label
+                className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-50' : ''}`}
+              >
                 <UploadCloud className="h-4 w-4" aria-hidden />
                 {banner ? 'เปลี่ยนภาพ' : 'เลือกภาพปก'}
                 <input

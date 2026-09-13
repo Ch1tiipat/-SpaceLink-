@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Ban,
   Building2,
@@ -16,8 +16,8 @@ import {
   ShieldAlert,
   UserRound,
   X,
-} from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+} from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   createSuperAdminPenalty,
@@ -37,11 +37,11 @@ import {
   type SuperAdminSupportTicketStatusUpdate,
   type SuperAdminUserListItem,
   type SupportTicketStatus,
-} from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 const PAGE_SIZE = 25;
-const TICKET_STATUSES: SupportTicketStatus[] = ["OPEN", "PROCESSING", "CLOSED"];
+const TICKET_STATUSES: SupportTicketStatus[] = ['OPEN', 'PROCESSING', 'CLOSED'];
 const DEFAULT_PENALTY_POINTS: Record<PenaltyReason, number> = {
   NO_SHOW: 20,
   RULE_VIOLATION: 15,
@@ -49,20 +49,20 @@ const DEFAULT_PENALTY_POINTS: Record<PenaltyReason, number> = {
   BAD_REVIEW: 10,
   OTHER: 5,
 };
-const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Bangkok",
+const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Bangkok',
 });
 
-type Tab = "tickets" | "moderation";
+type Tab = 'tickets' | 'moderation';
 
 export function SuperAdminSupportScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab =
-    searchParams.get("tab") === "moderation" ? "moderation" : "tickets";
+    searchParams.get('tab') === 'moderation' ? 'moderation' : 'tickets';
   const [tickets, setTickets] = useState<SuperAdminSupportTicket[]>([]);
   const [moderation, setModeration] = useState<SuperAdminPenaltiesOverview>({
     penalties: [],
@@ -74,19 +74,19 @@ export function SuperAdminSupportScreen() {
   );
   const [bookings, setBookings] = useState<SuperAdminBooking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     setLoading(true);
-    setError("");
+    setError('');
 
     void (async () => {
       try {
         const token = await getAccessToken();
-        if (tab === "tickets") {
+        if (tab === 'tickets') {
           const rows = await getSuperAdminSupportTickets(
             token,
             controller.signal,
@@ -108,15 +108,15 @@ export function SuperAdminSupportScreen() {
           }
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active)
           setError(
             errorMessage(
               cause,
-              tab === "tickets"
-                ? "โหลดเคสช่วยเหลือไม่สำเร็จ"
-                : "โหลดข้อมูลการกำกับดูแลไม่สำเร็จ",
+              tab === 'tickets'
+                ? 'โหลดเคสช่วยเหลือไม่สำเร็จ'
+                : 'โหลดข้อมูลการกำกับดูแลไม่สำเร็จ',
             ),
           );
       } finally {
@@ -132,7 +132,7 @@ export function SuperAdminSupportScreen() {
 
   function changeTab(nextTab: Tab) {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", nextTab);
+    params.set('tab', nextTab);
     router.replace(`${pathname}?${params.toString()}`);
   }
 
@@ -170,7 +170,7 @@ export function SuperAdminSupportScreen() {
           disabled={loading}
           className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] disabled:opacity-55"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           โหลดข้อมูลใหม่
         </button>
       </header>
@@ -180,22 +180,22 @@ export function SuperAdminSupportScreen() {
         className="mb-[18px] flex gap-1 overflow-x-auto rounded-xl border border-[#e7dfea] bg-white p-1.5 shadow-[0_8px_24px_rgba(65,43,85,.045)]"
       >
         <TabButton
-          active={tab === "tickets"}
-          onClick={() => changeTab("tickets")}
+          active={tab === 'tickets'}
+          onClick={() => changeTab('tickets')}
           icon={MessageCircleQuestion}
         >
           เคสช่วยเหลือ
         </TabButton>
         <TabButton
-          active={tab === "moderation"}
-          onClick={() => changeTab("moderation")}
+          active={tab === 'moderation'}
+          onClick={() => changeTab('moderation')}
           icon={ShieldAlert}
         >
           รายงานและความปลอดภัย
         </TabButton>
       </nav>
 
-      {tab === "tickets" ? (
+      {tab === 'tickets' ? (
         <TicketsTab
           tickets={tickets}
           loading={loading}
@@ -228,8 +228,8 @@ function TicketsTab({
   error: string;
   onTicketUpdated: (updated: SuperAdminSupportTicketStatusUpdate) => void;
 }) {
-  const [status, setStatus] = useState<"ALL" | SupportTicketStatus>("ALL");
-  const [type, setType] = useState("ALL");
+  const [status, setStatus] = useState<'ALL' | SupportTicketStatus>('ALL');
+  const [type, setType] = useState('ALL');
   const [page, setPage] = useState(1);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
@@ -238,8 +238,8 @@ function TicketsTab({
   const types = useMemo(
     () =>
       [...new Set(tickets.map((ticket) => ticket.type))].sort((left, right) =>
-        ticketTypeLabel(left).localeCompare(ticketTypeLabel(right), "th-TH", {
-          sensitivity: "base",
+        ticketTypeLabel(left).localeCompare(ticketTypeLabel(right), 'th-TH', {
+          sensitivity: 'base',
         }),
       ),
     [tickets],
@@ -248,12 +248,12 @@ function TicketsTab({
     () =>
       tickets.filter(
         (ticket) =>
-          (status === "ALL" || ticket.status === status) &&
-          (type === "ALL" || ticket.type === type),
+          (status === 'ALL' || ticket.status === status) &&
+          (type === 'ALL' || ticket.type === type),
       ),
     [status, tickets, type],
   );
-  const hasFilters = status !== "ALL" || type !== "ALL";
+  const hasFilters = status !== 'ALL' || type !== 'ALL';
 
   return (
     <>
@@ -265,7 +265,7 @@ function TicketsTab({
             <Select
               value={status}
               onChange={(value) =>
-                setStatus(value as "ALL" | SupportTicketStatus)
+                setStatus(value as 'ALL' | SupportTicketStatus)
               }
               label="กรองสถานะคำร้อง"
             >
@@ -288,15 +288,15 @@ function TicketsTab({
               type="button"
               disabled={!hasFilters}
               onClick={() => {
-                setStatus("ALL");
-                setType("ALL");
+                setStatus('ALL');
+                setType('ALL');
               }}
               className="min-h-10 rounded-[9px] border border-[#e7dfea] bg-white px-3 text-xs font-bold text-[#716675] disabled:opacity-45"
             >
               ล้างตัวกรอง
             </button>
             <span className="self-center text-right text-xs text-[#82788b]">
-              {filtered.length.toLocaleString("th-TH")} รายการ
+              {filtered.length.toLocaleString('th-TH')} รายการ
             </span>
           </div>
         }
@@ -313,13 +313,13 @@ function TicketsTab({
           <StatePanel
             title={
               hasFilters
-                ? "ไม่พบคำร้องที่ตรงกับตัวกรอง"
-                : "ยังไม่มีเคสช่วยเหลือ"
+                ? 'ไม่พบคำร้องที่ตรงกับตัวกรอง'
+                : 'ยังไม่มีเคสช่วยเหลือ'
             }
             detail={
               hasFilters
-                ? "ลองเปลี่ยนสถานะหรือประเภทคำร้อง"
-                : "รายการจะปรากฏเมื่อผู้ใช้ส่งคำร้อง"
+                ? 'ลองเปลี่ยนสถานะหรือประเภทคำร้อง'
+                : 'รายการจะปรากฏเมื่อผู้ใช้ส่งคำร้อง'
             }
             icon={MessageCircleQuestion}
           />
@@ -351,7 +351,7 @@ function TicketsTab({
                       aria-label={`เปิดรายละเอียดคำร้อง ${ticket.subject}`}
                       onClick={() => setSelectedTicketId(ticket.id)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
+                        if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           setSelectedTicketId(ticket.id);
                         }
@@ -432,8 +432,8 @@ function TicketDetailDrawer({
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [statusError, setStatusError] = useState("");
+  const [error, setError] = useState('');
+  const [statusError, setStatusError] = useState('');
   const [savingStatus, setSavingStatus] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -441,7 +441,7 @@ function TicketDetailDrawer({
     const controller = new AbortController();
     let active = true;
     setLoading(true);
-    setError("");
+    setError('');
 
     void (async () => {
       try {
@@ -453,10 +453,10 @@ function TicketDetailDrawer({
         );
         if (active) setDetail(result);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active)
-          setError(errorMessage(cause, "โหลดรายละเอียดคำร้องไม่สำเร็จ"));
+          setError(errorMessage(cause, 'โหลดรายละเอียดคำร้องไม่สำเร็จ'));
       } finally {
         if (active) setLoading(false);
       }
@@ -470,10 +470,10 @@ function TicketDetailDrawer({
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === 'Escape') onClose();
     }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
   }, [onClose]);
 
   async function advanceStatus() {
@@ -492,7 +492,7 @@ function TicketDetailDrawer({
       updatedAt: new Date().toISOString(),
     };
     setSavingStatus(true);
-    setStatusError("");
+    setStatusError('');
     setDetail((current) =>
       current
         ? {
@@ -532,7 +532,7 @@ function TicketDetailDrawer({
           : current,
       );
       onTicketUpdated(previous);
-      setStatusError(errorMessage(cause, "เปลี่ยนสถานะคำร้องไม่สำเร็จ"));
+      setStatusError(errorMessage(cause, 'เปลี่ยนสถานะคำร้องไม่สำเร็จ'));
     } finally {
       setSavingStatus(false);
     }
@@ -563,11 +563,11 @@ function TicketDetailDrawer({
               id="ticket-detail-title"
               className="mt-1 truncate text-xl font-black text-[#242032]"
             >
-              {detail?.subject ?? "รายละเอียดคำร้อง"}
+              {detail?.subject ?? 'รายละเอียดคำร้อง'}
             </h2>
             {detail ? (
               <p className="mt-1 text-xs text-[#82788b]">
-                {ticketTypeLabel(detail.type)} · สร้างเมื่อ{" "}
+                {ticketTypeLabel(detail.type)} · สร้างเมื่อ{' '}
                 {formatDateTime(detail.createdAt)}
               </p>
             ) : null}
@@ -621,10 +621,10 @@ function TicketDetailDrawer({
                         <CircleCheckBig className="h-4 w-4" />
                       )}
                       {savingStatus
-                        ? "กำลังบันทึก..."
-                        : nextStatus === "PROCESSING"
-                          ? "เริ่มดำเนินการ"
-                          : "ปิดเคส"}
+                        ? 'กำลังบันทึก...'
+                        : nextStatus === 'PROCESSING'
+                          ? 'เริ่มดำเนินการ'
+                          : 'ปิดเคส'}
                     </button>
                   ) : (
                     <span className="inline-flex items-center gap-2 rounded-lg bg-[#e7f8ef] px-3 py-2 text-xs font-extrabold text-[#147653]">
@@ -660,7 +660,7 @@ function TicketDetailDrawer({
                   <DetailField
                     icon={Building2}
                     label="องค์กรที่เกี่ยวข้อง"
-                    value={detail.organization?.name ?? "ไม่ผูกองค์กร"}
+                    value={detail.organization?.name ?? 'ไม่ผูกองค์กร'}
                   />
                   <DetailField
                     icon={MessageCircleQuestion}
@@ -692,7 +692,7 @@ function TicketDetailDrawer({
                       <dt>โซน / บูธ</dt>
                       <dd className="text-right font-bold text-[#312939]">
                         {detail.booking.booth.zone.name ??
-                          detail.booking.booth.zone.code}{" "}
+                          detail.booking.booth.zone.code}{' '}
                         / {detail.booking.booth.code}
                       </dd>
                     </div>
@@ -789,36 +789,35 @@ function PenaltyForm({
   bookings: SuperAdminBooking[];
   onCreated: () => void;
 }) {
-  const [userQuery, setUserQuery] = useState("");
-  const [userId, setUserId] = useState("");
-  const [organizationId, setOrganizationId] = useState("");
-  const [bookingId, setBookingId] = useState("");
-  const [reason, setReason] = useState<PenaltyReason>("NO_SHOW");
+  const [userQuery, setUserQuery] = useState('');
+  const [userId, setUserId] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
+  const [bookingId, setBookingId] = useState('');
+  const [reason, setReason] = useState<PenaltyReason>('NO_SHOW');
   const [points, setPoints] = useState(DEFAULT_PENALTY_POINTS.NO_SHOW);
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
-    tone: "success" | "error";
+    tone: 'success' | 'error';
     text: string;
   } | null>(null);
 
-  const normalizedUserQuery = userQuery.trim().toLocaleLowerCase("th-TH");
+  const normalizedUserQuery = userQuery.trim().toLocaleLowerCase('th-TH');
   const visibleUsers = useMemo(
     () =>
       users.filter(
         (user) =>
           !normalizedUserQuery ||
           user.fullName
-            .toLocaleLowerCase("th-TH")
+            .toLocaleLowerCase('th-TH')
             .includes(normalizedUserQuery) ||
-          user.email.toLocaleLowerCase("th-TH").includes(normalizedUserQuery) ||
-          user.id.toLocaleLowerCase("th-TH").includes(normalizedUserQuery),
+          user.email.toLocaleLowerCase('th-TH').includes(normalizedUserQuery) ||
+          user.id.toLocaleLowerCase('th-TH').includes(normalizedUserQuery),
       ),
     [normalizedUserQuery, users],
   );
   const selectedUser = users.find((user) => user.id === userId) ?? null;
-  const selectedVendor =
-    selectedUser?.role === "VENDOR" ? selectedUser : null;
+  const selectedVendor = selectedUser?.role === 'VENDOR' ? selectedUser : null;
 
   const matchingBookings = bookings.filter(
     (booking) =>
@@ -854,18 +853,18 @@ function PenaltyForm({
         },
         token,
       );
-      setDescription("");
+      setDescription('');
       setFeedback({
-        tone: "success",
+        tone: 'success',
         text: result.justBlacklisted
-          ? "ออกบทลงโทษแล้ว Trust Score เหลือ 0 และบัญชีถูกขึ้นบัญชีดำ"
+          ? 'ออกบทลงโทษแล้ว Trust Score เหลือ 0 และบัญชีถูกขึ้นบัญชีดำ'
           : `ออกบทลงโทษแล้ว Trust Score เหลือ ${result.trustScore} คะแนน`,
       });
       onCreated();
     } catch (cause) {
       setFeedback({
-        tone: "error",
-        text: errorMessage(cause, "ออกบทลงโทษไม่สำเร็จ"),
+        tone: 'error',
+        text: errorMessage(cause, 'ออกบทลงโทษไม่สำเร็จ'),
       });
     } finally {
       setSubmitting(false);
@@ -887,8 +886,8 @@ function PenaltyForm({
             value={userQuery}
             onChange={(event) => {
               setUserQuery(event.target.value);
-              setUserId("");
-              setBookingId("");
+              setUserId('');
+              setBookingId('');
             }}
             placeholder="ค้นหาชื่อ อีเมล หรือ User ID โดยไม่ต้องเลือกองค์กร"
             className="min-w-0 flex-1 bg-transparent text-sm text-[#28202f] outline-none"
@@ -898,14 +897,14 @@ function PenaltyForm({
           value={userId}
           onChange={(value) => {
             setUserId(value);
-            setBookingId("");
+            setBookingId('');
           }}
           label="เลือกผู้ใช้"
         >
           <option value="">เลือกผู้ใช้</option>
           {visibleUsers.map((user) => (
             <option key={user.id} value={user.id}>
-              {user.fullName} — {userRoleLabel(user.role)} — Trust Score{" "}
+              {user.fullName} — {userRoleLabel(user.role)} — Trust Score{' '}
               {user.trustScore}/100
             </option>
           ))}
@@ -914,7 +913,7 @@ function PenaltyForm({
           value={organizationId}
           onChange={(value) => {
             setOrganizationId(value);
-            setBookingId("");
+            setBookingId('');
           }}
           label="เลือกองค์กร"
         >
@@ -989,15 +988,15 @@ function PenaltyForm({
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#6d28d9] px-4 text-sm font-extrabold text-white disabled:opacity-50"
           >
             <Gavel className="h-4 w-4" />
-            {submitting ? "กำลังออกบทลงโทษ…" : "ยืนยันออกบทลงโทษ"}
+            {submitting ? 'กำลังออกบทลงโทษ…' : 'ยืนยันออกบทลงโทษ'}
           </button>
           {feedback ? (
             <p
-              role={feedback.tone === "error" ? "alert" : "status"}
+              role={feedback.tone === 'error' ? 'alert' : 'status'}
               className={`mt-3 rounded-lg px-3 py-2 text-sm font-bold ${
-                feedback.tone === "error"
-                  ? "bg-[#fff0ef] text-[#b42318]"
-                  : "bg-[#e7f8ef] text-[#147653]"
+                feedback.tone === 'error'
+                  ? 'bg-[#fff0ef] text-[#b42318]'
+                  : 'bg-[#e7f8ef] text-[#147653]'
               }`}
             >
               {feedback.text}
@@ -1123,12 +1122,12 @@ function ModerationTab({
                         <strong
                           className={
                             penalty.user.trustScore === 0
-                              ? "text-[#b42318]"
-                              : "text-[#6d28d9]"
+                              ? 'text-[#b42318]'
+                              : 'text-[#6d28d9]'
                           }
                         >
                           {penalty.user.trustScore}
-                        </strong>{" "}
+                        </strong>{' '}
                         / 100
                       </td>
                       <td className="px-3 py-4">
@@ -1137,12 +1136,12 @@ function ModerationTab({
                         </span>
                       </td>
                       <td className="max-w-[300px] px-3 py-4 text-xs leading-5 text-[#62576c]">
-                        {penalty.description || "—"}
+                        {penalty.description || '—'}
                       </td>
                       <td className="px-3 py-4">
                         <strong className="text-[#b42318]">
-                          -{penalty.points.toLocaleString("th-TH")}
-                        </strong>{" "}
+                          -{penalty.points.toLocaleString('th-TH')}
+                        </strong>{' '}
                         คะแนน
                       </td>
                       <td className="px-3 py-4">
@@ -1207,7 +1206,7 @@ function ModerationTab({
                       aria-label={`เปิดข้อมูลผู้ใช้ ${user.fullName}`}
                       onClick={() => openUser(user.id)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
+                        if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           openUser(user.id);
                         }
@@ -1227,7 +1226,7 @@ function ModerationTab({
                         {user.trustScore} / 100
                       </td>
                       <td className="max-w-[360px] px-3 py-4 text-xs leading-5 text-[#716675]">
-                        {user.blacklistReason || "ไม่ระบุเหตุผล"}
+                        {user.blacklistReason || 'ไม่ระบุเหตุผล'}
                       </td>
                       <td className="px-5 py-4 text-right font-extrabold text-[#6d28d9]">
                         ดูข้อมูลผู้ใช้ →
@@ -1260,7 +1259,7 @@ function Panel({
       <div className="border-b border-[#ebe4ef] bg-[#fdfbff] p-4">
         <h2 className="m-0 text-base font-black text-[#312939]">{title}</h2>
         <p
-          className={`mt-1 text-xs text-[#82788b] ${controls ? "mb-4" : "mb-0"}`}
+          className={`mt-1 text-xs text-[#82788b] ${controls ? 'mb-4' : 'mb-0'}`}
         >
           {description}
         </p>
@@ -1285,9 +1284,9 @@ function TabButton({
   return (
     <button
       type="button"
-      aria-current={active ? "page" : undefined}
+      aria-current={active ? 'page' : undefined}
       onClick={onClick}
-      className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-4 text-sm font-extrabold transition ${active ? "bg-[#6d28d9] text-white shadow-sm" : "text-[#716675] hover:bg-[#f5effc]"}`}
+      className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-4 text-sm font-extrabold transition ${active ? 'bg-[#6d28d9] text-white shadow-sm' : 'text-[#716675] hover:bg-[#f5effc]'}`}
     >
       <Icon className="h-4 w-4" />
       {children}
@@ -1333,7 +1332,7 @@ function Summary({
   return (
     <div className="inline-flex items-center gap-2 rounded-lg bg-[#f2eaff] px-3 py-2 text-xs font-bold text-[#6d28d9]">
       <Icon className="h-4 w-4" />
-      {label}: <strong>{value.toLocaleString("th-TH")}</strong>
+      {label}: <strong>{value.toLocaleString('th-TH')}</strong>
     </div>
   );
 }
@@ -1395,8 +1394,8 @@ function Pagination({
   return (
     <footer className="flex flex-col gap-3 border-t border-[#ebe4ef] bg-[#fdfbff] px-5 py-3.5 text-xs text-[#82788b] sm:flex-row sm:items-center sm:justify-between">
       <span>
-        แสดง {first.toLocaleString("th-TH")}–{last.toLocaleString("th-TH")} จาก{" "}
-        {total.toLocaleString("th-TH")} รายการ
+        แสดง {first.toLocaleString('th-TH')}–{last.toLocaleString('th-TH')} จาก{' '}
+        {total.toLocaleString('th-TH')} รายการ
       </span>
       <div className="flex items-center gap-2">
         <button
@@ -1475,9 +1474,9 @@ function TableSkeleton() {
 
 function TicketStatusPill({ status }: { status: SupportTicketStatus }) {
   const styles: Record<SupportTicketStatus, string> = {
-    OPEN: "bg-[#fff4df] text-[#9a570f]",
-    PROCESSING: "bg-[#eaf2ff] text-[#2459b5]",
-    CLOSED: "bg-[#e7f8ef] text-[#147653]",
+    OPEN: 'bg-[#fff4df] text-[#9a570f]',
+    PROCESSING: 'bg-[#eaf2ff] text-[#2459b5]',
+    CLOSED: 'bg-[#e7f8ef] text-[#147653]',
   };
   return (
     <span
@@ -1489,7 +1488,7 @@ function TicketStatusPill({ status }: { status: SupportTicketStatus }) {
 }
 
 function ticketStatusLabel(status: SupportTicketStatus) {
-  return { OPEN: "เปิดอยู่", PROCESSING: "กำลังดำเนินการ", CLOSED: "ปิดแล้ว" }[
+  return { OPEN: 'เปิดอยู่', PROCESSING: 'กำลังดำเนินการ', CLOSED: 'ปิดแล้ว' }[
     status
   ];
 }
@@ -1497,39 +1496,39 @@ function ticketStatusLabel(status: SupportTicketStatus) {
 function nextTicketStatus(
   status: SupportTicketStatus,
 ): SupportTicketStatus | null {
-  return status === "OPEN"
-    ? "PROCESSING"
-    : status === "PROCESSING"
-      ? "CLOSED"
+  return status === 'OPEN'
+    ? 'PROCESSING'
+    : status === 'PROCESSING'
+      ? 'CLOSED'
       : null;
 }
 
 function ticketTypeLabel(type: string) {
   const labels: Record<string, string> = {
-    REFUND_REQUEST: "คำร้องคืนเงิน",
-    BOOTH_CHANGE: "ขอเปลี่ยนบูธ",
-    ISSUE_REPORT: "รายงานปัญหา",
-    GENERAL_INQUIRY: "สอบถามทั่วไป",
-    OTHER: "อื่นๆ",
+    REFUND_REQUEST: 'คำร้องคืนเงิน',
+    BOOTH_CHANGE: 'ขอเปลี่ยนบูธ',
+    ISSUE_REPORT: 'รายงานปัญหา',
+    GENERAL_INQUIRY: 'สอบถามทั่วไป',
+    OTHER: 'อื่นๆ',
   };
   return labels[type] ?? type;
 }
 
 function penaltyReasonLabel(reason: PenaltyReason) {
   return {
-    NO_SHOW: "ไม่มาตามนัด",
-    RULE_VIOLATION: "ทำผิดกติกาพื้นที่",
-    CONTRACT_BREACH: "ผิดสัญญา",
-    BAD_REVIEW: "ได้รับรีวิวไม่ดี",
-    OTHER: "อื่นๆ",
+    NO_SHOW: 'ไม่มาตามนัด',
+    RULE_VIOLATION: 'ทำผิดกติกาพื้นที่',
+    CONTRACT_BREACH: 'ผิดสัญญา',
+    BAD_REVIEW: 'ได้รับรีวิวไม่ดี',
+    OTHER: 'อื่นๆ',
   }[reason];
 }
 
-function userRoleLabel(role: SuperAdminUserListItem["role"]) {
+function userRoleLabel(role: SuperAdminUserListItem['role']) {
   return {
-    SUPER_ADMIN: "Super Admin",
-    ORG_ADMIN: "แอดมินบริษัท",
-    VENDOR: "ผู้ขาย",
+    SUPER_ADMIN: 'Super Admin',
+    ORG_ADMIN: 'แอดมินบริษัท',
+    VENDOR: 'ผู้ขาย',
   }[role];
 }
 
@@ -1541,7 +1540,7 @@ async function getAccessToken() {
   const supabase = getSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new Error("ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่");
+  if (!token) throw new Error('ไม่พบเซสชันผู้ดูแลระบบ กรุณาเข้าสู่ระบบใหม่');
   return token;
 }
 

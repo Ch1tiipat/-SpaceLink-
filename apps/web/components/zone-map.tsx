@@ -99,10 +99,7 @@ function boothText(
   selectedBoothIds: string[],
   recommendedBoothId: string | null,
 ) {
-  if (
-    selectedBoothIds.includes(booth.id) ||
-    booth.id === recommendedBoothId
-  ) {
+  if (selectedBoothIds.includes(booth.id) || booth.id === recommendedBoothId) {
     return '#ffffff';
   }
   return statusOf(booth).text;
@@ -113,12 +110,21 @@ function bookedLogoUrl(booth: EventBooth) {
   return booth.occupant?.logoUrl ?? null;
 }
 
-function BookedShopLogo({ logoUrl, shopName }: { logoUrl: string | null; shopName: string }) {
+function BookedShopLogo({
+  logoUrl,
+  shopName,
+}: {
+  logoUrl: string | null;
+  shopName: string;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
 
   if (!logoUrl || imageFailed) {
     return (
-      <span className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,#31a66f,#0f3f2d)] text-lg font-black text-white" aria-hidden>
+      <span
+        className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,#31a66f,#0f3f2d)] text-lg font-black text-white"
+        aria-hidden
+      >
         {shopName.trim().charAt(0) || 'ร'}
       </span>
     );
@@ -369,7 +375,10 @@ function OverviewGridMap({
   onFocusZone: (zoneId: string) => void;
   onSelectBooth: (booth: EventBooth) => void;
 }) {
-  const [selectedShop, setSelectedShop] = useState<{ booth: EventBooth; zone: EventZone } | null>(null);
+  const [selectedShop, setSelectedShop] = useState<{
+    booth: EventBooth;
+    zone: EventZone;
+  } | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
@@ -430,124 +439,146 @@ function OverviewGridMap({
         }}
       >
         {zones.map((zone, zoneIndex) => {
-        const tone = overviewPalette[zoneIndex % overviewPalette.length];
-        const available = zone.booths.filter(
-          (booth) => booth.availability === 'AVAILABLE',
-        ).length;
-        const selected = zone.id === focusedZoneId;
+          const tone = overviewPalette[zoneIndex % overviewPalette.length];
+          const available = zone.booths.filter(
+            (booth) => booth.availability === 'AVAILABLE',
+          ).length;
+          const selected = zone.id === focusedZoneId;
 
-        return (
-          <section
-            key={zone.id}
-            aria-label={`Zone ${zone.code} ${zone.name ?? ''}`}
-            onClick={() => onFocusZone(zone.id)}
-            className={`rounded-[20px] border-2 border-dashed p-3 transition ${
-              selected
-                ? 'shadow-[0_0_0_5px_rgba(124,58,237,.10),0_16px_34px_rgba(54,36,91,.10)]'
-                : 'hover:-translate-y-0.5 hover:shadow-soft'
-            }`}
-            style={{ borderColor: tone.stroke, backgroundColor: tone.fill }}
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-black text-ink">Zone {zone.code}</h2>
-                <p className="mt-0.5 line-clamp-1 text-sm text-muted">
-                  {zone.name ??
-                    (zone.categories
-                      .map((category) => category.name)
-                      .join(' · ') || 'ยังไม่ระบุชื่อโซน')}
-                </p>
+          return (
+            <section
+              key={zone.id}
+              aria-label={`Zone ${zone.code} ${zone.name ?? ''}`}
+              onClick={() => onFocusZone(zone.id)}
+              className={`rounded-[20px] border-2 border-dashed p-3 transition ${
+                selected
+                  ? 'shadow-[0_0_0_5px_rgba(124,58,237,.10),0_16px_34px_rgba(54,36,91,.10)]'
+                  : 'hover:-translate-y-0.5 hover:shadow-soft'
+              }`}
+              style={{ borderColor: tone.stroke, backgroundColor: tone.fill }}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-black text-ink">
+                    Zone {zone.code}
+                  </h2>
+                  <p className="mt-0.5 line-clamp-1 text-sm text-muted">
+                    {zone.name ??
+                      (zone.categories
+                        .map((category) => category.name)
+                        .join(' · ') ||
+                        'ยังไม่ระบุชื่อโซน')}
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#e9f9f1] px-2 py-1 text-xs font-extrabold text-[#128252]">
+                  {available} ว่าง
+                </span>
               </div>
-              <span className="rounded-full bg-[#e9f9f1] px-2 py-1 text-xs font-extrabold text-[#128252]">
-                {available} ว่าง
-              </span>
-            </div>
 
-            <div className="grid grid-cols-3 gap-1">
-              {zone.booths.map((booth) => {
-                const unavailable = booth.availability !== 'AVAILABLE';
-                const href =
-                  !multiSelect && !readOnly && !unavailable
-                    ? boothHref?.(booth)
-                    : undefined;
-                const selected = selectedBoothIds.includes(booth.id);
-                const recommended = booth.id === recommendedBoothId;
-                const shopName = booth.occupant?.name ?? 'จองแล้ว';
-                const shared =
-                  'relative flex min-h-[38px] flex-col items-center justify-center overflow-hidden rounded-[9px] border px-1 py-1 text-center transition';
+              <div className="grid grid-cols-3 gap-1">
+                {zone.booths.map((booth) => {
+                  const unavailable = booth.availability !== 'AVAILABLE';
+                  const href =
+                    !multiSelect && !readOnly && !unavailable
+                      ? boothHref?.(booth)
+                      : undefined;
+                  const selected = selectedBoothIds.includes(booth.id);
+                  const recommended = booth.id === recommendedBoothId;
+                  const shopName = booth.occupant?.name ?? 'จองแล้ว';
+                  const shared =
+                    'relative flex min-h-[38px] flex-col items-center justify-center overflow-hidden rounded-[9px] border px-1 py-1 text-center transition';
 
-                if (booth.availability === 'BOOKED') {
+                  if (booth.availability === 'BOOKED') {
+                    return (
+                      <button
+                        key={booth.id}
+                        type="button"
+                        aria-label={`ดูข้อมูลร้าน ${shopName} ที่บูธ ${booth.code}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openerRef.current = event.currentTarget;
+                          setSelectedShop({ booth, zone });
+                        }}
+                        className={`${shared} border-[#2a9b67] bg-white p-0 text-white hover:-translate-y-0.5 hover:border-[#168555] hover:shadow-[0_9px_20px_rgba(15,63,45,.2)] focus:outline-none focus:ring-2 focus:ring-[#168555] focus:ring-offset-2`}
+                      >
+                        <BookedShopLogo
+                          logoUrl={booth.occupant?.logoUrl ?? null}
+                          shopName={shopName}
+                        />
+                      </button>
+                    );
+                  }
+
+                  if (booth.availability === 'HELD') {
+                    return (
+                      <div
+                        key={booth.id}
+                        aria-label={`บูธ ${booth.code} กำลังถูกจอง`}
+                        className={`${shared} cursor-not-allowed border-[#e7a339] bg-[#fff8ec] text-[#9d620c]`}
+                      >
+                        <strong className="text-sm">{booth.code}</strong>
+                        <span className="text-xs">กำลังจอง</span>
+                      </div>
+                    );
+                  }
+
+                  if (booth.availability === 'UNAVAILABLE') {
+                    return (
+                      <div
+                        key={booth.id}
+                        aria-label={`บูธ ${booth.code} ปิดใช้งาน`}
+                        className={`${shared} cursor-not-allowed border-dashed border-[#d3ccd6] bg-[#efedef] text-[#918996]`}
+                      >
+                        <strong className="text-sm">{booth.code}</strong>
+                        <span className="text-xs">ปิดใช้งาน</span>
+                      </div>
+                    );
+                  }
+
+                  if (href) {
+                    return (
+                      <a
+                        key={booth.id}
+                        href={href}
+                        aria-label={`บูธ ${booth.code} AVAILABLE`}
+                        onClick={(event) => event.stopPropagation()}
+                        className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
+                      >
+                        {recommended ? (
+                          <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">
+                            AI
+                          </span>
+                        ) : null}
+                        <strong className="text-sm">{booth.code}</strong>
+                      </a>
+                    );
+                  }
+
                   return (
                     <button
                       key={booth.id}
                       type="button"
-                      aria-label={`ดูข้อมูลร้าน ${shopName} ที่บูธ ${booth.code}`}
+                      disabled={readOnly}
+                      aria-pressed={selected}
+                      aria-label={`บูธ ${booth.code} AVAILABLE`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        openerRef.current = event.currentTarget;
-                        setSelectedShop({ booth, zone });
+                        onSelectBooth(booth);
                       }}
-                      className={`${shared} border-[#2a9b67] bg-white p-0 text-white hover:-translate-y-0.5 hover:border-[#168555] hover:shadow-[0_9px_20px_rgba(15,63,45,.2)] focus:outline-none focus:ring-2 focus:ring-[#168555] focus:ring-offset-2`}
+                      className={`${shared} ${selected ? 'border-[#201b2e] bg-[#201b2e] text-white shadow-[0_9px_20px_rgba(32,27,46,.2)]' : 'border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)]'} ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
                     >
-                      <BookedShopLogo logoUrl={booth.occupant?.logoUrl ?? null} shopName={shopName} />
+                      {recommended ? (
+                        <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">
+                          AI
+                        </span>
+                      ) : null}
+                      <strong className="text-sm">{booth.code}</strong>
                     </button>
                   );
-                }
-
-                if (booth.availability === 'HELD') {
-                  return (
-                    <div key={booth.id} aria-label={`บูธ ${booth.code} กำลังถูกจอง`} className={`${shared} cursor-not-allowed border-[#e7a339] bg-[#fff8ec] text-[#9d620c]`}>
-                      <strong className="text-sm">{booth.code}</strong>
-                      <span className="text-xs">กำลังจอง</span>
-                    </div>
-                  );
-                }
-
-                if (booth.availability === 'UNAVAILABLE') {
-                  return (
-                    <div key={booth.id} aria-label={`บูธ ${booth.code} ปิดใช้งาน`} className={`${shared} cursor-not-allowed border-dashed border-[#d3ccd6] bg-[#efedef] text-[#918996]`}>
-                      <strong className="text-sm">{booth.code}</strong>
-                      <span className="text-xs">ปิดใช้งาน</span>
-                    </div>
-                  );
-                }
-
-                if (href) {
-                  return (
-                    <a
-                      key={booth.id}
-                      href={href}
-                      aria-label={`บูธ ${booth.code} AVAILABLE`}
-                      onClick={(event) => event.stopPropagation()}
-                      className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
-                    >
-                      {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">AI</span> : null}
-                      <strong className="text-sm">{booth.code}</strong>
-                    </a>
-                  );
-                }
-
-                return (
-                  <button
-                    key={booth.id}
-                    type="button"
-                    disabled={readOnly}
-                    aria-pressed={selected}
-                    aria-label={`บูธ ${booth.code} AVAILABLE`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelectBooth(booth);
-                    }}
-                    className={`${shared} ${selected ? 'border-[#201b2e] bg-[#201b2e] text-white shadow-[0_9px_20px_rgba(32,27,46,.2)]' : 'border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)]'} ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
-                  >
-                    {recommended ? <span className="absolute right-1 top-1 rounded-full bg-violet px-1.5 py-0.5 text-xs font-black leading-none text-white">AI</span> : null}
-                    <strong className="text-sm">{booth.code}</strong>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        );
+                })}
+              </div>
+            </section>
+          );
         })}
       </div>
 
@@ -567,14 +598,23 @@ function OverviewGridMap({
           >
             <div className="flex items-start gap-4 border-b border-line p-5">
               <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[18px] border border-[#d9cfeb] bg-[#f7f2ff]">
-                <BookedShopLogo logoUrl={selectedShop.booth.occupant?.logoUrl ?? null} shopName={selectedShop.booth.occupant?.name ?? 'ร้านค้า'} />
+                <BookedShopLogo
+                  logoUrl={selectedShop.booth.occupant?.logoUrl ?? null}
+                  shopName={selectedShop.booth.occupant?.name ?? 'ร้านค้า'}
+                />
               </div>
               <div className="min-w-0 flex-1 pt-1">
                 <span className="sl-kicker">SHOP INFORMATION</span>
-                <h2 id="booked-shop-title" className="mt-1 truncate text-xl font-black text-ink">
+                <h2
+                  id="booked-shop-title"
+                  className="mt-1 truncate text-xl font-black text-ink"
+                >
                   {selectedShop.booth.occupant?.name ?? 'ร้านค้าที่จองพื้นที่'}
                 </h2>
-                <p className="mt-1 text-sm text-muted">Zone {selectedShop.zone.code} · Booth {selectedShop.booth.code}</p>
+                <p className="mt-1 text-sm text-muted">
+                  Zone {selectedShop.zone.code} · Booth{' '}
+                  {selectedShop.booth.code}
+                </p>
               </div>
               <button
                 ref={closeButtonRef}
@@ -588,20 +628,28 @@ function OverviewGridMap({
             </div>
 
             <div className="p-5">
-              <h3 className="text-base font-black text-ink">ร้านนี้จำหน่ายอะไร?</h3>
+              <h3 className="text-base font-black text-ink">
+                ร้านนี้จำหน่ายอะไร?
+              </h3>
               {selectedShop.zone.categories.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedShop.zone.categories.map((category) => (
-                    <span key={category.id} className="rounded-full border border-[#d9c9f2] bg-[#f8f3ff] px-3 py-2 text-sm font-bold text-violet">
+                    <span
+                      key={category.id}
+                      className="rounded-full border border-[#d9c9f2] bg-[#f8f3ff] px-3 py-2 text-sm font-bold text-violet"
+                    >
                       {category.name}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-muted">ร้านค้ายังไม่ได้ระบุหมวดสินค้าในข้อมูลสาธารณะ</p>
+                <p className="mt-2 text-sm text-muted">
+                  ร้านค้ายังไม่ได้ระบุหมวดสินค้าในข้อมูลสาธารณะ
+                </p>
               )}
               <p className="mt-4 rounded-[14px] bg-[#f7f5fa] p-3 text-sm leading-6 text-muted">
-                หมวดสินค้านี้อ้างอิงจากประเภทสินค้าที่ผู้จัดงานกำหนดให้ Zone {selectedShop.zone.code}
+                หมวดสินค้านี้อ้างอิงจากประเภทสินค้าที่ผู้จัดงานกำหนดให้ Zone{' '}
+                {selectedShop.zone.code}
               </p>
             </div>
           </section>
@@ -620,7 +668,10 @@ function MapLegend() {
   return (
     <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-white/95 px-5 py-4">
       {STATUS_LEGEND.map(({ key, label }) => (
-        <li key={key} className="flex items-center gap-2 text-xs font-semibold text-muted">
+        <li
+          key={key}
+          className="flex items-center gap-2 text-xs font-semibold text-muted"
+        >
           <span
             aria-hidden
             className="h-3 w-3 shrink-0 rounded-[4px] border"
@@ -746,18 +797,30 @@ function OverviewZone({
             role={href ? 'link' : readOnly ? undefined : 'button'}
             tabIndex={readOnly || unavailable ? -1 : 0}
             aria-disabled={unavailable}
-            aria-label={readOnly ? undefined : `บูธ ${booth.code} ${booth.availability}`}
+            aria-label={
+              readOnly ? undefined : `บูธ ${booth.code} ${booth.availability}`
+            }
             onClick={(event) => {
               event.stopPropagation();
               if (!href && !readOnly && !unavailable) onSelectBooth(booth);
             }}
             onKeyDown={(event) => {
-              if (!readOnly && !unavailable && (event.key === 'Enter' || event.key === ' ')) {
+              if (
+                !readOnly &&
+                !unavailable &&
+                (event.key === 'Enter' || event.key === ' ')
+              ) {
                 event.stopPropagation();
                 onSelectBooth(booth);
               }
             }}
-            className={readOnly ? undefined : unavailable ? 'cursor-not-allowed' : 'cursor-pointer'}
+            className={
+              readOnly
+                ? undefined
+                : unavailable
+                  ? 'cursor-not-allowed'
+                  : 'cursor-pointer'
+            }
           >
             <rect
               x={boothX}
@@ -891,7 +954,12 @@ function FocusedZone({
       >
         {zone.name ?? `โซน ${zone.code}`}
       </text>
-      <text x={96 + pillWidth(zone.code, 24)} y="160" fill="#726B80" fontSize="15">
+      <text
+        x={96 + pillWidth(zone.code, 24)}
+        y="160"
+        fill="#726B80"
+        fontSize="15"
+      >
         {zone.description ??
           zone.categories.map((category) => category.name).join(' • ')}
       </text>
@@ -1027,7 +1095,11 @@ function FocusedZone({
             {!logoUrl && (
               <text
                 x={x + boothWidth / 2}
-                y={booth.availability === 'AVAILABLE' ? y + boothHeight / 2 + 6 : y + 29}
+                y={
+                  booth.availability === 'AVAILABLE'
+                    ? y + boothHeight / 2 + 6
+                    : y + 29
+                }
                 textAnchor="middle"
                 fill={boothText(booth, selectedBoothIds, recommendedBoothId)}
                 fontSize="17"

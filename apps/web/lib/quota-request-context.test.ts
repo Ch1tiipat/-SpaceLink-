@@ -1,12 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node runs this TypeScript test directly. */
-const quotaContextAssert: typeof import('node:assert/strict') = require(
-  'node:assert/strict'
-);
-const { test: quotaContextTest }: typeof import('node:test') = require('node:test');
+const quotaContextAssert: typeof import('node:assert/strict') = require('node:assert/strict');
 const {
-  parseQuotaRequestQuery,
-  resolveQuotaRequestContext,
-} = require('./quota-request-context.ts') as typeof import('./quota-request-context');
+  test: quotaContextTest,
+}: typeof import('node:test') = require('node:test');
+const { parseQuotaRequestQuery, resolveQuotaRequestContext } =
+  require('./quota-request-context.ts') as typeof import('./quota-request-context');
 import type { EventMap, MyBooking } from './api';
 
 const ids = {
@@ -20,7 +18,9 @@ function params(values: Record<string, string>) {
   return { get: (name: string) => values[name] ?? null };
 }
 
-function eventMap(availability: 'AVAILABLE' | 'BOOKED' = 'AVAILABLE'): EventMap {
+function eventMap(
+  availability: 'AVAILABLE' | 'BOOKED' = 'AVAILABLE',
+): EventMap {
   return {
     event: {
       id: ids.event,
@@ -55,81 +55,103 @@ const bookings = [
   },
 ] as MyBooking[];
 
-quotaContextTest('parses a complete quota request and ignores a normal help visit', () => {
-  quotaContextAssert.deepEqual(
-    parseQuotaRequestQuery(
-      params({
-        type: 'QUOTA_INCREASE',
-        eventId: ids.event,
-        zoneId: ids.zone,
-        boothId: ids.booth,
-      }),
-    ),
-    { status: 'ready', value: { eventId: ids.event, zoneId: ids.zone, boothId: ids.booth } },
-  );
-  quotaContextAssert.deepEqual(parseQuotaRequestQuery(params({})), { status: 'none' });
-});
+quotaContextTest(
+  'parses a complete quota request and ignores a normal help visit',
+  () => {
+    quotaContextAssert.deepEqual(
+      parseQuotaRequestQuery(
+        params({
+          type: 'QUOTA_INCREASE',
+          eventId: ids.event,
+          zoneId: ids.zone,
+          boothId: ids.booth,
+        }),
+      ),
+      {
+        status: 'ready',
+        value: { eventId: ids.event, zoneId: ids.zone, boothId: ids.booth },
+      },
+    );
+    quotaContextAssert.deepEqual(parseQuotaRequestQuery(params({})), {
+      status: 'none',
+    });
+  },
+);
 
 quotaContextTest('rejects an incomplete quota request link', () => {
   quotaContextAssert.equal(
-    parseQuotaRequestQuery(params({ type: 'QUOTA_INCREASE', eventId: ids.event })).status,
+    parseQuotaRequestQuery(
+      params({ type: 'QUOTA_INCREASE', eventId: ids.event }),
+    ).status,
     'invalid',
   );
 });
 
-quotaContextTest('resolves a requested zone even when the active booking is in another zone', () => {
-  const result = resolveQuotaRequestContext({
-    query,
-    eventMap: eventMap(),
-    bookings,
-  });
-
-  quotaContextAssert.equal(result.status, 'ready');
-  if (result.status === 'ready') {
-    quotaContextAssert.equal(result.option.zoneName, 'โซนแฟชั่น');
-    quotaContextAssert.equal(result.requestedBoothId, ids.booth);
-  }
-});
-
-quotaContextTest('does not substitute another booth when the requested booth is no longer free', () => {
-  const result = resolveQuotaRequestContext({
-    query,
-    eventMap: eventMap('BOOKED'),
-    bookings,
-  });
-
-  quotaContextAssert.equal(result.status, 'ready');
-  if (result.status === 'ready') {
-    quotaContextAssert.equal(result.requestedBoothId, '');
-    quotaContextAssert.match(result.notice ?? '', /ไม่ว่างแล้ว/);
-  }
-});
-
-quotaContextTest('rejects a booth that does not belong to the requested zone', () => {
-  const result = resolveQuotaRequestContext({
-    query: { ...query, boothId: 'another-booth' },
-    eventMap: eventMap(),
-    bookings,
-  });
-
-  quotaContextAssert.equal(result.status, 'error');
-});
-
-quotaContextTest('rejects mismatched events and vendors without an active event booking', () => {
-  quotaContextAssert.equal(
-    resolveQuotaRequestContext({
-      query: { ...query, eventId: 'another-event' },
-      eventMap: eventMap(),
-      bookings,
-    }).status,
-    'error',
-  );
-  quotaContextAssert.equal(
-    resolveQuotaRequestContext({
+quotaContextTest(
+  'resolves a requested zone even when the active booking is in another zone',
+  () => {
+    const result = resolveQuotaRequestContext({
       query,
       eventMap: eventMap(),
-      bookings: [],
-    }).status,
-    'error',
-  );
-});
+      bookings,
+    });
+
+    quotaContextAssert.equal(result.status, 'ready');
+    if (result.status === 'ready') {
+      quotaContextAssert.equal(result.option.zoneName, 'โซนแฟชั่น');
+      quotaContextAssert.equal(result.requestedBoothId, ids.booth);
+    }
+  },
+);
+
+quotaContextTest(
+  'does not substitute another booth when the requested booth is no longer free',
+  () => {
+    const result = resolveQuotaRequestContext({
+      query,
+      eventMap: eventMap('BOOKED'),
+      bookings,
+    });
+
+    quotaContextAssert.equal(result.status, 'ready');
+    if (result.status === 'ready') {
+      quotaContextAssert.equal(result.requestedBoothId, '');
+      quotaContextAssert.match(result.notice ?? '', /ไม่ว่างแล้ว/);
+    }
+  },
+);
+
+quotaContextTest(
+  'rejects a booth that does not belong to the requested zone',
+  () => {
+    const result = resolveQuotaRequestContext({
+      query: { ...query, boothId: 'another-booth' },
+      eventMap: eventMap(),
+      bookings,
+    });
+
+    quotaContextAssert.equal(result.status, 'error');
+  },
+);
+
+quotaContextTest(
+  'rejects mismatched events and vendors without an active event booking',
+  () => {
+    quotaContextAssert.equal(
+      resolveQuotaRequestContext({
+        query: { ...query, eventId: 'another-event' },
+        eventMap: eventMap(),
+        bookings,
+      }).status,
+      'error',
+    );
+    quotaContextAssert.equal(
+      resolveQuotaRequestContext({
+        query,
+        eventMap: eventMap(),
+        bookings: [],
+      }).status,
+      'error',
+    );
+  },
+);

@@ -44,7 +44,10 @@ export function canUseUxPreview(): boolean {
     return false;
   }
 
-  return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  return (
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === 'localhost'
+  );
 }
 
 export function getUxPreviewMode(): UxPreviewMode | null {
@@ -77,7 +80,9 @@ export function getUxPreviewMode(): UxPreviewMode | null {
 export function setUxPreviewMode(mode: UxPreviewMode): void {
   if (!canUseUxPreview()) return;
   window.localStorage.setItem(STORAGE_KEY, mode);
-  window.dispatchEvent(new CustomEvent<UxPreviewMode>(CHANGE_EVENT, { detail: mode }));
+  window.dispatchEvent(
+    new CustomEvent<UxPreviewMode>(CHANGE_EVENT, { detail: mode }),
+  );
 }
 
 export function subscribeToUxPreview(

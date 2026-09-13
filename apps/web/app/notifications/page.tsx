@@ -31,12 +31,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { useAuthState } from '@/lib/use-auth-state';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
-type NotificationKind =
-  | 'event'
-  | 'booking'
-  | 'penalty'
-  | 'payment'
-  | 'system';
+type NotificationKind = 'event' | 'booking' | 'penalty' | 'payment' | 'system';
 type NotificationFilter = 'all' | 'unread' | NotificationKind;
 type NotificationPreference =
   | 'all'
@@ -199,7 +194,10 @@ function formatRelativeTime(createdAt: string): string {
   const absolute = Math.abs(difference);
   if (absolute < 60_000) return 'เมื่อสักครู่';
   if (absolute < 3_600_000) {
-    return RELATIVE_TIME_FORMATTER.format(Math.round(difference / 60_000), 'minute');
+    return RELATIVE_TIME_FORMATTER.format(
+      Math.round(difference / 60_000),
+      'minute',
+    );
   }
   if (absolute < 86_400_000) {
     return RELATIVE_TIME_FORMATTER.format(
@@ -223,10 +221,43 @@ function describeError(cause: unknown, fallback: string): string {
 function createPreviewNotifications(): UserNotification[] {
   const now = Date.now();
   return [
-    { id: 'preview-payment', kind: 'payment', title: 'การจองกำลังรอชำระเงิน', description: 'อัปโหลดสลิปสำหรับบูธ A01 ภายในเวลาที่กำหนด', createdAt: new Date(now - 8 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-booking/payment' },
-    { id: 'preview-confirmed', kind: 'booking', title: 'ยืนยันการจองเรียบร้อยแล้ว', description: 'บูธ A01 ในงานเกษตร มทส. 2569 พร้อมสำหรับร้านของคุณ', createdAt: new Date(now - 65 * 60_000).toISOString(), unread: true, href: '/bookings/local-preview-confirmed-booking' },
-    { id: 'preview-event', kind: 'event', title: 'ประกาศจากผู้จัดงาน', description: 'ตรวจสอบเวลาเข้าพื้นที่และกฎร้านค้าก่อนวันเริ่มงาน', createdAt: new Date(now - 5 * 3_600_000).toISOString(), unread: false, href: '/events/demo-event' },
-    { id: 'preview-review', kind: 'system', title: 'แชร์ประสบการณ์พื้นที่ของคุณ', description: 'รายการเสร็จสิ้นแล้ว คุณสามารถรีวิวบูธและพื้นที่ได้', createdAt: new Date(now - 2 * 86_400_000).toISOString(), unread: false, href: '/bookings/local-preview-completed-booking/review', actionLabel: 'เขียนรีวิวพื้นที่' },
+    {
+      id: 'preview-payment',
+      kind: 'payment',
+      title: 'การจองกำลังรอชำระเงิน',
+      description: 'อัปโหลดสลิปสำหรับบูธ A01 ภายในเวลาที่กำหนด',
+      createdAt: new Date(now - 8 * 60_000).toISOString(),
+      unread: true,
+      href: '/bookings/local-preview-booking/payment',
+    },
+    {
+      id: 'preview-confirmed',
+      kind: 'booking',
+      title: 'ยืนยันการจองเรียบร้อยแล้ว',
+      description: 'บูธ A01 ในงานเกษตร มทส. 2569 พร้อมสำหรับร้านของคุณ',
+      createdAt: new Date(now - 65 * 60_000).toISOString(),
+      unread: true,
+      href: '/bookings/local-preview-confirmed-booking',
+    },
+    {
+      id: 'preview-event',
+      kind: 'event',
+      title: 'ประกาศจากผู้จัดงาน',
+      description: 'ตรวจสอบเวลาเข้าพื้นที่และกฎร้านค้าก่อนวันเริ่มงาน',
+      createdAt: new Date(now - 5 * 3_600_000).toISOString(),
+      unread: false,
+      href: '/events/demo-event',
+    },
+    {
+      id: 'preview-review',
+      kind: 'system',
+      title: 'แชร์ประสบการณ์พื้นที่ของคุณ',
+      description: 'รายการเสร็จสิ้นแล้ว คุณสามารถรีวิวบูธและพื้นที่ได้',
+      createdAt: new Date(now - 2 * 86_400_000).toISOString(),
+      unread: false,
+      href: '/bookings/local-preview-completed-booking/review',
+      actionLabel: 'เขียนรีวิวพื้นที่',
+    },
   ];
 }
 
@@ -299,7 +330,8 @@ export default function NotificationsPage() {
         );
         setAccess({ status: 'ready', token });
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) {
           setNotifications([]);
           setAccess({
@@ -339,7 +371,8 @@ export default function NotificationsPage() {
           );
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
       }
     }
 
@@ -361,18 +394,17 @@ export default function NotificationsPage() {
     };
   }, [access, signedInRole]);
 
-  const visibleNotifications = useMemo(
-    () => {
-      if (filter === 'unread') {
-        return notifications.filter((notification) => notification.unread);
-      }
-      if (filter !== 'all') {
-        return notifications.filter((notification) => notification.kind === filter);
-      }
-      return notifications;
-    },
-    [filter, notifications],
-  );
+  const visibleNotifications = useMemo(() => {
+    if (filter === 'unread') {
+      return notifications.filter((notification) => notification.unread);
+    }
+    if (filter !== 'all') {
+      return notifications.filter(
+        (notification) => notification.kind === filter,
+      );
+    }
+    return notifications;
+  }, [filter, notifications]);
   const unreadCount = notifications.filter(
     (notification) => notification.unread,
   ).length;
@@ -413,9 +445,7 @@ export default function NotificationsPage() {
       await markAllNotificationsRead(access.token);
     } catch (cause) {
       setNotifications(previous);
-      setActionError(
-        describeError(cause, 'ทำเครื่องหมายอ่านทั้งหมดไม่สำเร็จ'),
-      );
+      setActionError(describeError(cause, 'ทำเครื่องหมายอ่านทั้งหมดไม่สำเร็จ'));
     }
   }
 
@@ -444,9 +474,7 @@ export default function NotificationsPage() {
             : notification,
         ),
       );
-      setActionError(
-        describeError(cause, 'ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ'),
-      );
+      setActionError(describeError(cause, 'ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ'));
     }
   }
 
@@ -547,10 +575,7 @@ export default function NotificationsPage() {
             <section className="sl-surface overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between">
                 <div className="w-full min-w-0 md:order-2 md:w-72 md:shrink-0">
-                  <label
-                    htmlFor="notification-filter"
-                    className="sr-only"
-                  >
+                  <label htmlFor="notification-filter" className="sr-only">
                     กรองการแจ้งเตือน
                   </label>
                   <div className="relative">
@@ -558,7 +583,9 @@ export default function NotificationsPage() {
                       id="notification-filter"
                       value={filter}
                       onChange={(event) =>
-                        setFilter(event.currentTarget.value as NotificationFilter)
+                        setFilter(
+                          event.currentTarget.value as NotificationFilter,
+                        )
                       }
                       className="h-11 w-full min-w-0 appearance-none rounded-2xl border border-line bg-white px-4 pr-11 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
                     >
@@ -637,7 +664,11 @@ function NotificationErrorState({
       <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted">
         {message}
       </p>
-      <button type="button" onClick={onRetry} className="sl-action-primary mt-6">
+      <button
+        type="button"
+        onClick={onRetry}
+        className="sl-action-primary mt-6"
+      >
         ลองใหม่อีกครั้ง
       </button>
     </section>
@@ -690,12 +721,16 @@ function NotificationSettings({
   ];
 
   return (
-    <section className="sl-surface mb-5 overflow-hidden" aria-label="ตั้งค่าการแจ้งเตือน">
+    <section
+      className="sl-surface mb-5 overflow-hidden"
+      aria-label="ตั้งค่าการแจ้งเตือน"
+    >
       <div className="flex flex-col gap-4 border-b border-line bg-[#fbf9ff] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
           <h2 className="text-lg font-extrabold">เลือกสิ่งที่ต้องการรับแจ้ง</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            ปิดหรือเปิดได้ทุกประเภท การตั้งค่านี้เป็นตัวอย่าง UX และยังไม่ส่งเข้า API
+            ปิดหรือเปิดได้ทุกประเภท การตั้งค่านี้เป็นตัวอย่าง UX
+            และยังไม่ส่งเข้า API
           </p>
         </div>
         <ToggleSwitch
@@ -714,7 +749,9 @@ function NotificationSettings({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-extrabold">{title}</p>
-                <p className="mt-0.5 text-xs leading-5 text-muted">{description}</p>
+                <p className="mt-0.5 text-xs leading-5 text-muted">
+                  {description}
+                </p>
               </div>
               <ToggleSwitch
                 checked={preferences[key]}
@@ -845,7 +882,10 @@ function NotificationRow({
         <span className="flex flex-wrap items-center gap-2">
           <strong className="text-[15px] text-ink">{notification.title}</strong>
           {notification.unread ? (
-            <span className="h-2 w-2 rounded-full bg-violet" aria-label="ยังไม่ได้อ่าน" />
+            <span
+              className="h-2 w-2 rounded-full bg-violet"
+              aria-label="ยังไม่ได้อ่าน"
+            />
           ) : null}
         </span>
         {notification.description ? (
@@ -913,7 +953,9 @@ function SignedOutState() {
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
         <Bell className="h-7 w-7" aria-hidden />
       </span>
-      <h2 className="mt-5 text-xl font-extrabold">เข้าสู่ระบบเพื่อดูการแจ้งเตือน</h2>
+      <h2 className="mt-5 text-xl font-extrabold">
+        เข้าสู่ระบบเพื่อดูการแจ้งเตือน
+      </h2>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
         ข่าวงานและสถานะการจองจะแสดงเฉพาะบัญชีผู้ขายของคุณ
       </p>
@@ -926,7 +968,10 @@ function SignedOutState() {
 
 function NotificationSkeleton() {
   return (
-    <section className="sl-surface overflow-hidden" aria-label="กำลังโหลดการแจ้งเตือน">
+    <section
+      className="sl-surface overflow-hidden"
+      aria-label="กำลังโหลดการแจ้งเตือน"
+    >
       {Array.from({ length: 4 }, (_, index) => (
         <div
           key={index}

@@ -85,7 +85,8 @@ export function AdminAnnouncementsScreen() {
         setToken(accessToken);
         setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) setAccess('denied');
       }
     })();
@@ -110,11 +111,7 @@ export function AdminAnnouncementsScreen() {
     setEditingId('');
     setDraft(EMPTY_ANNOUNCEMENT);
 
-    void getAdminAnnouncements(
-      selectedOrganizationId,
-      token,
-      controller.signal,
-    )
+    void getAdminAnnouncements(selectedOrganizationId, token, controller.signal)
       .then(setAnnouncements)
       .catch((cause) => {
         if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
@@ -221,14 +218,20 @@ export function AdminAnnouncementsScreen() {
     setSuccess(null);
   }
 
-  if (access === 'loading') return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแล" />;
+  if (access === 'loading')
+    return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแล" />;
 
   if (access === 'denied') {
     return (
       <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
         <section className="max-w-lg rounded-[28px] border border-[#eadff7] bg-white p-8 text-center shadow-sm">
-          <AlertCircle className="mx-auto h-11 w-11 text-[#dc2626]" aria-hidden />
-          <h1 className="mt-4 text-2xl font-black text-ink">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</h1>
+          <AlertCircle
+            className="mx-auto h-11 w-11 text-[#dc2626]"
+            aria-hidden
+          />
+          <h1 className="mt-4 text-2xl font-black text-ink">
+            คุณไม่มีสิทธิ์เข้าถึงหน้านี้
+          </h1>
           <p className="mt-2 text-sm leading-6 text-muted">
             หน้านี้สำหรับผู้ดูแลองค์กรและผู้ดูแลระบบเท่านั้น
           </p>
@@ -237,7 +240,8 @@ export function AdminAnnouncementsScreen() {
     );
   }
 
-  if (!selectedOrganizationId) return <PageState label="ไม่พบองค์กรที่คุณดูแล" />;
+  if (!selectedOrganizationId)
+    return <PageState label="ไม่พบองค์กรที่คุณดูแล" />;
 
   return (
     <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
@@ -264,7 +268,10 @@ export function AdminAnnouncementsScreen() {
             actionLabel="สร้างประกาศ"
             onAction={startCreate}
           >
-            <EntityList loading={loading} emptyLabel="ยังไม่มีประกาศขององค์กรนี้">
+            <EntityList
+              loading={loading}
+              emptyLabel="ยังไม่มีประกาศขององค์กรนี้"
+            >
               {announcements.map((announcement) => (
                 <article
                   key={announcement.id}
@@ -272,7 +279,9 @@ export function AdminAnnouncementsScreen() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="font-black text-ink">{announcement.title}</h3>
+                      <h3 className="font-black text-ink">
+                        {announcement.title}
+                      </h3>
                       <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-6 text-muted">
                         {announcement.body}
                       </p>
@@ -281,11 +290,18 @@ export function AdminAnnouncementsScreen() {
                   </div>
                   <p className="mt-3 text-xs text-muted">
                     {announcement.publishedAt
-                      ? 'เผยแพร่ ' + dateTimeFormatter.format(new Date(announcement.publishedAt))
+                      ? 'เผยแพร่ ' +
+                        dateTimeFormatter.format(
+                          new Date(announcement.publishedAt),
+                        )
                       : 'ยังไม่ระบุเวลาเผยแพร่'}
                   </p>
                   <div className="mt-3 flex gap-2">
-                    <MiniButton label="แก้ไข" icon={Edit3} onClick={() => startEdit(announcement)} />
+                    <MiniButton
+                      label="แก้ไข"
+                      icon={Edit3}
+                      onClick={() => startEdit(announcement)}
+                    />
                     <MiniButton
                       label="ลบ"
                       icon={Trash2}
@@ -397,7 +413,9 @@ function AnnouncementEditor({
           หัวข้อประกาศ *
           <input
             value={draft.title}
-            onChange={(event) => onChange({ ...draft, title: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...draft, title: event.target.value })
+            }
             placeholder="เช่น แจ้งเปลี่ยนเวลาเปิดรับผู้ขาย"
             className="mt-1.5 h-10 w-full rounded-xl border border-line px-3 text-sm outline-none focus:border-violet"
           />
@@ -406,7 +424,9 @@ function AnnouncementEditor({
           รายละเอียด *
           <textarea
             value={draft.body}
-            onChange={(event) => onChange({ ...draft, body: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...draft, body: event.target.value })
+            }
             rows={5}
             placeholder="เขียนรายละเอียดที่ต้องการแจ้งให้ผู้ขายทราบ"
             className="mt-1.5 w-full resize-y rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-violet"
@@ -475,9 +495,7 @@ function MiniButton({
       onClick={onClick}
       className={
         'flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold ' +
-        (danger
-          ? 'bg-[#fff1f2] text-[#b91c1c]'
-          : 'bg-[#f2edfb] text-violet')
+        (danger ? 'bg-[#fff1f2] text-[#b91c1c]' : 'bg-[#f2edfb] text-violet')
       }
     >
       <Icon className="h-3.5 w-3.5" aria-hidden /> {label}
@@ -490,9 +508,7 @@ function StatusBadge({ active }: { active: boolean }) {
     <span
       className={
         'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold ' +
-        (active
-          ? 'bg-[#dcfce7] text-[#166534]'
-          : 'bg-[#f1eef4] text-[#655d70]')
+        (active ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#f1eef4] text-[#655d70]')
       }
     >
       {active ? 'กำลังแสดง' : 'ปิดการแสดง'}
@@ -500,7 +516,13 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function Feedback({ tone, children }: { tone: 'error' | 'success'; children: string }) {
+function Feedback({
+  tone,
+  children,
+}: {
+  tone: 'error' | 'success';
+  children: string;
+}) {
   const success = tone === 'success';
   const Icon = success ? CheckCircle2 : AlertCircle;
   return (
@@ -530,13 +552,16 @@ function PageState({ label }: { label: string }) {
 
 function describeError(cause: unknown, fallback: string): string {
   if (!(cause instanceof ApiError)) return fallback;
-  if (cause.status === 404) return 'ไม่พบข้อมูลหรือคุณไม่มีสิทธิ์จัดการรายการนี้';
+  if (cause.status === 404)
+    return 'ไม่พบข้อมูลหรือคุณไม่มีสิทธิ์จัดการรายการนี้';
   return cause.message;
 }
 
 function toDateTimeLocal(value: string | null): string {
   if (!value) return '';
   const date = new Date(value);
-  const localTime = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  const localTime = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
   return localTime.toISOString().slice(0, 16);
 }

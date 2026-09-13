@@ -51,9 +51,7 @@ export function decideBoothQuota({
   remainingQuota: number;
 }): BoothQuotaDecision {
   if (selectedCount < effectiveSelectionLimit) return 'continue';
-  return remainingQuota === 0
-    ? 'open-quota-request'
-    : 'show-selection-limit';
+  return remainingQuota === 0 ? 'open-quota-request' : 'show-selection-limit';
 }
 
 export function canAttemptBoothSelection(

@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CalendarDays, CheckCircle2, MapPinned, ReceiptText, Store } from 'lucide-react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  MapPinned,
+  ReceiptText,
+  Store,
+} from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import {
   cancelBooking,
@@ -53,7 +59,9 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
 export function formatBookingMoney(value: string): string {
   const numeric = Number(value);
   return Number.isFinite(numeric)
-    ? new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(numeric)
+    ? new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(
+        numeric,
+      )
     : value;
 }
 
@@ -109,8 +117,12 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
     boothId: 'demo-booth-a01',
     shopId: UX_PREVIEW_SHOP.id,
     vendorUserId: '00000000-0000-4000-8000-000000000051',
-    bookingStartDate: new Date(now + (completed ? -4 : 20) * 86_400_000).toISOString(),
-    bookingEndDate: new Date(now + (completed ? -2 : 22) * 86_400_000).toISOString(),
+    bookingStartDate: new Date(
+      now + (completed ? -4 : 20) * 86_400_000,
+    ).toISOString(),
+    bookingEndDate: new Date(
+      now + (completed ? -2 : 22) * 86_400_000,
+    ).toISOString(),
     boothPrice: '3500.00',
     isPaymentExempt: false,
     paymentExemptReason: null,
@@ -121,7 +133,9 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
         ? new Date(now - 5 * 86_400_000).toISOString()
         : null,
     cancelReason: cancelled ? 'เปลี่ยนแผนการเข้าร่วมงาน (ข้อมูลจำลอง)' : null,
-    cancelledAt: cancelled ? new Date(now - 2 * 86_400_000).toISOString() : null,
+    cancelledAt: cancelled
+      ? new Date(now - 2 * 86_400_000).toISOString()
+      : null,
     createdAt: new Date(now - 60_000).toISOString(),
     updatedAt: new Date(now - 60_000).toISOString(),
     paymentQrDataUri: null,
@@ -174,9 +188,8 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
 
     if (canUseUxPreview()) {
       const preview =
-        getPreviewBookings().find(
-          (item) => item.bookingCode === bookingId,
-        ) ?? createPreviewBooking(bookingId);
+        getPreviewBookings().find((item) => item.bookingCode === bookingId) ??
+        createPreviewBooking(bookingId);
       setBooking(preview);
       setError(preview ? null : 'ไม่พบรายการจองตัวอย่างนี้');
       setIsLoading(false);
@@ -188,12 +201,14 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
         const legacyUuid = isUuid(bookingId);
         const match =
           items.find((item) =>
-            legacyUuid
-              ? item.id === bookingId
-              : item.bookingCode === bookingId,
+            legacyUuid ? item.id === bookingId : item.bookingCode === bookingId,
           ) ?? null;
         setBooking(match);
-        setError(match ? null : 'ไม่พบรายการจอง หรือรายการนี้ไม่ได้เป็นของบัญชีปัจจุบัน');
+        setError(
+          match
+            ? null
+            : 'ไม่พบรายการจอง หรือรายการนี้ไม่ได้เป็นของบัญชีปัจจุบัน',
+        );
         if (match && legacyUuid) {
           const currentPrefix = `/bookings/${bookingId}`;
           const suffix = pathname.startsWith(currentPrefix)
@@ -205,8 +220,11 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
         }
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof Error ? cause.message : 'โหลดข้อมูลการจองไม่สำเร็จ');
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
+        setError(
+          cause instanceof Error ? cause.message : 'โหลดข้อมูลการจองไม่สำเร็จ',
+        );
       })
       .finally(() => setIsLoading(false));
 
@@ -214,9 +232,11 @@ export function useBookingDetail(bookingId: string): BookingDetailState {
   }, [bookingId, pathname, reloadCount, router, vendor]);
 
   if (vendor.status === 'signed-out') return { status: 'signed-out' };
-  if (vendor.status === 'error') return { status: 'error', message: vendor.message };
+  if (vendor.status === 'error')
+    return { status: 'error', message: vendor.message };
   if (vendor.status === 'loading' || isLoading) return { status: 'loading' };
-  if (error || !booking) return { status: 'error', message: error ?? 'ไม่พบรายการจอง' };
+  if (error || !booking)
+    return { status: 'error', message: error ?? 'ไม่พบรายการจอง' };
 
   return {
     status: 'ready',
@@ -235,8 +255,22 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
   const [previewCancelled, setPreviewCancelled] = useState(false);
 
   if (state.status === 'loading') return <BookingPageLoading />;
-  if (state.status === 'signed-out') return <BookingPageMessage title="กรุณาเข้าสู่ระบบก่อน" detail="รายละเอียดการจองจะแสดงเฉพาะเจ้าของบัญชี" href="/login" action="เข้าสู่ระบบ" />;
-  if (state.status === 'error') return <BookingPageMessage title="เปิดรายละเอียดการจองไม่ได้" detail={state.message} />;
+  if (state.status === 'signed-out')
+    return (
+      <BookingPageMessage
+        title="กรุณาเข้าสู่ระบบก่อน"
+        detail="รายละเอียดการจองจะแสดงเฉพาะเจ้าของบัญชี"
+        href="/login"
+        action="เข้าสู่ระบบ"
+      />
+    );
+  if (state.status === 'error')
+    return (
+      <BookingPageMessage
+        title="เปิดรายละเอียดการจองไม่ได้"
+        detail={state.message}
+      />
+    );
 
   const booking = previewCancelled
     ? { ...state.booking, status: 'CANCELLED' as const, cancelReason }
@@ -265,7 +299,9 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
         state.refresh();
       }
     } catch (cause) {
-      setCancelError(cause instanceof Error ? cause.message : 'ยกเลิกการจองไม่สำเร็จ');
+      setCancelError(
+        cause instanceof Error ? cause.message : 'ยกเลิกการจองไม่สำเร็จ',
+      );
     } finally {
       setIsCancelling(false);
     }
@@ -274,14 +310,24 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
   return (
     <main className="sl-page pb-16">
       <div className="shell py-8">
-        <Link href="/bookings" className="sl-chip">← กลับการจองของฉัน</Link>
+        <Link href="/bookings" className="sl-chip">
+          ← กลับการจองของฉัน
+        </Link>
         <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <span className="sl-kicker"><ReceiptText className="h-4 w-4" aria-hidden /> Booking detail</span>
-            <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl">รายละเอียดการจอง</h1>
+            <span className="sl-kicker">
+              <ReceiptText className="h-4 w-4" aria-hidden /> Booking detail
+            </span>
+            <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+              รายละเอียดการจอง
+            </h1>
             <p className="mt-2 text-muted">รหัสการจอง {booking.bookingCode}</p>
           </div>
-          <span className={`rounded-full border px-4 py-2 text-sm font-extrabold ${statusTones[booking.status]}`}>{statusLabels[booking.status]}</span>
+          <span
+            className={`rounded-full border px-4 py-2 text-sm font-extrabold ${statusTones[booking.status]}`}
+          >
+            {statusLabels[booking.status]}
+          </span>
         </div>
 
         <BookingProgress status={booking.status} />
@@ -290,14 +336,36 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
           <section className="sl-surface p-5 sm:p-7">
             <h2 className="text-2xl font-black">{booking.event.name}</h2>
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-              <Detail icon={MapPinned} label="บูธ / โซน" value={`${booking.booth.code} · ${booking.booth.zone.name ?? booking.booth.zone.code}`} />
+              <Detail
+                icon={MapPinned}
+                label="บูธ / โซน"
+                value={`${booking.booth.code} · ${booking.booth.zone.name ?? booking.booth.zone.code}`}
+              />
               <Detail icon={Store} label="ร้านค้า" value={booking.shop.name} />
-              <Detail icon={CalendarDays} label="วันเริ่มงาน" value={formatBookingDate(booking.bookingStartDate)} />
-              <Detail icon={CalendarDays} label="วันสิ้นสุด" value={formatBookingDate(booking.bookingEndDate)} />
+              <Detail
+                icon={CalendarDays}
+                label="วันเริ่มงาน"
+                value={formatBookingDate(booking.bookingStartDate)}
+              />
+              <Detail
+                icon={CalendarDays}
+                label="วันสิ้นสุด"
+                value={formatBookingDate(booking.bookingEndDate)}
+              />
             </dl>
             <div className="mt-6 flex flex-wrap gap-3 border-t border-line pt-6">
-              <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`} className="sl-action-secondary text-violet">ดู Event</Link>
-              <Link href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`} className="sl-action-secondary text-violet">ดูตำแหน่งบน Zone Map</Link>
+              <Link
+                href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
+                className="sl-action-secondary text-violet"
+              >
+                ดู Event
+              </Link>
+              <Link
+                href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`}
+                className="sl-action-secondary text-violet"
+              >
+                ดูตำแหน่งบน Zone Map
+              </Link>
               {booking.status === 'PENDING_PAYMENT' ? (
                 <Link
                   href={
@@ -310,36 +378,73 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
                   ไปหน้าชำระเงิน
                 </Link>
               ) : null}
-              {isBookingReviewEligible(booking) ? <Link href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`} className="sl-action-primary">เขียนรีวิวพื้นที่</Link> : null}
+              {isBookingReviewEligible(booking) ? (
+                <Link
+                  href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`}
+                  className="sl-action-primary"
+                >
+                  เขียนรีวิวพื้นที่
+                </Link>
+              ) : null}
             </div>
           </section>
 
           <aside className="grid gap-5">
             <section className="sl-surface p-5">
               <p className="text-sm font-bold text-muted">ยอดชำระทั้งหมด</p>
-              <strong className="mt-2 block text-3xl font-black">{formatBookingMoney(booking.boothPrice)} บาท</strong>
-              {booking.status === 'PENDING_PAYMENT' ? <BookingCountdown expiresAt={booking.holdExpiresAt} active /> : null}
+              <strong className="mt-2 block text-3xl font-black">
+                {formatBookingMoney(booking.boothPrice)} บาท
+              </strong>
+              {booking.status === 'PENDING_PAYMENT' ? (
+                <BookingCountdown expiresAt={booking.holdExpiresAt} active />
+              ) : null}
             </section>
             {cancellable ? (
               <section className="sl-surface p-5">
                 <h2 className="font-black">ยกเลิกการจอง</h2>
-                <p className="mt-1 text-sm leading-6 text-muted">การยกเลิกจะส่งผลกับรายการจริง กรุณาระบุเหตุผลก่อนยืนยัน</p>
-                <p className="mt-2 text-sm font-bold text-[#895b08]">ยกเลิกได้ถึงวันสิ้นสุดงาน วันที่ {formatBookingDate(booking.bookingEndDate)}</p>
-                <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows={3} placeholder="เหตุผลที่ต้องการยกเลิก" className="mt-4 w-full rounded-xl border border-line px-4 py-3 text-base outline-none focus:border-violet" />
-                {cancelError ? <p role="alert" className="mt-2 text-sm text-danger">{cancelError}</p> : null}
-                <button type="button" onClick={() => void handleCancel()} disabled={isCancelling} className="mt-3 w-full rounded-xl border border-danger px-4 py-2.5 text-sm font-bold text-danger disabled:opacity-50">{isCancelling ? 'กำลังยกเลิก…' : 'ยืนยันยกเลิกการจอง'}</button>
+                <p className="mt-1 text-sm leading-6 text-muted">
+                  การยกเลิกจะส่งผลกับรายการจริง กรุณาระบุเหตุผลก่อนยืนยัน
+                </p>
+                <p className="mt-2 text-sm font-bold text-[#895b08]">
+                  ยกเลิกได้ถึงวันสิ้นสุดงาน วันที่{' '}
+                  {formatBookingDate(booking.bookingEndDate)}
+                </p>
+                <textarea
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                  rows={3}
+                  placeholder="เหตุผลที่ต้องการยกเลิก"
+                  className="mt-4 w-full rounded-xl border border-line px-4 py-3 text-base outline-none focus:border-violet"
+                />
+                {cancelError ? (
+                  <p role="alert" className="mt-2 text-sm text-danger">
+                    {cancelError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handleCancel()}
+                  disabled={isCancelling}
+                  className="mt-3 w-full rounded-xl border border-danger px-4 py-2.5 text-sm font-bold text-danger disabled:opacity-50"
+                >
+                  {isCancelling ? 'กำลังยกเลิก…' : 'ยืนยันยกเลิกการจอง'}
+                </button>
               </section>
             ) : booking.paymentGroupId &&
               booking.status === 'PENDING_PAYMENT' ? (
               <section className="sl-surface p-5">
                 <h2 className="font-black">การจองแบบชำระรวม</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  รายการนี้อยู่ในกลุ่มชำระเงินเดียวกัน จึงไม่สามารถยกเลิกแยกราย Booking ได้
+                  รายการนี้อยู่ในกลุ่มชำระเงินเดียวกัน จึงไม่สามารถยกเลิกแยกราย
+                  Booking ได้
                 </p>
               </section>
             ) : pastCancelDeadline ? (
               <section className="sl-surface p-5">
-                <p className="text-sm font-bold leading-6 text-[#895b08]">พ้นกำหนดยกเลิกแล้ว (ยกเลิกได้ถึงวันสิ้นสุดงาน วันที่ {formatBookingDate(booking.bookingEndDate)})</p>
+                <p className="text-sm font-bold leading-6 text-[#895b08]">
+                  พ้นกำหนดยกเลิกแล้ว (ยกเลิกได้ถึงวันสิ้นสุดงาน วันที่{' '}
+                  {formatBookingDate(booking.bookingEndDate)})
+                </p>
               </section>
             ) : null}
           </aside>
@@ -375,7 +480,9 @@ function BookingProgress({ status }: { status: BookingStatus }) {
           >
             <span
               className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                step.complete ? 'bg-[#176c50] text-white' : 'bg-white text-violet shadow-sm'
+                step.complete
+                  ? 'bg-[#176c50] text-white'
+                  : 'bg-white text-violet shadow-sm'
               }`}
             >
               {step.complete ? (
@@ -392,14 +499,55 @@ function BookingProgress({ status }: { status: BookingStatus }) {
   );
 }
 
-function Detail({ icon: Icon, label, value }: { icon: typeof MapPinned; label: string; value: string }) {
-  return <div className="rounded-2xl border border-line bg-[#faf8ff] p-4"><Icon className="h-5 w-5 text-violet" aria-hidden /><dt className="mt-3 text-xs font-bold text-muted">{label}</dt><dd className="mt-1 font-extrabold">{value}</dd></div>;
+function Detail({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof MapPinned;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-[#faf8ff] p-4">
+      <Icon className="h-5 w-5 text-violet" aria-hidden />
+      <dt className="mt-3 text-xs font-bold text-muted">{label}</dt>
+      <dd className="mt-1 font-extrabold">{value}</dd>
+    </div>
+  );
 }
 
 export function BookingPageLoading() {
-  return <main><div className="shell py-10"><div className="skeleton h-24 rounded-3xl" /><div className="skeleton mt-6 h-[460px] rounded-3xl" /></div></main>;
+  return (
+    <main>
+      <div className="shell py-10">
+        <div className="skeleton h-24 rounded-3xl" />
+        <div className="skeleton mt-6 h-[460px] rounded-3xl" />
+      </div>
+    </main>
+  );
 }
 
-export function BookingPageMessage({ title, detail, href = '/bookings', action = 'กลับการจองของฉัน' }: { title: string; detail: string; href?: string; action?: string }) {
-  return <main><div className="shell py-20 text-center"><h1 className="text-2xl font-black">{title}</h1><p className="mt-3 text-muted">{detail}</p><Link href={href} className="sl-action-primary mt-7">{action}</Link></div></main>;
+export function BookingPageMessage({
+  title,
+  detail,
+  href = '/bookings',
+  action = 'กลับการจองของฉัน',
+}: {
+  title: string;
+  detail: string;
+  href?: string;
+  action?: string;
+}) {
+  return (
+    <main>
+      <div className="shell py-20 text-center">
+        <h1 className="text-2xl font-black">{title}</h1>
+        <p className="mt-3 text-muted">{detail}</p>
+        <Link href={href} className="sl-action-primary mt-7">
+          {action}
+        </Link>
+      </div>
+    </main>
+  );
 }

@@ -137,7 +137,8 @@ export function ProfileShopScreen() {
     getCategories(controller.signal)
       .then(setCategories)
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         setCategoriesError(
           cause instanceof Error ? cause.message : 'โหลดหมวดสินค้าไม่สำเร็จ',
         );
@@ -161,7 +162,8 @@ export function ProfileShopScreen() {
         setRatingState('ready');
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         setRatingState('error');
       });
 
@@ -183,9 +185,7 @@ export function ProfileShopScreen() {
       <div className="shell py-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="sl-kicker">
-              Profile
-            </span>
+            <span className="sl-kicker">Profile</span>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
               โปรไฟล์ของฉัน
             </h1>
@@ -219,10 +219,7 @@ export function ProfileShopScreen() {
             <p className="mt-2 text-muted">
               โปรไฟล์จะแสดงเฉพาะข้อมูลของบัญชีที่เข้าสู่ระบบอยู่
             </p>
-            <Link
-              href="/login"
-              className="sl-action-primary mt-6"
-            >
+            <Link href="/login" className="sl-action-primary mt-6">
               เข้าสู่ระบบ
             </Link>
           </section>
@@ -333,7 +330,8 @@ export function ProfileShopScreen() {
                 className="mt-4 flex items-start gap-3 rounded-2xl border border-[#fac5bf] bg-[#fff0ee] px-5 py-4 text-sm leading-6 text-[#b42318]"
               >
                 <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-                บัญชีนี้ถูกระงับการใช้งาน การดำเนินการบางอย่างอาจไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ
+                บัญชีนี้ถูกระงับการใช้งาน การดำเนินการบางอย่างอาจไม่พร้อมใช้งาน
+                กรุณาติดต่อผู้ดูแลระบบ
               </p>
             )}
 
@@ -456,7 +454,15 @@ export function ProfileShopScreen() {
   );
 }
 
-function AdminAccountProfile({ profile, token, refresh }: { profile: CurrentUser; token: string; refresh: () => void }) {
+function AdminAccountProfile({
+  profile,
+  token,
+  refresh,
+}: {
+  profile: CurrentUser;
+  token: string;
+  refresh: () => void;
+}) {
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -480,13 +486,115 @@ function AdminAccountProfile({ profile, token, refresh }: { profile: CurrentUser
       setNotice('บันทึกเบอร์โทรศัพท์เรียบร้อยแล้ว');
       refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'บันทึกข้อมูลส่วนตัวไม่สำเร็จ');
+      setError(
+        cause instanceof Error ? cause.message : 'บันทึกข้อมูลส่วนตัวไม่สำเร็จ',
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  return <section className="sl-surface mt-8 overflow-hidden"><div className="border-b border-line bg-[linear-gradient(135deg,#fff,#faf7ff)] p-6 sm:p-8"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">{[...profile.fullName.trim()][0] ?? '?'}</span><div className="min-w-0"><span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-xs font-extrabold text-violet">{ROLE_LABELS[profile.role]}</span><h2 className="mt-3 truncate text-2xl font-black text-ink">{profile.fullName}</h2><p className="mt-1 truncate text-sm text-muted">{profile.email}</p></div></div></div><div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.8fr)]"><div><span className="sl-kicker">Account information</span><h3 className="mt-2 text-lg font-bold text-ink">ข้อมูลบัญชีผู้ดูแลระบบ</h3><dl className="mt-5 grid gap-4 sm:grid-cols-2"><InfoLine icon={UserRound} label="ชื่อบัญชี" value={profile.fullName} /><InfoLine icon={Mail} label="อีเมล" value={profile.email} /><InfoLine icon={Phone} label="เบอร์โทรศัพท์" value={profile.phone ?? 'ยังไม่ระบุ'} /><InfoLine icon={BadgeCheck} label="สิทธิ์การใช้งาน" value={ROLE_LABELS[profile.role]} /></dl>{profile.organizations.length > 0 ? <div className="mt-5"><span className="text-xs font-bold text-muted">องค์กรที่ดูแล</span><div className="mt-2 flex flex-wrap gap-2">{profile.organizations.map((organization) => <span key={organization.id} className="rounded-full bg-[#f1eaff] px-3 py-1.5 text-xs font-extrabold text-violet">{organization.name}</span>)}</div></div> : null}</div><div className="rounded-2xl border border-[#e5ddec] bg-[#fcfbff] p-5"><h3 className="font-bold text-ink">แก้ไขข้อมูลติดต่อ</h3><p className="mt-1 text-xs leading-5 text-muted">บัญชีผู้ดูแลแก้ไขได้เฉพาะเบอร์โทรศัพท์ ข้อมูลร้านค้าสงวนไว้สำหรับบัญชีผู้ขายเท่านั้น</p><label className="mt-4 block"><span className="mb-2 block text-sm font-bold">เบอร์โทรศัพท์</span><input type="tel" inputMode="numeric" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="เช่น 0812345678" className="h-11 w-full rounded-xl border border-line bg-white px-4 text-sm outline-none focus:border-violet focus:ring-4 focus:ring-violet-tint" /></label>{error ? <p role="alert" className="mt-3 text-sm text-[#b42318]">{error}</p> : null}{notice ? <p role="status" className="mt-3 text-sm font-bold text-[#13795b]">{notice}</p> : null}<button type="button" onClick={() => void savePhone()} disabled={saving || phone.trim() === (profile.phone ?? '')} className="sl-action-primary mt-5 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'กำลังบันทึก…' : 'บันทึกเบอร์โทรศัพท์'}</button></div></div></section>;
+  return (
+    <section className="sl-surface mt-8 overflow-hidden">
+      <div className="border-b border-line bg-[linear-gradient(135deg,#fff,#faf7ff)] p-6 sm:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">
+            {[...profile.fullName.trim()][0] ?? '?'}
+          </span>
+          <div className="min-w-0">
+            <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-xs font-extrabold text-violet">
+              {ROLE_LABELS[profile.role]}
+            </span>
+            <h2 className="mt-3 truncate text-2xl font-black text-ink">
+              {profile.fullName}
+            </h2>
+            <p className="mt-1 truncate text-sm text-muted">{profile.email}</p>
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.8fr)]">
+        <div>
+          <span className="sl-kicker">Account information</span>
+          <h3 className="mt-2 text-lg font-bold text-ink">
+            ข้อมูลบัญชีผู้ดูแลระบบ
+          </h3>
+          <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <InfoLine
+              icon={UserRound}
+              label="ชื่อบัญชี"
+              value={profile.fullName}
+            />
+            <InfoLine icon={Mail} label="อีเมล" value={profile.email} />
+            <InfoLine
+              icon={Phone}
+              label="เบอร์โทรศัพท์"
+              value={profile.phone ?? 'ยังไม่ระบุ'}
+            />
+            <InfoLine
+              icon={BadgeCheck}
+              label="สิทธิ์การใช้งาน"
+              value={ROLE_LABELS[profile.role]}
+            />
+          </dl>
+          {profile.organizations.length > 0 ? (
+            <div className="mt-5">
+              <span className="text-xs font-bold text-muted">
+                องค์กรที่ดูแล
+              </span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {profile.organizations.map((organization) => (
+                  <span
+                    key={organization.id}
+                    className="rounded-full bg-[#f1eaff] px-3 py-1.5 text-xs font-extrabold text-violet"
+                  >
+                    {organization.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="rounded-2xl border border-[#e5ddec] bg-[#fcfbff] p-5">
+          <h3 className="font-bold text-ink">แก้ไขข้อมูลติดต่อ</h3>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            บัญชีผู้ดูแลแก้ไขได้เฉพาะเบอร์โทรศัพท์
+            ข้อมูลร้านค้าสงวนไว้สำหรับบัญชีผู้ขายเท่านั้น
+          </p>
+          <label className="mt-4 block">
+            <span className="mb-2 block text-sm font-bold">เบอร์โทรศัพท์</span>
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={phone}
+              onChange={(event) =>
+                setPhone(event.target.value.replace(/\D/g, ''))
+              }
+              placeholder="เช่น 0812345678"
+              className="h-11 w-full rounded-xl border border-line bg-white px-4 text-sm outline-none focus:border-violet focus:ring-4 focus:ring-violet-tint"
+            />
+          </label>
+          {error ? (
+            <p role="alert" className="mt-3 text-sm text-[#b42318]">
+              {error}
+            </p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="mt-3 text-sm font-bold text-[#13795b]">
+              {notice}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void savePhone()}
+            disabled={saving || phone.trim() === (profile.phone ?? '')}
+            className="sl-action-primary mt-5 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? 'กำลังบันทึก…' : 'บันทึกเบอร์โทรศัพท์'}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 type PushAvailability =
@@ -504,7 +612,10 @@ function urlBase64ToUint8Array(value: string) {
   return Uint8Array.from(bytes, (character) => character.charCodeAt(0));
 }
 
-function subscriptionKeyToBase64(subscription: PushSubscription, name: PushEncryptionKeyName) {
+function subscriptionKeyToBase64(
+  subscription: PushSubscription,
+  name: PushEncryptionKeyName,
+) {
   const key = subscription.getKey(name);
   if (!key) return '';
   const bytes = new Uint8Array(key);
@@ -516,7 +627,8 @@ function subscriptionKeyToBase64(subscription: PushSubscription, name: PushEncry
 }
 
 function PushNotificationCard({ token }: { token: string }) {
-  const [availability, setAvailability] = useState<PushAvailability>('checking');
+  const [availability, setAvailability] =
+    useState<PushAvailability>('checking');
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -547,9 +659,12 @@ function PushNotificationCard({ token }: { token: string }) {
         return;
       }
 
-      const registration = await resolvePushRegistration(navigator.serviceWorker, {
-        waitForReady: process.env.NODE_ENV === 'production',
-      });
+      const registration = await resolvePushRegistration(
+        navigator.serviceWorker,
+        {
+          waitForReady: process.env.NODE_ENV === 'production',
+        },
+      );
       if (!active) return;
       if (!registration) {
         setAvailability('unsupported');
@@ -581,11 +696,16 @@ function PushNotificationCard({ token }: { token: string }) {
     setMessage(null);
 
     try {
-      const registration = await resolvePushRegistration(navigator.serviceWorker, {
-        waitForReady: true,
-      });
+      const registration = await resolvePushRegistration(
+        navigator.serviceWorker,
+        {
+          waitForReady: true,
+        },
+      );
       if (!registration) {
-        throw new Error('ไม่พบ Service Worker สำหรับการแจ้งเตือน กรุณาลองอีกครั้ง');
+        throw new Error(
+          'ไม่พบ Service Worker สำหรับการแจ้งเตือน กรุณาลองอีกครั้ง',
+        );
       }
       const existing = await registration.pushManager.getSubscription();
 
@@ -659,7 +779,10 @@ function PushNotificationCard({ token }: { token: string }) {
   }
 
   return (
-    <section className="sl-surface mt-4 p-5 sm:p-6" aria-labelledby="push-notification-title">
+    <section
+      className="sl-surface mt-4 p-5 sm:p-6"
+      aria-labelledby="push-notification-title"
+    >
       <div className="flex items-start gap-4">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-tint text-violet">
           {availability === 'denied' ? (
@@ -673,11 +796,14 @@ function PushNotificationCard({ token }: { token: string }) {
             เปิดการแจ้งเตือนบนอุปกรณ์นี้
           </h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            รับข่าวการจอง การชำระเงิน และประกาศสำคัญ แม้ไม่ได้เปิดหน้า SpaceLink อยู่
+            รับข่าวการจอง การชำระเงิน และประกาศสำคัญ แม้ไม่ได้เปิดหน้า SpaceLink
+            อยู่
           </p>
         </div>
 
-        {availability === 'ready' || availability === 'denied' || availability === 'unconfigured' ? (
+        {availability === 'ready' ||
+        availability === 'denied' ||
+        availability === 'unconfigured' ? (
           <button
             type="button"
             role="switch"
@@ -694,7 +820,9 @@ function PushNotificationCard({ token }: { token: string }) {
                 subscribed ? 'left-6' : 'left-1'
               }`}
             >
-              {busy ? <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden /> : null}
+              {busy ? (
+                <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden />
+              ) : null}
             </span>
           </button>
         ) : null}
@@ -705,7 +833,8 @@ function PushNotificationCard({ token }: { token: string }) {
       ) : null}
       {availability === 'denied' ? (
         <p role="alert" className="mt-3 text-sm text-[#b42318]">
-          เบราว์เซอร์ปิดสิทธิ์แจ้งเตือนไว้ กรุณาเปิดสิทธิ์ของเว็บไซต์นี้ในการตั้งค่าเบราว์เซอร์
+          เบราว์เซอร์ปิดสิทธิ์แจ้งเตือนไว้
+          กรุณาเปิดสิทธิ์ของเว็บไซต์นี้ในการตั้งค่าเบราว์เซอร์
         </p>
       ) : null}
       {availability === 'unsupported' ? (
@@ -886,8 +1015,8 @@ function ShopLogoUploader({
   const cooldownDate = logoAvailableAt ? new Date(logoAvailableAt) : null;
   const isCooldownActive = Boolean(
     cooldownDate &&
-    !Number.isNaN(cooldownDate.getTime()) &&
-    cooldownDate.getTime() > Date.now(),
+      !Number.isNaN(cooldownDate.getTime()) &&
+      cooldownDate.getTime() > Date.now(),
   );
   const logoControlsDisabled = isUploading || isCooldownActive;
 
@@ -993,7 +1122,9 @@ function ProfileStat({
 
   return (
     <article className="sl-soft-surface flex min-w-0 items-center gap-3 p-4 sm:p-5">
-      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${tones[tone]}`}>
+      <span
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${tones[tone]}`}
+      >
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <div className="min-w-0">

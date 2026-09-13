@@ -42,7 +42,8 @@ export function BookingPaymentGroupScreen({
         setHoldExpired(false);
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         setError(
           cause instanceof Error
             ? cause.message
@@ -146,7 +147,9 @@ export function BookingPaymentGroupScreen({
                 : 'border-[#d8caeb] bg-white text-violet'
             }`}
           >
-            <span className="block text-xs font-bold text-muted">เวลาที่เหลือ</span>
+            <span className="block text-xs font-bold text-muted">
+              เวลาที่เหลือ
+            </span>
             <strong className="mt-1 block text-lg font-black">
               <BookingCountdown
                 expiresAt={currentGroup.holdExpiresAt}
@@ -154,7 +157,9 @@ export function BookingPaymentGroupScreen({
                 onExpired={() => setHoldExpired(true)}
               />
             </strong>
-            <small className="mt-0.5 block text-xs opacity-70">Hold ทั้งกลุ่ม</small>
+            <small className="mt-0.5 block text-xs opacity-70">
+              Hold ทั้งกลุ่ม
+            </small>
           </div>
         </header>
 
@@ -162,12 +167,21 @@ export function BookingPaymentGroupScreen({
           {[
             ['รหัสชำระเงิน', currentGroup.paymentCode],
             ['จำนวน Booking', `${currentGroup.bookings.length} รายการ`],
-            ['ยอดชำระรวม', `${formatBookingMoney(currentGroup.totalAmount)} บาท`],
+            [
+              'ยอดชำระรวม',
+              `${formatBookingMoney(currentGroup.totalAmount)} บาท`,
+            ],
             ['สถานะ', 'รอชำระเงิน'],
           ].map(([label, value]) => (
-            <article key={label} className="rounded-[14px] border border-line bg-white p-3">
+            <article
+              key={label}
+              className="rounded-[14px] border border-line bg-white p-3"
+            >
               <span className="text-xs text-muted">{label}</span>
-              <strong className="mt-1 block truncate text-base font-black" title={value}>
+              <strong
+                className="mt-1 block truncate text-base font-black"
+                title={value}
+              >
                 {value}
               </strong>
             </article>
@@ -185,7 +199,9 @@ export function BookingPaymentGroupScreen({
                     className="flex items-center justify-between gap-4 rounded-xl bg-[#faf8ff] px-4 py-3 text-sm"
                   >
                     <div>
-                      <span className="text-xs text-muted">Booking {index + 1}</span>
+                      <span className="text-xs text-muted">
+                        Booking {index + 1}
+                      </span>
                       <strong className="block">{booking.bookingCode}</strong>
                     </div>
                     <strong className="text-violet">
@@ -225,7 +241,8 @@ export function BookingPaymentGroupScreen({
                 ) : (
                   <div className="rounded-xl border border-[#f0d9a4] bg-[#fff9e8] p-4 text-left text-sm text-[#7a5700]">
                     <QrCode className="mb-2 h-6 w-6" aria-hidden />
-                    ผู้จัดงานยังไม่ได้ตั้งค่า PromptPay กรุณาอย่าโอนเงินจากข้อมูลอื่นนอกระบบ
+                    ผู้จัดงานยังไม่ได้ตั้งค่า PromptPay
+                    กรุณาอย่าโอนเงินจากข้อมูลอื่นนอกระบบ
                   </div>
                 )}
               </div>
@@ -236,7 +253,8 @@ export function BookingPaymentGroupScreen({
             </article>
 
             <article className="sl-surface border-[#f0d9a4] bg-[#fffaf0] p-4 text-sm leading-6 text-[#7a5700]">
-              ต้องชำระยอดรวมเต็มจำนวนและใช้สลิปเดียว ระบบจะยืนยันหรือยกเลิกทุก Booking ในกลุ่มพร้อมกัน
+              ต้องชำระยอดรวมเต็มจำนวนและใช้สลิปเดียว ระบบจะยืนยันหรือยกเลิกทุก
+              Booking ในกลุ่มพร้อมกัน
             </article>
           </aside>
         </div>

@@ -1,9 +1,92 @@
 import { UsersRound } from 'lucide-react';
-import { AdminEmpty, AdminError, AdminPanel, formatAdminDateTime } from '@/components/admin-ui';
+import {
+  AdminEmpty,
+  AdminError,
+  AdminPanel,
+  formatAdminDateTime,
+} from '@/components/admin-ui';
 import type { AdminTransactionVendor } from '@/lib/api';
 
-export function AdminVendorsScreen({ items, loading, error }: { items: AdminTransactionVendor[]; loading: boolean; error: string }) {
-  return <AdminPanel title="ผู้ขายและร้านค้า" description="สรุปจาก Booking ภายในองค์กรที่เลือกเท่านั้น">
-    {error ? <AdminError message={error} /> : loading ? <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton h-40 rounded-[18px]" />)}</div> : items.length === 0 ? <AdminEmpty icon={UsersRound} title="ไม่พบผู้ขาย" description="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" /> : <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <article key={item.id} className="rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff] p-5"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] font-black text-white">{[...item.fullName.trim()][0] ?? '?'}</span><div className="min-w-0"><h2 className="truncate font-black text-ink">{item.fullName}</h2><p className="mt-1 truncate text-xs text-muted">{item.email}</p><p className="mt-1 text-xs text-muted">{item.phone || 'ไม่ระบุโทรศัพท์'}</p></div></div><div className="mt-4 flex flex-wrap gap-1.5">{item.shops.map((shop) => <span key={shop.id} className="rounded-full bg-[#f1eaff] px-2.5 py-1 text-[11px] font-extrabold text-violet">{shop.name}</span>)}</div><dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ebe5ef] pt-4 text-xs"><div><dt className="text-muted">การจอง</dt><dd className="mt-1 font-black">{item.bookingCount}</dd></div><div><dt className="text-muted">ยืนยันแล้ว</dt><dd className="mt-1 font-black text-[#147653]">{item.confirmedCount}</dd></div></dl><p className="mt-3 text-[11px] text-muted">ล่าสุด {formatAdminDateTime(item.lastBookingAt)}</p></article>)}</div>}
-  </AdminPanel>;
+export function AdminVendorsScreen({
+  items,
+  loading,
+  error,
+}: {
+  items: AdminTransactionVendor[];
+  loading: boolean;
+  error: string;
+}) {
+  return (
+    <AdminPanel
+      title="ผู้ขายและร้านค้า"
+      description="สรุปจาก Booking ภายในองค์กรที่เลือกเท่านั้น"
+    >
+      {error ? (
+        <AdminError message={error} />
+      ) : loading ? (
+        <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="skeleton h-40 rounded-[18px]" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <AdminEmpty
+          icon={UsersRound}
+          title="ไม่พบผู้ขาย"
+          description="ลองเปลี่ยนคำค้นหาหรือตัวกรอง"
+        />
+      ) : (
+        <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <article
+              key={item.id}
+              className="rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff] p-5"
+            >
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] font-black text-white">
+                  {[...item.fullName.trim()][0] ?? '?'}
+                </span>
+                <div className="min-w-0">
+                  <h2 className="truncate font-black text-ink">
+                    {item.fullName}
+                  </h2>
+                  <p className="mt-1 truncate text-xs text-muted">
+                    {item.email}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {item.phone || 'ไม่ระบุโทรศัพท์'}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {item.shops.map((shop) => (
+                  <span
+                    key={shop.id}
+                    className="rounded-full bg-[#f1eaff] px-2.5 py-1 text-[11px] font-extrabold text-violet"
+                  >
+                    {shop.name}
+                  </span>
+                ))}
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ebe5ef] pt-4 text-xs">
+                <div>
+                  <dt className="text-muted">การจอง</dt>
+                  <dd className="mt-1 font-black">{item.bookingCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">ยืนยันแล้ว</dt>
+                  <dd className="mt-1 font-black text-[#147653]">
+                    {item.confirmedCount}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-[11px] text-muted">
+                ล่าสุด {formatAdminDateTime(item.lastBookingAt)}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
+    </AdminPanel>
+  );
 }

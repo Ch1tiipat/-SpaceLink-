@@ -40,10 +40,25 @@ export const DEFAULT_ADMIN_TRANSACTION_FILTERS: AdminTransactionFilters = {
 };
 
 const BOOKING_STATUSES = new Set([
-  'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'NO_SHOW', 'COMPLETED',
+  'PENDING_PAYMENT',
+  'CONFIRMED',
+  'CANCELLED',
+  'NO_SHOW',
+  'COMPLETED',
 ]);
-const PAYMENT_STATUSES = new Set(['EXEMPT', 'AWAITING_SLIP', 'VERIFIED', 'FAILED']);
-const REFUND_STATUSES = new Set(['NONE', 'PENDING', 'APPROVED', 'REJECTED', 'PROCESSED']);
+const PAYMENT_STATUSES = new Set([
+  'EXEMPT',
+  'AWAITING_SLIP',
+  'VERIFIED',
+  'FAILED',
+]);
+const REFUND_STATUSES = new Set([
+  'NONE',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'PROCESSED',
+]);
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function parseAdminTransactionFilters(
@@ -73,11 +88,16 @@ export function serializeAdminTransactionFilters(
   const params = new URLSearchParams();
   params.set('tab', filters.tab);
   const optional: Array<[keyof AdminTransactionFilters, string]> = [
-    ['eventId', filters.eventId], ['zoneId', filters.zoneId],
-    ['vendorUserId', filters.vendorUserId], ['shopId', filters.shopId],
-    ['bookingStatus', filters.bookingStatus], ['paymentStatus', filters.paymentStatus],
-    ['refundStatus', filters.refundStatus], ['from', filters.from],
-    ['to', filters.to], ['q', filters.q.trim()],
+    ['eventId', filters.eventId],
+    ['zoneId', filters.zoneId],
+    ['vendorUserId', filters.vendorUserId],
+    ['shopId', filters.shopId],
+    ['bookingStatus', filters.bookingStatus],
+    ['paymentStatus', filters.paymentStatus],
+    ['refundStatus', filters.refundStatus],
+    ['from', filters.from],
+    ['to', filters.to],
+    ['q', filters.q.trim()],
   ];
   optional.forEach(([key, value]) => {
     if (value) params.set(key, value);
@@ -107,7 +127,14 @@ function date(value: string | null) {
   return value && DATE_ONLY.test(value) ? value : '';
 }
 
-function integer(value: string | null, min: number, max: number, fallback: number) {
+function integer(
+  value: string | null,
+  min: number,
+  max: number,
+  fallback: number,
+) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max
+    ? parsed
+    : fallback;
 }

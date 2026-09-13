@@ -9,7 +9,7 @@ export type EventSummary = {
   endTime: string | null;
   bannerUrl: string | null;
   galleryUrls: string[];
-  status: "DRAFT" | "PUBLISHED" | "ONGOING" | "COMPLETED" | "CANCELLED";
+  status: 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
 };
 
 export type EventJoinInformation = {
@@ -20,7 +20,7 @@ export type EventJoinInformation = {
   sortOrder: number;
 };
 
-export type EventInformationType = "ATMOSPHERE" | "ACTIVITY" | "FACILITY";
+export type EventInformationType = 'ATMOSPHERE' | 'ACTIVITY' | 'FACILITY';
 
 export type EventInformation = {
   id: string;
@@ -45,8 +45,8 @@ export type DiscoveryEvent = EventSummary & {
   categories: { id: string; name: string }[];
 };
 
-export type BoothAvailability = "AVAILABLE" | "HELD" | "BOOKED" | "UNAVAILABLE";
-export type BoothTier = "S" | "A" | "B" | "C";
+export type BoothAvailability = 'AVAILABLE' | 'HELD' | 'BOOKED' | 'UNAVAILABLE';
+export type BoothTier = 'S' | 'A' | 'B' | 'C';
 
 export type EventBooth = {
   id: string;
@@ -149,13 +149,13 @@ export type UpdateMeInput = {
 };
 
 /** What PATCH /users/me returns — CurrentUser without the `shops` field. */
-export type UserProfile = Omit<CurrentUser, "shops" | "organizations">;
+export type UserProfile = Omit<CurrentUser, 'shops' | 'organizations'>;
 
 export type ZoneRecommendation = {
   boothId: string;
   score: number;
   reason: string;
-  source: "AI_GEMINI" | "RULE_BASED";
+  source: 'AI_GEMINI' | 'RULE_BASED';
 };
 
 export type ZoneRecommendationInput = {
@@ -168,20 +168,26 @@ export type ZoneRecommendationInput = {
 
 export type SupportAssistantResponse = {
   answer: string;
-  source: "AI_GEMINI" | "RULE_BASED";
+  source: 'AI_GEMINI' | 'RULE_BASED';
   actions: SupportAssistantAction[];
 };
 
 export type SupportAssistantAction =
-  "OPEN_EVENTS" | "OPEN_BOOKINGS" | "OPEN_PROFILE";
+  | 'OPEN_EVENTS'
+  | 'OPEN_BOOKINGS'
+  | 'OPEN_PROFILE';
 
 export type SupportAssistantHistoryMessage = {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   text: string;
 };
 
 export type BookingStatus =
-  "PENDING_PAYMENT" | "CONFIRMED" | "CANCELLED" | "NO_SHOW" | "COMPLETED";
+  | 'PENDING_PAYMENT'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'NO_SHOW'
+  | 'COMPLETED';
 
 export type BookingRecord = {
   id: string;
@@ -232,8 +238,8 @@ export type CreateBookingInput = {
   shopId: string;
 };
 
-export type ReviewTargetType = "BOOTH" | "ZONE" | "SHOP" | "ORGANIZATION";
-export type ReviewStatus = "PUBLISHED" | "HIDDEN" | "DELETED";
+export type ReviewTargetType = 'BOOTH' | 'ZONE' | 'SHOP' | 'ORGANIZATION';
+export type ReviewStatus = 'PUBLISHED' | 'HIDDEN' | 'DELETED';
 
 export type AverageRating = {
   average: number | null;
@@ -242,7 +248,7 @@ export type AverageRating = {
 
 export type CreateReviewInput = {
   bookingId: string;
-  targetType: "BOOTH" | "ZONE";
+  targetType: 'BOOTH' | 'ZONE';
   targetId: string;
   rating: number;
   comment?: string;
@@ -330,7 +336,11 @@ export type AdminReviewsPage = {
 };
 
 export type PenaltyReason =
-  "NO_SHOW" | "RULE_VIOLATION" | "CONTRACT_BREACH" | "BAD_REVIEW" | "OTHER";
+  | 'NO_SHOW'
+  | 'RULE_VIOLATION'
+  | 'CONTRACT_BREACH'
+  | 'BAD_REVIEW'
+  | 'OTHER';
 
 export type PenaltyRecord = {
   id: string;
@@ -368,7 +378,7 @@ export type CreateSuperAdminPenaltyInput = CreatePenaltyInput & {
   bookingId?: string;
 };
 
-export type SupportTicketStatus = "OPEN" | "PROCESSING" | "CLOSED";
+export type SupportTicketStatus = 'OPEN' | 'PROCESSING' | 'CLOSED';
 
 export type SupportTicketRecord = {
   id: string;
@@ -384,7 +394,7 @@ export type SupportTicketRecord = {
 
 export type CreateSupportTicketInput =
   | {
-      requestType: "QUOTA_INCREASE";
+      requestType: 'QUOTA_INCREASE';
       eventId: string;
       zoneId: string;
       boothId: string;
@@ -392,7 +402,7 @@ export type CreateSupportTicketInput =
       message: string;
     }
   | {
-      requestType: "ISSUE_REPORT";
+      requestType: 'ISSUE_REPORT';
       bookingId?: string;
       subject: string;
       message: string;
@@ -419,7 +429,10 @@ export type QuotaExceptionDecision = {
 };
 
 export type SlipVerificationStatus =
-  "VERIFIED" | "INVALID" | "DUPLICATE" | "ERROR";
+  | 'VERIFIED'
+  | 'INVALID'
+  | 'DUPLICATE'
+  | 'ERROR';
 
 export type SlipUploadResponse = {
   booking: {
@@ -434,10 +447,7 @@ export type SlipUploadResponse = {
   };
 };
 
-export type PaymentGroupStatus =
-  | "PENDING_PAYMENT"
-  | "CONFIRMED"
-  | "CANCELLED";
+export type PaymentGroupStatus = 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED';
 
 export type PaymentGroupRecord = {
   id: string;
@@ -477,7 +487,7 @@ export type PaymentGroupSlipUploadResponse = {
 };
 
 /** The `app_user.role` values (AGENTS.md §5). Platform-level, not org-level. */
-export type UserRole = "SUPER_ADMIN" | "ORG_ADMIN" | "VENDOR";
+export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'VENDOR';
 
 /**
  * Exactly what `GET /auth/me` returns — no more. `blacklistReason` and penalty
@@ -501,7 +511,7 @@ export type CurrentUser = {
     promptpayId: string | null;
     facebookUrl: string | null;
     lineUrl: string | null;
-    membershipRole: "OWNER" | "ADMIN";
+    membershipRole: 'OWNER' | 'ADMIN';
     canEditQuota: boolean;
     canManagePayments: boolean;
     canManageZones: boolean;
@@ -522,7 +532,7 @@ export type OrganizationSettings = {
   promptpayId: string | null;
 };
 
-export type SuperAdminOrganizationStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED";
+export type SuperAdminOrganizationStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
 export type SuperAdminOrganization = {
   id: string;
@@ -545,7 +555,7 @@ export type CreateSuperAdminOrganizationInput = {
 
 export type SuperAdminCompanyAdmin = {
   id: string;
-  role: "OWNER" | "ADMIN";
+  role: 'OWNER' | 'ADMIN';
   canEditQuota: boolean;
   canManagePayments: boolean;
   canManageZones: boolean;
@@ -556,7 +566,7 @@ export type SuperAdminCompanyAdmin = {
 
 export type OrganizationTeamMember = {
   id: string;
-  role: "OWNER" | "ADMIN";
+  role: 'OWNER' | 'ADMIN';
   canEditQuota: boolean;
   canManagePayments: boolean;
   canManageZones: boolean;
@@ -601,7 +611,7 @@ export type SuperAdminUserDetail = SuperAdminUserListItem & {
     reason: string;
     requestedAmount: string;
     approvedAmount: string | null;
-    status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
     createdAt: string;
     booking: { id: string; bookingCode: string };
   }[];
@@ -681,7 +691,7 @@ export type EventSubscription = EventSubscriptionQuote & {
   id: string;
   organizationId: string;
   eventId: string;
-  status: "DRAFT" | "PENDING_PAYMENT" | "ACTIVE" | "EXPIRED" | "CANCELLED";
+  status: 'DRAFT' | 'PENDING_PAYMENT' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
   platformPaidAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -712,12 +722,25 @@ export type PlatformBillingConfig = {
 
 export type UpdatePlatformBillingConfigInput = Omit<
   PlatformBillingConfig,
-  "id" | "updatedAt"
+  'id' | 'updatedAt'
 >;
 
-export type AdminTransactionView = 'BOOKINGS' | 'PAYMENTS' | 'REFUNDS' | 'VENDORS';
-export type AdminPaymentStatus = 'EXEMPT' | 'AWAITING_SLIP' | 'VERIFIED' | 'FAILED';
-export type AdminRefundStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+export type AdminTransactionView =
+  | 'BOOKINGS'
+  | 'PAYMENTS'
+  | 'REFUNDS'
+  | 'VENDORS';
+export type AdminPaymentStatus =
+  | 'EXEMPT'
+  | 'AWAITING_SLIP'
+  | 'VERIFIED'
+  | 'FAILED';
+export type AdminRefundStatus =
+  | 'NONE'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'PROCESSED';
 
 export type AdminTransactionBooking = {
   id: string;
@@ -785,7 +808,9 @@ export type AdminTransactionResponse = {
   page: number;
   pageSize: number;
   total: number;
-  items: Array<AdminTransactionBooking | AdminTransactionRefund | AdminTransactionVendor>;
+  items: Array<
+    AdminTransactionBooking | AdminTransactionRefund | AdminTransactionVendor
+  >;
 };
 
 export type AdminTransactionQuery = {
@@ -874,17 +899,19 @@ export type AdminTransactionBookingDetail = {
       createdAt: string;
     }>;
   };
-  refunds: Array<AdminOrganizationRefund & {
-    payoutMethod: string | null;
-    payoutPromptPayId: string | null;
-    payoutBankName: string | null;
-    payoutAccountNumber: string | null;
-    payoutAccountName: string | null;
-    requestedBy: { id: string; fullName: string; email: string };
-    reviewedBy: { id: string; fullName: string; email: string } | null;
-    payoutNameMismatch: boolean;
-    pendingSince: string | null;
-  }>;
+  refunds: Array<
+    AdminOrganizationRefund & {
+      payoutMethod: string | null;
+      payoutPromptPayId: string | null;
+      payoutBankName: string | null;
+      payoutAccountNumber: string | null;
+      payoutAccountName: string | null;
+      requestedBy: { id: string; fullName: string; email: string };
+      reviewedBy: { id: string; fullName: string; email: string } | null;
+      payoutNameMismatch: boolean;
+      pendingSince: string | null;
+    }
+  >;
   timeline: AdminTransactionTimelineItem[];
 };
 
@@ -901,7 +928,7 @@ export type AdminOrganizationRefund = {
   reason: string;
   requestedAmount: string;
   approvedAmount: string | null;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
   evidenceUrls: string[];
   reviewedByUserId: string | null;
   reviewedAt: string | null;
@@ -915,7 +942,7 @@ export type SuperAdminRefund = {
   bookingId: string;
   requestedByUserId: string;
   reason: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PROCESSED";
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
   requestedAmount: string;
   approvedAmount: string | null;
   evidenceUrls: string[];
@@ -999,14 +1026,16 @@ export type SuperAdminPenaltiesOverview = {
 };
 
 export type SuperAdminAuditAction =
-  | "ORGANIZATION_CREATED"
-  | "ORGANIZATION_STATUS_UPDATED"
-  | "ORG_ADMIN_GRANTED"
-  | "ORG_ADMIN_REVOKED"
-  | "PLATFORM_CONFIG_UPDATED";
+  | 'ORGANIZATION_CREATED'
+  | 'ORGANIZATION_STATUS_UPDATED'
+  | 'ORG_ADMIN_GRANTED'
+  | 'ORG_ADMIN_REVOKED'
+  | 'PLATFORM_CONFIG_UPDATED';
 
 export type SuperAdminAuditTargetType =
-  "ORGANIZATION" | "USER" | "PLATFORM_CONFIG";
+  | 'ORGANIZATION'
+  | 'USER'
+  | 'PLATFORM_CONFIG';
 
 export type SuperAdminAuditLogFilter = {
   action?: SuperAdminAuditAction;
@@ -1051,7 +1080,7 @@ export type AdminVenue = {
   longitude: string | null;
   googleMapsUrl: string | null;
   mapImageUrl: string | null;
-  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
   updatedAt: string;
 };
@@ -1091,7 +1120,10 @@ export type AdminZone = {
 };
 
 export type AdminBoothStatus =
-  "AVAILABLE" | "BOOKED" | "MAINTENANCE" | "INACTIVE";
+  | 'AVAILABLE'
+  | 'BOOKED'
+  | 'MAINTENANCE'
+  | 'INACTIVE';
 
 export type AdminBooth = {
   id: string;
@@ -1155,13 +1187,13 @@ export type SaveAnnouncementInput = {
 };
 
 export type NotificationType =
-  | "ANNOUNCEMENT"
-  | "BOOKING_STATUS"
-  | "PAYMENT"
-  | "REFUND"
-  | "SUPPORT_TICKET"
-  | "PENALTY"
-  | "SYSTEM";
+  | 'ANNOUNCEMENT'
+  | 'BOOKING_STATUS'
+  | 'PAYMENT'
+  | 'REFUND'
+  | 'SUPPORT_TICKET'
+  | 'PENALTY'
+  | 'SYSTEM';
 
 export type NotificationRecord = {
   id: string;
@@ -1199,7 +1231,7 @@ export type SystemBroadcast = {
   createdAt: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(
@@ -1208,7 +1240,7 @@ export class ApiError extends Error {
     readonly availableAt: string | null = null,
   ) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
@@ -1227,12 +1259,12 @@ async function getJson<T>(
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -1244,12 +1276,12 @@ async function getJson<T>(
       headers,
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
 
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -1257,8 +1289,8 @@ async function getJson<T>(
   if (!response.ok) {
     throw new ApiError(
       response.status === 404
-        ? "ไม่พบข้อมูลที่ต้องการ"
-        : "เชื่อมต่อข้อมูล SpaceLink ไม่สำเร็จ",
+        ? 'ไม่พบข้อมูลที่ต้องการ'
+        : 'เชื่อมต่อข้อมูล SpaceLink ไม่สำเร็จ',
       response.status,
     );
   }
@@ -1267,22 +1299,22 @@ async function getJson<T>(
 }
 
 async function sendJson<T>(
-  method: "POST" | "PATCH",
+  method: 'POST' | 'PATCH',
   path: string,
   body: unknown,
   { signal, token }: RequestOptions = {},
-  fallbackMessage = "ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+  fallbackMessage = 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -1297,12 +1329,12 @@ async function sendJson<T>(
       body: JSON.stringify(body),
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
 
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -1312,7 +1344,7 @@ async function sendJson<T>(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
 
     throw new ApiError(detail || fallbackMessage, response.status);
@@ -1327,7 +1359,7 @@ function postJson<T>(
   options: RequestOptions = {},
   fallbackMessage?: string,
 ): Promise<T> {
-  return sendJson<T>("POST", path, body, options, fallbackMessage);
+  return sendJson<T>('POST', path, body, options, fallbackMessage);
 }
 
 function patchJson<T>(
@@ -1336,36 +1368,36 @@ function patchJson<T>(
   options: RequestOptions = {},
   fallbackMessage?: string,
 ): Promise<T> {
-  return sendJson<T>("PATCH", path, body, options, fallbackMessage);
+  return sendJson<T>('PATCH', path, body, options, fallbackMessage);
 }
 
 async function deleteJson<T>(
   path: string,
   { signal, token }: RequestOptions = {},
-  fallbackMessage = "ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง",
+  fallbackMessage = 'ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง',
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (token) headers.Authorization = "Bearer " + token;
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
 
   let response: Response;
   try {
     response = await fetch(API_BASE_URL + path, {
-      method: "DELETE",
+      method: 'DELETE',
       signal,
       headers,
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError")
+    if (cause instanceof DOMException && cause.name === 'AbortError')
       throw cause;
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง',
       0,
     );
   }
@@ -1375,7 +1407,7 @@ async function deleteJson<T>(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     throw new ApiError(detail || fallbackMessage, response.status);
   }
@@ -1387,35 +1419,35 @@ async function deleteJsonWithBody<T>(
   path: string,
   body: unknown,
   { signal, token }: RequestOptions = {},
-  fallbackMessage = "ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง",
+  fallbackMessage = 'ไม่สามารถลบรายการได้ กรุณาลองอีกครั้ง',
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
   };
-  if (token) headers.Authorization = "Bearer " + token;
+  if (token) headers.Authorization = 'Bearer ' + token;
 
   let response: Response;
   try {
     response = await fetch(API_BASE_URL + path, {
-      method: "DELETE",
+      method: 'DELETE',
       signal,
       headers,
       body: JSON.stringify(body),
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API ได้ กรุณาลองอีกครั้ง',
       0,
     );
   }
@@ -1425,7 +1457,7 @@ async function deleteJsonWithBody<T>(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     throw new ApiError(detail || fallbackMessage, response.status);
   }
@@ -1442,7 +1474,7 @@ export function getAdminVenues(
   token: string,
   signal?: AbortSignal,
 ): Promise<AdminVenue[]> {
-  return getJson<AdminVenue[]>("/venues", { signal, token });
+  return getJson<AdminVenue[]>('/venues', { signal, token });
 }
 
 export function createAdminVenue(
@@ -1451,10 +1483,10 @@ export function createAdminVenue(
   token: string,
 ): Promise<AdminVenue> {
   return postJson<AdminVenue>(
-    "/organizations/" + encodeURIComponent(organizationId) + "/venues",
+    '/organizations/' + encodeURIComponent(organizationId) + '/venues',
     input,
     { token },
-    "ไม่สามารถสร้างสถานที่ได้",
+    'ไม่สามารถสร้างสถานที่ได้',
   );
 }
 
@@ -1462,10 +1494,9 @@ export function getVenueLocation(
   venueId: string,
   signal?: AbortSignal,
 ): Promise<VenueLocation> {
-  return getJson<VenueLocation>(
-    "/venues/" + encodeURIComponent(venueId),
-    { signal },
-  );
+  return getJson<VenueLocation>('/venues/' + encodeURIComponent(venueId), {
+    signal,
+  });
 }
 
 export function updateAdminVenue(
@@ -1474,10 +1505,10 @@ export function updateAdminVenue(
   token: string,
 ): Promise<AdminVenue> {
   return patchJson<AdminVenue>(
-    "/venues/" + encodeURIComponent(venueId),
+    '/venues/' + encodeURIComponent(venueId),
     input,
     { token },
-    "ไม่สามารถแก้ไขสถานที่ได้",
+    'ไม่สามารถแก้ไขสถานที่ได้',
   );
 }
 
@@ -1486,9 +1517,9 @@ export function deleteAdminVenue(
   token: string,
 ): Promise<AdminVenue> {
   return deleteJson<AdminVenue>(
-    "/venues/" + encodeURIComponent(venueId),
+    '/venues/' + encodeURIComponent(venueId),
     { token },
-    "ไม่สามารถลบสถานที่ได้",
+    'ไม่สามารถลบสถานที่ได้',
   );
 }
 
@@ -1497,7 +1528,7 @@ export function getAdminZones(
   token: string,
   signal?: AbortSignal,
 ): Promise<AdminZone[]> {
-  return getJson<AdminZone[]>("/zones?venueId=" + encodeURIComponent(venueId), {
+  return getJson<AdminZone[]>('/zones?venueId=' + encodeURIComponent(venueId), {
     signal,
     token,
   });
@@ -1509,10 +1540,10 @@ export function createAdminZone(
   token: string,
 ): Promise<AdminZone> {
   return postJson<AdminZone>(
-    "/venues/" + encodeURIComponent(venueId) + "/zones",
+    '/venues/' + encodeURIComponent(venueId) + '/zones',
     input,
     { token },
-    "ไม่สามารถสร้างโซนได้",
+    'ไม่สามารถสร้างโซนได้',
   );
 }
 
@@ -1522,10 +1553,10 @@ export function updateAdminZone(
   token: string,
 ): Promise<AdminZone> {
   return patchJson<AdminZone>(
-    "/zones/" + encodeURIComponent(zoneId),
+    '/zones/' + encodeURIComponent(zoneId),
     input,
     { token },
-    "ไม่สามารถแก้ไขโซนได้",
+    'ไม่สามารถแก้ไขโซนได้',
   );
 }
 
@@ -1534,9 +1565,9 @@ export function deleteAdminZone(
   token: string,
 ): Promise<AdminZone> {
   return deleteJson<AdminZone>(
-    "/zones/" + encodeURIComponent(zoneId),
+    '/zones/' + encodeURIComponent(zoneId),
     { token },
-    "ไม่สามารถลบโซนได้",
+    'ไม่สามารถลบโซนได้',
   );
 }
 
@@ -1545,7 +1576,7 @@ export function getAdminBooths(
   token: string,
   signal?: AbortSignal,
 ): Promise<AdminBooth[]> {
-  return getJson<AdminBooth[]>("/booths?zoneId=" + encodeURIComponent(zoneId), {
+  return getJson<AdminBooth[]>('/booths?zoneId=' + encodeURIComponent(zoneId), {
     signal,
     token,
   });
@@ -1556,7 +1587,7 @@ export function getBooths(
   signal?: AbortSignal,
 ): Promise<BoothOption[]> {
   return getJson<BoothOption[]>(
-    "/booths?zoneId=" + encodeURIComponent(zoneId),
+    '/booths?zoneId=' + encodeURIComponent(zoneId),
     { signal },
   );
 }
@@ -1567,10 +1598,10 @@ export function createAdminBooth(
   token: string,
 ): Promise<AdminBooth> {
   return postJson<AdminBooth>(
-    "/zones/" + encodeURIComponent(zoneId) + "/booths",
+    '/zones/' + encodeURIComponent(zoneId) + '/booths',
     input,
     { token },
-    "ไม่สามารถสร้างบูธได้",
+    'ไม่สามารถสร้างบูธได้',
   );
 }
 
@@ -1580,10 +1611,10 @@ export function updateAdminBooth(
   token: string,
 ): Promise<AdminBooth> {
   return patchJson<AdminBooth>(
-    "/booths/" + encodeURIComponent(boothId),
+    '/booths/' + encodeURIComponent(boothId),
     input,
     { token },
-    "ไม่สามารถแก้ไขบูธได้",
+    'ไม่สามารถแก้ไขบูธได้',
   );
 }
 
@@ -1592,9 +1623,9 @@ export function deleteAdminBooth(
   token: string,
 ): Promise<AdminBooth> {
   return deleteJson<AdminBooth>(
-    "/booths/" + encodeURIComponent(boothId),
+    '/booths/' + encodeURIComponent(boothId),
     { token },
-    "ไม่สามารถลบบูธได้",
+    'ไม่สามารถลบบูธได้',
   );
 }
 
@@ -1603,7 +1634,7 @@ export function getPublicAnnouncements(
   signal?: AbortSignal,
 ): Promise<AdminAnnouncement[]> {
   return getJson<AdminAnnouncement[]>(
-    "/organizations/" + encodeURIComponent(organizationId) + "/announcements",
+    '/organizations/' + encodeURIComponent(organizationId) + '/announcements',
     { signal },
   );
 }
@@ -1614,9 +1645,9 @@ export function getAdminAnnouncements(
   signal?: AbortSignal,
 ): Promise<AdminAnnouncement[]> {
   return getJson<AdminAnnouncement[]>(
-    "/organizations/" +
+    '/organizations/' +
       encodeURIComponent(organizationId) +
-      "/announcements/admin",
+      '/announcements/admin',
     { signal, token },
   );
 }
@@ -1627,10 +1658,10 @@ export function createAdminAnnouncement(
   token: string,
 ): Promise<AdminAnnouncement> {
   return postJson<AdminAnnouncement>(
-    "/organizations/" + encodeURIComponent(organizationId) + "/announcements",
+    '/organizations/' + encodeURIComponent(organizationId) + '/announcements',
     input,
     { token },
-    "ไม่สามารถสร้างประกาศได้",
+    'ไม่สามารถสร้างประกาศได้',
   );
 }
 
@@ -1641,13 +1672,13 @@ export function updateAdminAnnouncement(
   token: string,
 ): Promise<AdminAnnouncement> {
   return patchJson<AdminAnnouncement>(
-    "/organizations/" +
+    '/organizations/' +
       encodeURIComponent(organizationId) +
-      "/announcements/" +
+      '/announcements/' +
       encodeURIComponent(announcementId),
     input,
     { token },
-    "ไม่สามารถแก้ไขประกาศได้",
+    'ไม่สามารถแก้ไขประกาศได้',
   );
 }
 
@@ -1657,12 +1688,12 @@ export function deleteAdminAnnouncement(
   token: string,
 ): Promise<AdminAnnouncement> {
   return deleteJson<AdminAnnouncement>(
-    "/organizations/" +
+    '/organizations/' +
       encodeURIComponent(organizationId) +
-      "/announcements/" +
+      '/announcements/' +
       encodeURIComponent(announcementId),
     { token },
-    "ไม่สามารถลบประกาศได้",
+    'ไม่สามารถลบประกาศได้',
   );
 }
 
@@ -1670,14 +1701,14 @@ export function getMyNotifications(
   token: string,
   signal?: AbortSignal,
 ): Promise<NotificationRecord[]> {
-  return getJson<NotificationRecord[]>("/notifications", { signal, token });
+  return getJson<NotificationRecord[]>('/notifications', { signal, token });
 }
 
 export function getUnreadNotificationCount(
   token: string,
   signal?: AbortSignal,
 ): Promise<NotificationCount> {
-  return getJson<NotificationCount>("/notifications/unread-count", {
+  return getJson<NotificationCount>('/notifications/unread-count', {
     signal,
     token,
   });
@@ -1691,7 +1722,7 @@ export function markNotificationRead(
     `/notifications/${encodeURIComponent(notificationId)}/read`,
     {},
     { token },
-    "ไม่สามารถอัปเดตการแจ้งเตือนได้",
+    'ไม่สามารถอัปเดตการแจ้งเตือนได้',
   );
 }
 
@@ -1699,10 +1730,10 @@ export function markAllNotificationsRead(
   token: string,
 ): Promise<NotificationCount> {
   return patchJson<NotificationCount>(
-    "/notifications/mark-all-read",
+    '/notifications/mark-all-read',
     {},
     { token },
-    "ไม่สามารถอัปเดตการแจ้งเตือนทั้งหมดได้",
+    'ไม่สามารถอัปเดตการแจ้งเตือนทั้งหมดได้',
   );
 }
 
@@ -1713,7 +1744,7 @@ export function deleteNotification(
   return deleteJson<NotificationCount>(
     `/notifications/${encodeURIComponent(notificationId)}`,
     { token },
-    "ไม่สามารถลบการแจ้งเตือนได้",
+    'ไม่สามารถลบการแจ้งเตือนได้',
   );
 }
 
@@ -1722,10 +1753,10 @@ export function createPushSubscription(
   token: string,
 ): Promise<PushSubscriptionRecord> {
   return postJson<PushSubscriptionRecord>(
-    "/push-subscriptions",
+    '/push-subscriptions',
     input,
     { token },
-    "เปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ",
+    'เปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ',
   );
 }
 
@@ -1734,10 +1765,10 @@ export function deletePushSubscription(
   token: string,
 ): Promise<NotificationCount> {
   return deleteJsonWithBody<NotificationCount>(
-    "/push-subscriptions",
+    '/push-subscriptions',
     { endpoint },
     { token },
-    "ปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ",
+    'ปิดการแจ้งเตือนบนอุปกรณ์นี้ไม่สำเร็จ',
   );
 }
 
@@ -1745,7 +1776,7 @@ export function getActiveSystemBroadcast(
   token: string,
   signal?: AbortSignal,
 ): Promise<SystemBroadcast | null> {
-  return getJson<SystemBroadcast | null>("/system-broadcasts/active", {
+  return getJson<SystemBroadcast | null>('/system-broadcasts/active', {
     signal,
     token,
   });
@@ -1756,15 +1787,15 @@ export function createSystemBroadcast(
   token: string,
 ): Promise<SystemBroadcast> {
   return postJson<SystemBroadcast>(
-    "/system-broadcasts",
+    '/system-broadcasts',
     input,
     { token },
-    "ส่งประกาศระบบไม่สำเร็จ",
+    'ส่งประกาศระบบไม่สำเร็จ',
   );
 }
 
 export function getEvents(signal?: AbortSignal): Promise<DiscoveryEvent[]> {
-  return getJson<DiscoveryEvent[]>("/events/discovery", { signal });
+  return getJson<DiscoveryEvent[]>('/events/discovery', { signal });
 }
 
 export function getEventMap(
@@ -1780,10 +1811,9 @@ export function getEventMapBySlug(
   slug: string,
   signal?: AbortSignal,
 ): Promise<EventMap> {
-  return getJson<EventMap>(
-    `/events/by-slug/${encodeURIComponent(slug)}/map`,
-    { signal },
-  );
+  return getJson<EventMap>(`/events/by-slug/${encodeURIComponent(slug)}/map`, {
+    signal,
+  });
 }
 
 /**
@@ -1798,7 +1828,7 @@ export function getMe(
   token: string,
   signal?: AbortSignal,
 ): Promise<CurrentUser> {
-  return getJson<CurrentUser>("/auth/me", { signal, token });
+  return getJson<CurrentUser>('/auth/me', { signal, token });
 }
 
 export function getAdminDashboardSummary(
@@ -1832,7 +1862,7 @@ export function quoteAdminEventSubscription(
     `/organizations/${encodeURIComponent(organizationId)}/events/quote`,
     input,
     { token },
-    "คำนวณค่าบริการอีเวนต์ไม่สำเร็จ",
+    'คำนวณค่าบริการอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1845,7 +1875,7 @@ export function createAdminEvent(
     `/organizations/${encodeURIComponent(organizationId)}/events`,
     input,
     { token },
-    "สร้างอีเวนต์ไม่สำเร็จ",
+    'สร้างอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1858,7 +1888,7 @@ export function publishAdminEvent(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/publish`,
     {},
     { token },
-    "เผยแพร่อีเวนต์ไม่สำเร็จ",
+    'เผยแพร่อีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1871,7 +1901,7 @@ export function openAdminEvent(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/open`,
     {},
     { token },
-    "เปิดอีเวนต์ไม่สำเร็จ",
+    'เปิดอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1884,7 +1914,7 @@ export function closeAdminEvent(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/close`,
     {},
     { token },
-    "ปิดอีเวนต์ไม่สำเร็จ",
+    'ปิดอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1896,7 +1926,7 @@ export function deleteAdminEvent(
   return deleteJson<AdminOrganizationEvent>(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}`,
     { token },
-    "ลบอีเวนต์ไม่สำเร็จ",
+    'ลบอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1910,7 +1940,7 @@ export function updateAdminEventGallery(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}`,
     { galleryUrls },
     { token },
-    "บันทึกลำดับรูปภาพไม่สำเร็จ",
+    'บันทึกลำดับรูปภาพไม่สำเร็จ',
   );
 }
 
@@ -1922,7 +1952,7 @@ export function deleteAdminEventBanner(
   return deleteJson<AdminOrganizationEvent>(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/banner`,
     { token },
-    "ลบภาพปกอีเวนต์ไม่สำเร็จ",
+    'ลบภาพปกอีเวนต์ไม่สำเร็จ',
   );
 }
 
@@ -1936,7 +1966,7 @@ export function createAdminEventJoinInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information`,
     input,
     { token },
-    "เพิ่มข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+    'เพิ่มข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ',
   );
 }
 
@@ -1951,7 +1981,7 @@ export function updateAdminEventJoinInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/${encodeURIComponent(informationId)}`,
     input,
     { token },
-    "แก้ไขข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+    'แก้ไขข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ',
   );
 }
 
@@ -1964,7 +1994,7 @@ export function deleteAdminEventJoinInformation(
   return deleteJson<EventJoinInformation>(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/${encodeURIComponent(informationId)}`,
     { token },
-    "ลบข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+    'ลบข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ',
   );
 }
 
@@ -1978,7 +2008,7 @@ export function reorderAdminEventJoinInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/join-information/reorder`,
     { ids },
     { token },
-    "บันทึกลำดับข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ",
+    'บันทึกลำดับข้อมูลก่อนเข้าร่วมงานไม่สำเร็จ',
   );
 }
 
@@ -1992,7 +2022,7 @@ export function createAdminEventInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/information`,
     input,
     { token },
-    "เพิ่มรายละเอียดภายในงานไม่สำเร็จ",
+    'เพิ่มรายละเอียดภายในงานไม่สำเร็จ',
   );
 }
 
@@ -2007,7 +2037,7 @@ export function updateAdminEventInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/information/${encodeURIComponent(informationId)}`,
     input,
     { token },
-    "แก้ไขรายละเอียดภายในงานไม่สำเร็จ",
+    'แก้ไขรายละเอียดภายในงานไม่สำเร็จ',
   );
 }
 
@@ -2020,7 +2050,7 @@ export function deleteAdminEventInformation(
   return deleteJson<EventInformation>(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/information/${encodeURIComponent(informationId)}`,
     { token },
-    "ลบรายละเอียดภายในงานไม่สำเร็จ",
+    'ลบรายละเอียดภายในงานไม่สำเร็จ',
   );
 }
 
@@ -2034,7 +2064,7 @@ export function reorderAdminEventInformation(
     `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/information/reorder`,
     { ids },
     { token },
-    "บันทึกลำดับรายละเอียดภายในงานไม่สำเร็จ",
+    'บันทึกลำดับรายละเอียดภายในงานไม่สำเร็จ',
   );
 }
 
@@ -2047,34 +2077,34 @@ export async function uploadAdminEventGallery(
 ): Promise<AdminOrganizationEvent> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const form = new FormData();
-  files.forEach((file) => form.append("files", file));
+  files.forEach((file) => form.append('files', file));
 
   let response: Response;
   try {
     response = await fetch(
       `${API_BASE_URL}/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/gallery`,
       {
-        method: "POST",
+        method: 'POST',
         signal,
         headers: {
-          Accept: "application/json",
+          Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: form,
       },
     );
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดรูปภาพได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดรูปภาพได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -2084,16 +2114,16 @@ export async function uploadAdminEventGallery(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     const fallbackByStatus: Record<number, string> = {
-      400: "ไฟล์รูปภาพไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด",
-      404: "ไม่พบอีเวนต์ในองค์กรนี้",
-      413: "ไฟล์รูปภาพมีขนาดเกิน 2 MB",
-      502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+      400: 'ไฟล์รูปภาพไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด',
+      404: 'ไม่พบอีเวนต์ในองค์กรนี้',
+      413: 'ไฟล์รูปภาพมีขนาดเกิน 2 MB',
+      502: 'บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
     };
     throw new ApiError(
-      detail || fallbackByStatus[response.status] || "อัปโหลดรูปภาพไม่สำเร็จ",
+      detail || fallbackByStatus[response.status] || 'อัปโหลดรูปภาพไม่สำเร็จ',
       response.status,
     );
   }
@@ -2110,34 +2140,34 @@ export async function uploadAdminEventBanner(
 ): Promise<AdminOrganizationEvent> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const form = new FormData();
-  form.append("file", file);
+  form.append('file', file);
 
   let response: Response;
   try {
     response = await fetch(
       `${API_BASE_URL}/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/banner`,
       {
-        method: "POST",
+        method: 'POST',
         signal,
         headers: {
-          Accept: "application/json",
+          Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: form,
       },
     );
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดภาพปกได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดภาพปกได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -2147,16 +2177,16 @@ export async function uploadAdminEventBanner(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     const fallbackByStatus: Record<number, string> = {
-      400: "ไฟล์ภาพปกไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด",
-      404: "ไม่พบอีเวนต์ในองค์กรนี้",
-      413: "ไฟล์ภาพปกมีขนาดเกิน 2 MB",
-      502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+      400: 'ไฟล์ภาพปกไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG ตามข้อกำหนด',
+      404: 'ไม่พบอีเวนต์ในองค์กรนี้',
+      413: 'ไฟล์ภาพปกมีขนาดเกิน 2 MB',
+      502: 'บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
     };
     throw new ApiError(
-      detail || fallbackByStatus[response.status] || "อัปโหลดภาพปกไม่สำเร็จ",
+      detail || fallbackByStatus[response.status] || 'อัปโหลดภาพปกไม่สำเร็จ',
       response.status,
     );
   }
@@ -2206,7 +2236,7 @@ export function getSuperAdminOrganizations(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminOrganization[]> {
-  return getJson<SuperAdminOrganization[]>("/organizations", {
+  return getJson<SuperAdminOrganization[]>('/organizations', {
     signal,
     token,
   });
@@ -2216,7 +2246,7 @@ export function getPlatformBillingConfig(
   token: string,
   signal?: AbortSignal,
 ): Promise<PlatformBillingConfig> {
-  return getJson<PlatformBillingConfig>("/platform-config", { signal, token });
+  return getJson<PlatformBillingConfig>('/platform-config', { signal, token });
 }
 
 export function updatePlatformBillingConfig(
@@ -2224,10 +2254,10 @@ export function updatePlatformBillingConfig(
   token: string,
 ): Promise<PlatformBillingConfig> {
   return patchJson<PlatformBillingConfig>(
-    "/platform-config",
+    '/platform-config',
     input,
     { token },
-    "บันทึกค่าบริการแพลตฟอร์มไม่สำเร็จ",
+    'บันทึกค่าบริการแพลตฟอร์มไม่สำเร็จ',
   );
 }
 
@@ -2236,10 +2266,10 @@ export function createSuperAdminOrganization(
   token: string,
 ): Promise<SuperAdminOrganization> {
   return postJson<SuperAdminOrganization>(
-    "/organizations",
+    '/organizations',
     input,
     { token },
-    "สร้างองค์กรไม่สำเร็จ",
+    'สร้างองค์กรไม่สำเร็จ',
   );
 }
 
@@ -2252,7 +2282,7 @@ export function updateSuperAdminOrganizationStatus(
     `/organizations/${encodeURIComponent(organizationId)}/status`,
     { status },
     { token },
-    "เปลี่ยนสถานะองค์กรไม่สำเร็จ",
+    'เปลี่ยนสถานะองค์กรไม่สำเร็จ',
   );
 }
 
@@ -2265,7 +2295,7 @@ export function updateSuperAdminOrganizationPromptPay(
     `/organizations/${encodeURIComponent(organizationId)}`,
     { promptpayId },
     { token },
-    "บันทึกหมายเลข PromptPay ขององค์กรไม่สำเร็จ",
+    'บันทึกหมายเลข PromptPay ขององค์กรไม่สำเร็จ',
   );
 }
 
@@ -2278,7 +2308,7 @@ export function setSuperAdminOrganizationOwner(
     `/organizations/${encodeURIComponent(organizationId)}/owner`,
     { email },
     { token },
-    "กำหนด OWNER ไม่สำเร็จ",
+    'กำหนด OWNER ไม่สำเร็จ',
   );
 }
 
@@ -2286,7 +2316,7 @@ export function getSuperAdminCompanyAdmins(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminCompanyAdmin[]> {
-  return getJson<SuperAdminCompanyAdmin[]>("/admins", { signal, token });
+  return getJson<SuperAdminCompanyAdmin[]>('/admins', { signal, token });
 }
 
 export function getOrganizationTeam(
@@ -2309,7 +2339,7 @@ export function addOrganizationAdmin(
     `/organizations/${encodeURIComponent(organizationId)}/admins`,
     { email },
     { token },
-    "เพิ่มผู้ดูแลไม่สำเร็จ",
+    'เพิ่มผู้ดูแลไม่สำเร็จ',
   );
 }
 
@@ -2323,7 +2353,7 @@ export function updateOrganizationAdminPermissions(
     `/organizations/${encodeURIComponent(organizationId)}/admins/${encodeURIComponent(membershipId)}/permissions`,
     input,
     { token },
-    "เปลี่ยนสิทธิ์ผู้ดูแลไม่สำเร็จ",
+    'เปลี่ยนสิทธิ์ผู้ดูแลไม่สำเร็จ',
   );
 }
 
@@ -2335,7 +2365,7 @@ export function removeOrganizationAdmin(
   return deleteJson<void>(
     `/organizations/${encodeURIComponent(organizationId)}/admins/${encodeURIComponent(userId)}`,
     { token },
-    "ถอดผู้ดูแลไม่สำเร็จ",
+    'ถอดผู้ดูแลไม่สำเร็จ',
   );
 }
 
@@ -2349,7 +2379,7 @@ export function updateSuperAdminQuotaPermission(
     `/admins/${encodeURIComponent(membershipId)}/quota-permission`,
     { canEditQuota },
     { signal, token },
-    "เปลี่ยนสิทธิ์แก้ไขโควตาไม่สำเร็จ",
+    'เปลี่ยนสิทธิ์แก้ไขโควตาไม่สำเร็จ',
   );
 }
 
@@ -2357,7 +2387,7 @@ export function getSuperAdminUsers(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminUserListItem[]> {
-  return getJson<SuperAdminUserListItem[]>("/users", { signal, token });
+  return getJson<SuperAdminUserListItem[]>('/users', { signal, token });
 }
 
 export function getSuperAdminUserDetail(
@@ -2386,21 +2416,21 @@ export function getSuperAdminBookings(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminBooking[]> {
-  return getJson<SuperAdminBooking[]>("/bookings/all", { signal, token });
+  return getJson<SuperAdminBooking[]>('/bookings/all', { signal, token });
 }
 
 export function getSuperAdminRefunds(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminRefund[]> {
-  return getJson<SuperAdminRefund[]>("/refunds/all", { signal, token });
+  return getJson<SuperAdminRefund[]>('/refunds/all', { signal, token });
 }
 
 export function getSuperAdminSupportTickets(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminSupportTicket[]> {
-  return getJson<SuperAdminSupportTicket[]>("/support-tickets/all", {
+  return getJson<SuperAdminSupportTicket[]>('/support-tickets/all', {
     signal,
     token,
   });
@@ -2454,7 +2484,7 @@ export function updateSuperAdminSupportTicketStatus(
     `/support-tickets/${encodeURIComponent(ticketId)}/status`,
     { status },
     { token },
-    "เปลี่ยนสถานะคำร้องไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+    'เปลี่ยนสถานะคำร้องไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
   );
 }
 
@@ -2462,7 +2492,7 @@ export function getSuperAdminPenalties(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminPenaltiesOverview> {
-  return getJson<SuperAdminPenaltiesOverview>("/penalties/all", {
+  return getJson<SuperAdminPenaltiesOverview>('/penalties/all', {
     signal,
     token,
   });
@@ -2473,10 +2503,10 @@ export function createSuperAdminPenalty(
   token: string,
 ): Promise<CreatePenaltyResult> {
   return postJson<CreatePenaltyResult>(
-    "/penalties",
+    '/penalties',
     input,
     { token },
-    "ออกบทลงโทษไม่สำเร็จ",
+    'ออกบทลงโทษไม่สำเร็จ',
   );
 }
 
@@ -2484,7 +2514,7 @@ export function getSuperAdminAnnouncements(
   token: string,
   signal?: AbortSignal,
 ): Promise<SuperAdminAnnouncement[]> {
-  return getJson<SuperAdminAnnouncement[]>("/announcements/all", {
+  return getJson<SuperAdminAnnouncement[]>('/announcements/all', {
     signal,
     token,
   });
@@ -2497,7 +2527,7 @@ export function deleteSuperAdminAnnouncement(
   return deleteJson<SuperAdminAnnouncement>(
     `/announcements/${encodeURIComponent(announcementId)}`,
     { token },
-    "ลบประกาศกลางไม่สำเร็จ",
+    'ลบประกาศกลางไม่สำเร็จ',
   );
 }
 
@@ -2507,11 +2537,11 @@ export function getSuperAdminAuditLogs(
   filter: SuperAdminAuditLogFilter = {},
 ): Promise<SuperAdminAuditLog[]> {
   const search = new URLSearchParams();
-  if (filter.action) search.set("action", filter.action);
-  if (filter.actorUserId) search.set("actorUserId", filter.actorUserId);
+  if (filter.action) search.set('action', filter.action);
+  if (filter.actorUserId) search.set('actorUserId', filter.actorUserId);
   const query = search.toString();
   return getJson<SuperAdminAuditLog[]>(
-    query ? `/audit-logs?${query}` : "/audit-logs",
+    query ? `/audit-logs?${query}` : '/audit-logs',
     { signal, token },
   );
 }
@@ -2527,10 +2557,10 @@ export function updateOrganizationPromptPay(
   signal?: AbortSignal,
 ): Promise<OrganizationSettings> {
   return patchJson<OrganizationSettings>(
-    "/organizations/" + encodeURIComponent(organizationId),
+    '/organizations/' + encodeURIComponent(organizationId),
     { promptpayId },
     { signal, token },
-    "บันทึกหมายเลข PromptPay ไม่สำเร็จ",
+    'บันทึกหมายเลข PromptPay ไม่สำเร็จ',
   );
 }
 
@@ -2541,10 +2571,10 @@ export function updateOrganizationSocialLinks(
   signal?: AbortSignal,
 ): Promise<OrganizationSettings> {
   return patchJson<OrganizationSettings>(
-    "/organizations/" + encodeURIComponent(organizationId),
+    '/organizations/' + encodeURIComponent(organizationId),
     input,
     { signal, token },
-    "บันทึกช่องทางติดต่อขององค์กรไม่สำเร็จ",
+    'บันทึกช่องทางติดต่อขององค์กรไม่สำเร็จ',
   );
 }
 
@@ -2558,7 +2588,7 @@ export function updateOrganizationBookingQuota(
     `/organizations/${encodeURIComponent(organizationId)}/quota`,
     { bookingQuotaPerVendor },
     { signal, token },
-    "บันทึกโควตาการจองไม่สำเร็จ",
+    'บันทึกโควตาการจองไม่สำเร็จ',
   );
 }
 
@@ -2568,10 +2598,10 @@ export function createShop(
   signal?: AbortSignal,
 ): Promise<VendorShop> {
   return postJson<VendorShop>(
-    "/shops",
+    '/shops',
     input,
     { signal, token },
-    "สร้างร้านค้าไม่สำเร็จ",
+    'สร้างร้านค้าไม่สำเร็จ',
   );
 }
 
@@ -2585,10 +2615,10 @@ export function updateShop(
   signal?: AbortSignal,
 ): Promise<VendorShop> {
   return patchJson<VendorShop>(
-    "/shops/me",
+    '/shops/me',
     input,
     { signal, token },
-    "บันทึกข้อมูลร้านค้าไม่สำเร็จ",
+    'บันทึกข้อมูลร้านค้าไม่สำเร็จ',
   );
 }
 
@@ -2608,32 +2638,32 @@ export async function uploadShopLogo(
 ): Promise<VendorShop> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const form = new FormData();
-  form.append("file", file);
+  form.append('file', file);
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/shops/me/logo`, {
-      method: "POST",
+      method: 'POST',
       signal,
       headers: {
-        Accept: "application/json",
+        Accept: 'application/json',
         Authorization: `Bearer ${token}`,
       },
       body: form,
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
 
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดโลโก้ได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดโลโก้ได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -2644,18 +2674,18 @@ export async function uploadShopLogo(
       availableAt?: string;
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     const fallbackByStatus: Record<number, string> = {
-      400: "ไฟล์โลโก้ไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG",
-      404: "ไม่พบร้านค้าของคุณ กรุณาสร้างร้านค้าก่อนอัปโหลดโลโก้",
-      409: "ยังไม่ครบกำหนด 7 วันสำหรับการเปลี่ยนโลโก้ร้าน",
-      413: "ไฟล์โลโก้มีขนาดเกิน 2 MB",
-      502: "บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+      400: 'ไฟล์โลโก้ไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG',
+      404: 'ไม่พบร้านค้าของคุณ กรุณาสร้างร้านค้าก่อนอัปโหลดโลโก้',
+      409: 'ยังไม่ครบกำหนด 7 วันสำหรับการเปลี่ยนโลโก้ร้าน',
+      413: 'ไฟล์โลโก้มีขนาดเกิน 2 MB',
+      502: 'บริการจัดเก็บไฟล์ยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
     };
 
     throw new ApiError(
-      detail || fallbackByStatus[response.status] || "อัปโหลดโลโก้ไม่สำเร็จ",
+      detail || fallbackByStatus[response.status] || 'อัปโหลดโลโก้ไม่สำเร็จ',
       response.status,
       payload?.availableAt ?? null,
     );
@@ -2668,7 +2698,7 @@ export async function uploadShopLogo(
 export function getCategories(
   signal?: AbortSignal,
 ): Promise<ProductCategory[]> {
-  return getJson<ProductCategory[]>("/categories", { signal });
+  return getJson<ProductCategory[]>('/categories', { signal });
 }
 
 export function updateMe(
@@ -2677,10 +2707,10 @@ export function updateMe(
   signal?: AbortSignal,
 ): Promise<UserProfile> {
   return patchJson<UserProfile>(
-    "/users/me",
+    '/users/me',
     input,
     { signal, token },
-    "บันทึกข้อมูลส่วนตัวไม่สำเร็จ",
+    'บันทึกข้อมูลส่วนตัวไม่สำเร็จ',
   );
 }
 
@@ -2710,10 +2740,10 @@ export function askSupportAssistant(
   signal?: AbortSignal,
 ): Promise<SupportAssistantResponse> {
   return postJson<SupportAssistantResponse>(
-    "/ai/support",
+    '/ai/support',
     { question: question.trim(), history: history.slice(-10) },
     { signal, token },
-    "AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง",
+    'AI ช่วยคุณได้ยังไม่พร้อมใช้งาน กรุณาลองใหม่อีกครั้ง',
   );
 }
 
@@ -2723,10 +2753,10 @@ export function createBooking(
   signal?: AbortSignal,
 ): Promise<BookingRecord> {
   return postJson<BookingRecord>(
-    "/bookings",
+    '/bookings',
     input,
     { signal, token },
-    "สร้างการจองไม่สำเร็จ",
+    'สร้างการจองไม่สำเร็จ',
   );
 }
 
@@ -2736,10 +2766,10 @@ export function createBookingsBatch(
   signal?: AbortSignal,
 ): Promise<PaymentGroupRecord> {
   return postJson<PaymentGroupRecord>(
-    "/bookings/batch",
+    '/bookings/batch',
     input,
     { signal, token },
-    "สร้างการจองทั้งชุดไม่สำเร็จ",
+    'สร้างการจองทั้งชุดไม่สำเร็จ',
   );
 }
 
@@ -2769,7 +2799,7 @@ export function getMyBookings(
   token: string,
   signal?: AbortSignal,
 ): Promise<MyBooking[]> {
-  return getJson<MyBooking[]>("/bookings", { signal, token });
+  return getJson<MyBooking[]>('/bookings', { signal, token });
 }
 
 export function getAverageRating(
@@ -2778,9 +2808,9 @@ export function getAverageRating(
   signal?: AbortSignal,
 ): Promise<AverageRating> {
   return getJson<AverageRating>(
-    "/reviews/average?targetType=" +
+    '/reviews/average?targetType=' +
       targetType +
-      "&targetId=" +
+      '&targetId=' +
       encodeURIComponent(targetId),
     { signal },
   );
@@ -2790,7 +2820,7 @@ export function createReview(
   input: CreateReviewInput,
   token: string,
 ): Promise<unknown> {
-  return postJson("/reviews", input, { token }, "ไม่สามารถบันทึกคะแนนได้");
+  return postJson('/reviews', input, { token }, 'ไม่สามารถบันทึกคะแนนได้');
 }
 
 export function getMyReviews(
@@ -2799,10 +2829,10 @@ export function getMyReviews(
   limit = 10,
   signal?: AbortSignal,
 ): Promise<MyReviewsPage> {
-  return getJson<MyReviewsPage>(
-    `/reviews/me?page=${page}&limit=${limit}`,
-    { signal, token },
-  );
+  return getJson<MyReviewsPage>(`/reviews/me?page=${page}&limit=${limit}`, {
+    signal,
+    token,
+  });
 }
 
 export function getEventReviews(
@@ -2824,11 +2854,11 @@ export function getOrganizationReviews(
   signal?: AbortSignal,
 ): Promise<AdminReviewsPage> {
   const query = new URLSearchParams();
-  if (filters.eventId) query.set("eventId", filters.eventId);
-  if (filters.status) query.set("status", filters.status);
-  if (filters.rating) query.set("rating", String(filters.rating));
-  query.set("page", String(filters.page ?? 1));
-  query.set("limit", String(filters.limit ?? 25));
+  if (filters.eventId) query.set('eventId', filters.eventId);
+  if (filters.status) query.set('status', filters.status);
+  if (filters.rating) query.set('rating', String(filters.rating));
+  query.set('page', String(filters.page ?? 1));
+  query.set('limit', String(filters.limit ?? 25));
   return getJson<AdminReviewsPage>(
     `/reviews/organizations/${encodeURIComponent(organizationId)}?${query.toString()}`,
     { signal, token },
@@ -2844,7 +2874,7 @@ export function hideReview(
     `/reviews/${encodeURIComponent(reviewId)}/hide`,
     { reason },
     { token },
-    "ไม่สามารถซ่อนรีวิวได้",
+    'ไม่สามารถซ่อนรีวิวได้',
   );
 }
 
@@ -2857,7 +2887,7 @@ export function restoreReview(
     `/reviews/${encodeURIComponent(reviewId)}/restore`,
     { reason },
     { token },
-    "ไม่สามารถคืนสถานะรีวิวได้",
+    'ไม่สามารถคืนสถานะรีวิวได้',
   );
 }
 
@@ -2870,7 +2900,7 @@ export function deleteReview(
     `/reviews/${encodeURIComponent(reviewId)}`,
     { reason },
     { token },
-    "ไม่สามารถลบรีวิวได้",
+    'ไม่สามารถลบรีวิวได้',
   );
 }
 
@@ -2895,7 +2925,7 @@ export function createPenalty(
     `/bookings/${encodeURIComponent(bookingId)}/penalties`,
     input,
     { signal, token },
-    "ไม่สามารถออกแต้มโทษได้",
+    'ไม่สามารถออกแต้มโทษได้',
   );
 }
 
@@ -2909,7 +2939,7 @@ export function cancelBooking(
     `/bookings/${encodeURIComponent(bookingId)}/cancel`,
     { cancelReason: cancelReason.trim() },
     { signal, token },
-    "ยกเลิกการจองไม่สำเร็จ",
+    'ยกเลิกการจองไม่สำเร็จ',
   );
 }
 
@@ -2940,7 +2970,7 @@ export function confirmExemptBooking(
     `/bookings/${encodeURIComponent(bookingId)}/confirm-exempt`,
     { paymentExemptReason: paymentExemptReason.trim() },
     { signal, token },
-    "ยืนยันการจองไม่สำเร็จ",
+    'ยืนยันการจองไม่สำเร็จ',
   );
 }
 
@@ -2951,8 +2981,8 @@ export function createSupportTicket(
   signal?: AbortSignal,
 ): Promise<SupportTicketRecord> {
   return postJson<SupportTicketRecord>(
-    "/support-tickets",
-    input.requestType === "QUOTA_INCREASE"
+    '/support-tickets',
+    input.requestType === 'QUOTA_INCREASE'
       ? {
           requestType: input.requestType,
           eventId: input.eventId.trim(),
@@ -2968,7 +2998,7 @@ export function createSupportTicket(
           message: input.message.trim(),
         },
     { signal, token },
-    "ไม่สามารถส่งคำร้องได้",
+    'ไม่สามารถส่งคำร้องได้',
   );
 }
 
@@ -2982,12 +3012,12 @@ export function createOrganizationAdminSupportTicket(
   return postJson<SupportTicketRecord>(
     `/support-tickets/organizations/${encodeURIComponent(organizationId)}`,
     {
-      requestType: "ISSUE_REPORT",
+      requestType: 'ISSUE_REPORT',
       subject: input.subject.trim(),
       message: input.message.trim(),
     },
     { signal, token },
-    "ไม่สามารถส่งคำร้องถึง Super Admin ได้",
+    'ไม่สามารถส่งคำร้องถึง Super Admin ได้',
   );
 }
 
@@ -3005,7 +3035,7 @@ export function approveQuotaException(
     `/support-tickets/${encodeURIComponent(ticketId.trim())}/approve-quota-exception`,
     input.reason?.trim() ? { reason: input.reason.trim() } : {},
     { signal, token },
-    "ไม่สามารถอนุมัติคำร้องขอเพิ่มโควตาได้",
+    'ไม่สามารถอนุมัติคำร้องขอเพิ่มโควตาได้',
   );
 }
 
@@ -3020,7 +3050,7 @@ export function rejectQuotaException(
     `/support-tickets/${encodeURIComponent(ticketId.trim())}/reject-quota-exception`,
     { reason: input.reason.trim() },
     { signal, token },
-    "ไม่สามารถปฏิเสธคำร้องขอเพิ่มโควตาได้",
+    'ไม่สามารถปฏิเสธคำร้องขอเพิ่มโควตาได้',
   );
 }
 
@@ -3067,35 +3097,32 @@ async function uploadSlip<TResponse>(
 ): Promise<TResponse> {
   if (!API_BASE_URL) {
     throw new ApiError(
-      "ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web",
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
       0,
     );
   }
 
   const form = new FormData();
-  form.append("file", file);
+  form.append('file', file);
 
   let response: Response;
   try {
-    response = await fetch(
-      `${API_BASE_URL}${path}`,
-      {
-        method: "POST",
-        signal,
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: form,
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      signal,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
       },
-    );
+      body: form,
+    });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
       throw cause;
     }
 
     throw new ApiError(
-      "ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดสลิปได้ กรุณาลองใหม่อีกครั้ง",
+      'ไม่สามารถเชื่อมต่อ SpaceLink API เพื่ออัปโหลดสลิปได้ กรุณาลองใหม่อีกครั้ง',
       0,
     );
   }
@@ -3105,18 +3132,18 @@ async function uploadSlip<TResponse>(
       message?: string | string[];
     } | null;
     const detail = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
+      ? payload.message.join(', ')
       : payload?.message;
     const fallbackByStatus: Record<number, string> = {
-      400: "ไฟล์สลิปไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG",
-      404: "ไม่พบรายการจองนี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
-      409: "รายการจองหมดเวลาหรืออยู่ในสถานะที่อัปโหลดสลิปไม่ได้",
-      413: "ไฟล์สลิปมีขนาดเกิน 5 MB",
-      502: "บริการจัดเก็บหรือตรวจสอบสลิปยังไม่พร้อม กรุณาลองใหม่ภายหลัง",
+      400: 'ไฟล์สลิปไม่ถูกต้อง กรุณาใช้ไฟล์ JPEG หรือ PNG',
+      404: 'ไม่พบรายการจองนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
+      409: 'รายการจองหมดเวลาหรืออยู่ในสถานะที่อัปโหลดสลิปไม่ได้',
+      413: 'ไฟล์สลิปมีขนาดเกิน 5 MB',
+      502: 'บริการจัดเก็บหรือตรวจสอบสลิปยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
     };
 
     throw new ApiError(
-      detail || fallbackByStatus[response.status] || "อัปโหลดสลิปไม่สำเร็จ",
+      detail || fallbackByStatus[response.status] || 'อัปโหลดสลิปไม่สำเร็จ',
       response.status,
     );
   }

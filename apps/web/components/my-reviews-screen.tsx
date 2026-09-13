@@ -100,9 +100,7 @@ export function MyReviewsScreen() {
         return;
       }
       setLoadError(
-        cause instanceof Error
-          ? cause.message
-          : 'ไม่สามารถโหลดรายการรีวิวได้',
+        cause instanceof Error ? cause.message : 'ไม่สามารถโหลดรายการรีวิวได้',
       );
     } finally {
       if (
@@ -211,11 +209,7 @@ export function MyReviewsScreen() {
     setLoadError(null);
     try {
       const nextPage = page + 1;
-      const result = await getMyReviews(
-        access.token,
-        nextPage,
-        PAGE_SIZE,
-      );
+      const result = await getMyReviews(access.token, nextPage, PAGE_SIZE);
       if (currentTokenRef.current !== access.token) return;
       setItems((current) => [...current, ...result.items]);
       setPage(result.page);
@@ -275,7 +269,10 @@ export function MyReviewsScreen() {
           </section>
         ) : null}
 
-        {access.status === 'ready' && !isLoading && loadError && items.length === 0 ? (
+        {access.status === 'ready' &&
+        !isLoading &&
+        loadError &&
+        items.length === 0 ? (
           <section className="sl-surface mt-8 p-8 text-center">
             <h2 className="text-xl font-black">โหลดรายการรีวิวไม่สำเร็จ</h2>
             <p role="alert" className="mt-2 text-danger">
@@ -291,16 +288,23 @@ export function MyReviewsScreen() {
           </section>
         ) : null}
 
-        {access.status === 'ready' && !isLoading && !loadError && items.length === 0 ? (
+        {access.status === 'ready' &&
+        !isLoading &&
+        !loadError &&
+        items.length === 0 ? (
           <section className="sl-surface mt-8 p-8 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-tint text-violet">
               <Star className="h-7 w-7" aria-hidden />
             </span>
             <h2 className="mt-5 text-xl font-black">ยังไม่มีรีวิวที่ส่งไว้</h2>
             <p className="mt-2 text-muted">
-              เมื่อการจองเข้าเงื่อนไข คุณสามารถเปิดรายการจองและเขียนรีวิวพื้นที่ได้
+              เมื่อการจองเข้าเงื่อนไข
+              คุณสามารถเปิดรายการจองและเขียนรีวิวพื้นที่ได้
             </p>
-            <Link href="/bookings?tab=completed" className="sl-action-primary mt-6">
+            <Link
+              href="/bookings?tab=completed"
+              className="sl-action-primary mt-6"
+            >
               ดูการจองที่เสร็จสิ้น
             </Link>
           </section>
@@ -311,7 +315,10 @@ export function MyReviewsScreen() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <span className="sl-kicker">Review history</span>
-                <h2 id="my-review-list-title" className="mt-2 text-xl font-black">
+                <h2
+                  id="my-review-list-title"
+                  className="mt-2 text-xl font-black"
+                >
                   รีวิวทั้งหมด {total} รายการ
                 </h2>
               </div>
@@ -325,7 +332,10 @@ export function MyReviewsScreen() {
             </div>
 
             {loadError ? (
-              <p role="alert" className="mt-4 text-center text-sm font-bold text-danger">
+              <p
+                role="alert"
+                className="mt-4 text-center text-sm font-bold text-danger"
+              >
                 {loadError}
               </p>
             ) : null}
@@ -355,7 +365,9 @@ function ReviewCard({ review }: { review: MyReview }) {
     <article className="sl-surface overflow-hidden p-5 sm:p-6">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <span className="sl-kicker">{reviewTypeLabel(review.targetType)}</span>
+          <span className="sl-kicker">
+            {reviewTypeLabel(review.targetType)}
+          </span>
           <h3 className="mt-2 break-words text-lg font-black text-ink">
             {context?.event.name ?? 'พื้นที่ที่คุณเคยรีวิว'}
           </h3>

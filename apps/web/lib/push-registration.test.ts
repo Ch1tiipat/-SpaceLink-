@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node runs this TypeScript test directly. */
 const assert: typeof import('node:assert/strict') = require('node:assert/strict');
 const { test }: typeof import('node:test') = require('node:test');
-const {
-  PushRegistrationTimeoutError,
-  resolvePushRegistration,
-} = require('./push-registration.ts') as typeof import('./push-registration');
+const { PushRegistrationTimeoutError, resolvePushRegistration } =
+  require('./push-registration.ts') as typeof import('./push-registration');
 
 const registration = {} as ServiceWorkerRegistration;
 

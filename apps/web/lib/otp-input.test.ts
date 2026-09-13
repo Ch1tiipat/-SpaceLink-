@@ -1,14 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node runs this test directly. */
-const otpAssert: typeof import('node:assert/strict') = require(
-  'node:assert/strict',
-);
+const otpAssert: typeof import('node:assert/strict') = require('node:assert/strict');
 const { test: otpTest }: typeof import('node:test') = require('node:test');
-const {
-  backspaceOtpValue,
-  changeOtpValue,
-  clampOtpFocus,
-  pasteOtpValue,
-} = require('../components/otp-input-logic.ts') as typeof import('../components/otp-input-logic');
+const { backspaceOtpValue, changeOtpValue, clampOtpFocus, pasteOtpValue } =
+  require('../components/otp-input-logic.ts') as typeof import('../components/otp-input-logic');
 
 otpTest('advances through 082946 without losing rapid changes', () => {
   let value = '';
@@ -29,24 +23,30 @@ otpTest('accepts multi-digit browser autofill at the active position', () => {
   });
 });
 
-otpTest('parses paste, filters non-digits, and truncates after six digits', () => {
-  otpAssert.deepEqual(pasteOtpValue(' 08a-29 46!7 '), {
-    value: '082946',
-    focusIndex: 5,
-  });
-  otpAssert.equal(pasteOtpValue('letters only'), null);
-});
+otpTest(
+  'parses paste, filters non-digits, and truncates after six digits',
+  () => {
+    otpAssert.deepEqual(pasteOtpValue(' 08a-29 46!7 '), {
+      value: '082946',
+      focusIndex: 5,
+    });
+    otpAssert.equal(pasteOtpValue('letters only'), null);
+  },
+);
 
-otpTest('backspace removes the active digit or the preceding digit from an empty box', () => {
-  otpAssert.deepEqual(backspaceOtpValue('082', 1), {
-    value: '02',
-    focusIndex: 1,
-  });
-  otpAssert.deepEqual(backspaceOtpValue('082', 3), {
-    value: '08',
-    focusIndex: 2,
-  });
-});
+otpTest(
+  'backspace removes the active digit or the preceding digit from an empty box',
+  () => {
+    otpAssert.deepEqual(backspaceOtpValue('082', 1), {
+      value: '02',
+      focusIndex: 1,
+    });
+    otpAssert.deepEqual(backspaceOtpValue('082', 3), {
+      value: '08',
+      focusIndex: 2,
+    });
+  },
+);
 
 otpTest('replaces an existing digit and preserves a dense value', () => {
   otpAssert.deepEqual(changeOtpValue('082', 1, '9'), {

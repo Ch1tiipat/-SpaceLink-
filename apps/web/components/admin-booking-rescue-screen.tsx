@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useState } from "react";
+import { useRouter } from 'next/navigation';
+import { type FormEvent, useEffect, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,8 +11,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   TicketCheck,
-} from "lucide-react";
-import { SelectMenu, type SelectMenuOption } from "@/components/select-menu";
+} from 'lucide-react';
+import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import {
   ApiError,
   createPenalty,
@@ -23,25 +23,25 @@ import {
   type BookingRecord,
   type PenaltyHistory,
   type PenaltyReason,
-} from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+} from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
-type AccessState = "loading" | "allowed" | "denied";
+type AccessState = 'loading' | 'allowed' | 'denied';
 
-const STATUS_LABELS: Record<BookingRecord["status"], string> = {
-  PENDING_PAYMENT: "รอชำระเงิน",
-  CONFIRMED: "ยืนยันแล้ว",
-  CANCELLED: "ยกเลิกแล้ว",
-  NO_SHOW: "ไม่มาใช้พื้นที่",
-  COMPLETED: "เสร็จสิ้น",
+const STATUS_LABELS: Record<BookingRecord['status'], string> = {
+  PENDING_PAYMENT: 'รอชำระเงิน',
+  CONFIRMED: 'ยืนยันแล้ว',
+  CANCELLED: 'ยกเลิกแล้ว',
+  NO_SHOW: 'ไม่มาใช้พื้นที่',
+  COMPLETED: 'เสร็จสิ้น',
 };
 
 const PENALTY_REASON_LABELS: Record<PenaltyReason, string> = {
-  NO_SHOW: "ไม่มาใช้พื้นที่ตามที่จอง",
-  RULE_VIOLATION: "ฝ่าฝืนกติกาการใช้พื้นที่",
-  CONTRACT_BREACH: "ผิดเงื่อนไขสัญญา",
-  BAD_REVIEW: "ได้รับรีวิวเชิงลบร้ายแรง",
-  OTHER: "อื่นๆ",
+  NO_SHOW: 'ไม่มาใช้พื้นที่ตามที่จอง',
+  RULE_VIOLATION: 'ฝ่าฝืนกติกาการใช้พื้นที่',
+  CONTRACT_BREACH: 'ผิดเงื่อนไขสัญญา',
+  BAD_REVIEW: 'ได้รับรีวิวเชิงลบร้ายแรง',
+  OTHER: 'อื่นๆ',
 };
 
 const PENALTY_REASON_OPTIONS: SelectMenuOption[] = Object.entries(
@@ -58,11 +58,11 @@ const DEFAULT_PENALTY_POINTS: Record<PenaltyReason, number> = {
 
 export function AdminBookingRescueScreen() {
   const router = useRouter();
-  const [access, setAccess] = useState<AccessState>("loading");
-  const [token, setToken] = useState("");
-  const [bookingCode, setBookingCode] = useState("");
+  const [access, setAccess] = useState<AccessState>('loading');
+  const [token, setToken] = useState('');
+  const [bookingCode, setBookingCode] = useState('');
   const [booking, setBooking] = useState<BookingRecord | null>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,24 +78,24 @@ export function AdminBookingRescueScreen() {
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
         if (!accessToken) {
-          router.replace("/login");
+          router.replace('/login');
           return;
         }
 
         const me = await getMe(accessToken, controller.signal);
         if (!active) return;
 
-        if (me.role !== "ORG_ADMIN" && me.role !== "SUPER_ADMIN") {
-          setAccess("denied");
+        if (me.role !== 'ORG_ADMIN' && me.role !== 'SUPER_ADMIN') {
+          setAccess('denied');
           return;
         }
 
         setToken(accessToken);
-        setAccess("allowed");
+        setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess("denied");
+        if (active) setAccess('denied');
       }
     })();
 
@@ -109,13 +109,13 @@ export function AdminBookingRescueScreen() {
     event.preventDefault();
     const normalizedCode = bookingCode.trim().toUpperCase();
     if (!normalizedCode) {
-      setError("กรุณากรอกรหัสการจอง");
+      setError('กรุณากรอกรหัสการจอง');
       return;
     }
 
     setSearching(true);
     setBooking(null);
-    setReason("");
+    setReason('');
     setError(null);
     setSuccess(null);
     try {
@@ -123,16 +123,16 @@ export function AdminBookingRescueScreen() {
       setBooking(result);
       setBookingCode(result.bookingCode);
     } catch (cause) {
-      setError(describeError(cause, "ค้นหาการจองไม่สำเร็จ"));
+      setError(describeError(cause, 'ค้นหาการจองไม่สำเร็จ'));
     } finally {
       setSearching(false);
     }
   }
 
   async function handleConfirm() {
-    if (!booking || booking.status !== "PENDING_PAYMENT") return;
+    if (!booking || booking.status !== 'PENDING_PAYMENT') return;
     if (!reason.trim()) {
-      setError("กรุณาระบุเหตุผลที่ยกเว้นการชำระเงิน");
+      setError('กรุณาระบุเหตุผลที่ยกเว้นการชำระเงิน');
       return;
     }
 
@@ -144,17 +144,17 @@ export function AdminBookingRescueScreen() {
       setBooking(confirmed);
       setSuccess(`ยืนยันการจอง ${confirmed.bookingCode} เรียบร้อยแล้ว`);
     } catch (cause) {
-      setError(describeError(cause, "ยืนยันการจองไม่สำเร็จ"));
+      setError(describeError(cause, 'ยืนยันการจองไม่สำเร็จ'));
     } finally {
       setConfirming(false);
     }
   }
 
-  if (access === "loading") {
+  if (access === 'loading') {
     return <AdminPageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแลระบบ" />;
   }
 
-  if (access === "denied") {
+  if (access === 'denied') {
     return (
       <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5 py-12">
         <section className="max-w-lg rounded-[28px] border border-[#eadff7] bg-white p-8 text-center shadow-[0_22px_55px_rgba(54,36,91,0.08)]">
@@ -170,7 +170,7 @@ export function AdminBookingRescueScreen() {
           </p>
           <button
             type="button"
-            onClick={() => router.replace("/")}
+            onClick={() => router.replace('/')}
             className="mt-6 rounded-2xl bg-violet px-5 py-3 text-sm font-extrabold text-white"
           >
             กลับหน้าหลัก
@@ -224,7 +224,7 @@ export function AdminBookingRescueScreen() {
               disabled={searching}
               className="mt-auto h-[52px] rounded-2xl bg-violet px-6 text-sm font-extrabold text-white shadow-[0_12px_28px_rgba(124,58,237,0.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {searching ? "กำลังค้นหา..." : "ค้นหาการจอง"}
+              {searching ? 'กำลังค้นหา...' : 'ค้นหาการจอง'}
             </button>
           </form>
 
@@ -274,14 +274,14 @@ function PenaltyPanel({
   const [history, setHistory] = useState<PenaltyHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>("NO_SHOW");
+  const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('NO_SHOW');
   const [penaltyPoints, setPenaltyPoints] = useState(
     DEFAULT_PENALTY_POINTS.NO_SHOW,
   );
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<{
-    tone: "success" | "warning";
+    tone: 'success' | 'warning';
     text: string;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -293,9 +293,9 @@ function PenaltyPanel({
     setHistory(null);
     setLoading(true);
     setLoadError(null);
-    setPenaltyReason("NO_SHOW");
+    setPenaltyReason('NO_SHOW');
     setPenaltyPoints(DEFAULT_PENALTY_POINTS.NO_SHOW);
-    setDescription("");
+    setDescription('');
     setResultMessage(null);
     setSubmitError(null);
 
@@ -304,10 +304,10 @@ function PenaltyPanel({
         if (active) setHistory(result);
       })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === "AbortError")
+        if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         if (active) {
-          setLoadError(describeError(cause, "โหลดประวัติแต้มโทษไม่สำเร็จ"));
+          setLoadError(describeError(cause, 'โหลดประวัติแต้มโทษไม่สำเร็จ'));
         }
       })
       .finally(() => {
@@ -349,15 +349,15 @@ function PenaltyPanel({
         token,
       );
 
-      setDescription("");
+      setDescription('');
       setResultMessage(
         result.justBlacklisted
           ? {
-              tone: "warning",
-              text: "⚠️ คะแนนความน่าเชื่อถือลดลงเหลือ 0 บัญชีนี้ถูกขึ้นบัญชีดำอัตโนมัติ",
+              tone: 'warning',
+              text: '⚠️ คะแนนความน่าเชื่อถือลดลงเหลือ 0 บัญชีนี้ถูกขึ้นบัญชีดำอัตโนมัติ',
             }
           : {
-              tone: "success",
+              tone: 'success',
               text: `ออกบทลงโทษเรียบร้อยแล้ว เหลือ Trust Score ${result.trustScore} คะแนน`,
             },
       );
@@ -370,12 +370,12 @@ function PenaltyPanel({
         setLoadError(
           describeError(
             cause,
-            "ออกแต้มโทษสำเร็จ แต่โหลดประวัติล่าสุดไม่สำเร็จ",
+            'ออกแต้มโทษสำเร็จ แต่โหลดประวัติล่าสุดไม่สำเร็จ',
           ),
         );
       }
     } catch (cause) {
-      setSubmitError(describeError(cause, "ออกแต้มโทษไม่สำเร็จ"));
+      setSubmitError(describeError(cause, 'ออกแต้มโทษไม่สำเร็จ'));
     } finally {
       setSubmitting(false);
     }
@@ -401,7 +401,7 @@ function PenaltyPanel({
           </div>
         </div>
         <div
-          className={`rounded-2xl px-4 py-3 text-right ${isBlacklisted ? "bg-[#fff1f2] text-[#b91c1c]" : "bg-[#f7f2ff] text-[#6d28d9]"}`}
+          className={`rounded-2xl px-4 py-3 text-right ${isBlacklisted ? 'bg-[#fff1f2] text-[#b91c1c]' : 'bg-[#f7f2ff] text-[#6d28d9]'}`}
         >
           <p className="text-[11px] font-bold uppercase tracking-[0.12em]">
             Trust Score
@@ -509,13 +509,13 @@ function PenaltyPanel({
             disabled={submitting}
             className="mt-4 w-full rounded-2xl bg-[#7e22ce] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#6b21a8] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? "กำลังออกแต้มโทษ..." : "ออกแต้มโทษ"}
+            {submitting ? 'กำลังออกแต้มโทษ...' : 'ออกแต้มโทษ'}
           </button>
           {submitError && <Feedback tone="error">{submitError}</Feedback>}
           {resultMessage && (
             <p
               role="status"
-              className={`mt-4 rounded-2xl p-3 text-sm font-bold ${resultMessage.tone === "warning" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#ecfdf3] text-[#166534]"}`}
+              className={`mt-4 rounded-2xl p-3 text-sm font-bold ${resultMessage.tone === 'warning' ? 'bg-[#fff7ed] text-[#c2410c]' : 'bg-[#ecfdf3] text-[#166534]'}`}
             >
               {resultMessage.text}
             </p>
@@ -539,7 +539,7 @@ function BookingResult({
   onConfirm: () => void;
   confirming: boolean;
 }) {
-  const canConfirm = booking.status === "PENDING_PAYMENT";
+  const canConfirm = booking.status === 'PENDING_PAYMENT';
 
   return (
     <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -615,8 +615,8 @@ function BookingResult({
               className="mt-4 w-full rounded-2xl bg-[#15803d] px-4 py-3.5 text-sm font-extrabold text-white shadow-[0_12px_26px_rgba(21,128,61,0.18)] transition hover:bg-[#166534] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {confirming
-                ? "กำลังยืนยัน..."
-                : "ยืนยันการจองโดยยกเว้นการชำระเงิน"}
+                ? 'กำลังยืนยัน...'
+                : 'ยืนยันการจองโดยยกเว้นการชำระเงิน'}
             </button>
           </>
         ) : (
@@ -630,17 +630,17 @@ function BookingResult({
   );
 }
 
-function StatusBadge({ status }: { status: BookingRecord["status"] }) {
-  const pending = status === "PENDING_PAYMENT";
-  const confirmed = status === "CONFIRMED";
+function StatusBadge({ status }: { status: BookingRecord['status'] }) {
+  const pending = status === 'PENDING_PAYMENT';
+  const confirmed = status === 'CONFIRMED';
   return (
     <span
       className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${
         pending
-          ? "bg-[#fff3cd] text-[#8a5a00]"
+          ? 'bg-[#fff3cd] text-[#8a5a00]'
           : confirmed
-            ? "bg-[#dcfce7] text-[#166534]"
-            : "bg-[#f1eef4] text-[#655d70]"
+            ? 'bg-[#dcfce7] text-[#166534]'
+            : 'bg-[#f1eef4] text-[#655d70]'
       }`}
     >
       {STATUS_LABELS[status]}
@@ -661,7 +661,7 @@ function Detail({
     <div className="rounded-2xl bg-[#faf8fd] p-4">
       <dt className="text-xs font-bold text-[#8b8197]">{label}</dt>
       <dd
-        className={`mt-1 font-extrabold text-ink ${compact ? "break-all text-xs" : "text-sm"}`}
+        className={`mt-1 font-extrabold text-ink ${compact ? 'break-all text-xs' : 'text-sm'}`}
       >
         {value}
       </dd>
@@ -673,16 +673,16 @@ function Feedback({
   tone,
   children,
 }: {
-  tone: "error" | "success";
+  tone: 'error' | 'success';
   children: string;
 }) {
-  const success = tone === "success";
+  const success = tone === 'success';
   const Icon = success ? CheckCircle2 : AlertCircle;
   return (
     <p
-      role={success ? "status" : "alert"}
+      role={success ? 'status' : 'alert'}
       className={`mt-4 flex items-start gap-2 rounded-2xl p-3 text-sm font-semibold ${
-        success ? "bg-[#ecfdf3] text-[#166534]" : "bg-[#fff1f2] text-[#b91c1c]"
+        success ? 'bg-[#ecfdf3] text-[#166534]' : 'bg-[#fff1f2] text-[#b91c1c]'
       }`}
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -706,23 +706,23 @@ function describeError(cause: unknown, fallback: string): string {
 }
 
 function formatMoney(value: string): string {
-  const [whole, fraction] = value.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction ? `${grouped}.${fraction.padEnd(2, "0")}` : `${grouped}.00`;
+  const [whole, fraction] = value.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction ? `${grouped}.${fraction.padEnd(2, '0')}` : `${grouped}.00`;
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("th-TH", {
-    dateStyle: "medium",
-    timeZone: "Asia/Bangkok",
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Bangkok',
   }).format(new Date(value));
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return "ไม่มีกำหนด";
-  return new Intl.DateTimeFormat("th-TH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Bangkok",
+  if (!value) return 'ไม่มีกำหนด';
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Bangkok',
   }).format(new Date(value));
 }

@@ -124,7 +124,8 @@ export function AdminMapDesigner() {
         setVenueId(organizationVenues[0]?.id ?? '');
         setAccess('allowed');
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof DOMException && cause.name === 'AbortError')
+          return;
         if (active) setAccess('denied');
       }
     })();
@@ -152,7 +153,9 @@ export function AdminMapDesigner() {
       try {
         const zoneRows = await getAdminZones(venueId, token, controller.signal);
         const boothGroups = await Promise.all(
-          zoneRows.map((zone) => getAdminBooths(zone.id, token, controller.signal)),
+          zoneRows.map((zone) =>
+            getAdminBooths(zone.id, token, controller.signal),
+          ),
         );
         setZones(
           zoneRows.map((zone, index) => ({
@@ -187,8 +190,12 @@ export function AdminMapDesigner() {
     const activeDrag = drag;
 
     function move(event: PointerEvent) {
-      const nextX = activeDrag.startX + ((event.clientX - activeDrag.startClientX) / activeDrag.width) * 100;
-      const nextY = activeDrag.startY + ((event.clientY - activeDrag.startClientY) / activeDrag.height) * 100;
+      const nextX =
+        activeDrag.startX +
+        ((event.clientX - activeDrag.startClientX) / activeDrag.width) * 100;
+      const nextY =
+        activeDrag.startY +
+        ((event.clientY - activeDrag.startClientY) / activeDrag.height) * 100;
 
       if (activeDrag.kind === 'zone') {
         setZones((current) =>
@@ -258,7 +265,8 @@ export function AdminMapDesigner() {
   );
 
   async function saveLayout() {
-    if (!token || saving || (dirtyZones.size === 0 && dirtyBooths.size === 0)) return;
+    if (!token || saving || (dirtyZones.size === 0 && dirtyBooths.size === 0))
+      return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -268,7 +276,11 @@ export function AdminMapDesigner() {
         ...zones
           .filter((zone) => dirtyZones.has(zone.id))
           .map((zone) =>
-            updateAdminZone(zone.id, { posX: roundPosition(zone.x), posY: roundPosition(zone.y) }, token),
+            updateAdminZone(
+              zone.id,
+              { posX: roundPosition(zone.x), posY: roundPosition(zone.y) },
+              token,
+            ),
           ),
         ...booths
           .filter((booth) => dirtyBooths.has(booth.id))
@@ -299,7 +311,14 @@ export function AdminMapDesigner() {
       setZones((current) =>
         current.map((zone) =>
           zone.id === selection.id
-            ? { ...zone, [axis]: clamp(value, axis === 'y' ? 9 : 0, axis === 'x' ? 63 : 68) }
+            ? {
+                ...zone,
+                [axis]: clamp(
+                  value,
+                  axis === 'y' ? 9 : 0,
+                  axis === 'x' ? 63 : 68,
+                ),
+              }
             : zone,
         ),
       );
@@ -308,7 +327,14 @@ export function AdminMapDesigner() {
       setBooths((current) =>
         current.map((booth) =>
           booth.id === selection.id
-            ? { ...booth, [axis]: clamp(value, axis === 'x' ? 4 : 31, axis === 'x' ? 78 : 68) }
+            ? {
+                ...booth,
+                [axis]: clamp(
+                  value,
+                  axis === 'x' ? 4 : 31,
+                  axis === 'x' ? 78 : 68,
+                ),
+              }
             : booth,
         ),
       );
@@ -317,16 +343,21 @@ export function AdminMapDesigner() {
     setSuccess(null);
   }
 
-  if (access === 'loading') return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแล..." />;
+  if (access === 'loading')
+    return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแล..." />;
   if (access === 'denied') {
     return <PageState label="บัญชีนี้ไม่มีสิทธิ์จัดการแผนผังขององค์กร" />;
   }
 
   const venue = venues.find((row) => row.id === venueId);
   const selectedZone =
-    selection?.kind === 'zone' ? zones.find((zone) => zone.id === selection.id) : undefined;
+    selection?.kind === 'zone'
+      ? zones.find((zone) => zone.id === selection.id)
+      : undefined;
   const selectedBooth =
-    selection?.kind === 'booth' ? booths.find((booth) => booth.id === selection.id) : undefined;
+    selection?.kind === 'booth'
+      ? booths.find((booth) => booth.id === selection.id)
+      : undefined;
   const hasChanges = dirtyZones.size > 0 || dirtyBooths.size > 0;
 
   return (
@@ -342,11 +373,16 @@ export function AdminMapDesigner() {
                 ออกแบบโซนและบูธด้วยการลากวาง
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
-                จัดตำแหน่งจากข้อมูลจริงขององค์กร แล้วบันทึกเฉพาะพิกัดที่เปลี่ยนแปลง
+                จัดตำแหน่งจากข้อมูลจริงขององค์กร
+                แล้วบันทึกเฉพาะพิกัดที่เปลี่ยนแปลง
               </p>
             </div>
-            <Link href="/admin/zones" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-5 font-extrabold text-violet transition hover:bg-[#f5f0ff]">
-              <Settings2 className="h-5 w-5" aria-hidden /> จัดการข้อมูลโซนและบูธ
+            <Link
+              href="/admin/zones"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-5 font-extrabold text-violet transition hover:bg-[#f5f0ff]"
+            >
+              <Settings2 className="h-5 w-5" aria-hidden />{' '}
+              จัดการข้อมูลโซนและบูธ
             </Link>
           </div>
         </section>
@@ -355,14 +391,33 @@ export function AdminMapDesigner() {
           <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:px-7 lg:flex-row lg:items-end lg:justify-between">
             <label className="grid max-w-xl flex-1 gap-2 text-sm font-bold text-ink">
               สถานที่จัดงาน
-              <select value={venueId} onChange={(event) => setVenueId(event.target.value)} className="min-h-12 rounded-2xl border border-[#ddd4ec] bg-white px-4 text-sm outline-none focus:border-violet focus:ring-2 focus:ring-violet/15">
-                {venues.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+              <select
+                value={venueId}
+                onChange={(event) => setVenueId(event.target.value)}
+                className="min-h-12 rounded-2xl border border-[#ddd4ec] bg-white px-4 text-sm outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+              >
+                {venues.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex min-h-11 items-center rounded-2xl bg-violet-tint px-4 text-xs font-bold text-violet">{zones.length} โซน · {booths.length} บูธ</span>
-              <button type="button" onClick={() => void saveLayout()} disabled={!hasChanges || saving} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-violet px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(124,58,237,0.25)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-45">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span className="inline-flex min-h-11 items-center rounded-2xl bg-violet-tint px-4 text-xs font-bold text-violet">
+                {zones.length} โซน · {booths.length} บูธ
+              </span>
+              <button
+                type="button"
+                onClick={() => void saveLayout()}
+                disabled={!hasChanges || saving}
+                className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-violet px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(124,58,237,0.25)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
                 {saving ? 'กำลังบันทึก...' : 'บันทึกตำแหน่ง'}
               </button>
             </div>
@@ -370,64 +425,171 @@ export function AdminMapDesigner() {
 
           <div className="px-5 py-5 sm:px-7">
             <p className="mb-4 flex items-center gap-2 rounded-2xl bg-[#f5f0ff] px-4 py-3 text-sm font-semibold text-[#6942a8]">
-              <Grip className="h-4 w-4 shrink-0" aria-hidden /> ลากกรอบโซนเพื่อจัดพื้นที่ และลากบูธภายในกรอบเพื่อกำหนดตำแหน่ง
+              <Grip className="h-4 w-4 shrink-0" aria-hidden />{' '}
+              ลากกรอบโซนเพื่อจัดพื้นที่ และลากบูธภายในกรอบเพื่อกำหนดตำแหน่ง
             </p>
             {error && <Feedback tone="error">{error}</Feedback>}
             {success && <Feedback tone="success">{success}</Feedback>}
 
-            <div ref={canvasRef} className="relative h-[680px] overflow-hidden rounded-[24px] border border-[#d9cdef] bg-[linear-gradient(#eee8f6_1px,transparent_1px),linear-gradient(90deg,#eee8f6_1px,transparent_1px),#fbfaff] bg-[size:32px_32px]">
-              <div className="absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-center bg-[#5b21b6] px-4 text-center text-sm font-extrabold text-white shadow-sm">ทางเข้า · จุดลงทะเบียน</div>
+            <div
+              ref={canvasRef}
+              className="relative h-[680px] overflow-hidden rounded-[24px] border border-[#d9cdef] bg-[linear-gradient(#eee8f6_1px,transparent_1px),linear-gradient(90deg,#eee8f6_1px,transparent_1px),#fbfaff] bg-[size:32px_32px]"
+            >
+              <div className="absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-center bg-[#5b21b6] px-4 text-center text-sm font-extrabold text-white shadow-sm">
+                ทางเข้า · จุดลงทะเบียน
+              </div>
               {loading ? (
-                <div className="absolute inset-0 grid place-items-center pt-14"><Loader2 className="h-8 w-8 animate-spin text-violet" aria-label="กำลังโหลดแผนผัง" /></div>
+                <div className="absolute inset-0 grid place-items-center pt-14">
+                  <Loader2
+                    className="h-8 w-8 animate-spin text-violet"
+                    aria-label="กำลังโหลดแผนผัง"
+                  />
+                </div>
               ) : zones.length === 0 ? (
-                <div className="absolute inset-0 grid place-items-center px-6 pt-14 text-center text-sm font-semibold text-muted">ยังไม่มีโซนในสถานที่นี้ กรุณาสร้างข้อมูลที่หน้าโซนและบูธก่อน</div>
-              ) : zones.map((zone, index) => {
-                const tone = ZONE_TONES[index % ZONE_TONES.length];
-                const zoneBooths = booths.filter((booth) => booth.zoneId === zone.id);
-                const active = selection?.kind === 'zone' && selection.id === zone.id;
-                return (
-                  <div key={zone.id} className="absolute h-[29%] w-[35%] min-w-[270px] rounded-[24px] border-2 border-dashed shadow-[0_12px_30px_rgba(47,32,79,0.08)]" style={{ left: `${zone.x}%`, top: `${zone.y}%`, borderColor: active ? '#201b2e' : tone.border, backgroundColor: tone.background }}>
-                    <button type="button" onPointerDown={(event) => beginDrag('zone', zone.id, zone, event)} className="absolute inset-x-0 top-0 flex h-[30%] cursor-grab touch-none items-start gap-2 rounded-t-[22px] px-4 py-3 text-left active:cursor-grabbing" style={{ color: tone.text }} aria-label={`ลากโซน ${zone.code}`}>
-                      <Grip className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                      <span><strong className="block text-sm">{zone.code} · {zone.name || 'ยังไม่ได้ตั้งชื่อ'}</strong><span className="mt-0.5 block text-[11px] opacity-75">{zone.description || 'ไม่มีรายละเอียด'}</span></span>
-                    </button>
-                    {zoneBooths.map((booth) => {
-                      const boothActive = selection?.kind === 'booth' && selection.id === booth.id;
-                      return (
-                        <button type="button" key={booth.id} onPointerDown={(event) => beginDrag('booth', booth.id, booth, event)} className="absolute grid h-11 w-[18%] min-w-[58px] cursor-grab touch-none place-items-center rounded-xl border-2 bg-white text-[11px] font-black shadow-[0_5px_12px_rgba(36,25,57,0.1)] active:cursor-grabbing" style={{ left: `${booth.x}%`, top: `${booth.y}%`, borderColor: boothActive ? '#201b2e' : tone.border, color: tone.text }} aria-label={`ลากบูธ ${booth.code}`}>
-                          {booth.code}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              <div className="absolute inset-x-0 bottom-0 flex h-12 items-center justify-center bg-[#4f485c] text-sm font-extrabold text-white">ทางออก · จุดรับส่ง</div>
+                <div className="absolute inset-0 grid place-items-center px-6 pt-14 text-center text-sm font-semibold text-muted">
+                  ยังไม่มีโซนในสถานที่นี้ กรุณาสร้างข้อมูลที่หน้าโซนและบูธก่อน
+                </div>
+              ) : (
+                zones.map((zone, index) => {
+                  const tone = ZONE_TONES[index % ZONE_TONES.length];
+                  const zoneBooths = booths.filter(
+                    (booth) => booth.zoneId === zone.id,
+                  );
+                  const active =
+                    selection?.kind === 'zone' && selection.id === zone.id;
+                  return (
+                    <div
+                      key={zone.id}
+                      className="absolute h-[29%] w-[35%] min-w-[270px] rounded-[24px] border-2 border-dashed shadow-[0_12px_30px_rgba(47,32,79,0.08)]"
+                      style={{
+                        left: `${zone.x}%`,
+                        top: `${zone.y}%`,
+                        borderColor: active ? '#201b2e' : tone.border,
+                        backgroundColor: tone.background,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onPointerDown={(event) =>
+                          beginDrag('zone', zone.id, zone, event)
+                        }
+                        className="absolute inset-x-0 top-0 flex h-[30%] cursor-grab touch-none items-start gap-2 rounded-t-[22px] px-4 py-3 text-left active:cursor-grabbing"
+                        style={{ color: tone.text }}
+                        aria-label={`ลากโซน ${zone.code}`}
+                      >
+                        <Grip className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                        <span>
+                          <strong className="block text-sm">
+                            {zone.code} · {zone.name || 'ยังไม่ได้ตั้งชื่อ'}
+                          </strong>
+                          <span className="mt-0.5 block text-[11px] opacity-75">
+                            {zone.description || 'ไม่มีรายละเอียด'}
+                          </span>
+                        </span>
+                      </button>
+                      {zoneBooths.map((booth) => {
+                        const boothActive =
+                          selection?.kind === 'booth' &&
+                          selection.id === booth.id;
+                        return (
+                          <button
+                            type="button"
+                            key={booth.id}
+                            onPointerDown={(event) =>
+                              beginDrag('booth', booth.id, booth, event)
+                            }
+                            className="absolute grid h-11 w-[18%] min-w-[58px] cursor-grab touch-none place-items-center rounded-xl border-2 bg-white text-[11px] font-black shadow-[0_5px_12px_rgba(36,25,57,0.1)] active:cursor-grabbing"
+                            style={{
+                              left: `${booth.x}%`,
+                              top: `${booth.y}%`,
+                              borderColor: boothActive
+                                ? '#201b2e'
+                                : tone.border,
+                              color: tone.text,
+                            }}
+                            aria-label={`ลากบูธ ${booth.code}`}
+                          >
+                            {booth.code}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })
+              )}
+              <div className="absolute inset-x-0 bottom-0 flex h-12 items-center justify-center bg-[#4f485c] text-sm font-extrabold text-white">
+                ทางออก · จุดรับส่ง
+              </div>
             </div>
-            <p className="mt-3 text-xs text-muted">พิกัดเก็บเป็นเปอร์เซ็นต์ของพื้นที่ แผนผังจึงปรับตามขนาดหน้าจอได้</p>
+            <p className="mt-3 text-xs text-muted">
+              พิกัดเก็บเป็นเปอร์เซ็นต์ของพื้นที่ แผนผังจึงปรับตามขนาดหน้าจอได้
+            </p>
           </div>
         </section>
 
-        <PropertyPanel venueName={venue?.name ?? ''} zone={selectedZone} booth={selectedBooth} onPositionChange={updateSelectedPosition} />
+        <PropertyPanel
+          venueName={venue?.name ?? ''}
+          zone={selectedZone}
+          booth={selectedBooth}
+          onPositionChange={updateSelectedPosition}
+        />
       </div>
     </main>
   );
 }
 
-function PropertyPanel({ venueName, zone, booth, onPositionChange }: { venueName: string; zone?: PositionedZone; booth?: PositionedBooth; onPositionChange: (axis: 'x' | 'y', value: string) => void }) {
+function PropertyPanel({
+  venueName,
+  zone,
+  booth,
+  onPositionChange,
+}: {
+  venueName: string;
+  zone?: PositionedZone;
+  booth?: PositionedBooth;
+  onPositionChange: (axis: 'x' | 'y', value: string) => void;
+}) {
   const item = booth ?? zone;
   return (
     <section className="mt-6 rounded-[28px] border border-[#e8e0f2] bg-white p-5 shadow-surface sm:p-7">
-      <span className="text-xs font-extrabold uppercase tracking-[1.4px] text-violet">Property panel</span>
-      <h2 className="mt-1 text-2xl font-black tracking-[-0.5px] text-ink">ตั้งค่ารายละเอียด</h2>
-      {!item ? <p className="mt-5 rounded-2xl bg-[#f7f4fb] p-5 text-sm font-semibold text-muted">เลือกโซนหรือบูธบนแผนผังเพื่อดูตำแหน่งและรายละเอียด</p> : (
+      <span className="text-xs font-extrabold uppercase tracking-[1.4px] text-violet">
+        Property panel
+      </span>
+      <h2 className="mt-1 text-2xl font-black tracking-[-0.5px] text-ink">
+        ตั้งค่ารายละเอียด
+      </h2>
+      {!item ? (
+        <p className="mt-5 rounded-2xl bg-[#f7f4fb] p-5 text-sm font-semibold text-muted">
+          เลือกโซนหรือบูธบนแผนผังเพื่อดูตำแหน่งและรายละเอียด
+        </p>
+      ) : (
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <ReadOnlyField label={booth ? 'เลขบูธ' : 'รหัสโซน'} value={item.code} />
-          <ReadOnlyField label={booth ? 'สถานะ' : 'ชื่อโซน'} value={booth ? booth.status : (zone?.name || 'ยังไม่ได้ตั้งชื่อ')} />
+          <ReadOnlyField
+            label={booth ? 'เลขบูธ' : 'รหัสโซน'}
+            value={item.code}
+          />
+          <ReadOnlyField
+            label={booth ? 'สถานะ' : 'ชื่อโซน'}
+            value={booth ? booth.status : zone?.name || 'ยังไม่ได้ตั้งชื่อ'}
+          />
           <ReadOnlyField label="สถานที่" value={venueName || '-'} />
-          <NumberField label="ตำแหน่งแนวนอน (%)" value={item.x} onChange={(value) => onPositionChange('x', value)} />
-          <NumberField label="ตำแหน่งแนวตั้ง (%)" value={item.y} onChange={(value) => onPositionChange('y', value)} />
-          {booth && <div className="rounded-2xl bg-[#f5f0ff] px-4 py-3 text-sm text-[#63439a] md:col-span-2 xl:col-span-5">บูธ {booth.code} ขนาด {booth.widthM ?? '-'} × {booth.heightM ?? '-'} เมตร · ราคา {formatMoney(booth.boothPrice)} บาท</div>}
+          <NumberField
+            label="ตำแหน่งแนวนอน (%)"
+            value={item.x}
+            onChange={(value) => onPositionChange('x', value)}
+          />
+          <NumberField
+            label="ตำแหน่งแนวตั้ง (%)"
+            value={item.y}
+            onChange={(value) => onPositionChange('y', value)}
+          />
+          {booth && (
+            <div className="rounded-2xl bg-[#f5f0ff] px-4 py-3 text-sm text-[#63439a] md:col-span-2 xl:col-span-5">
+              บูธ {booth.code} ขนาด {booth.widthM ?? '-'} ×{' '}
+              {booth.heightM ?? '-'} เมตร · ราคา {formatMoney(booth.boothPrice)}{' '}
+              บาท
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -435,21 +597,70 @@ function PropertyPanel({ venueName, zone, booth, onPositionChange }: { venueName
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return <label className="grid gap-2 text-xs font-bold text-ink">{label}<input readOnly value={value} className="min-h-12 rounded-2xl border border-[#e2daec] bg-[#faf9fc] px-4 text-sm" /></label>;
+  return (
+    <label className="grid gap-2 text-xs font-bold text-ink">
+      {label}
+      <input
+        readOnly
+        value={value}
+        className="min-h-12 rounded-2xl border border-[#e2daec] bg-[#faf9fc] px-4 text-sm"
+      />
+    </label>
+  );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: string) => void }) {
-  return <label className="grid gap-2 text-xs font-bold text-ink">{label}<input type="number" min="0" max="100" step="0.1" value={roundPosition(value)} onChange={(event) => onChange(event.target.value)} className="min-h-12 rounded-2xl border border-[#ddd4ec] px-4 text-sm outline-none focus:border-violet focus:ring-2 focus:ring-violet/15" /></label>;
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-2 text-xs font-bold text-ink">
+      {label}
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="0.1"
+        value={roundPosition(value)}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-12 rounded-2xl border border-[#ddd4ec] px-4 text-sm outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+      />
+    </label>
+  );
 }
 
-function Feedback({ tone, children }: { tone: 'error' | 'success'; children: string }) {
+function Feedback({
+  tone,
+  children,
+}: {
+  tone: 'error' | 'success';
+  children: string;
+}) {
   const successful = tone === 'success';
   const Icon = successful ? CheckCircle2 : AlertCircle;
-  return <p role={successful ? 'status' : 'alert'} className={`mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm font-semibold ${successful ? 'bg-[#ecfdf3] text-[#166534]' : 'bg-[#fff1f2] text-[#b91c1c]'}`}><Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {children}</p>;
+  return (
+    <p
+      role={successful ? 'status' : 'alert'}
+      className={`mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm font-semibold ${successful ? 'bg-[#ecfdf3] text-[#166534]' : 'bg-[#fff1f2] text-[#b91c1c]'}`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {children}
+    </p>
+  );
 }
 
 function PageState({ label }: { label: string }) {
-  return <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5"><p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-muted shadow-sm">{label}</p></main>;
+  return (
+    <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
+      <p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-muted shadow-sm">
+        {label}
+      </p>
+    </main>
+  );
 }
 
 function zoneFallbackPosition(zone: AdminZone, index: number): Position {
@@ -462,7 +673,11 @@ function zoneFallbackPosition(zone: AdminZone, index: number): Position {
 function boothFallbackPosition(booth: AdminBooth, index: number): Position {
   return {
     x: clamp(storedPosition(booth.posX, 6 + (index % 4) * 23), 0, 88),
-    y: clamp(storedPosition(booth.posY, 34 + Math.floor(index / 4) * 26), 10, 82),
+    y: clamp(
+      storedPosition(booth.posY, 34 + Math.floor(index / 4) * 26),
+      10,
+      82,
+    ),
   };
 }
 
@@ -473,16 +688,26 @@ function storedPosition(raw: string | null, fallback: number): number {
   return parsed >= 0 && parsed <= 1 ? parsed * 100 : clamp(parsed, 0, 100);
 }
 
-function roundPosition(value: number): number { return Math.round(value * 10) / 10; }
-function clamp(value: number, minimum: number, maximum: number): number { return Math.min(Math.max(value, minimum), maximum); }
+function roundPosition(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
 
 function formatMoney(value: string): string {
   const numeric = Number(value);
-  return Number.isFinite(numeric) ? new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric) : value;
+  return Number.isFinite(numeric)
+    ? new Intl.NumberFormat('th-TH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(numeric)
+    : value;
 }
 
 function describeError(cause: unknown, fallback: string): string {
   if (!(cause instanceof ApiError)) return fallback;
-  if (cause.status === 404) return 'ไม่พบข้อมูลหรือคุณไม่มีสิทธิ์จัดการรายการนี้';
+  if (cause.status === 404)
+    return 'ไม่พบข้อมูลหรือคุณไม่มีสิทธิ์จัดการรายการนี้';
   return cause.message;
 }

@@ -27,10 +27,14 @@ self.addEventListener('notificationclick', (event) => {
   ).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existingClient = clients.find((client) => client.url === targetUrl);
-      if (existingClient) return existingClient.focus();
-      return self.clients.openWindow(targetUrl);
-    }),
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        const existingClient = clients.find(
+          (client) => client.url === targetUrl,
+        );
+        if (existingClient) return existingClient.focus();
+        return self.clients.openWindow(targetUrl);
+      }),
   );
 });
