@@ -1153,7 +1153,7 @@ export class BookingsService {
         paymentGroupId: true,
         status: true,
         holdExpiresAt: true,
-        bookingStartDate: true,
+        bookingEndDate: true,
       },
     });
 
@@ -1197,10 +1197,10 @@ export class BookingsService {
       throw new ConflictException('การจองหมดเวลาชำระเงินแล้ว');
     }
     if (
-      this.thailandDateKey(booking.bookingStartDate) <=
+      this.thailandDateKey(booking.bookingEndDate) <
       this.thailandDateKey(cancelledAt)
     ) {
-      throw new ConflictException('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
+      throw new ConflictException('ไม่สามารถยกเลิกหลังวันสิ้นสุดงานได้');
     }
 
     const updated = await this.prisma.booking.updateMany({
@@ -1214,7 +1214,7 @@ export class BookingsService {
             holdExpiresAt: { gt: cancelledAt },
           },
         ],
-        bookingStartDate: { gt: cancelledAt },
+        bookingEndDate: { gte: this.thailandDayStart(cancelledAt) },
       },
       data: {
         status: BookingStatus.CANCELLED,
@@ -1432,6 +1432,10 @@ export class BookingsService {
     const valueOf = (type: Intl.DateTimeFormatPartTypes): string =>
       parts.find((part) => part.type === type)?.value ?? '';
     return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`;
+  }
+
+  private thailandDayStart(value: Date): Date {
+    return new Date(`${this.thailandDateKey(value)}T00:00:00+07:00`);
   }
 
   private toResponse(booking: Booking): BookingResponse {

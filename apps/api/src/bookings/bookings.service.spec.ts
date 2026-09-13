@@ -1665,7 +1665,7 @@ describe('BookingsService', () => {
         paymentGroupId: null,
         status: BookingStatus.CONFIRMED,
         holdExpiresAt: null,
-        bookingStartDate: EVENT_START,
+        bookingEndDate: EVENT_END,
       });
     });
 
@@ -1679,7 +1679,7 @@ describe('BookingsService', () => {
           paymentGroupId: true,
           status: true,
           holdExpiresAt: true,
-          bookingStartDate: true,
+          bookingEndDate: true,
         },
       });
       expect(bookingUpdateMany).toHaveBeenCalledWith({
@@ -1693,7 +1693,9 @@ describe('BookingsService', () => {
               holdExpiresAt: { gt: NOW },
             },
           ],
-          bookingStartDate: { gt: NOW },
+          bookingEndDate: {
+            gte: new Date('2026-08-01T17:00:00.000Z'),
+          },
         },
         data: {
           status: BookingStatus.CANCELLED,
@@ -1714,7 +1716,7 @@ describe('BookingsService', () => {
         paymentGroupId: PAYMENT_GROUP_ID,
         status: BookingStatus.PENDING_PAYMENT,
         holdExpiresAt: CREATED_BOOKING.holdExpiresAt,
-        bookingStartDate: EVENT_START,
+        bookingEndDate: EVENT_END,
       });
 
       await expect(
@@ -1741,7 +1743,7 @@ describe('BookingsService', () => {
         id: BOOKING_ID,
         status,
         holdExpiresAt: null,
-        bookingStartDate: EVENT_START,
+        bookingEndDate: EVENT_END,
       });
 
       await expect(
@@ -1750,18 +1752,42 @@ describe('BookingsService', () => {
       expect(bookingUpdateMany).not.toHaveBeenCalled();
     });
 
-    it('rejects cancellation on or after the booking start date', async () => {
+    it('allows cancellation throughout the final event day in Thailand', async () => {
+      jest.setSystemTime(new Date('2026-09-12T10:00:00.000Z'));
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
+        paymentGroupId: null,
         status: BookingStatus.CONFIRMED,
         holdExpiresAt: null,
-        bookingStartDate: NOW,
+        bookingEndDate: EVENT_END,
       });
 
       await expect(
         service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
-      ).rejects.toThrow('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
-      expect(bookingUpdateMany).not.toHaveBeenCalled();
+      ).resolves.toMatchObject({ status: BookingStatus.CANCELLED });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          vendorUserId: VENDOR_ID,
+          OR: [
+            { status: BookingStatus.CONFIRMED },
+            {
+              status: BookingStatus.PENDING_PAYMENT,
+              holdExpiresAt: { gt: new Date('2026-09-12T10:00:00.000Z') },
+            },
+          ],
+          bookingEndDate: {
+            gte: new Date('2026-09-11T17:00:00.000Z'),
+          },
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledByUserId: VENDOR_ID,
+          cancelledByRole: CancelledByRole.VENDOR,
+          cancelReason: CANCEL_DTO.cancelReason,
+          cancelledAt: new Date('2026-09-12T10:00:00.000Z'),
+        },
+      });
     });
 
     it('records an expired pending hold as a system cancellation', async () => {
@@ -1770,7 +1796,7 @@ describe('BookingsService', () => {
         paymentGroupId: null,
         status: BookingStatus.PENDING_PAYMENT,
         holdExpiresAt: new Date('2026-08-01T23:59:59.000Z'),
-        bookingStartDate: EVENT_START,
+        bookingEndDate: EVENT_END,
       });
 
       await expect(
@@ -1792,18 +1818,19 @@ describe('BookingsService', () => {
       });
     });
 
-    it('uses the Thailand calendar date for the cancellation cutoff', async () => {
-      jest.setSystemTime(new Date('2026-09-09T18:00:00.000Z'));
+    it('rejects cancellation starting the day after the event in Thailand', async () => {
+      jest.setSystemTime(new Date('2026-09-12T17:00:00.000Z'));
       bookingFindFirst.mockResolvedValue({
         id: BOOKING_ID,
+        paymentGroupId: null,
         status: BookingStatus.CONFIRMED,
         holdExpiresAt: null,
-        bookingStartDate: EVENT_START,
+        bookingEndDate: EVENT_END,
       });
 
       await expect(
         service.cancel(BOOKING_ID, CANCEL_DTO, VENDOR_ID),
-      ).rejects.toThrow('ไม่สามารถยกเลิกหลังวันเริ่มจองได้');
+      ).rejects.toThrow('ไม่สามารถยกเลิกหลังวันสิ้นสุดงานได้');
       expect(bookingUpdateMany).not.toHaveBeenCalled();
     });
 

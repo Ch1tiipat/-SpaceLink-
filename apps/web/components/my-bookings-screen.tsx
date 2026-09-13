@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import {
   getPreviewBookings,
+  isBookingCancellationOpen,
   isBookingReviewEligible,
 } from '@/components/booking-detail-screen';
 import {
@@ -82,12 +83,13 @@ function isExpired(booking: MyBooking): boolean {
 }
 
 function isNearCancelDeadline(booking: MyBooking): boolean {
-  const timeUntilStart =
-    new Date(booking.bookingStartDate).getTime() - Date.now();
   return (
     (booking.status === 'PENDING_PAYMENT' || booking.status === 'CONFIRMED') &&
-    timeUntilStart > 0 &&
-    timeUntilStart < 24 * 60 * 60 * 1000
+    isBookingCancellationOpen(booking.bookingEndDate) &&
+    !isBookingCancellationOpen(
+      booking.bookingEndDate,
+      Date.now() + 24 * 60 * 60 * 1000,
+    )
   );
 }
 

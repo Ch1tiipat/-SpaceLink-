@@ -9,7 +9,6 @@ import {
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { isEventEnded } from '../reviews/reviews.service';
 import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
@@ -347,20 +346,15 @@ export class NotificationsService {
     transaction: Prisma.TransactionClient,
   ): Promise<number> {
     const candidateBookings = await transaction.booking.findMany({
-      where: {
-        status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
-      },
       select: {
         id: true,
         vendorUserId: true,
-        event: { select: { name: true, endDate: true, endTime: true } },
+        event: { select: { name: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
-    const eligibleBookings = candidateBookings.filter((booking) =>
-      isEventEnded(booking.event),
-    );
+    const eligibleBookings = candidateBookings;
 
     if (eligibleBookings.length === 0) return 0;
 
