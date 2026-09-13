@@ -7,9 +7,11 @@ import {
   Param,
   Patch,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { UserRole, type User } from '@prisma/client';
+import type { Response } from 'express';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
@@ -46,6 +48,19 @@ export class OrganizationsController {
   @Get()
   findAll() {
     return this.organizationsService.findAll();
+  }
+
+  @Get('export')
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  async exportCsv(@Res() response: Response) {
+    const csv = await this.organizationsService.exportCsv();
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      'attachment; filename="organizations.csv"',
+    );
+    response.send(csv);
   }
 
   @Get(':id')

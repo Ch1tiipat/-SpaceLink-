@@ -30,6 +30,17 @@ export const PUBLIC_ORGANIZATION_SELECT = {
   status: true,
 } satisfies Prisma.OrganizationSelect;
 
+export function escapeCsvCell(value: string | null | undefined): string {
+  let escaped = value ?? '';
+  if (/^[=+\-@]/.test(escaped)) {
+    escaped = `'${escaped}`;
+  }
+
+  return /[",\r\n]/.test(escaped)
+    ? `"${escaped.replace(/"/g, '""')}"`
+    : escaped;
+}
+
 @Injectable()
 export class OrganizationsService {
   constructor(
@@ -63,6 +74,44 @@ export class OrganizationsService {
     return this.prisma.organization.findMany({
       select: PUBLIC_ORGANIZATION_SELECT,
     });
+  }
+
+  async exportCsv(): Promise<string> {
+    const organizations = await this.prisma.organization.findMany({
+      select: {
+        name: true,
+        contactEmail: true,
+        contactPhone: true,
+        status: true,
+        facebookUrl: true,
+        lineUrl: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const header = [
+      'name',
+      'contactEmail',
+      'contactPhone',
+      'status',
+      'facebookUrl',
+      'lineUrl',
+      'createdAt',
+    ];
+    const rows = organizations.map((organization) => [
+      organization.name,
+      organization.contactEmail,
+      organization.contactPhone,
+      organization.status,
+      organization.facebookUrl,
+      organization.lineUrl,
+      organization.createdAt.toISOString(),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map(escapeCsvCell).join(','))
+      .join('\r\n');
+
+    return `\uFEFF${csv}`;
   }
 
   async findOne(id: string) {

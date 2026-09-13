@@ -15,6 +15,7 @@ import {
 import {
   ApiError,
   createSuperAdminOrganization,
+  exportSuperAdminOrganizations,
   getSuperAdminCompanyAdmins,
   getSuperAdminOrganizations,
   setSuperAdminOrganizationOwner,
@@ -51,6 +52,7 @@ export function SuperAdminOrganizationsScreen() {
   const [editingOrganization, setEditingOrganization] =
     useState<SuperAdminOrganization | null>(null);
   const [savingId, setSavingId] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -224,6 +226,31 @@ export function SuperAdminOrganizationsScreen() {
     }
   }
 
+  async function exportOrganizations() {
+    setExporting(true);
+    try {
+      const token = await getAccessToken();
+      const blob = await exportSuperAdminOrganizations(token);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      try {
+        link.href = objectUrl;
+        link.download = 'organizations.csv';
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (cause) {
+      setToast(errorMessage(cause, 'ส่งออกข้อมูลองค์กรไม่สำเร็จ'));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const hasFilters = query.trim().length > 0 || status !== 'ALL';
 
   return (
@@ -243,11 +270,11 @@ export function SuperAdminOrganizationsScreen() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled
-            title="ยังไม่มี Export Endpoint"
-            className="min-h-[38px] rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] opacity-55"
+            disabled={exporting}
+            onClick={() => void exportOrganizations()}
+            className="min-h-[38px] rounded-lg border border-[#e7dfea] bg-white px-[13px] text-[13px] font-bold text-[#716675] hover:bg-[#faf7fc] disabled:opacity-55"
           >
-            ส่งออก · รอ Backend
+            {exporting ? 'กำลังส่งออก…' : 'ส่งออก CSV'}
           </button>
           <button
             type="button"
