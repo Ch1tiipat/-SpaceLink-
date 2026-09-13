@@ -4,35 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  BookingStatus,
-  Prisma,
-  ReviewStatus,
-  ReviewTargetType,
-} from '@prisma/client';
+import { Prisma, ReviewStatus, ReviewTargetType } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminReviewsQueryDto } from './dto/admin-reviews-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
-const REVIEWABLE_BOOKING_STATUSES: BookingStatus[] = [
-  BookingStatus.CONFIRMED,
-  BookingStatus.COMPLETED,
-];
-
-export function isEventEnded(
-  event: { endDate: Date; endTime: string | null },
-  now = new Date(),
-): boolean {
-  const dateKey = event.endDate.toISOString().slice(0, 10);
-  const timePart =
-    event.endTime && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.endTime)
-      ? event.endTime
-      : '23:59';
-  const endInstant = new Date(`${dateKey}T${timePart}:00+07:00`);
-  return endInstant.getTime() <= now.getTime();
-}
 
 @Injectable()
 export class ReviewsService {
@@ -336,13 +314,10 @@ export class ReviewsService {
         id: true,
         vendorUserId: true,
         boothId: true,
-        status: true,
         eventId: true,
         event: {
           select: {
             organizationId: true,
-            endDate: true,
-            endTime: true,
           },
         },
         booth: { select: { zoneId: true } },
@@ -359,15 +334,6 @@ export class ReviewsService {
         : booking.booth.zoneId === dto.targetId;
     if (!targetMatches) {
       throw new ForbiddenException('พื้นที่รีวิวไม่ตรงกับการจอง');
-    }
-
-    if (
-      !REVIEWABLE_BOOKING_STATUSES.includes(booking.status) ||
-      !isEventEnded(booking.event)
-    ) {
-      throw new ForbiddenException(
-        'สามารถให้คะแนนได้หลังงานสิ้นสุดและการจองได้รับการยืนยันแล้วเท่านั้น',
-      );
     }
 
     const existing = await transaction.review.findUnique({

@@ -7,7 +7,6 @@ import { createReview } from '@/lib/api';
 import {
   BookingPageLoading,
   BookingPageMessage,
-  isBookingReviewEligible,
   useBookingDetail,
 } from '@/components/booking-detail-screen';
 
@@ -27,7 +26,6 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
   if (state.status === 'error') return <BookingPageMessage title="เปิดหน้ารีวิวไม่ได้" detail={state.message} />;
 
   const { booking } = state;
-  if (!isBookingReviewEligible(booking)) return <BookingPageMessage title="ยังรีวิวพื้นที่ไม่ได้" detail="สามารถให้คะแนนได้หลังงานสิ้นสุดและรายการอยู่ในสถานะยืนยันหรือเสร็จสิ้น" href={`/bookings/${encodeURIComponent(booking.bookingCode)}`} action="ดูรายละเอียดการจอง" />;
   if (success) {
     return (
       <main className="sl-page pb-16">

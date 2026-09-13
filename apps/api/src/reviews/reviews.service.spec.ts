@@ -9,7 +9,7 @@ import {
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
-import { isEventEnded, ReviewsService } from './reviews.service';
+import { ReviewsService } from './reviews.service';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const bookingId = '22222222-2222-4222-8222-222222222222';
@@ -68,51 +68,10 @@ function eligibleBooking(status: BookingStatus = BookingStatus.CONFIRMED) {
     boothId: targetId,
     status,
     eventId,
-    event: {
-      organizationId,
-      endDate: new Date('2026-09-05T00:00:00.000Z'),
-      endTime: '23:00',
-    },
+    event: { organizationId },
     booth: { zoneId },
   };
 }
-
-describe('isEventEnded', () => {
-  const endDate = new Date('2026-09-05T00:00:00.000Z');
-
-  it.each([null, 'invalid', '25:00'])(
-    'falls back to 23:59 Bangkok when endTime is %p',
-    (endTime) => {
-      expect(
-        isEventEnded(
-          { endDate, endTime },
-          new Date('2026-09-05T16:58:59.000Z'),
-        ),
-      ).toBe(false);
-      expect(
-        isEventEnded(
-          { endDate, endTime },
-          new Date('2026-09-05T16:59:00.000Z'),
-        ),
-      ).toBe(true);
-    },
-  );
-
-  it('uses the exact event time across Bangkok midnight', () => {
-    expect(
-      isEventEnded(
-        { endDate, endTime: '00:15' },
-        new Date('2026-09-04T17:14:59.000Z'),
-      ),
-    ).toBe(false);
-    expect(
-      isEventEnded(
-        { endDate, endTime: '00:15' },
-        new Date('2026-09-04T17:15:00.000Z'),
-      ),
-    ).toBe(true);
-  });
-});
 
 describe('ReviewsService', () => {
   let service: ReviewsService;
@@ -275,8 +234,8 @@ describe('ReviewsService', () => {
     expect(call.select).not.toHaveProperty('reviewerDisplayName');
   });
 
-  it.each([BookingStatus.CONFIRMED, BookingStatus.COMPLETED])(
-    'creates one booking-scoped review for %s',
+  it.each(Object.values(BookingStatus))(
+    'creates one booking-scoped review immediately for %s',
     async (status) => {
       transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
 
@@ -322,27 +281,6 @@ describe('ReviewsService', () => {
       ).rejects.toThrow('พื้นที่รีวิวไม่ตรงกับการจอง');
     },
   );
-
-  it('rejects a review before the exact event end time', async () => {
-    transactionBookingFindUnique.mockResolvedValue({
-      ...eligibleBooking(),
-      event: { ...eligibleBooking().event, endTime: '23:01' },
-    });
-    await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-  });
-
-  it.each([
-    BookingStatus.PENDING_PAYMENT,
-    BookingStatus.CANCELLED,
-    BookingStatus.NO_SHOW,
-  ])('rejects booking status %s', async (status) => {
-    transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
-    await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-  });
 
   it.each([ReviewStatus.PUBLISHED, ReviewStatus.HIDDEN])(
     'updates content but preserves an existing %s status',
