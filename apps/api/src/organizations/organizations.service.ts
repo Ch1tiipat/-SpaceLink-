@@ -420,8 +420,4 @@ export class OrganizationsService {
   ): Promise<void> {
     await this.auditLogsService.record(input).catch(() => undefined);
   }
-
-  remove(id: number) {
-    return `This action removes a #${id} organization`;
-  }
 }
