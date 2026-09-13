@@ -29,6 +29,9 @@ const eventUpdate = jest.fn();
 const eventUpdateMany = jest.fn();
 const eventDelete = jest.fn();
 const eventCreate = jest.fn();
+const savedEventFindMany = jest.fn();
+const savedEventUpsert = jest.fn();
+const savedEventDeleteMany = jest.fn();
 const zoneFindMany = jest.fn();
 const zoneCount = jest.fn();
 const venueFindFirst = jest.fn();
@@ -54,6 +57,11 @@ const mockPrismaService = {
     updateMany: eventUpdateMany,
     delete: eventDelete,
     create: eventCreate,
+  },
+  savedEvent: {
+    findMany: savedEventFindMany,
+    upsert: savedEventUpsert,
+    deleteMany: savedEventDeleteMany,
   },
   zone: { findMany: zoneFindMany, count: zoneCount },
   venue: { findFirst: venueFindFirst },
@@ -104,6 +112,70 @@ describe('EventsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('saved events', () => {
+    const userId = '00000000-0000-4000-8000-0000000000d1';
+
+    it('returns only the saved event ids for the authenticated user', async () => {
+      savedEventFindMany.mockResolvedValue([
+        { eventId: 'event-1' },
+        { eventId: 'event-2' },
+      ]);
+
+      await expect(service.getSavedEventIds(userId)).resolves.toEqual([
+        'event-1',
+        'event-2',
+      ]);
+      expect(savedEventFindMany).toHaveBeenCalledWith({
+        where: { userId },
+        select: { eventId: true },
+      });
+    });
+
+    it('saves the same event repeatedly without creating a duplicate', async () => {
+      findUnique.mockResolvedValue({ id: eventId });
+      savedEventUpsert.mockResolvedValue({});
+
+      await service.saveEvent(eventId, userId);
+      await service.saveEvent(eventId, userId);
+
+      expect(savedEventUpsert).toHaveBeenCalledTimes(2);
+      expect(savedEventUpsert).toHaveBeenNthCalledWith(1, {
+        where: { userId_eventId: { userId, eventId } },
+        create: { userId, eventId },
+        update: {},
+      });
+      expect(savedEventUpsert).toHaveBeenNthCalledWith(2, {
+        where: { userId_eventId: { userId, eventId } },
+        create: { userId, eventId },
+        update: {},
+      });
+    });
+
+    it('rejects saving an event that does not exist', async () => {
+      findUnique.mockResolvedValue(null);
+
+      await expect(service.saveEvent(eventId, userId)).rejects.toMatchObject({
+        status: 404,
+        message: 'Event not found',
+      });
+      expect(savedEventUpsert).not.toHaveBeenCalled();
+    });
+
+    it('unsaves idempotently with the authenticated user and event ids', async () => {
+      savedEventDeleteMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      await service.unsaveEvent(eventId, userId);
+      await service.unsaveEvent(eventId, userId);
+
+      expect(savedEventDeleteMany).toHaveBeenCalledTimes(2);
+      expect(savedEventDeleteMany).toHaveBeenCalledWith({
+        where: { userId, eventId },
+      });
+    });
   });
 
   it('lists organization events newest-first with venue display data', async () => {

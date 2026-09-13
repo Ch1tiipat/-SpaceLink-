@@ -20,7 +20,10 @@ import {
   getEventMap,
   getEventMapBySlug,
   getEventReviews,
+  getSavedEventIds,
   getVenueLocation,
+  saveEvent,
+  unsaveEvent,
   type EventInformationType,
   type EventMap,
   type EventReviewsPage,
@@ -33,6 +36,7 @@ import {
   type FacebookEmbeddedPost,
 } from '@/lib/facebook-embed';
 import { isUuid } from '@/lib/route-identifier';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -51,6 +55,12 @@ const EVENT_INFORMATION_TYPE_LABELS: Record<EventInformationType, string> = {
   ACTIVITY: 'กิจกรรม',
   FACILITY: 'สิ่งอำนวยความสะดวก',
 };
+
+type SavedEventsAccess =
+  | { status: 'loading' }
+  | { status: 'signed-out' }
+  | { status: 'ready'; token: string; eventIds: string[] }
+  | { status: 'error' };
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 }).format(
@@ -94,6 +104,14 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     data: EventReviewsPage | null;
     error: string | null;
   } | null>(null);
+  const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
+    status: 'loading',
+  });
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,6 +143,60 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       controller.abort();
     };
   }, [eventId, router]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+
+    try {
+      supabase = getSupabaseBrowserClient();
+    } catch {
+      setSavedEvents({ status: 'signed-out' });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const token = sessionData.session?.access_token;
+        if (!token) {
+          if (active) setSavedEvents({ status: 'signed-out' });
+          return;
+        }
+
+        const eventIds = await getSavedEventIds(token, controller.signal);
+        if (active) setSavedEvents({ status: 'ready', token, eventIds });
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          return;
+        }
+        if (active) {
+          setSavedEvents({ status: 'error' });
+          setSaveNotice({
+            kind: 'error',
+            message:
+              cause instanceof Error
+                ? cause.message
+                : 'โหลดสถานะการบันทึก Event ไม่สำเร็จ',
+          });
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!saveNotice) return;
+    const timeout = window.setTimeout(() => setSaveNotice(null), 3_500);
+    return () => window.clearTimeout(timeout);
+  }, [saveNotice]);
 
   useEffect(() => {
     const resolvedEventId = data?.event.id;
@@ -202,9 +274,69 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
+  const isSaved =
+    savedEvents.status === 'ready' &&
+    savedEvents.eventIds.includes(event.id);
+
+  async function toggleSavedEvent() {
+    if (savedEvents.status === 'signed-out') {
+      router.push('/login');
+      return;
+    }
+    if (savedEvents.status !== 'ready' || savingEvent) return;
+
+    const wasSaved = savedEvents.eventIds.includes(event.id);
+    const nextEventIds = wasSaved
+      ? savedEvents.eventIds.filter((savedId) => savedId !== event.id)
+      : [...savedEvents.eventIds, event.id];
+    const token = savedEvents.token;
+
+    setSavedEvents({ status: 'ready', token, eventIds: nextEventIds });
+    setSavingEvent(true);
+    setSaveNotice(null);
+
+    try {
+      if (wasSaved) {
+        await unsaveEvent(event.id, token);
+      } else {
+        await saveEvent(event.id, token);
+      }
+      setSaveNotice({
+        kind: 'success',
+        message: wasSaved ? 'เลิกบันทึก Event แล้ว' : 'บันทึก Event แล้ว',
+      });
+    } catch (cause) {
+      setSavedEvents((current) =>
+        current.status === 'ready'
+          ? { ...current, eventIds: savedEvents.eventIds }
+          : current,
+      );
+      setSaveNotice({
+        kind: 'error',
+        message:
+          cause instanceof Error
+            ? cause.message
+            : wasSaved
+              ? 'เลิกบันทึก Event ไม่สำเร็จ'
+              : 'บันทึก Event ไม่สำเร็จ',
+      });
+    } finally {
+      setSavingEvent(false);
+    }
+  }
 
   return (
     <main className="sl-page pb-0">
+      {saveNotice ? (
+        <div
+          role={saveNotice.kind === 'error' ? 'alert' : 'status'}
+          className={`fixed bottom-6 right-6 z-[70] max-w-[calc(100vw-3rem)] rounded-[10px] px-4 py-3 text-xs font-bold text-white shadow-[0_14px_35px_rgba(28,14,47,.25)] ${
+            saveNotice.kind === 'error' ? 'bg-danger' : 'bg-[#1f1730]'
+          }`}
+        >
+          {saveNotice.message}
+        </div>
+      ) : null}
       <div className="shell max-w-[1100px] py-8">
         <Link href="/" className="sl-chip">
           ← กลับไปค้นหา Event
@@ -238,12 +370,36 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               </Link>
               <button
                 type="button"
-                disabled
-                title="ระบบจริงยังไม่มี API สำหรับบันทึก Event"
-                className="inline-flex min-h-[46px] cursor-not-allowed items-center justify-center gap-2 rounded-[13px] border border-white/35 bg-white/10 px-5 font-bold text-white/65"
+                onClick={() => void toggleSavedEvent()}
+                disabled={
+                  savedEvents.status === 'loading' ||
+                  savedEvents.status === 'error' ||
+                  savingEvent
+                }
+                aria-pressed={isSaved}
+                title={
+                  savedEvents.status === 'error'
+                    ? 'โหลดสถานะการบันทึก Event ไม่สำเร็จ'
+                    : undefined
+                }
+                className={`inline-flex min-h-[46px] items-center justify-center gap-2 rounded-[13px] border px-5 font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isSaved
+                    ? 'border-white bg-white text-violet'
+                    : 'border-white/35 bg-white/10 text-white hover:bg-white/20'
+                }`}
               >
-                <Heart className="h-4 w-4" aria-hidden /> บันทึก Event · เร็ว ๆ
-                นี้
+                <Heart
+                  className="h-4 w-4"
+                  fill={isSaved ? 'currentColor' : 'none'}
+                  aria-hidden
+                />{' '}
+                {savingEvent
+                  ? isSaved
+                    ? 'กำลังบันทึก…'
+                    : 'กำลังยกเลิก…'
+                  : isSaved
+                    ? 'บันทึกแล้ว'
+                    : 'บันทึก Event'}
               </button>
             </div>
           </div>
