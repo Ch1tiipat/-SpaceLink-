@@ -1,6 +1,12 @@
+import { type ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
+import type { Server } from 'node:http';
+import request from 'supertest';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserLastLoginService } from './user-last-login.service';
@@ -22,6 +28,7 @@ const CURRENT_USER: User = {
   trustScore: 100,
   isBlacklisted: false,
   blacklistReason: 'must stay private',
+  notificationPreferences: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
 };
@@ -80,6 +87,10 @@ describe('UsersController', () => {
    * absence of the scaffolded admin write handlers, which is what this asserts.
    */
   it('defaults to super admins and exposes no admin write handlers', () => {
+    expect(Reflect.getMetadata(GUARDS_METADATA, UsersController)).toEqual([
+      SupabaseAuthGuard,
+      RolesGuard,
+    ]);
     expect(Reflect.getMetadata(ROLES_KEY, UsersController)).toEqual([
       UserRole.SUPER_ADMIN,
     ]);
@@ -101,6 +112,17 @@ describe('UsersController', () => {
       UserRole.VENDOR,
     ]);
   });
+
+  it.each(['getNotificationPreferences', 'updateNotificationPreferences'])(
+    'opens %s to all three roles',
+    (name) => {
+      expect(Reflect.getMetadata(ROLES_KEY, handlerOf(name))).toEqual([
+        UserRole.SUPER_ADMIN,
+        UserRole.ORG_ADMIN,
+        UserRole.VENDOR,
+      ]);
+    },
+  );
 
   it('leaves the admin reads on the class default', () => {
     expect(
@@ -157,6 +179,105 @@ describe('UsersController', () => {
       where: { id: USER_ID },
       data: { phone: '0812345678' },
     });
+  });
+
+  it('reads and updates notification preferences for the authenticated user', async () => {
+    userFindUnique.mockResolvedValue({ notificationPreferences: null });
+    userUpdate.mockResolvedValue({});
+
+    await expect(
+      controller.getNotificationPreferences(CURRENT_USER),
+    ).resolves.toMatchObject({ BOOKING_STATUS: true, SYSTEM: true });
+    await expect(
+      controller.updateNotificationPreferences(
+        { PAYMENT: false },
+        CURRENT_USER,
+      ),
+    ).resolves.toMatchObject({ PAYMENT: false, SYSTEM: true });
+
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      select: { notificationPreferences: true },
+    });
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      data: {
+        notificationPreferences: {
+          BOOKING_STATUS: true,
+          PAYMENT: false,
+          ANNOUNCEMENT: true,
+          PENALTY: true,
+          REFUND: true,
+          SUPPORT_TICKET: true,
+          SYSTEM: true,
+        },
+      },
+    });
+  });
+
+  it('returns 401 without login and allows all three roles over HTTP', async () => {
+    let authenticated = false;
+    let role: UserRole = UserRole.VENDOR;
+    const fakeAuthGuard = {
+      canActivate(context: ExecutionContext) {
+        if (!authenticated) {
+          throw new UnauthorizedException('Missing bearer token');
+        }
+        context.switchToHttp().getRequest<{ user?: User }>().user = {
+          id: USER_ID,
+          role,
+        } as User;
+        return true;
+      },
+    };
+    userFindUnique.mockResolvedValue({ notificationPreferences: null });
+    userUpdate.mockResolvedValue({});
+    const module = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [
+        UsersService,
+        RolesGuard,
+        { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: UserLastLoginService,
+          useValue: mockUserLastLoginService,
+        },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
+      ],
+    })
+      .overrideGuard(SupabaseAuthGuard)
+      .useValue(fakeAuthGuard)
+      .compile();
+    const app = module.createNestApplication();
+    await app.init();
+
+    try {
+      await request(app.getHttpServer() as Server)
+        .get('/users/me/notification-preferences')
+        .expect(401);
+      await request(app.getHttpServer() as Server)
+        .patch('/users/me/notification-preferences')
+        .send({ PAYMENT: false })
+        .expect(401);
+
+      authenticated = true;
+      for (const allowedRole of [
+        UserRole.VENDOR,
+        UserRole.ORG_ADMIN,
+        UserRole.SUPER_ADMIN,
+      ]) {
+        role = allowedRole;
+        await request(app.getHttpServer() as Server)
+          .get('/users/me/notification-preferences')
+          .expect(200);
+        await request(app.getHttpServer() as Server)
+          .patch('/users/me/notification-preferences')
+          .send({ PAYMENT: false })
+          .expect(200);
+      }
+    } finally {
+      await app.close();
+    }
   });
 
   it('never returns blacklistReason', async () => {

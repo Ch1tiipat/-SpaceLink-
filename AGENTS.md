@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10; SCRUM-175 added 2026-09-11; SCRUM-177 added 2026-09-11; SCRUM-178 added 2026-09-11; SCRUM-182 added 2026-09-11; SCRUM-183 added 2026-09-12; SCRUM-194 added 2026-09-13)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10; SCRUM-175 added 2026-09-11; SCRUM-177 added 2026-09-11; SCRUM-178 added 2026-09-11; SCRUM-182 added 2026-09-11; SCRUM-183 added 2026-09-12; SCRUM-194 added 2026-09-13; SCRUM-193 added 2026-09-13)
 
-The Prisma schema remains frozen except for these sixteen additive changes:
+The Prisma schema remains frozen except for these seventeen additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -119,11 +119,14 @@ The Prisma schema remains frozen except for these sixteen additive changes:
   `Event.savedByUsers` relations. Each row records one user saving one event, with a unique
   `(userId, eventId)` pair so saving and unsaving can be implemented idempotently. Both foreign
   keys cascade on delete; no separate saved-events page or additional Event fields are authorized.
+- SCRUM-193: add the nullable `User.notificationPreferences` field
+  (`Json? @map("notification_preferences")`) so authenticated users can persist per-category
+  notification preferences. Missing values and missing keys remain enabled by default.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the sixteen tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the seventeen tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 

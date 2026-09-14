@@ -11,18 +11,19 @@ import {
   CircleAlert,
   Clock3,
   CreditCard,
-  Mail,
   Megaphone,
   Settings2,
   ShieldAlert,
-  Smartphone,
   Sparkles,
 } from 'lucide-react';
 
 import {
+  getNotificationPreferences,
   getMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  updateNotificationPreferences,
+  type NotificationPreferences,
   type NotificationRecord,
   type NotificationType,
   type UserRole,
@@ -33,15 +34,21 @@ import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
 type NotificationKind = 'event' | 'booking' | 'penalty' | 'payment' | 'system';
 type NotificationFilter = 'all' | 'unread' | NotificationKind;
-type NotificationPreference =
-  | 'all'
-  | 'booking'
-  | 'penalty'
-  | 'payment'
-  | 'event'
-  | 'system'
-  | 'email'
-  | 'line';
+
+const NOTIFICATION_PREFERENCE_TYPES = [
+  'BOOKING_STATUS',
+  'PAYMENT',
+  'ANNOUNCEMENT',
+  'PENALTY',
+  'REFUND',
+  'SUPPORT_TICKET',
+  'SYSTEM',
+] as const satisfies readonly NotificationType[];
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences =
+  Object.fromEntries(
+    NOTIFICATION_PREFERENCE_TYPES.map((type) => [type, true]),
+  ) as NotificationPreferences;
 
 type UserNotification = {
   id: string;
@@ -271,18 +278,10 @@ export default function NotificationsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [preferences, setPreferences] = useState<
-    Record<NotificationPreference, boolean>
-  >({
-    all: true,
-    booking: true,
-    penalty: true,
-    payment: true,
-    event: true,
-    system: true,
-    email: true,
-    line: false,
-  });
+  const [preferences, setPreferences] = useState<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES,
+  );
+  const [savingPreference, setSavingPreference] = useState(false);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
 
   useEffect(() => {
@@ -292,12 +291,14 @@ export default function NotificationsPage() {
     }
     if (auth.status === 'signed-out') {
       setNotifications([]);
+      setPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
       setAccess({ status: 'signed-out' });
       return;
     }
 
     if (canUseUxPreview()) {
       setNotifications(createPreviewNotifications());
+      setPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
       setAccess({ status: 'ready', token: UX_PREVIEW_TOKEN });
       setActionError(null);
       return;
@@ -321,13 +322,17 @@ export default function NotificationsPage() {
           return;
         }
 
-        const rows = await getMyNotifications(token, controller.signal);
+        const [rows, savedPreferences] = await Promise.all([
+          getMyNotifications(token, controller.signal),
+          getNotificationPreferences(token, controller.signal),
+        ]);
         if (!active) return;
         setNotifications(
           rows.map((notification) =>
             toUserNotification(notification, signedInRole),
           ),
         );
+        setPreferences(savedPreferences);
         setAccess({ status: 'ready', token });
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
@@ -478,31 +483,42 @@ export default function NotificationsPage() {
     }
   }
 
-  function togglePreference(key: NotificationPreference) {
-    setPreferences((current) => {
-      if (key === 'all') {
-        const enabled = !current.all;
-        return {
-          all: enabled,
-          booking: enabled,
-          penalty: enabled,
-          payment: enabled,
-          event: enabled,
-          system: enabled,
-          email: enabled,
-          line: enabled ? current.line : false,
-        };
-      }
+  async function togglePreference(key: NotificationType | 'all') {
+    if (access.status !== 'ready' || savingPreference) return;
 
-      const next = { ...current, [key]: !current[key] };
-      const contentEnabled =
-        next.booking &&
-        next.penalty &&
-        next.payment &&
-        next.event &&
-        next.system;
-      return { ...next, all: contentEnabled };
-    });
+    const previous = preferences;
+    const patch =
+      key === 'all'
+        ? (Object.fromEntries(
+            NOTIFICATION_PREFERENCE_TYPES.map((type) => [
+              type,
+              !NOTIFICATION_PREFERENCE_TYPES.every(
+                (preferenceType) => previous[preferenceType],
+              ),
+            ]),
+          ) as NotificationPreferences)
+        : { [key]: !previous[key] };
+    const optimistic = { ...previous, ...patch };
+    setActionError(null);
+    setSavingPreference(true);
+    setPreferences(optimistic);
+
+    if (access.token === UX_PREVIEW_TOKEN) {
+      setSavingPreference(false);
+      return;
+    }
+
+    try {
+      const saved = await updateNotificationPreferences(patch, access.token);
+      setPreferences(saved);
+    } catch (cause) {
+      setPreferences(previous);
+      setActionError(
+        describeError(cause, 'บันทึกการตั้งค่าการแจ้งเตือนไม่สำเร็จ'),
+      );
+    } finally {
+      setSavingPreference(false);
+    }
   }
 
   return (
@@ -560,6 +576,7 @@ export default function NotificationsPage() {
               <NotificationSettings
                 preferences={preferences}
                 onToggle={togglePreference}
+                saving={savingPreference}
               />
             ) : null}
 
@@ -678,47 +695,64 @@ function NotificationErrorState({
 function NotificationSettings({
   preferences,
   onToggle,
+  saving,
 }: {
-  preferences: Record<NotificationPreference, boolean>;
-  onToggle: (key: NotificationPreference) => void;
+  preferences: NotificationPreferences;
+  onToggle: (key: NotificationType | 'all') => void;
+  saving: boolean;
 }) {
   const options: {
-    key: NotificationPreference;
+    key: NotificationType;
     title: string;
     description: string;
     icon: typeof Bell;
   }[] = [
     {
-      key: 'booking',
+      key: 'BOOKING_STATUS',
       title: 'สถานะการจอง',
       description: 'แจ้งเมื่อยืนยัน ยกเลิก หรือมีการเปลี่ยนแปลงบูธ',
       icon: CalendarDays,
     },
     {
-      key: 'penalty',
-      title: 'แต้มโทษ',
-      description: 'แจ้งเมื่อได้รับแต้มโทษและรายละเอียดเวลาที่ออกแต้ม',
-      icon: ShieldAlert,
-    },
-    {
-      key: 'payment',
+      key: 'PAYMENT',
       title: 'การชำระเงิน',
       description: 'เตือนเวลาชำระ ยืนยันสลิป และผลการตรวจสอบ',
       icon: CreditCard,
     },
     {
-      key: 'event',
+      key: 'ANNOUNCEMENT',
       title: 'ข่าวสารและประกาศงาน',
       description: 'ประกาศจากผู้จัดงานและงานใหม่ที่เปิดรับร้านค้า',
       icon: Megaphone,
     },
     {
-      key: 'system',
-      title: 'คำแนะนำจาก AI',
-      description: 'โซนและบูธที่เหมาะกับข้อมูลร้านในโปรไฟล์',
+      key: 'PENALTY',
+      title: 'แต้มโทษ',
+      description: 'แจ้งเมื่อได้รับแต้มโทษและรายละเอียดเวลาที่ออกแต้ม',
+      icon: ShieldAlert,
+    },
+    {
+      key: 'REFUND',
+      title: 'การคืนเงิน',
+      description: 'แจ้งสถานะคำร้องและผลการคืนเงิน',
+      icon: CreditCard,
+    },
+    {
+      key: 'SUPPORT_TICKET',
+      title: 'การติดต่อฝ่ายสนับสนุน',
+      description: 'แจ้งความคืบหน้าของคำร้องและข้อความตอบกลับ',
+      icon: Bell,
+    },
+    {
+      key: 'SYSTEM',
+      title: 'ระบบและคำแนะนำ',
+      description: 'ข้อความสำคัญจากระบบและคำแนะนำสำหรับร้านของคุณ',
       icon: Sparkles,
     },
   ];
+  const allEnabled = NOTIFICATION_PREFERENCE_TYPES.every(
+    (type) => preferences[type],
+  );
 
   return (
     <section
@@ -729,101 +763,45 @@ function NotificationSettings({
         <div>
           <h2 className="text-lg font-extrabold">เลือกสิ่งที่ต้องการรับแจ้ง</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            ปิดหรือเปิดได้ทุกประเภท การตั้งค่านี้เป็นตัวอย่าง UX
-            และยังไม่ส่งเข้า API
+            ตั้งค่าหมวดที่ต้องการเห็นภายในเว็บไซต์และรับผ่านการแจ้งเตือนบนอุปกรณ์
           </p>
         </div>
         <ToggleSwitch
-          checked={preferences.all}
-          onClick={() => onToggle('all')}
+          checked={allEnabled}
+          onClick={() => void onToggle('all')}
           label="เปิดการแจ้งเตือนทั้งหมด"
+          disabled={saving}
         />
       </div>
 
-      <div className="grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-        <div className="divide-y divide-line px-5 sm:px-7">
-          {options.map(({ key, title, description, icon: Icon }) => (
-            <div key={key} className="flex items-center gap-4 py-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
-                <Icon className="h-4.5 w-4.5" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-extrabold">{title}</p>
-                <p className="mt-0.5 text-xs leading-5 text-muted">
-                  {description}
-                </p>
-              </div>
-              <ToggleSwitch
-                checked={preferences[key]}
-                onClick={() => onToggle(key)}
-                label={title}
-                compact
-              />
+      <div className="grid divide-y divide-line px-5 sm:px-7 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        {options.map(({ key, title, description, icon: Icon }, index) => (
+          <div
+            key={key}
+            className={`flex items-center gap-4 py-4 ${
+              index % 2 === 0 ? 'lg:pr-7' : 'lg:pl-7'
+            }`}
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+              <Icon className="h-4.5 w-4.5" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold">{title}</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted">
+                {description}
+              </p>
             </div>
-          ))}
-        </div>
-
-        <div className="px-5 py-5 sm:px-7">
-          <p className="text-sm font-extrabold">ช่องทางรับแจ้งเตือน</p>
-          <div className="mt-3 grid gap-3">
-            <ChannelSetting
-              icon={Bell}
-              title="ภายในเว็บไซต์"
-              description="แสดงที่กระดิ่งและหน้าการแจ้งเตือน"
-              checked={preferences.all}
-              disabled
-            />
-            <ChannelSetting
-              icon={Mail}
-              title="อีเมล"
-              description="ส่งรายละเอียดสำคัญไปยังอีเมลบัญชี"
-              checked={preferences.email}
-              onClick={() => onToggle('email')}
-            />
-            <ChannelSetting
-              icon={Smartphone}
-              title="LINE"
-              description="ต้นแบบช่องทางเสริม รอเชื่อม LINE Official"
-              checked={preferences.line}
-              onClick={() => onToggle('line')}
+            <ToggleSwitch
+              checked={preferences[key]}
+              onClick={() => void onToggle(key)}
+              label={title}
+              compact
+              disabled={saving}
             />
           </div>
-        </div>
+        ))}
       </div>
     </section>
-  );
-}
-
-function ChannelSetting({
-  icon: Icon,
-  title,
-  description,
-  checked,
-  disabled = false,
-  onClick,
-}: {
-  icon: typeof Bell;
-  title: string;
-  description: string;
-  checked: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-line p-3.5">
-      <Icon className="h-5 w-5 shrink-0 text-violet" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">{title}</p>
-        <p className="text-xs leading-5 text-muted">{description}</p>
-      </div>
-      <ToggleSwitch
-        checked={checked}
-        onClick={onClick}
-        label={title}
-        compact
-        disabled={disabled}
-      />
-    </div>
   );
 }
 

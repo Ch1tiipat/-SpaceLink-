@@ -30,6 +30,7 @@ describe('AuthController', () => {
     trustScore: 100,
     isBlacklisted: false,
     blacklistReason: 'must stay private',
+    notificationPreferences: null,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
   };

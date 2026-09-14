@@ -1,6 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import {
+  normalizeNotificationPreferences,
+  NOTIFICATION_TYPES,
+  type NotificationPreferences,
+} from '../notifications/notification-preferences';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { toUserResponse, type UserResponse } from './user-response';
 
@@ -146,6 +152,51 @@ export class UsersService {
     }
 
     return user.authUserId;
+  }
+
+  async getNotificationPreferences(
+    userId: string,
+  ): Promise<NotificationPreferences> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('ไม่พบผู้ใช้');
+    }
+
+    return normalizeNotificationPreferences(user.notificationPreferences);
+  }
+
+  async updateNotificationPreferences(
+    userId: string,
+    input: UpdateNotificationPreferencesDto,
+  ): Promise<NotificationPreferences> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { notificationPreferences: true },
+    });
+
+    if (!current) {
+      throw new NotFoundException('ไม่พบผู้ใช้');
+    }
+
+    const preferences = normalizeNotificationPreferences(
+      current.notificationPreferences,
+    );
+    for (const type of NOTIFICATION_TYPES) {
+      const value = input[type];
+      if (value !== undefined) {
+        preferences[type] = value;
+      }
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { notificationPreferences: preferences },
+    });
+
+    return preferences;
   }
 
   private toUserDetailResponse(user: UserDetailRecord): UserDetailResponse {
