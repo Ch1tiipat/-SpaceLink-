@@ -1,7 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole, type User } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { UsersService } from './users.service';
 
 const USER_ID = '00000000-0000-4000-8000-000000000001';
@@ -15,6 +17,7 @@ const USER_ROW: User = {
   trustScore: 100,
   isBlacklisted: false,
   blacklistReason: 'must stay private',
+  notificationPreferences: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
 };
@@ -296,6 +299,93 @@ describe('UsersService', () => {
         NotFoundException,
       );
     });
+  });
+
+  describe('notification preferences', () => {
+    it('returns all seven categories enabled when preferences are null', async () => {
+      userFindUnique.mockResolvedValue({ notificationPreferences: null });
+
+      await expect(
+        service.getNotificationPreferences(USER_ID),
+      ).resolves.toEqual({
+        BOOKING_STATUS: true,
+        PAYMENT: true,
+        ANNOUNCEMENT: true,
+        PENALTY: true,
+        REFUND: true,
+        SUPPORT_TICKET: true,
+        SYSTEM: true,
+      });
+      expect(userFindUnique).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        select: { notificationPreferences: true },
+      });
+    });
+
+    it('normalizes missing and non-false values as enabled', async () => {
+      userFindUnique.mockResolvedValue({
+        notificationPreferences: {
+          PAYMENT: false,
+          SYSTEM: 'false',
+        },
+      });
+
+      await expect(
+        service.getNotificationPreferences(USER_ID),
+      ).resolves.toMatchObject({
+        PAYMENT: false,
+        SYSTEM: true,
+        ANNOUNCEMENT: true,
+      });
+    });
+
+    it('merges a partial patch without changing omitted categories', async () => {
+      userFindUnique.mockResolvedValue({
+        notificationPreferences: {
+          PAYMENT: false,
+          SYSTEM: false,
+        },
+      });
+      userUpdate.mockResolvedValue({});
+
+      const input = plainToInstance(UpdateNotificationPreferencesDto, {
+        PAYMENT: true,
+      });
+      const result = await service.updateNotificationPreferences(
+        USER_ID,
+        input,
+      );
+
+      expect(result).toEqual({
+        BOOKING_STATUS: true,
+        PAYMENT: true,
+        ANNOUNCEMENT: true,
+        PENALTY: true,
+        REFUND: true,
+        SUPPORT_TICKET: true,
+        SYSTEM: false,
+      });
+      expect(userUpdate).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        data: { notificationPreferences: result },
+      });
+    });
+
+    it.each(['get', 'patch'])(
+      'returns 404 when the current user is missing during %s',
+      async (operation) => {
+        userFindUnique.mockResolvedValue(null);
+
+        const result =
+          operation === 'get'
+            ? service.getNotificationPreferences(USER_ID)
+            : service.updateNotificationPreferences(USER_ID, {
+                PAYMENT: false,
+              });
+        await expect(result).rejects.toThrow(NotFoundException);
+        expect(userUpdate).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('updateMe', () => {

@@ -201,6 +201,7 @@ model User {
   trustScore      Int      @default(100) @map("trust_score")
   isBlacklisted   Boolean  @default(false) @map("is_blacklisted")
   blacklistReason String?  @map("blacklist_reason")
+  notificationPreferences Json? @map("notification_preferences")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

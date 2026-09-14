@@ -5,6 +5,7 @@ import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UserLastLoginService } from './user-last-login.service';
 import { UsersService } from './users.service';
@@ -22,6 +23,24 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('me/notification-preferences')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.VENDOR)
+  getNotificationPreferences(@CurrentUser() currentUser: User) {
+    return this.usersService.getNotificationPreferences(currentUser.id);
+  }
+
+  @Patch('me/notification-preferences')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.VENDOR)
+  updateNotificationPreferences(
+    @Body() preferences: UpdateNotificationPreferencesDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.updateNotificationPreferences(
+      currentUser.id,
+      preferences,
+    );
   }
 
   @Get(':id')

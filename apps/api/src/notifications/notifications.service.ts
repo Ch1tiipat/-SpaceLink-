@@ -9,6 +9,7 @@ import {
   type Notification,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isNotificationTypeEnabled } from './notification-preferences';
 import { PushSenderService } from './push-sender.service';
 
 export interface CreateNotificationInput {
@@ -81,6 +82,20 @@ export class NotificationsService {
     input: CreateNotificationInput,
   ): Promise<Notification | null> {
     try {
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationPreferences: true },
+      });
+      if (
+        !recipient ||
+        !isNotificationTypeEnabled(
+          recipient.notificationPreferences,
+          input.type,
+        )
+      ) {
+        return null;
+      }
+
       const notification = await this.prisma.notification.create({
         data: { userId, ...input },
       });
@@ -111,12 +126,15 @@ export class NotificationsService {
     try {
       const recipients = await this.prisma.user.findMany({
         where: { role },
-        select: { id: true },
+        select: { id: true, notificationPreferences: true },
       });
 
-      if (recipients.length === 0) return 0;
-
-      const userIds = recipients.map(({ id }) => id);
+      const userIds = recipients.flatMap(({ id, notificationPreferences }) =>
+        isNotificationTypeEnabled(notificationPreferences, input.type)
+          ? [id]
+          : [],
+      );
+      if (userIds.length === 0) return 0;
       const created = await this.prisma.notification.createMany({
         data: userIds.map((userId) => ({ userId, ...input })),
       });
@@ -155,7 +173,10 @@ export class NotificationsService {
           ...permissionFilter,
           user: { role: UserRole.ORG_ADMIN },
         },
-        select: { userId: true },
+        select: {
+          userId: true,
+          user: { select: { notificationPreferences: true } },
+        },
       });
 
       if (recipients.length === 0) {
@@ -165,7 +186,10 @@ export class NotificationsService {
             role: MembershipRole.OWNER,
             user: { role: UserRole.ORG_ADMIN },
           },
-          select: { userId: true },
+          select: {
+            userId: true,
+            user: { select: { notificationPreferences: true } },
+          },
         });
       }
 
@@ -176,13 +200,19 @@ export class NotificationsService {
             role: MembershipRole.ADMIN,
             user: { role: UserRole.ORG_ADMIN },
           },
-          select: { userId: true },
+          select: {
+            userId: true,
+            user: { select: { notificationPreferences: true } },
+          },
         });
       }
 
-      if (recipients.length === 0) return 0;
-
-      const userIds = recipients.map(({ userId }) => userId);
+      const userIds = recipients.flatMap(({ userId, user }) =>
+        isNotificationTypeEnabled(user.notificationPreferences, input.type)
+          ? [userId]
+          : [],
+      );
+      if (userIds.length === 0) return 0;
       const created = await this.prisma.notification.createMany({
         data: userIds.map((userId) => ({ userId, ...input })),
       });
@@ -215,14 +245,20 @@ export class NotificationsService {
             endDate: { gte: this.bangkokCalendarDate() },
           },
         },
-        select: { vendorUserId: true },
+        select: {
+          vendorUserId: true,
+          vendor: { select: { notificationPreferences: true } },
+        },
         distinct: ['vendorUserId'],
       });
 
-      if (recipients.length === 0) return 0;
+      const enabledRecipients = recipients.filter(({ vendor }) =>
+        isNotificationTypeEnabled(vendor.notificationPreferences, input.type),
+      );
+      if (enabledRecipients.length === 0) return 0;
 
       const created = await this.prisma.notification.createMany({
-        data: recipients.map(({ vendorUserId }) => ({
+        data: enabledRecipients.map(({ vendorUserId }) => ({
           userId: vendorUserId,
           ...input,
         })),
@@ -245,11 +281,19 @@ export class NotificationsService {
     body: string;
   }): Promise<number> {
     try {
-      const users = await this.prisma.user.findMany({ select: { id: true } });
+      const users = await this.prisma.user.findMany({
+        select: { id: true, notificationPreferences: true },
+      });
 
-      if (users.length === 0) return 0;
-
-      const userIds = users.map(({ id }) => id);
+      const userIds = users.flatMap(({ id, notificationPreferences }) =>
+        isNotificationTypeEnabled(
+          notificationPreferences,
+          NotificationType.SYSTEM,
+        )
+          ? [id]
+          : [],
+      );
+      if (userIds.length === 0) return 0;
       await this.prisma.notification.createMany({
         data: userIds.map((userId) => ({
           userId,
@@ -261,7 +305,7 @@ export class NotificationsService {
 
       void this.pushSender.sendToUsers(userIds, input).catch(() => undefined);
 
-      return users.length;
+      return userIds.length;
     } catch {
       this.logger.error('Failed to fan out a system broadcast notification');
       return 0;
@@ -349,6 +393,7 @@ export class NotificationsService {
       select: {
         id: true,
         vendorUserId: true,
+        vendor: { select: { notificationPreferences: true } },
         event: { select: { name: true } },
         booth: { select: { code: true } },
       },
@@ -398,7 +443,11 @@ export class NotificationsService {
       if (
         reviewedKeys.has(key) ||
         invitedKeys.has(key) ||
-        selectedKeys.has(key)
+        selectedKeys.has(key) ||
+        !isNotificationTypeEnabled(
+          booking.vendor.notificationPreferences,
+          NotificationType.SYSTEM,
+        )
       ) {
         return [];
       }

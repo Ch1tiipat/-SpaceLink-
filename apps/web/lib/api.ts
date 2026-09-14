@@ -1208,6 +1208,9 @@ export type NotificationRecord = {
 };
 
 export type NotificationCount = { count: number };
+export type NotificationPreferences = Record<NotificationType, boolean>;
+export type UpdateNotificationPreferencesInput =
+  Partial<NotificationPreferences>;
 
 export type PushSubscriptionInput = {
   endpoint: string;
@@ -1710,6 +1713,28 @@ export function getMyNotifications(
   signal?: AbortSignal,
 ): Promise<NotificationRecord[]> {
   return getJson<NotificationRecord[]>('/notifications', { signal, token });
+}
+
+export function getNotificationPreferences(
+  token: string,
+  signal?: AbortSignal,
+): Promise<NotificationPreferences> {
+  return getJson<NotificationPreferences>(
+    '/users/me/notification-preferences',
+    { signal, token },
+  );
+}
+
+export function updateNotificationPreferences(
+  input: UpdateNotificationPreferencesInput,
+  token: string,
+): Promise<NotificationPreferences> {
+  return patchJson<NotificationPreferences>(
+    '/users/me/notification-preferences',
+    input,
+    { token },
+    'ไม่สามารถบันทึกการตั้งค่าการแจ้งเตือนได้',
+  );
 }
 
 export function getUnreadNotificationCount(

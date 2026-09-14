@@ -32,6 +32,7 @@ const vendor = {
   trustScore: 100,
   isBlacklisted: false,
   blacklistReason: null,
+  notificationPreferences: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
   updatedAt: new Date('2026-08-01T00:00:00.000Z'),
 } satisfies User;

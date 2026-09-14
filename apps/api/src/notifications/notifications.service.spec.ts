@@ -41,6 +41,7 @@ const NOTIFICATION: Notification = {
 
 const bookingFindMany = jest.fn();
 const reviewFindMany = jest.fn();
+const userFindUnique = jest.fn();
 const userFindMany = jest.fn();
 const orgMembershipFindMany = jest.fn();
 const notificationCreate = jest.fn();
@@ -68,7 +69,7 @@ const transactionClient = {
 const mockPrismaService = {
   booking: { findMany: bookingFindMany },
   review: { findMany: reviewFindMany },
-  user: { findMany: userFindMany },
+  user: { findUnique: userFindUnique, findMany: userFindMany },
   orgMembership: { findMany: orgMembershipFindMany },
   notification: {
     create: notificationCreate,
@@ -95,7 +96,10 @@ type BookingFindManyArgs = {
     status: { not: BookingStatus };
     event: { organizationId: string; endDate: { gte: Date } };
   };
-  select: { vendorUserId: boolean };
+  select: {
+    vendorUserId: boolean;
+    vendor: { select: { notificationPreferences: boolean } };
+  };
   distinct: string[];
 };
 
@@ -120,10 +124,14 @@ describe('NotificationsService', () => {
     });
     sendToUser.mockResolvedValue(undefined);
     sendToUsers.mockResolvedValue(undefined);
-    userFindMany.mockResolvedValue([{ id: USER_ID }, { id: OTHER_USER_ID }]);
+    userFindUnique.mockResolvedValue({ notificationPreferences: null });
+    userFindMany.mockResolvedValue([
+      { id: USER_ID, notificationPreferences: null },
+      { id: OTHER_USER_ID, notificationPreferences: null },
+    ]);
     orgMembershipFindMany.mockResolvedValue([
-      { userId: USER_ID },
-      { userId: OTHER_USER_ID },
+      { userId: USER_ID, user: { notificationPreferences: null } },
+      { userId: OTHER_USER_ID, user: { notificationPreferences: null } },
     ]);
     reviewFindMany.mockResolvedValue([]);
     prismaTransaction.mockImplementation(
@@ -157,6 +165,21 @@ describe('NotificationsService', () => {
       title: INPUT.title,
       body: INPUT.body,
     });
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      select: { notificationPreferences: true },
+    });
+  });
+
+  it('does not create or push a disabled direct notification', async () => {
+    userFindUnique.mockResolvedValue({
+      notificationPreferences: { ANNOUNCEMENT: false },
+    });
+
+    await expect(service.createForUser(USER_ID, INPUT)).resolves.toBeNull();
+
+    expect(notificationCreate).not.toHaveBeenCalled();
+    expect(sendToUser).not.toHaveBeenCalled();
   });
 
   it('keeps the saved notification result when web push fails', async () => {
@@ -189,7 +212,7 @@ describe('NotificationsService', () => {
 
     expect(userFindMany).toHaveBeenCalledWith({
       where: { role: UserRole.SUPER_ADMIN },
-      select: { id: true },
+      select: { id: true, notificationPreferences: true },
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [
@@ -198,6 +221,29 @@ describe('NotificationsService', () => {
       ],
     });
     expect(sendToUsers).toHaveBeenCalledWith([USER_ID, OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
+  it('filters disabled role recipients before both insert and push', async () => {
+    userFindMany.mockResolvedValue([
+      {
+        id: USER_ID,
+        notificationPreferences: { ANNOUNCEMENT: false },
+      },
+      { id: OTHER_USER_ID, notificationPreferences: null },
+    ]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.createForRole(UserRole.SUPER_ADMIN, INPUT),
+    ).resolves.toBe(1);
+
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [{ userId: OTHER_USER_ID, ...INPUT }],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([OTHER_USER_ID], {
       title: INPUT.title,
       body: INPUT.body,
     });
@@ -243,7 +289,10 @@ describe('NotificationsService', () => {
         canManagePayments: true,
         user: { role: UserRole.ORG_ADMIN },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        user: { select: { notificationPreferences: true } },
+      },
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [
@@ -257,10 +306,38 @@ describe('NotificationsService', () => {
     });
   });
 
+  it('filters disabled organization admins before insert and push', async () => {
+    orgMembershipFindMany.mockResolvedValue([
+      {
+        userId: USER_ID,
+        user: { notificationPreferences: { ANNOUNCEMENT: false } },
+      },
+      {
+        userId: OTHER_USER_ID,
+        user: { notificationPreferences: null },
+      },
+    ]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.createForOrganizationAdmins(ORGANIZATION_ID, 'payments', INPUT),
+    ).resolves.toBe(1);
+
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [{ userId: OTHER_USER_ID, ...INPUT }],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
+  });
+
   it('falls back to the organization owner when no zone admin is delegated', async () => {
     orgMembershipFindMany
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ userId: USER_ID }]);
+      .mockResolvedValueOnce([
+        { userId: USER_ID, user: { notificationPreferences: null } },
+      ]);
     notificationCreateMany.mockResolvedValue({ count: 1 });
 
     await expect(
@@ -274,7 +351,10 @@ describe('NotificationsService', () => {
         canManageZones: true,
         user: { role: UserRole.ORG_ADMIN },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        user: { select: { notificationPreferences: true } },
+      },
     });
     expect(orgMembershipFindMany).toHaveBeenNthCalledWith(2, {
       where: {
@@ -282,7 +362,10 @@ describe('NotificationsService', () => {
         role: MembershipRole.OWNER,
         user: { role: UserRole.ORG_ADMIN },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        user: { select: { notificationPreferences: true } },
+      },
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [{ userId: USER_ID, ...INPUT }],
@@ -293,7 +376,10 @@ describe('NotificationsService', () => {
     orgMembershipFindMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ userId: USER_ID }, { userId: OTHER_USER_ID }]);
+      .mockResolvedValueOnce([
+        { userId: USER_ID, user: { notificationPreferences: null } },
+        { userId: OTHER_USER_ID, user: { notificationPreferences: null } },
+      ]);
     notificationCreateMany.mockResolvedValue({ count: 2 });
 
     await expect(
@@ -306,7 +392,10 @@ describe('NotificationsService', () => {
         role: MembershipRole.ADMIN,
         user: { role: UserRole.ORG_ADMIN },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        user: { select: { notificationPreferences: true } },
+      },
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [
@@ -343,6 +432,7 @@ describe('NotificationsService', () => {
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
         status: BookingStatus.PENDING_PAYMENT,
         event: { name: 'งานเกษตร มทส. 2569' },
         booth: { code: 'A05' },
@@ -360,6 +450,7 @@ describe('NotificationsService', () => {
       select: {
         id: true,
         vendorUserId: true,
+        vendor: { select: { notificationPreferences: true } },
         event: { select: { name: true } },
         booth: { select: { code: true } },
       },
@@ -383,11 +474,31 @@ describe('NotificationsService', () => {
     });
   });
 
+  it('does not create a review invitation when SYSTEM is disabled', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        vendor: { notificationPreferences: { SYSTEM: false } },
+        event: { name: 'งานเกษตร มทส. 2569' },
+        booth: { code: 'A05' },
+      },
+    ]);
+    reviewFindMany.mockResolvedValue([]);
+    notificationFindMany.mockResolvedValue([]);
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+  });
+
   it('does not invite a vendor who already reviewed the booking', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
         event: {
           name: 'งานเกษตร มทส. 2569',
           endDate: new Date('2026-08-18T00:00:00.000Z'),
@@ -410,6 +521,7 @@ describe('NotificationsService', () => {
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
         event: {
           name: 'งานใหม่',
           endDate: new Date('2026-08-18T00:00:00.000Z'),
@@ -420,6 +532,7 @@ describe('NotificationsService', () => {
       {
         id: OLDER_REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
         event: {
           name: 'งานเดิม',
           endDate: new Date('2026-08-18T00:00:00.000Z'),
@@ -544,7 +657,10 @@ describe('NotificationsService', () => {
             seen.add(vendorUserId);
             return true;
           })
-          .map(({ vendorUserId }) => ({ vendorUserId })),
+          .map(({ vendorUserId }) => ({
+            vendorUserId,
+            vendor: { notificationPreferences: null },
+          })),
       );
     });
 
@@ -559,7 +675,10 @@ describe('NotificationsService', () => {
           endDate: { gte: new Date('2026-08-19T00:00:00.000Z') },
         },
       },
-      select: { vendorUserId: true },
+      select: {
+        vendorUserId: true,
+        vendor: { select: { notificationPreferences: true } },
+      },
       distinct: ['vendorUserId'],
     });
     expect(notificationCreateMany).toHaveBeenCalledWith({
@@ -567,6 +686,27 @@ describe('NotificationsService', () => {
         { userId: USER_ID, ...INPUT },
         { userId: OTHER_USER_ID, ...INPUT },
       ],
+    });
+  });
+
+  it('filters disabled organization bookers before insert', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        vendorUserId: USER_ID,
+        vendor: { notificationPreferences: { ANNOUNCEMENT: false } },
+      },
+      {
+        vendorUserId: OTHER_USER_ID,
+        vendor: { notificationPreferences: null },
+      },
+    ]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.fanOutToOrganizationBookers(ORGANIZATION_ID, INPUT),
+    ).resolves.toBe(1);
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [{ userId: OTHER_USER_ID, ...INPUT }],
     });
   });
 
@@ -591,7 +731,9 @@ describe('NotificationsService', () => {
     await expect(
       service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
     ).resolves.toBe(2);
-    expect(userFindMany).toHaveBeenCalledWith({ select: { id: true } });
+    expect(userFindMany).toHaveBeenCalledWith({
+      select: { id: true, notificationPreferences: true },
+    });
     expect(notificationCreateMany).toHaveBeenCalledTimes(1);
     expect(notificationCreateMany).toHaveBeenCalledWith({
       data: [
@@ -617,6 +759,32 @@ describe('NotificationsService', () => {
     expect(notificationCreateMany.mock.invocationCallOrder[0]).toBeLessThan(
       sendToUsers.mock.invocationCallOrder[0],
     );
+  });
+
+  it('filters disabled system broadcast recipients before insert and push', async () => {
+    userFindMany.mockResolvedValue([
+      { id: USER_ID, notificationPreferences: { SYSTEM: false } },
+      { id: OTHER_USER_ID, notificationPreferences: null },
+    ]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.broadcastToAllUsers({ title: INPUT.title, body: INPUT.body }),
+    ).resolves.toBe(1);
+    expect(notificationCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          userId: OTHER_USER_ID,
+          type: NotificationType.SYSTEM,
+          title: INPUT.title,
+          body: INPUT.body,
+        },
+      ],
+    });
+    expect(sendToUsers).toHaveBeenCalledWith([OTHER_USER_ID], {
+      title: INPUT.title,
+      body: INPUT.body,
+    });
   });
 
   it('does not write or push when there are no broadcast recipients', async () => {
