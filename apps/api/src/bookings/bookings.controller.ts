@@ -19,8 +19,8 @@ import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import {
   MAX_SLIP_FILE_SIZE_BYTES,
   type UploadedSlipFile,
@@ -30,6 +30,7 @@ import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
 export const PAYMENT_SLIP_UPLOAD_LIMITS = {
   files: 1,
@@ -184,7 +185,7 @@ export class BookingsController {
   // [SupabaseAuthGuard, RolesGuard, SupabaseAuthGuard, OrgScopeGuard]: Nest runs
   // controller-level guards before route-level ones, and `@OrgScoped` bundles its
   // own SupabaseAuthGuard alongside OrgScopeGuard. That guard therefore runs
-  // twice on these two routes, costing one extra token verification and one
+  // twice on these routes, costing one extra token verification and one
   // idempotent `findOrCreate`. Accepted rather than fixed — the alternatives are
   // splitting `@OrgScoped` into `@OrgScope` + `@UseGuards`, which AGENTS.md
   // forbids outright, or dropping the class-level guards, which would touch every
@@ -203,6 +204,25 @@ export class BookingsController {
       bookingId,
       confirmExemptBookingDto,
       orgId,
+    );
+  }
+
+  @Patch(':bookingId/status')
+  @UseGuards(OrgPermissionGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
+  @OrgScoped('bookingId')
+  updateStatus(
+    @Param('bookingId') bookingId: string,
+    @Body() updateBookingStatusDto: UpdateBookingStatusDto,
+    @CurrentOrgId() orgId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.bookingsService.updateStatus(
+      bookingId,
+      updateBookingStatusDto,
+      orgId,
+      currentUser.id,
     );
   }
 
