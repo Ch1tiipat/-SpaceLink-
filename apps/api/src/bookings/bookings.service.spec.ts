@@ -21,6 +21,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import generatePromptPayPayload from 'promptpay-qr';
 import QRCode from 'qrcode';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SlipVerificationService } from '../slips/slip-verification.service';
@@ -33,6 +34,7 @@ import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateBookingsBatchDto } from './dto/create-bookings-batch.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
 jest.mock('promptpay-qr', () => ({
   __esModule: true,
@@ -184,6 +186,7 @@ const createAdminAccess = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 const createForOrganizationAdmins = jest.fn();
+const recordAuditLog = jest.fn();
 
 const mockPrismaService = {
   event: { findUnique: eventFindUnique },
@@ -222,6 +225,7 @@ const mockNotificationsService = {
   createForUser,
   createForOrganizationAdmins,
 };
+const mockAuditLogsService = { record: recordAuditLog };
 
 const PENDING_SLIP_BOOKING = {
   id: BOOKING_ID,
@@ -327,6 +331,7 @@ describe('BookingsService', () => {
     removeObject.mockResolvedValue(undefined);
     createForUser.mockResolvedValue(null);
     createForOrganizationAdmins.mockResolvedValue(1);
+    recordAuditLog.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -344,6 +349,7 @@ describe('BookingsService', () => {
           provide: NotificationsService,
           useValue: mockNotificationsService,
         },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
       ],
     }).compile();
 
@@ -2267,6 +2273,115 @@ describe('BookingsService', () => {
       ).rejects.toThrow('การจองหมดเวลาหรือสถานะเปลี่ยนไปแล้ว');
       expect(bookingFindUnique).not.toHaveBeenCalled();
       expect(createForUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateStatus', () => {
+    const actorUserId = '77777777-7777-4777-8777-777777777777';
+    const completedDto: UpdateBookingStatusDto = {
+      status: BookingStatus.COMPLETED,
+    };
+
+    beforeEach(() => {
+      bookingFindFirst.mockResolvedValue({
+        id: BOOKING_ID,
+        status: BookingStatus.CONFIRMED,
+      });
+      bookingFindUnique.mockResolvedValue({
+        ...CREATED_BOOKING,
+        status: BookingStatus.COMPLETED,
+      });
+    });
+
+    it('records and returns a confirmed booking outcome', async () => {
+      const result = await service.updateStatus(
+        BOOKING_ID,
+        completedDto,
+        ORGANIZATION_ID,
+        actorUserId,
+      );
+
+      expect(bookingFindFirst).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          event: { organizationId: ORGANIZATION_ID },
+        },
+        select: { id: true, status: true },
+      });
+      expect(bookingUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: BOOKING_ID,
+          event: { organizationId: ORGANIZATION_ID },
+          status: BookingStatus.CONFIRMED,
+        },
+        data: { status: BookingStatus.COMPLETED },
+      });
+      expect(recordAuditLog).toHaveBeenCalledWith({
+        actorUserId,
+        action: 'BOOKING_STATUS_UPDATED',
+        targetType: 'BOOKING',
+        targetId: BOOKING_ID,
+        metadata: {
+          organizationId: ORGANIZATION_ID,
+          previousStatus: BookingStatus.CONFIRMED,
+          newStatus: BookingStatus.COMPLETED,
+        },
+      });
+      expect(result).toMatchObject({
+        id: BOOKING_ID,
+        status: BookingStatus.COMPLETED,
+        boothPrice: '1500',
+      });
+    });
+
+    it('returns 404 for a missing or out-of-organization booking', async () => {
+      bookingFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus(
+          BOOKING_ID,
+          completedDto,
+          ORGANIZATION_ID,
+          actorUserId,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      BookingStatus.PENDING_PAYMENT,
+      BookingStatus.CANCELLED,
+      BookingStatus.NO_SHOW,
+      BookingStatus.COMPLETED,
+    ])('rejects a booking in %s status', async (status) => {
+      bookingFindFirst.mockResolvedValue({ id: BOOKING_ID, status });
+
+      await expect(
+        service.updateStatus(
+          BOOKING_ID,
+          completedDto,
+          ORGANIZATION_ID,
+          actorUserId,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
+    });
+
+    it('rejects a concurrent status change before reading or auditing', async () => {
+      bookingUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.updateStatus(
+          BOOKING_ID,
+          completedDto,
+          ORGANIZATION_ID,
+          actorUserId,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(bookingFindUnique).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
     });
   });
 });

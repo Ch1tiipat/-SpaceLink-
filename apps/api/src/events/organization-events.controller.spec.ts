@@ -36,6 +36,7 @@ const ORG_ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const findByOrganization = jest.fn();
 const create = jest.fn();
 const quoteSubscription = jest.fn();
+const activateSubscription = jest.fn();
 const publish = jest.fn();
 const open = jest.fn();
 const close = jest.fn();
@@ -56,6 +57,7 @@ const service = {
   findByOrganization,
   create,
   quoteSubscription,
+  activateSubscription,
   publish,
   open,
   close,
@@ -83,6 +85,7 @@ function handler(
     | 'findByOrganization'
     | 'create'
     | 'quoteSubscription'
+    | 'activateSubscription'
     | 'publish'
     | 'open'
     | 'close'
@@ -159,6 +162,22 @@ describe('OrganizationEventsController', () => {
     }
   });
 
+  it('restricts manual subscription activation to scoped SUPER_ADMIN users', () => {
+    const activationHandler = handler('activateSubscription');
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, activationHandler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      RolesGuard,
+    ]);
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, activationHandler)).toBe(
+      'organizationId',
+    );
+    expect(Reflect.getMetadata(ROLES_KEY, activationHandler)).toEqual([
+      UserRole.SUPER_ADMIN,
+    ]);
+  });
+
   it('protects join-information writes for scoped organization admins only', () => {
     // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     for (const name of [
@@ -220,6 +239,29 @@ describe('OrganizationEventsController', () => {
     expect(create).toHaveBeenCalledWith(input, ORGANIZATION_ID);
   });
 
+  it('passes the scoped event, reason, and SUPER_ADMIN actor to manual activation', async () => {
+    const input = { reason: 'ตรวจสอบยอดโอนแล้ว' };
+    const superAdmin = {
+      id: '33333333-3333-4333-8333-333333333333',
+      role: UserRole.SUPER_ADMIN,
+    } as User;
+    activateSubscription.mockResolvedValue({ status: 'ACTIVE' });
+
+    await controller.activateSubscription(
+      ORGANIZATION_ID,
+      LEGACY_EVENT_ID,
+      input,
+      superAdmin,
+    );
+
+    expect(activateSubscription).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      input,
+      superAdmin.id,
+    );
+  });
+
   it('passes only the guard-resolved organization id to the service', async () => {
     findByOrganization.mockResolvedValue([]);
 
@@ -252,6 +294,7 @@ describe('OrganizationEventsController', () => {
 
   it.each([
     'publish',
+    'activateSubscription',
     'open',
     'close',
     'remove',
@@ -286,6 +329,17 @@ describe('OrganizationEventsController', () => {
     ) as LooseUuidPipe;
     expect(pipe.transform(LEGACY_EVENT_ID)).toBe(LEGACY_EVENT_ID);
     expect(() => pipe.transform('not-a-uuid')).toThrow(BadRequestException);
+  });
+
+  it('rejects ORG_ADMIN on manual subscription activation', () => {
+    const context = contextFor(
+      { user: { id: ORG_ADMIN_ID, role: UserRole.ORG_ADMIN } },
+      'activateSubscription',
+    );
+
+    expect(() => new RolesGuard(new Reflector()).canActivate(context)).toThrow(
+      ForbiddenException,
+    );
   });
 
   it('passes scoped join-information mutations to their service', async () => {
