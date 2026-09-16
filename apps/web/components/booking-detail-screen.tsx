@@ -11,6 +11,7 @@ import {
   Store,
 } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
+import { RefundRequestPanel } from '@/components/refund-request-panel';
 import {
   cancelBooking,
   getMyBookings,
@@ -129,7 +130,7 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
     status,
     holdExpiresAt: pending ? new Date(now + 15 * 60_000).toISOString() : null,
     confirmedAt:
-      status === 'CONFIRMED' || completed
+      status === 'CONFIRMED' || completed || cancelled
         ? new Date(now - 5 * 86_400_000).toISOString()
         : null,
     cancelReason: cancelled ? 'เปลี่ยนแผนการเข้าร่วมงาน (ข้อมูลจำลอง)' : null,
@@ -386,6 +387,9 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
                   เขียนรีวิวพื้นที่
                 </Link>
               ) : null}
+              <Link href="/refunds" className="sl-action-secondary text-violet">
+                คำร้องคืนเงินของฉัน
+              </Link>
             </div>
           </section>
 
@@ -447,6 +451,11 @@ export function BookingDetailScreen({ bookingId }: { bookingId: string }) {
                 </p>
               </section>
             ) : null}
+            <RefundRequestPanel
+              booking={booking}
+              token={state.token}
+              isPreview={state.isPreview}
+            />
           </aside>
         </div>
       </div>
