@@ -12,12 +12,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { UserRole } from '@prisma/client';
+import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
+import { ActivateSubscriptionDto } from './dto/activate-subscription.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { CreateEventInformationDto } from './dto/create-event-information.dto';
 import { CreateEventJoinInformationDto } from './dto/create-event-join-information.dto';
@@ -67,6 +69,28 @@ export class OrganizationEventsController {
     @Body() input: CreateEventDto,
   ) {
     return this.eventsService.create(input, organizationId);
+  }
+
+  /**
+   * Manual stop-gap until the PO defines a complete platform billing flow.
+   * This records an already-verified payment; it does not process one.
+   */
+  @Patch(':eventId/subscription/activate')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @OrgScoped('organizationId')
+  activateSubscription(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: ActivateSubscriptionDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.eventsService.activateSubscription(
+      eventId,
+      organizationId,
+      input,
+      currentUser.id,
+    );
   }
 
   @Post(':eventId/gallery')
