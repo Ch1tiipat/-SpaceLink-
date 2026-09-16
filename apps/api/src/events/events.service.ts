@@ -14,7 +14,9 @@ import {
   type Subscription,
   SubscriptionStatus,
 } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { ActivateSubscriptionDto } from './dto/activate-subscription.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { decimalString } from '../common/decimal';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,6 +46,7 @@ export class EventsService {
     private readonly prisma: PrismaService,
     private readonly bannerStorage: EventBannerStorageService,
     private readonly galleryStorage: EventGalleryStorageService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   async create(createEventDto: CreateEventDto, organizationId: string) {
@@ -129,6 +132,74 @@ export class EventsService {
       );
       return serializeQuote(quote);
     });
+  }
+
+  /**
+   * Manual stop-gap for payments verified outside SpaceLink. This deliberately
+   * does not charge a customer or model a complete billing workflow.
+   */
+  async activateSubscription(
+    eventId: string,
+    organizationId: string,
+    input: ActivateSubscriptionDto,
+    actorUserId: string,
+  ) {
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { eventId, organizationId },
+      select: { id: true, status: true },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found');
+    }
+    if (subscription.status !== SubscriptionStatus.DRAFT) {
+      throw new BadRequestException(
+        'Only draft subscriptions can be activated manually',
+      );
+    }
+
+    const platformPaidAt = new Date();
+    const updated = await this.prisma.subscription.updateMany({
+      where: {
+        id: subscription.id,
+        organizationId,
+        status: SubscriptionStatus.DRAFT,
+      },
+      data: {
+        status: SubscriptionStatus.ACTIVE,
+        platformPaidAt,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new BadRequestException(
+        'Subscription status changed; reload and try again',
+      );
+    }
+
+    const activeSubscription = await this.prisma.subscription.findUnique({
+      where: { id: subscription.id },
+    });
+    if (!activeSubscription) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    await this.auditLogs.record({
+      actorUserId,
+      action: 'SUBSCRIPTION_MANUALLY_ACTIVATED',
+      targetType: 'SUBSCRIPTION',
+      targetId: subscription.id,
+      metadata: {
+        eventId,
+        organizationId,
+        reason: input.reason,
+        previousStatus: subscription.status,
+        newStatus: SubscriptionStatus.ACTIVE,
+        platformPaidAt: platformPaidAt.toISOString(),
+      },
+    });
+
+    return serializeSubscription(activeSubscription);
   }
 
   findAll() {
