@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { User } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { LooseUuidPipe } from '../common/pipes/loose-uuid.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecommendationsController } from './recommendations.controller';
@@ -21,6 +22,15 @@ const CATEGORY_A = '00000000-0000-4000-8000-000000000004';
 const CATEGORY_B = '00000000-0000-4000-8000-000000000005';
 const OTHER_CATEGORY = '00000000-0000-4000-8000-000000000006';
 const ZONE_ID = '00000000-0000-4000-8000-000000000008';
+
+function recommendationHandler(): object {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    RecommendationsController.prototype,
+    'recommend',
+  );
+  if (!descriptor?.value) throw new Error('Missing recommend handler');
+  return descriptor.value as object;
+}
 
 const vendor = {
   id: VENDOR_ID,
@@ -62,10 +72,17 @@ describe('RecommendationsController', () => {
     controller = moduleRef.get(RecommendationsController);
   });
 
-  it('requires Supabase authentication', () => {
+  it('keeps recommendations authenticated without restricting the platform role', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     expect(
       Reflect.getMetadata(GUARDS_METADATA, RecommendationsController),
     ).toEqual([SupabaseAuthGuard]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, RecommendationsController),
+    ).toBeUndefined();
+    expect(
+      Reflect.getMetadata(ROLES_KEY, recommendationHandler()),
+    ).toBeUndefined();
   });
 
   it('validates the event id by UUID shape', () => {

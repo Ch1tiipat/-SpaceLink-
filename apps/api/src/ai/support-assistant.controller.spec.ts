@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { AskSupportAssistantDto } from './dto/ask-support-assistant.dto';
 import { SupportAssistantController } from './support-assistant.controller';
 import { SupportAssistantService } from './support-assistant.service';
@@ -14,6 +15,16 @@ jest.mock('../auth/guards/supabase-auth.guard', () => ({
 }));
 
 const USER_ID = '00000000-0000-4000-8000-000000000001';
+
+function supportHandler(): object {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    SupportAssistantController.prototype,
+    'ask',
+  );
+  if (!descriptor?.value) throw new Error('Missing ask handler');
+  return descriptor.value as object;
+}
+
 const user = {
   id: USER_ID,
   authUserId: '00000000-0000-4000-8000-000000000002',
@@ -48,10 +59,15 @@ describe('SupportAssistantController', () => {
     controller = moduleRef.get(SupportAssistantController);
   });
 
-  it('requires Supabase authentication', () => {
+  it('keeps AI support authenticated without restricting the platform role', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     expect(
       Reflect.getMetadata(GUARDS_METADATA, SupportAssistantController),
     ).toEqual([SupabaseAuthGuard]);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, SupportAssistantController),
+    ).toBeUndefined();
+    expect(Reflect.getMetadata(ROLES_KEY, supportHandler())).toBeUndefined();
   });
 
   it('uses the authenticated user id and forwards the bounded conversation', async () => {
