@@ -10,6 +10,7 @@ import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { ORG_SCOPE_KEY } from '../common/decorators/org-scope.decorator';
+import { ORG_PERMISSION_KEY } from '../common/decorators/org-permission.decorator';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { PenaltiesController } from './penalties.controller';
 import { PenaltiesService } from './penalties.service';
@@ -57,6 +58,13 @@ describe('PenaltiesController', () => {
       ]);
     },
   );
+
+  it('does not tie booking penalty creation to delegated payments or zones permissions', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
+    expect(
+      Reflect.getMetadata(ORG_PERMISSION_KEY, handlerOf('create')),
+    ).toBeUndefined();
+  });
 
   it('passes only the resolved organization and DTO to create', async () => {
     const dto = { reason: PenaltyReason.NO_SHOW };

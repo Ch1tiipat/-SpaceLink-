@@ -179,6 +179,7 @@ describe('OrganizationEventsController', () => {
   });
 
   it('protects join-information writes for scoped organization admins only', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     for (const name of [
       'createJoinInformation',
       'updateJoinInformation',
@@ -200,6 +201,7 @@ describe('OrganizationEventsController', () => {
   });
 
   it('protects event-information writes for scoped organization admins only', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     for (const name of [
       'createInformation',
       'updateInformation',
@@ -441,6 +443,7 @@ describe('OrganizationEventsController', () => {
   });
 
   it('rejects SUPER_ADMIN on event join-information writes', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     const context = contextFor(
       { user: { id: ORG_ADMIN_ID, role: UserRole.SUPER_ADMIN } },
       'createJoinInformation',
@@ -451,6 +454,7 @@ describe('OrganizationEventsController', () => {
   });
 
   it('rejects SUPER_ADMIN on event-information writes', () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     const context = contextFor(
       { user: { id: ORG_ADMIN_ID, role: UserRole.SUPER_ADMIN } },
       'createInformation',
