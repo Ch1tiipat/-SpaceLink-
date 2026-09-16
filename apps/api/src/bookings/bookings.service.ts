@@ -24,6 +24,7 @@ import {
 } from '@prisma/client';
 import generatePromptPayPayload from 'promptpay-qr';
 import QRCode from 'qrcode';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import {
   type CreateNotificationInput,
   NotificationsService,
@@ -44,6 +45,7 @@ import {
   MAX_BOOKINGS_PER_BATCH,
 } from './dto/create-bookings-batch.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING_PAYMENT,
@@ -222,6 +224,7 @@ export class BookingsService {
     private readonly slipVerification: SlipVerificationService,
     private readonly slipStorage: BookingSlipStorageService,
     private readonly notifications: NotificationsService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   async create(
@@ -1397,6 +1400,59 @@ export class BookingsService {
     });
 
     return response;
+  }
+
+  async updateStatus(
+    bookingId: string,
+    updateBookingStatusDto: UpdateBookingStatusDto,
+    orgId: string,
+    actorUserId: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, event: { organizationId: orgId } },
+      select: { id: true, status: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException('เปลี่ยนสถานะได้เฉพาะการจองที่ยืนยันแล้ว');
+    }
+
+    const updated = await this.prisma.booking.updateMany({
+      where: {
+        id: booking.id,
+        event: { organizationId: orgId },
+        status: BookingStatus.CONFIRMED,
+      },
+      data: { status: updateBookingStatusDto.status },
+    });
+
+    if (updated.count !== 1) {
+      throw new BadRequestException('สถานะการจองมีการเปลี่ยนแปลง กรุณาลองใหม่');
+    }
+
+    const updatedBooking = await this.prisma.booking.findUnique({
+      where: { id: booking.id },
+    });
+    if (!updatedBooking) {
+      throw new NotFoundException('ไม่พบการจอง');
+    }
+
+    await this.auditLogs.record({
+      actorUserId,
+      action: 'BOOKING_STATUS_UPDATED',
+      targetType: 'BOOKING',
+      targetId: booking.id,
+      metadata: {
+        organizationId: orgId,
+        previousStatus: booking.status,
+        newStatus: updateBookingStatusDto.status,
+      },
+    });
+
+    return this.toResponse(updatedBooking);
   }
 
   update(id: string, updateBookingDto: UpdateBookingDto) {

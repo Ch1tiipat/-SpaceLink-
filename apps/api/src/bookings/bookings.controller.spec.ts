@@ -9,7 +9,7 @@ import {
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
-import { UserRole, type User } from '@prisma/client';
+import { BookingStatus, UserRole, type User } from '@prisma/client';
 import type { Server } from 'node:http';
 import request from 'supertest';
 import { OrgScopeGuard } from '../auth/guards/org-scope.guard';
@@ -28,6 +28,7 @@ import { BookingsService } from './bookings.service';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { ConfirmExemptBookingDto } from './dto/confirm-exempt-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
 jest.mock('../auth/guards/supabase-auth.guard', () => ({
   SupabaseAuthGuard: class SupabaseAuthGuard {},
@@ -71,6 +72,9 @@ const ADMIN_USER: User = {
 const EXEMPT_DTO: ConfirmExemptBookingDto = {
   paymentExemptReason: 'ผู้ขายชำระเงินสดหน้างานแล้ว',
 };
+const UPDATE_STATUS_DTO: UpdateBookingStatusDto = {
+  status: BookingStatus.COMPLETED,
+};
 
 const cancel = jest.fn();
 const confirmExempt = jest.fn();
@@ -85,6 +89,7 @@ const createAdminSlipAccess = jest.fn();
 const uploadSlip = jest.fn();
 const findPaymentGroup = jest.fn();
 const uploadPaymentGroupSlip = jest.fn();
+const updateStatus = jest.fn();
 const mockBookingsService = {
   cancel,
   confirmExempt,
@@ -99,6 +104,7 @@ const mockBookingsService = {
   uploadSlip,
   findPaymentGroup,
   uploadPaymentGroupSlip,
+  updateStatus,
 };
 
 @Controller('payment-slip-multipart-probe')
@@ -126,7 +132,8 @@ function controllerHandler(
     | 'getAdminSlip'
     | 'uploadSlip'
     | 'findPaymentGroup'
-    | 'uploadPaymentGroupSlip',
+    | 'uploadPaymentGroupSlip'
+    | 'updateStatus',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
     BookingsController.prototype,
@@ -227,6 +234,7 @@ describe('BookingsController', () => {
       'confirmExempt',
       'findByCode',
       'getAdminSlip',
+      'updateStatus',
     ] as const) {
       expect(Reflect.getMetadata(ROLES_KEY, controllerHandler(name))).toEqual([
         UserRole.SUPER_ADMIN,
@@ -240,19 +248,21 @@ describe('BookingsController', () => {
   // Metadata alone enforces nothing, so assert the guard travels with it: both
   // come from @OrgScoped, and a route carrying only the metadata would return
   // 200 while checking no tenant at all.
-  it.each(['findOne', 'confirmExempt', 'getAdminSlip'] as const)(
-    'puts %s behind OrgScopeGuard scoped to bookingId',
-    (name) => {
-      const handler = controllerHandler(name);
+  it.each([
+    'findOne',
+    'confirmExempt',
+    'getAdminSlip',
+    'updateStatus',
+  ] as const)('puts %s behind OrgScopeGuard scoped to bookingId', (name) => {
+    const handler = controllerHandler(name);
 
-      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('bookingId');
-      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
-        SupabaseAuthGuard,
-        OrgScopeGuard,
-        OrgPermissionGuard,
-      ]);
-    },
-  );
+    expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler)).toBe('bookingId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      SupabaseAuthGuard,
+      OrgScopeGuard,
+      OrgPermissionGuard,
+    ]);
+  });
 
   // findByCode is the deliberate exception: OrgScopeGuard rejects a non-UUID
   // route param, so its ownership check lives in the service instead. It must
@@ -426,6 +436,24 @@ describe('BookingsController', () => {
       'booking-id',
       EXEMPT_DTO,
       ORGANIZATION_ID,
+    );
+  });
+
+  it('passes the outcome, guard-resolved organization, and admin actor', async () => {
+    updateStatus.mockResolvedValue({ id: 'booking-id' });
+
+    await controller.updateStatus(
+      'booking-id',
+      UPDATE_STATUS_DTO,
+      ORGANIZATION_ID,
+      ADMIN_USER,
+    );
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      'booking-id',
+      UPDATE_STATUS_DTO,
+      ORGANIZATION_ID,
+      ADMIN_USER.id,
     );
   });
 

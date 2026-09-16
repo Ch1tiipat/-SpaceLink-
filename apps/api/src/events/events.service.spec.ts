@@ -8,8 +8,10 @@ import {
   BoothStatus,
   EventStatus,
   Prisma,
+  SubscriptionStatus,
 } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateEventSlug } from './event-slug.util';
 import { EventsService } from './events.service';
@@ -37,6 +39,10 @@ const zoneCount = jest.fn();
 const venueFindFirst = jest.fn();
 const platformConfigFindFirst = jest.fn();
 const subscriptionCreate = jest.fn();
+const subscriptionFindFirst = jest.fn();
+const subscriptionFindUnique = jest.fn();
+const subscriptionUpdateMany = jest.fn();
+const recordAuditLog = jest.fn();
 const transaction = jest.fn();
 const uploadForEvent = jest.fn();
 const removeByUrls = jest.fn();
@@ -66,12 +72,20 @@ const mockPrismaService = {
   zone: { findMany: zoneFindMany, count: zoneCount },
   venue: { findFirst: venueFindFirst },
   platformConfig: { findFirst: platformConfigFindFirst },
-  subscription: { create: subscriptionCreate },
+  subscription: {
+    create: subscriptionCreate,
+    findFirst: subscriptionFindFirst,
+    findUnique: subscriptionFindUnique,
+    updateMany: subscriptionUpdateMany,
+  },
   $transaction: transaction,
 };
 
 const eventId = '00000000-0000-4000-8000-0000000000c1';
 const orgId = '00000000-0000-4000-8000-0000000000a1';
+const subscriptionId = '00000000-0000-4000-8000-0000000000e1';
+const actorUserId = '00000000-0000-4000-8000-0000000000f1';
+const mockAuditLogsService = { record: recordAuditLog };
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -87,6 +101,7 @@ describe('EventsService', () => {
       'https://project.supabase.co/storage/v1/object/public/event-banners/event/new',
     );
     removeBannerByUrl.mockResolvedValue(undefined);
+    recordAuditLog.mockResolvedValue(undefined);
     transaction.mockImplementation(
       (callback: (client: typeof mockPrismaService) => unknown) =>
         callback(mockPrismaService),
@@ -104,6 +119,7 @@ describe('EventsService', () => {
           provide: EventGalleryStorageService,
           useValue: mockGalleryStorage,
         },
+        { provide: AuditLogsService, useValue: mockAuditLogsService },
       ],
     }).compile();
 
@@ -409,6 +425,122 @@ describe('EventsService', () => {
         service.quoteSubscription(input, orgId),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(zoneCount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('manual subscription activation', () => {
+    const input = { reason: 'ตรวจสอบยอดโอนโดยผู้ดูแลระบบแล้ว' };
+    const activeSubscription = {
+      id: subscriptionId,
+      organizationId: orgId,
+      eventId,
+      status: SubscriptionStatus.ACTIVE,
+      baseFee: new Prisma.Decimal('500'),
+      zoneCount: 4,
+      perZoneRate: new Prisma.Decimal('50'),
+      eventDays: 3,
+      perDayRate: new Prisma.Decimal('100'),
+      calculatedPrice: new Prisma.Decimal('1000'),
+      priceMin: new Prisma.Decimal('500'),
+      priceMax: new Prisma.Decimal('15000'),
+      finalPrice: new Prisma.Decimal('1000'),
+      isOverMax: false,
+      platformPaidAt: new Date('2026-09-16T10:00:00.000Z'),
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-16T10:00:00.000Z'),
+    };
+
+    beforeEach(() => {
+      subscriptionFindFirst.mockResolvedValue({
+        id: subscriptionId,
+        status: SubscriptionStatus.DRAFT,
+      });
+      subscriptionUpdateMany.mockResolvedValue({ count: 1 });
+      subscriptionFindUnique.mockResolvedValue(activeSubscription);
+    });
+
+    it('activates a draft subscription, timestamps it, and records the reason', async () => {
+      const result = await service.activateSubscription(
+        eventId,
+        orgId,
+        input,
+        actorUserId,
+      );
+
+      expect(subscriptionFindFirst).toHaveBeenCalledWith({
+        where: { eventId, organizationId: orgId },
+        select: { id: true, status: true },
+      });
+      const platformPaidAt = (
+        subscriptionUpdateMany.mock.calls[0] as [
+          { data: { platformPaidAt: Date } },
+        ]
+      )[0].data.platformPaidAt;
+      expect(subscriptionUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: subscriptionId,
+          organizationId: orgId,
+          status: SubscriptionStatus.DRAFT,
+        },
+        data: {
+          status: SubscriptionStatus.ACTIVE,
+          platformPaidAt,
+        },
+      });
+      expect(recordAuditLog).toHaveBeenCalledWith({
+        actorUserId,
+        action: 'SUBSCRIPTION_MANUALLY_ACTIVATED',
+        targetType: 'SUBSCRIPTION',
+        targetId: subscriptionId,
+        metadata: {
+          eventId,
+          organizationId: orgId,
+          reason: input.reason,
+          previousStatus: SubscriptionStatus.DRAFT,
+          newStatus: SubscriptionStatus.ACTIVE,
+          platformPaidAt: platformPaidAt.toISOString(),
+        },
+      });
+      expect(result).toMatchObject({
+        id: subscriptionId,
+        status: SubscriptionStatus.ACTIVE,
+        finalPrice: '1000',
+      });
+    });
+
+    it('returns 404 for a missing or cross-organization subscription', async () => {
+      subscriptionFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.activateSubscription(eventId, orgId, input, actorUserId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      SubscriptionStatus.PENDING_PAYMENT,
+      SubscriptionStatus.ACTIVE,
+      SubscriptionStatus.EXPIRED,
+      SubscriptionStatus.CANCELLED,
+    ])('rejects a subscription in %s status', async (status) => {
+      subscriptionFindFirst.mockResolvedValue({ id: subscriptionId, status });
+
+      await expect(
+        service.activateSubscription(eventId, orgId, input, actorUserId),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
+    });
+
+    it('rejects a concurrent status change without reading back or auditing', async () => {
+      subscriptionUpdateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.activateSubscription(eventId, orgId, input, actorUserId),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(subscriptionFindUnique).not.toHaveBeenCalled();
+      expect(recordAuditLog).not.toHaveBeenCalled();
     });
   });
 

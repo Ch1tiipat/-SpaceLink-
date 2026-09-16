@@ -11,6 +11,7 @@ jest.mock('jose', () => ({
 }));
 
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { EventsController } from './events.controller';
 import { EventsService } from './events.service';
 
@@ -74,11 +75,13 @@ describe('EventsController', () => {
   });
 
   it.each(['getSaved', 'save', 'unsave'])(
-    'protects %s with SupabaseAuthGuard only',
+    'allows every authenticated platform role to use %s',
     (name) => {
+      // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
       expect(Reflect.getMetadata(GUARDS_METADATA, handlerOf(name))).toEqual([
         SupabaseAuthGuard,
       ]);
+      expect(Reflect.getMetadata(ROLES_KEY, handlerOf(name))).toBeUndefined();
     },
   );
 
@@ -87,6 +90,7 @@ describe('EventsController', () => {
   });
 
   it('returns 401 without login and allows every authenticated role to save idempotently', async () => {
+    // พฤติกรรมปัจจุบัน รอ PO ยืนยัน (AUTH-01) — ห้ามแก้โดยไม่อัปเดต test นี้
     let authenticated = false;
     let currentRole: UserRole = UserRole.VENDOR;
     const fakeAuthGuard = {
