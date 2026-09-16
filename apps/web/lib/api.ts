@@ -232,6 +232,39 @@ export type MyBooking = BookingRecord & {
   shop: { id: string; name: string };
 };
 
+export type RefundStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+
+export type RefundRequest = {
+  id: string;
+  bookingId: string;
+  requestedByUserId: string;
+  reason: string;
+  requestedAmount: string;
+  approvedAmount: string | null;
+  status: RefundStatus;
+  evidenceUrls: string[];
+  payoutMethod: 'PROMPTPAY' | 'BANK_TRANSFER' | null;
+  payoutPromptPayId: string | null;
+  payoutBankName: string | null;
+  payoutAccountNumber: string | null;
+  payoutAccountName: string | null;
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateRefundRequestInput = {
+  payoutMethod: 'PROMPTPAY' | 'BANK_TRANSFER';
+  payoutAccountName: string;
+  payoutPromptPayId?: string;
+  payoutBankName?: string;
+  payoutAccountNumber?: string;
+  reason: string;
+  requestedAmount: string;
+};
+
 export type CreateBookingInput = {
   eventId: string;
   boothId: string;
@@ -2898,6 +2931,27 @@ export function getMyBookings(
   signal?: AbortSignal,
 ): Promise<MyBooking[]> {
   return getJson<MyBooking[]>('/bookings', { signal, token });
+}
+
+export function getMyRefunds(
+  token: string,
+  signal?: AbortSignal,
+): Promise<RefundRequest[]> {
+  return getJson<RefundRequest[]>('/refunds/mine', { signal, token });
+}
+
+export function createRefundRequest(
+  bookingId: string,
+  input: CreateRefundRequestInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<RefundRequest> {
+  return postJson<RefundRequest>(
+    `/bookings/${encodeURIComponent(bookingId)}/refunds`,
+    input,
+    { signal, token },
+    'ส่งคำร้องคืนเงินไม่สำเร็จ',
+  );
 }
 
 export function getAverageRating(
