@@ -102,7 +102,18 @@ function refund(overrides: Record<string, unknown> = {}) {
     requestedAmount: new Prisma.Decimal('500.00'),
     approvedAmount: null,
     status: RefundStatus.PENDING,
-    evidenceUrls: ['https://example.com/evidence.jpg'],
+    evidenceUrls: {
+      kind: 'REFUND_PAYOUT_SLIP',
+      version: 1,
+      objectPath: 'refund-payouts/refund/slip.jpg',
+      transRef: 'REFUND-TRANS-1',
+      amount: '500',
+      sendingBank: 'KBANK',
+      senderName: 'องค์กรทดสอบ',
+      receiverName: 'ผู้ขายทดสอบ',
+      verifiedAt: '2026-09-03T04:00:00.000Z',
+      nameMismatchWarning: false,
+    },
     payoutMethod: 'PROMPTPAY',
     payoutPromptPayId: '0812345678',
     payoutBankName: null,
@@ -308,6 +319,11 @@ describe('TransactionsService', () => {
     );
     expect(response.payment.slips[0]).not.toHaveProperty('slipokRaw');
     expect(response.payment.slips[0]).not.toHaveProperty('slipImageUrl');
+    expect(response.refunds[0]).toMatchObject({
+      hasPayoutSlip: true,
+      nameMismatchWarning: false,
+    });
+    expect(response.refunds[0]).not.toHaveProperty('evidenceUrls');
     expect(response.timeline.map((item) => item.type)).toEqual(
       expect.arrayContaining([
         'BOOKING_CREATED',

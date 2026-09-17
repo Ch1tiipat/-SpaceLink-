@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseRefundPayoutEvidence } from '../slips/refund-slip-verification.service';
 import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import {
   buildTransactionTimeline,
@@ -412,11 +413,14 @@ export class TransactionsService {
     slips: TransactionSlip[],
     vendorName: string,
   ) {
+    const { evidenceUrls, ...publicRefund } = refund;
+    const payoutEvidence = parseRefundPayoutEvidence(evidenceUrls);
     return {
-      ...refund,
+      ...publicRefund,
       requestedAmount: refund.requestedAmount.toString(),
       approvedAmount: refund.approvedAmount?.toString() ?? null,
-      evidenceUrls: this.stringArray(refund.evidenceUrls),
+      hasPayoutSlip: payoutEvidence !== null,
+      nameMismatchWarning: payoutEvidence?.nameMismatchWarning ?? false,
       payoutNameMismatch: this.payoutNameMismatch(
         refund.payoutAccountName,
         vendorName,
@@ -531,12 +535,6 @@ export class TransactionsService {
       throw new BadRequestException('วันที่ไม่ถูกต้อง');
     }
     return new Date(Date.UTC(year, month - 1, day + Number(nextDay), -7));
-  }
-
-  private stringArray(value: Prisma.JsonValue): string[] {
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string')
-      : [];
   }
 
   private payoutNameMismatch(

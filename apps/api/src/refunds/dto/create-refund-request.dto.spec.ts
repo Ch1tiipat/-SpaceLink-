@@ -34,20 +34,15 @@ describe('CreateRefundRequestDto payout validation', () => {
       ).toBeGreaterThan(0);
     },
   );
-  it('requires bank details only for bank transfers and preserves leading zeroes', async () => {
+  it('rejects bank transfer payout details', async () => {
     const bank = {
       ...base,
       payoutMethod: 'BANK_TRANSFER',
       payoutPromptPayId: undefined,
+      payoutBankName: 'Test Bank',
+      payoutAccountNumber: '0012345678',
     };
     expect((await errors(bank)).length).toBeGreaterThan(0);
-    expect(
-      await errors({
-        ...bank,
-        payoutBankName: 'Test Bank',
-        payoutAccountNumber: '0012345678',
-      }),
-    ).toHaveLength(0);
   });
   it('rejects unsupported methods and missing payout fields on new requests', async () => {
     expect(

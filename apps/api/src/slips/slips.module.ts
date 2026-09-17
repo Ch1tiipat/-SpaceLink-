@@ -4,6 +4,7 @@ import { ManualSlipVerifier } from './providers/manual-slip-verifier';
 import { MockSlipVerifier } from './providers/mock-slip-verifier';
 import { SlipOkSlipVerifier } from './providers/slipok-slip-verifier';
 import { SlipVerificationService } from './slip-verification.service';
+import { RefundSlipVerificationService } from './refund-slip-verification.service';
 import { SLIP_VERIFIER } from './slip-verifier.interface';
 import type { SlipVerifier } from './slip-verifier.interface';
 
@@ -33,7 +34,8 @@ type SlipVerifierName = 'mock' | 'manual' | 'slipok';
       },
     },
     SlipVerificationService,
+    RefundSlipVerificationService,
   ],
-  exports: [SlipVerificationService],
+  exports: [SlipVerificationService, RefundSlipVerificationService],
 })
 export class SlipsModule {}

@@ -19,9 +19,11 @@ type HandlerName =
   | 'create'
   | 'findAllAcrossOrganizations'
   | 'findMine'
+  | 'getPayoutSlipUrl'
   | 'findForOrganization'
   | 'approve'
   | 'reject'
+  | 'uploadPayoutSlip'
   | 'process';
 
 function handlerOf(name: HandlerName): object {
@@ -66,7 +68,9 @@ describe('RefundsController', () => {
   const findForOrganization = jest.fn();
   const approve = jest.fn();
   const reject = jest.fn();
+  const uploadPayoutSlip = jest.fn();
   const process = jest.fn();
+  const createVendorPayoutSlipAccess = jest.fn();
   const service = {
     create,
     findAllAcrossOrganizations,
@@ -74,7 +78,9 @@ describe('RefundsController', () => {
     findForOrganization,
     approve,
     reject,
+    uploadPayoutSlip,
     process,
+    createVendorPayoutSlipAccess,
   } as unknown as RefundsService;
   const controller = new RefundsController(service);
 
@@ -90,7 +96,7 @@ describe('RefundsController', () => {
     ]);
   });
 
-  it.each(['create', 'findMine'] as const)(
+  it.each(['create', 'findMine', 'getPayoutSlipUrl'] as const)(
     'keeps %s vendor-only and derives ownership from the user',
     (handlerName) => {
       const handler = handlerOf(handlerName);
@@ -124,7 +130,7 @@ describe('RefundsController', () => {
     ]);
   });
 
-  it.each(['approve', 'reject', 'process'] as const)(
+  it.each(['approve', 'reject', 'uploadPayoutSlip', 'process'] as const)(
     'scopes %s through the booking ownership chain',
     (handlerName) => {
       const handler = handlerOf(handlerName);
@@ -148,13 +154,18 @@ describe('RefundsController', () => {
       payoutMethod: 'PROMPTPAY',
       payoutAccountName: 'Vendor',
       payoutPromptPayId: '0123456789',
-    };
+    } as const;
 
     await controller.create(BOOKING_ID, dto, vendor);
     await controller.findMine(vendor);
+    await controller.getPayoutSlipUrl(REFUND_ID, vendor);
 
     expect(create).toHaveBeenCalledWith(BOOKING_ID, VENDOR_ID, dto);
     expect(findMine).toHaveBeenCalledWith(VENDOR_ID);
+    expect(createVendorPayoutSlipAccess).toHaveBeenCalledWith(
+      REFUND_ID,
+      VENDOR_ID,
+    );
   });
 
   it('passes only the guard-resolved organization to the admin queue', async () => {
@@ -202,6 +213,26 @@ describe('RefundsController', () => {
       BOOKING_ID,
       REFUND_ID,
       ORGANIZATION_ID,
+    );
+  });
+
+  it('uploads payout evidence with guarded ids and the authenticated admin', async () => {
+    const file = { buffer: Buffer.from('refund-slip') };
+
+    await controller.uploadPayoutSlip(
+      BOOKING_ID,
+      REFUND_ID,
+      file,
+      ORGANIZATION_ID,
+      admin,
+    );
+
+    expect(uploadPayoutSlip).toHaveBeenCalledWith(
+      BOOKING_ID,
+      REFUND_ID,
+      ORGANIZATION_ID,
+      ADMIN_ID,
+      file,
     );
   });
 });

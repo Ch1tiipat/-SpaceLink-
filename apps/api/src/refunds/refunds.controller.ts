@@ -1,12 +1,16 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole, type User } from '@prisma/client';
 import { OrgScoped } from '../auth/decorators/org-scoped.decorator';
 import { OrgPermissionGuard } from '../auth/guards/org-permission.guard';
@@ -16,9 +20,20 @@ import { CurrentOrgId } from '../common/decorators/current-org-id.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RequireOrgPermission } from '../common/decorators/org-permission.decorator';
+import {
+  MAX_SLIP_FILE_SIZE_BYTES,
+  type UploadedSlipFile,
+} from '../bookings/booking-slip-storage.service';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
 import { CreateRefundRequestDto } from './dto/create-refund-request.dto';
 import { RefundsService } from './refunds.service';
+
+const REFUND_SLIP_UPLOAD_LIMITS = {
+  files: 1,
+  fields: 0,
+  parts: 2,
+  fileSize: MAX_SLIP_FILE_SIZE_BYTES,
+} as const;
 
 @Controller()
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -44,6 +59,18 @@ export class RefundsController {
   @Roles(UserRole.VENDOR)
   findMine(@CurrentUser() currentUser: User) {
     return this.refundsService.findMine(currentUser.id);
+  }
+
+  @Get('refunds/:refundId/payout-slip-url')
+  @Roles(UserRole.VENDOR)
+  getPayoutSlipUrl(
+    @Param('refundId') refundId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.refundsService.createVendorPayoutSlipAccess(
+      refundId,
+      currentUser.id,
+    );
   }
 
   @Get('refunds/all')
@@ -98,6 +125,35 @@ export class RefundsController {
       refundId,
       organizationId,
       currentUser.id,
+    );
+  }
+
+  @Post('bookings/:bookingId/refunds/:refundId/payout-slip')
+  @UseGuards(OrgPermissionGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @RequireOrgPermission('payments')
+  @OrgScoped('bookingId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: REFUND_SLIP_UPLOAD_LIMITS,
+    }),
+  )
+  uploadPayoutSlip(
+    @Param('bookingId') bookingId: string,
+    @Param('refundId') refundId: string,
+    @UploadedFile() file: UploadedSlipFile | undefined,
+    @CurrentOrgId() organizationId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (!file) {
+      throw new BadRequestException('กรุณาแนบไฟล์สลิปคืนเงิน');
+    }
+    return this.refundsService.uploadPayoutSlip(
+      bookingId,
+      refundId,
+      organizationId,
+      currentUser.id,
+      file,
     );
   }
 

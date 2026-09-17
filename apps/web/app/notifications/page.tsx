@@ -29,6 +29,7 @@ import {
   type UserRole,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { refundNotificationHref } from '@/lib/refund-notification-route';
 import { useAuthState } from '@/lib/use-auth-state';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
@@ -152,6 +153,12 @@ function notificationHref(
   notification: NotificationRecord,
   role?: UserRole,
 ): string | undefined {
+  const refundHref = refundNotificationHref(
+    notification.relatedEntityType,
+    notification.relatedEntityId,
+  );
+  if (refundHref) return refundHref;
+
   if (notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW') {
     return notification.relatedEntityId
       ? `/bookings/${encodeURIComponent(notification.relatedEntityId)}/review`

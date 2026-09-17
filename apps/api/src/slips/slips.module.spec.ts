@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ManualSlipVerifier } from './providers/manual-slip-verifier';
 import { MockSlipVerifier } from './providers/mock-slip-verifier';
 import { SlipOkSlipVerifier } from './providers/slipok-slip-verifier';
+import { RefundSlipVerificationService } from './refund-slip-verification.service';
 import { SlipVerificationService } from './slip-verification.service';
 import { SLIP_VERIFIER } from './slip-verifier.interface';
 import { SlipsModule } from './slips.module';
@@ -74,7 +75,7 @@ describe('SlipsModule', () => {
     await expect(bootSlipsModule()).rejects.toThrow('SLIPOK_BRANCH_ID');
   });
 
-  it('exports the recording service and keeps the token internal', async () => {
+  it('exports both recording services and keeps the token internal', async () => {
     process.env.SLIP_VERIFIER = 'mock';
     const moduleRef = await bootSlipsModule();
     const exports: unknown[] =
@@ -84,6 +85,7 @@ describe('SlipsModule', () => {
       moduleRef.get(SlipVerificationService, { strict: false }),
     ).toBeInstanceOf(SlipVerificationService);
     expect(exports).toContain(SlipVerificationService);
+    expect(exports).toContain(RefundSlipVerificationService);
     expect(exports).not.toContain(SLIP_VERIFIER);
     await moduleRef.close();
   });

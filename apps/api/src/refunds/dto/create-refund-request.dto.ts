@@ -5,7 +5,6 @@ import {
   IsString,
   Matches,
   MaxLength,
-  ValidateIf,
 } from 'class-validator';
 
 /**
@@ -15,8 +14,8 @@ import {
  * URLs are not an authorization-safe substitute for private Supabase Storage.
  */
 export class CreateRefundRequestDto {
-  @IsIn(['PROMPTPAY', 'BANK_TRANSFER'])
-  payoutMethod!: string;
+  @IsIn(['PROMPTPAY'])
+  payoutMethod!: 'PROMPTPAY';
 
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
@@ -26,26 +25,8 @@ export class CreateRefundRequestDto {
   @MaxLength(200)
   payoutAccountName!: string;
 
-  @ValidateIf((dto: CreateRefundRequestDto) => dto.payoutMethod === 'PROMPTPAY')
   @Matches(/^(\d{10}|\d{13}|\d{15})$/)
-  payoutPromptPayId?: string;
-
-  @ValidateIf(
-    (dto: CreateRefundRequestDto) => dto.payoutMethod === 'BANK_TRANSFER',
-  )
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  payoutBankName?: string;
-
-  @ValidateIf(
-    (dto: CreateRefundRequestDto) => dto.payoutMethod === 'BANK_TRANSFER',
-  )
-  @Matches(/^\d{6,20}$/)
-  payoutAccountNumber?: string;
+  payoutPromptPayId!: string;
 
   @IsString()
   @IsNotEmpty()

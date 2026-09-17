@@ -65,6 +65,27 @@ export class BookingSlipStorageService {
     const image = this.validateImage(file);
     const objectPath = `${vendorUserId}/${bookingId}/${randomUUID()}.${image.extension}`;
 
+    return this.uploadAtPath(file, objectPath, image);
+  }
+
+  async uploadRefundForVerification(
+    file: UploadedSlipFile,
+    refundId: string,
+    adminUserId: string,
+  ): Promise<StoredSlipUpload> {
+    const image = this.validateImage(file);
+    const objectPath = `refund-payouts/${refundId}/${adminUserId}/${randomUUID()}.${image.extension}`;
+
+    return this.uploadAtPath(file, objectPath, image);
+  }
+
+  private async uploadAtPath(
+    file: UploadedSlipFile,
+    objectPath: string,
+    validatedImage?: ValidatedSlipImage,
+  ): Promise<StoredSlipUpload> {
+    const image = validatedImage ?? this.validateImage(file);
+
     try {
       await this.uploadObject(objectPath, file.buffer, image.contentType);
       const verificationUrl = await this.createSignedUrl(objectPath);
@@ -103,9 +124,23 @@ export class BookingSlipStorageService {
    * the database; neither signed URL is persisted.
    */
   async createAdminAccess(objectPath: string): Promise<AdminSlipAccess> {
+    return this.createAccess(objectPath, 'payment-slip');
+  }
+
+  async createRefundAccess(objectPath: string): Promise<AdminSlipAccess> {
+    return this.createAccess(objectPath, 'refund-slip');
+  }
+
+  private async createAccess(
+    objectPath: string,
+    fileName: 'payment-slip' | 'refund-slip',
+  ): Promise<AdminSlipAccess> {
     const viewUrl = await this.createSignedUrl(objectPath);
     const downloadUrl = new URL(viewUrl);
-    downloadUrl.searchParams.set('download', this.downloadFileName(objectPath));
+    downloadUrl.searchParams.set(
+      'download',
+      this.downloadFileName(objectPath, fileName),
+    );
 
     return {
       viewUrl,
@@ -237,9 +272,12 @@ export class BookingSlipStorageService {
     return objectPath.split('/').map(encodeURIComponent).join('/');
   }
 
-  private downloadFileName(objectPath: string): string {
+  private downloadFileName(
+    objectPath: string,
+    fileName: 'payment-slip' | 'refund-slip',
+  ): string {
     const extension = objectPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
-    return `payment-slip.${extension}`;
+    return `${fileName}.${extension}`;
   }
 
   private async request(url: string, init: RequestInit): Promise<Response> {

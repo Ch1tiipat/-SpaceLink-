@@ -1,8 +1,13 @@
 # slips — ระบบตรวจสอบสลิป
 
 โมดูลเลือก provider ผ่าน `SLIP_VERIFIER=mock|manual|slipok` และเปิดให้โมดูลอื่น
-เรียกผ่าน `SlipVerificationService` เท่านั้น เพื่อให้ทุกผลตรวจถูกบันทึกลง
-`verified_slip`
+เรียกผ่าน wrapper service ที่ export จากโมดูลนี้เท่านั้น ห้าม inject provider token
+จาก feature module โดยตรง
+
+- `SlipVerificationService` ตรวจสลิปชำระค่าบูธและบันทึกลง `verified_slip`
+- `RefundSlipVerificationService` ตรวจสลิปเงินออกสำหรับ refund และบันทึกหลักฐาน
+  ลง `refund_request.evidence_urls` โดยไม่สร้าง `verified_slip` เพราะ payment state
+  และ timeline ถือ `verified_slip` ทุกแถวเป็นเงินเข้าของ booking
 
 - `mock` ใช้สำหรับพัฒนาในเครื่อง
 - `manual` คืน `ERROR` เพื่อเข้าสู่กระบวนการสำรอง

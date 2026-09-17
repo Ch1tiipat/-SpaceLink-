@@ -242,7 +242,8 @@ export type RefundRequest = {
   requestedAmount: string;
   approvedAmount: string | null;
   status: RefundStatus;
-  evidenceUrls: string[];
+  hasPayoutSlip: boolean;
+  nameMismatchWarning: boolean;
   payoutMethod: 'PROMPTPAY' | 'BANK_TRANSFER' | null;
   payoutPromptPayId: string | null;
   payoutBankName: string | null;
@@ -256,11 +257,9 @@ export type RefundRequest = {
 };
 
 export type CreateRefundRequestInput = {
-  payoutMethod: 'PROMPTPAY' | 'BANK_TRANSFER';
+  payoutMethod: 'PROMPTPAY';
   payoutAccountName: string;
-  payoutPromptPayId?: string;
-  payoutBankName?: string;
-  payoutAccountNumber?: string;
+  payoutPromptPayId: string;
   reason: string;
   requestedAmount: string;
 };
@@ -954,6 +953,14 @@ export type AdminSlipAccess = {
   expiresInSeconds: number;
 };
 
+export type RefundPayoutVerificationResponse = {
+  status: 'VERIFIED';
+  amount: string;
+  receiverName: string | null;
+  verifiedAt: string;
+  nameMismatchWarning: boolean;
+};
+
 export type AdminOrganizationRefund = {
   id: string;
   bookingId: string;
@@ -962,7 +969,8 @@ export type AdminOrganizationRefund = {
   requestedAmount: string;
   approvedAmount: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
-  evidenceUrls: string[];
+  hasPayoutSlip: boolean;
+  nameMismatchWarning: boolean;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   processedAt: string | null;
@@ -978,7 +986,8 @@ export type SuperAdminRefund = {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
   requestedAmount: string;
   approvedAmount: string | null;
-  evidenceUrls: string[];
+  hasPayoutSlip: boolean;
+  nameMismatchWarning: boolean;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   processedAt: string | null;
@@ -2954,6 +2963,57 @@ export function createRefundRequest(
   );
 }
 
+export function getRefundPayoutSlipAccess(
+  refundId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminSlipAccess> {
+  return getJson<AdminSlipAccess>(
+    `/refunds/${encodeURIComponent(refundId)}/payout-slip-url`,
+    { signal, token },
+  );
+}
+
+export function approveRefundRequest(
+  bookingId: string,
+  refundId: string,
+  approvedAmount: string,
+  token: string,
+): Promise<AdminOrganizationRefund> {
+  return patchJson<AdminOrganizationRefund>(
+    `/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/approve`,
+    { approvedAmount },
+    { token },
+    'อนุมัติคำร้องคืนเงินไม่สำเร็จ',
+  );
+}
+
+export function rejectRefundRequest(
+  bookingId: string,
+  refundId: string,
+  token: string,
+): Promise<AdminOrganizationRefund> {
+  return patchJson<AdminOrganizationRefund>(
+    `/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/reject`,
+    {},
+    { token },
+    'ปฏิเสธคำร้องคืนเงินไม่สำเร็จ',
+  );
+}
+
+export function processRefundRequest(
+  bookingId: string,
+  refundId: string,
+  token: string,
+): Promise<AdminOrganizationRefund> {
+  return patchJson<AdminOrganizationRefund>(
+    `/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/process`,
+    {},
+    { token },
+    'ยืนยันการคืนเงินไม่สำเร็จ',
+  );
+}
+
 export function getAverageRating(
   targetType: ReviewTargetType,
   targetId: string,
@@ -3235,6 +3295,21 @@ export async function uploadPaymentGroupSlip(
 ): Promise<PaymentGroupSlipUploadResponse> {
   return uploadSlip<PaymentGroupSlipUploadResponse>(
     `/bookings/payment-groups/${encodeURIComponent(paymentGroupId)}/slip`,
+    file,
+    token,
+    signal,
+  );
+}
+
+export async function uploadRefundPayoutSlip(
+  bookingId: string,
+  refundId: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<RefundPayoutVerificationResponse> {
+  return uploadSlip<RefundPayoutVerificationResponse>(
+    `/bookings/${encodeURIComponent(bookingId)}/refunds/${encodeURIComponent(refundId)}/payout-slip`,
     file,
     token,
     signal,
