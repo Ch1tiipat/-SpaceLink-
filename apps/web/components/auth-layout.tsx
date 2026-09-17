@@ -12,8 +12,8 @@ type AuthLayoutProps = {
 
 /**
  * The two-column shell shared by every authentication screen: a decorative
- * brand panel on the left, the form column on the right. Below `lg` the panel
- * collapses to a compact header and the form takes the full width.
+ * brand panel on the left, the form column on the right. The shared AppShell
+ * header remains visible at every breakpoint, including authentication pages.
  *
  * The panel's structure is fixed and its copy is not — signing in and signing
  * up are different promises, and each page states its own.
@@ -29,30 +29,7 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-[#f8f6ff] lg:grid lg:grid-cols-[minmax(440px,0.92fr)_minmax(540px,1.08fr)]">
-      {/* On phones the form is the primary task. Keep only a compact brand
-          header instead of repeating the desktop marketing panel above it. */}
-      <header className="flex min-h-[68px] items-center justify-between border-b border-[#ebe5ef] bg-white px-5 py-3.5 lg:hidden">
-        <Link
-          href="/"
-          className="flex items-center gap-3"
-          aria-label="SpaceLink หน้าแรก"
-        >
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-[#9f7aea] to-violet text-lg font-black text-white shadow-[0_8px_20px_rgba(124,58,237,.24)]">
-            S
-          </span>
-          <span className="text-xl font-extrabold tracking-[-0.03em] text-ink">
-            SpaceLink
-          </span>
-        </Link>
-        <Link
-          href="/"
-          className="rounded-full border border-[#e8e2f1] bg-white px-3 py-2 text-sm font-bold text-[#655d70]"
-        >
-          กลับหน้าแรก
-        </Link>
-      </header>
-
+    <div className="flex min-h-[calc(100vh-63px)] flex-col bg-[#f8f6ff] lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(440px,0.92fr)_minmax(540px,1.08fr)]">
       <aside className="relative hidden overflow-hidden bg-[radial-gradient(circle_at_15%_12%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,#7c3aed,#4e21bd)] px-[clamp(40px,5vw,76px)] py-12 text-white lg:flex lg:flex-col">
         <span className="absolute -right-24 -top-24 h-80 w-80 rounded-full border-[55px] border-white/[0.055]" />
         <span className="absolute -bottom-36 left-1/3 h-96 w-96 rounded-full bg-[#b44de7]/20 blur-3xl" />
@@ -128,8 +105,7 @@ function AuthBenefits() {
   );
 }
 
-/** The `S` tile and wordmark, inverted for a dark panel. Authentication
- * screens render outside `AppShell`, so this is their only branding. */
+/** The `S` tile and wordmark, inverted for the decorative dark panel. */
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">
