@@ -28,10 +28,7 @@ import { isEventBookable } from '@/lib/event-booking-rules';
 import { getEventCoverUrl } from '@/lib/event-cover';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
-type UpdateFilter = 'all' | 'event' | 'announcement';
-type Update =
-  | { kind: 'event'; event: DiscoveryEvent }
-  | { kind: 'announcement'; announcement: PublicAnnouncement };
+type EventStatusFilter = 'all' | 'bookable' | 'ongoing' | 'ended';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -70,12 +67,15 @@ export default function DiscoveryPage() {
   const [query, setQuery] = useState('');
   const [area, setArea] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [updateFilter, setUpdateFilter] = useState<UpdateFilter>('all');
-  const [searchApplied, setSearchApplied] = useState(false);
+  const [eventStatus, setEventStatus] = useState<EventStatusFilter>('all');
+  const [selectedAnnouncement, setSelectedAnnouncement] =
+    useState<PublicAnnouncement | null>(null);
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const updatesScrollerRef = useRef<HTMLDivElement>(null);
+  const announcementsScrollerRef = useRef<HTMLDivElement>(null);
+  const announcementDialogRef = useRef<HTMLDialogElement>(null);
+  const announcementOpenerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,6 +122,7 @@ export default function DiscoveryPage() {
             .flatMap((result) =>
               result.status === 'fulfilled' ? result.value : [],
             )
+            .filter((announcement) => announcement.isActive)
             .sort(
               (left, right) =>
                 announcementTimestamp(right) - announcementTimestamp(left),
@@ -138,17 +139,14 @@ export default function DiscoveryPage() {
   const filters = useMemo(
     () => ({
       events: uniqueOptions(
-        events
-          .filter((event) => !isEventEnded(event.endDate))
-          .map((event) => ({
-            value: event.name,
-            label: event.name,
-            hint: event.venue.name,
-          })),
+        events.map((event) => ({
+          value: event.name,
+          label: event.name,
+          hint: event.venue.name,
+        })),
       ),
       areas: uniqueOptions(
         events
-          .filter((event) => !isEventEnded(event.endDate))
           .filter((event) => event.venue.address)
           .map((event) => {
             const province = provinceFromAddress(event.venue.address ?? '');
@@ -156,14 +154,12 @@ export default function DiscoveryPage() {
           }),
       ),
       categories: uniqueOptions(
-        events
-          .filter((event) => !isEventEnded(event.endDate))
-          .flatMap((event) =>
-            event.categories.map((category) => ({
-              value: category.id,
-              label: category.name,
-            })),
-          ),
+        events.flatMap((event) =>
+          event.categories.map((category) => ({
+            value: category.id,
+            label: category.name,
+          })),
+        ),
       ),
     }),
     [events],
@@ -172,7 +168,6 @@ export default function DiscoveryPage() {
   const visibleEvents = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('th');
     return events.filter((event) => {
-      if (isEventEnded(event.endDate)) return false;
       const searchable =
         `${event.name} ${event.description ?? ''} ${event.organization.name} ${event.venue.name}`.toLocaleLowerCase(
           'th',
@@ -181,33 +176,25 @@ export default function DiscoveryPage() {
         (!keyword || searchable.includes(keyword)) &&
         (!area || provinceFromAddress(event.venue.address ?? '') === area) &&
         (!categoryId ||
-          event.categories.some((category) => category.id === categoryId))
+          event.categories.some((category) => category.id === categoryId)) &&
+        (eventStatus === 'all' ||
+          (eventStatus === 'bookable' && isEventBookable(event)) ||
+          (eventStatus === 'ongoing' &&
+            event.status === 'ONGOING' &&
+            !isEventEnded(event.endDate)) ||
+          (eventStatus === 'ended' && isEventEnded(event.endDate)))
       );
     });
-  }, [area, categoryId, events, query]);
+  }, [area, categoryId, eventStatus, events, query]);
+  const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
 
-  const updates = useMemo<Update[]>(() => {
-    if (searchApplied) {
-      return visibleEvents.map((event) => ({ kind: 'event', event }));
-    }
-
-    return [
-      ...events
-        .filter((event) => !isEventEnded(event.endDate))
-        .map((event): Update => ({ kind: 'event', event })),
-      ...announcements.map(
-        (announcement): Update => ({
-          kind: 'announcement',
-          announcement,
-        }),
-      ),
-    ].filter(
-      (update) => updateFilter === 'all' || update.kind === updateFilter,
-    );
-  }, [announcements, events, searchApplied, updateFilter, visibleEvents]);
+  useEffect(() => {
+    const dialog = announcementDialogRef.current;
+    if (selectedAnnouncement && dialog && !dialog.open) dialog.showModal();
+  }, [selectedAnnouncement]);
 
   function scrollUpdates(direction: -1 | 1) {
-    const scroller = updatesScrollerRef.current;
+    const scroller = announcementsScrollerRef.current;
     if (!scroller) return;
     scroller.scrollBy({
       left: direction * Math.max(scroller.clientWidth * 0.82, 280),
@@ -216,56 +203,72 @@ export default function DiscoveryPage() {
   }
 
   function runSearch() {
-    setSearchApplied(true);
     window.requestAnimationFrame(() => {
       document
-        .getElementById('latest-updates')
-        ?.scrollIntoView({ block: 'start' });
+        .getElementById('events')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }
+
+  function openAnnouncement(
+    announcement: PublicAnnouncement,
+    opener: HTMLButtonElement,
+  ) {
+    announcementOpenerRef.current = opener;
+    setSelectedAnnouncement(announcement);
+  }
+
+  function closeAnnouncement() {
+    announcementDialogRef.current?.close();
   }
 
   return (
     <main className="sl-page pb-10">
       <section className="shell pt-8">
-        <section className="relative flex min-h-[350px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] p-[44px] text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[390px] max-sm:items-end max-sm:rounded-[24px] max-sm:px-[22px] max-sm:py-7">
-          <div className="relative z-[5] w-[57%] max-w-[600px] max-md:w-[68%] max-sm:w-full">
-            <span className="inline-flex min-h-[30px] items-center rounded-full border border-white/25 bg-white/[0.13] px-[13px] py-1.5 text-sm font-bold">
+        <section className="relative flex min-h-[440px] items-center overflow-hidden rounded-[32px] bg-[#f5ecff] px-[clamp(24px,4vw,58px)] py-12 shadow-[0_28px_70px_rgba(62,37,99,0.12)] max-sm:min-h-[460px] max-sm:items-start max-sm:rounded-[24px] max-sm:py-10">
+          <div
+            aria-hidden
+            className="absolute inset-y-0 right-0 w-[76%] bg-[url('/home-hero.jpg')] bg-cover bg-[center_45%] max-sm:w-full"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[linear-gradient(90deg,#fcfaff_0%,rgba(250,246,255,.98)_30%,rgba(246,237,255,.88)_46%,rgba(246,237,255,.27)_72%,transparent_100%)] max-sm:bg-[linear-gradient(180deg,rgba(252,250,255,.98)_0%,rgba(250,246,255,.94)_55%,rgba(246,237,255,.28)_100%)]"
+          />
+          <div className="relative z-[1] w-[62%] max-w-[660px] max-md:w-[75%] max-sm:w-full">
+            <span className="inline-flex min-h-[30px] items-center rounded-full border border-[#decdf7] bg-white/80 px-[13px] py-1.5 text-sm font-bold text-[#5d2bc6]">
               พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
             </span>
-            <h1 className="my-[14px] text-[clamp(36px,4vw,48px)] font-black leading-[1.12] tracking-[-0.045em] text-white max-sm:text-[34px]">
-              ค้นหาพื้นที่ขายที่
+            <h1 className="my-5 text-[clamp(42px,4.6vw,72px)] font-black leading-[1.09] tracking-[-0.045em] text-[#171024] max-sm:text-[42px]">
+              ค้นหาพื้นที่ขาย
               <br />
-              เหมาะกับร้านคุณ
+              <span className="bg-[linear-gradient(90deg,#4b21c6,#723adf,#a45fff)] bg-clip-text text-transparent">
+                ที่เหมาะกับร้านคุณ
+              </span>
             </h1>
-            <p className="max-w-[550px] text-sm leading-[1.8] text-white/85">
+            <p className="max-w-[580px] text-base leading-[1.8] text-[#514664] max-sm:text-sm">
               รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
               และตรวจสอบพื้นที่ได้จากแผนผังจริง
             </p>
-            <a
-              href="#eventSearch"
-              className="mt-5 inline-flex min-h-[45px] items-center justify-center gap-[9px] rounded-[13px] bg-white px-[18px] text-[13px] font-bold text-[#6d28d9] shadow-[0_9px_25px_rgba(19,10,38,0.13)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(19,10,38,0.18)]"
-            >
-              เริ่มสำรวจพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
-            </a>
-          </div>
-
-          <div
-            aria-hidden
-            className="absolute inset-y-0 right-0 left-[55%] max-sm:hidden"
-          >
-            <span className="absolute bottom-[22%] left-[20%] h-[92px] w-[110px] -rotate-[4deg] rounded-[8px_8px_5px_5px] bg-[linear-gradient(#e28a8c,#c85c7a)] shadow-[0_18px_32px_rgba(18,9,32,0.18)]">
-              <span className="absolute inset-x-0 top-0 h-[25px] overflow-hidden rounded-[9px_9px_2px_2px] bg-[repeating-linear-gradient(90deg,#fff_0_18px,#8b5cf6_18px_36px)]" />
-            </span>
-            <span className="absolute bottom-[29%] right-[10%] h-[92px] w-[110px] rotate-[4deg] rounded-[8px_8px_5px_5px] bg-[linear-gradient(#72c9b2,#27876d)] shadow-[0_18px_32px_rgba(18,9,32,0.18)]">
-              <span className="absolute inset-x-0 top-0 h-[25px] overflow-hidden rounded-[9px_9px_2px_2px] bg-[repeating-linear-gradient(90deg,#fff_0_18px,#8b5cf6_18px_36px)]" />
-            </span>
-            <span className="absolute -bottom-[130px] -right-[10%] left-[10%] h-[260px] -rotate-[7deg] rounded-[50%] bg-white/[0.04]" />
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href="#eventSearch"
+                className="sl-action-primary inline-flex min-h-12 items-center gap-2 px-5"
+              >
+                เริ่มสำรวจพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
+              </a>
+              <a
+                href="#events"
+                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[#cdbaf4] bg-white/90 px-5 text-sm font-bold text-[#6030d0] transition hover:bg-white"
+              >
+                ค้นหา Event <CalendarSearch aria-hidden className="h-4 w-4" />
+              </a>
+            </div>
           </div>
         </section>
 
         <form
           id="eventSearch"
-          className="sl-surface relative z-30 mx-[18px] -mt-[18px] grid scroll-mt-24 grid-cols-[minmax(0,1.4fr)_minmax(170px,.8fr)_minmax(190px,.8fr)_auto] gap-[10px] overflow-visible p-[15px] max-lg:grid-cols-2 max-sm:mx-[7px] max-sm:-mt-[13px] max-sm:grid-cols-1 max-sm:rounded-[19px] max-sm:p-3"
+          className="sl-surface relative z-30 mx-[18px] -mt-[22px] grid scroll-mt-24 grid-cols-[minmax(0,1.25fr)_minmax(135px,.75fr)_minmax(160px,.8fr)_minmax(155px,.8fr)_auto] gap-[10px] overflow-visible p-[18px] max-xl:grid-cols-3 max-md:grid-cols-2 max-sm:mx-[7px] max-sm:-mt-[13px] max-sm:grid-cols-1 max-sm:rounded-[19px] max-sm:p-3"
           onSubmit={(event) => {
             event.preventDefault();
             runSearch();
@@ -276,10 +279,7 @@ export default function DiscoveryPage() {
             placeholder="เลือกงานหรือสถานที่"
             className="[&_button]:min-h-[66px]"
             value={query}
-            onChange={(value) => {
-              setQuery(value);
-              setSearchApplied(false);
-            }}
+            onChange={setQuery}
             options={withAllOption(filters.events, 'งานหรือสถานที่ทั้งหมด')}
           />
           <SelectMenu
@@ -287,10 +287,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกพื้นที่"
             className="[&_button]:min-h-[66px]"
             value={area}
-            onChange={(value) => {
-              setArea(value);
-              setSearchApplied(false);
-            }}
+            onChange={setArea}
             options={withAllOption(filters.areas, 'ทุกพื้นที่')}
           />
           <SelectMenu
@@ -298,96 +295,132 @@ export default function DiscoveryPage() {
             placeholder="ทุกหมวดสินค้า"
             className="[&_button]:min-h-[66px]"
             value={categoryId}
-            onChange={(value) => {
-              setCategoryId(value);
-              setSearchApplied(false);
-            }}
+            onChange={setCategoryId}
             options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')}
+          />
+          <SelectMenu
+            label="สถานะ Event"
+            placeholder="ทุกสถานะ"
+            className="[&_button]:min-h-[66px]"
+            value={eventStatus}
+            onChange={(value) => setEventStatus(value as EventStatusFilter)}
+            options={[
+              { value: 'all', label: 'ทุกสถานะ' },
+              { value: 'bookable', label: 'เปิดจอง' },
+              { value: 'ongoing', label: 'กำลังจัดงาน' },
+              { value: 'ended', label: 'สิ้นสุดแล้ว' },
+            ]}
           />
           <button
             type="submit"
-            className="sl-action-primary min-h-[45px] self-end whitespace-nowrap px-6 max-lg:w-full"
+            className="sl-action-primary min-h-[66px] self-end whitespace-nowrap px-6 max-xl:w-full"
           >
-            ค้นหา Event
+            ดูผลการค้นหา
           </button>
+          <p
+            aria-live="polite"
+            className="col-span-full text-sm font-semibold text-muted"
+          >
+            {loading
+              ? 'กำลังค้นหา Event…'
+              : `พบ ${visibleEvents.length} Event ที่ตรงกับตัวกรอง`}
+          </p>
         </form>
       </section>
 
       <section
-        id="latest-updates"
-        className="shell !mt-[52px] scroll-mt-24 max-sm:!mt-[38px]"
-        aria-labelledby="latest-heading"
+        className="shell !mt-[52px] max-sm:!mt-[38px]"
+        aria-labelledby="announcements-heading"
       >
-        <div className="mb-[18px] flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
+        <div className="mb-[18px] flex items-end justify-between gap-5">
           <div>
-            <span className="sl-kicker">Latest updates</span>
+            <span className="sl-kicker">ข่าวสารล่าสุด</span>
             <h2
-              id="latest-heading"
+              id="announcements-heading"
               className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
             >
-              {searchApplied ? 'ผลการค้นหา Event' : 'ข่าวสารและ Event ล่าสุด'}
+              ประกาศจากผู้จัดงาน
             </h2>
             <p className="mt-1 text-xs text-muted">
-              {searchApplied
-                ? `พบ ${visibleEvents.length} Event จากข้อมูล SpaceLink`
-                : `แสดงทั้งหมด ${updates.length} รายการจากข้อมูล Event และประกาศที่เปิดใช้งาน`}
+              อัปเดตจากองค์กรที่มี Event บน SpaceLink
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {announcements.length > 1 ? (
             <div
-              className="flex flex-wrap gap-[7px]"
+              className="flex gap-1"
               role="group"
-              aria-label="กรองข่าวสารล่าสุด"
+              aria-label="เลื่อนดูประกาศ"
             >
-              {(
-                [
-                  ['all', 'ทั้งหมด'],
-                  ['event', 'Event'],
-                  ['announcement', 'ประกาศ'],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={updateFilter === value}
-                  onClick={() => {
-                    setSearchApplied(false);
-                    setUpdateFilter(value);
-                  }}
-                  className={`sl-chip min-h-9 px-4 ${updateFilter === value ? '!border-violet !bg-violet !text-white' : ''}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {updates.length > 1 ? (
-              <div
-                className="flex gap-1"
-                role="group"
-                aria-label="เลื่อนดูรายการ Event และข่าวสาร"
+              <button
+                type="button"
+                onClick={() => scrollUpdates(-1)}
+                aria-label="ดูประกาศก่อนหน้า"
+                className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
               >
-                <button
-                  type="button"
-                  onClick={() => scrollUpdates(-1)}
-                  aria-label="ดูรายการก่อนหน้า"
-                  className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollUpdates(1)}
-                  aria-label="ดูรายการถัดไป"
-                  className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
-                >
-                  <ChevronRight className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-            ) : null}
-          </div>
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollUpdates(1)}
+                aria-label="ดูประกาศถัดไป"
+                className="grid h-9 w-9 place-items-center rounded-full border border-line bg-white text-ink transition hover:border-violet hover:text-violet"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          ) : null}
         </div>
+        {announcementsLoading ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[0, 1, 2].map((item) => (
+              <span
+                key={item}
+                className="skeleton block h-[230px] rounded-[22px]"
+              />
+            ))}
+          </div>
+        ) : announcements.length === 0 ? (
+          <div className="sl-surface p-8 text-center text-sm text-muted">
+            ยังไม่มีประกาศใหม่ในขณะนี้
+          </div>
+        ) : (
+          <div
+            ref={announcementsScrollerRef}
+            className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
+            aria-label="ประกาศล่าสุด เลื่อนซ้ายหรือขวาเพื่อดูเพิ่มเติม"
+          >
+            {announcements.map((announcement, index) => (
+              <div
+                key={announcement.id}
+                className="min-w-[86%] snap-start sm:min-w-[calc(50%-8px)] lg:min-w-[calc((100%-32px)/3)]"
+              >
+                <AnnouncementCard
+                  announcement={announcement}
+                  index={index}
+                  onOpen={openAnnouncement}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-        {loading || announcementsLoading ? (
+      <section
+        id="events"
+        className="shell !mt-[56px] scroll-mt-24 max-sm:!mt-[42px]"
+        aria-labelledby="events-heading"
+      >
+        <span className="sl-kicker">ค้นหา Event</span>
+        <h2
+          id="events-heading"
+          className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+        >
+          งานที่เหมาะกับร้านของคุณ
+        </h2>
+        <p aria-live="polite" className="mb-[18px] mt-1 text-sm text-muted">
+          พบ {visibleEvents.length} Event ที่ตรงกับตัวกรอง
+        </p>
+        {loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <span
@@ -400,44 +433,116 @@ export default function DiscoveryPage() {
           <div className="sl-surface p-8 text-center text-sm text-red-700">
             โหลดข้อมูลไม่สำเร็จ: {error}
           </div>
-        ) : updates.length === 0 ? (
-          <div className="sl-surface p-8 text-center text-sm text-muted">
-            ยังไม่พบรายการที่ตรงกับตัวกรอง
+        ) : visibleEvents.length === 0 ? (
+          <div className="sl-surface p-8 text-center">
+            <CalendarSearch
+              aria-hidden
+              className="mx-auto h-9 w-9 text-violet"
+            />
+            <h3 className="mt-3 text-lg font-extrabold">
+              ไม่พบ Event ที่ตรงกับตัวกรอง
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                setArea('');
+                setCategoryId('');
+                setEventStatus('all');
+              }}
+              className="mt-4 rounded-xl border border-violet px-4 py-2 text-sm font-bold text-violet"
+            >
+              ล้างตัวกรอง
+            </button>
           </div>
         ) : (
-          <div
-            ref={updatesScrollerRef}
-            className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
-            aria-label="รายการ Event และข่าวสารล่าสุด เลื่อนซ้ายหรือขวาเพื่อดูเพิ่มเติม"
-          >
-            {updates.map((update, index) => (
-              <div
-                key={
-                  update.kind === 'event'
-                    ? update.event.id
-                    : update.announcement.id
-                }
-                className="min-w-[86%] snap-start sm:min-w-[calc(50%-8px)] lg:min-w-[calc((100%-32px)/3)]"
-              >
-                <LatestCard update={update} index={index} />
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
             ))}
           </div>
         )}
       </section>
 
-      {visibleEvents[0] && (
-        <PopularAreaRecommendations event={visibleEvents[0]} />
-      )}
+      {featuredEvent && <PopularAreaRecommendations event={featuredEvent} />}
 
-      <BookingJourney event={visibleEvents[0]} />
+      <BookingJourney event={featuredEvent} />
       <PlatformBenefits />
       <HomepageCallToAction />
+      <dialog
+        ref={announcementDialogRef}
+        aria-modal="true"
+        aria-labelledby="announcement-dialog-title"
+        onClose={() => {
+          setSelectedAnnouncement(null);
+          announcementOpenerRef.current?.focus();
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) closeAnnouncement();
+        }}
+        className="w-[min(620px,calc(100%-32px))] max-h-[calc(100dvh-32px)] rounded-[26px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65"
+      >
+        {selectedAnnouncement ? (
+          <div className="p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <span className="rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">
+                ประกาศจากผู้จัดงาน
+              </span>
+              <button
+                type="button"
+                onClick={closeAnnouncement}
+                aria-label="ปิดประกาศ"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line text-xl text-muted hover:text-violet"
+              >
+                ×
+              </button>
+            </div>
+            <h2
+              id="announcement-dialog-title"
+              className="mt-5 text-2xl font-black leading-snug"
+            >
+              {selectedAnnouncement.title}
+            </h2>
+            <p className="mt-2 text-sm text-muted">
+              {selectedAnnouncement.organizationName} ·{' '}
+              {dateFormatter.format(
+                new Date(
+                  selectedAnnouncement.publishedAt ??
+                    selectedAnnouncement.createdAt,
+                ),
+              )}
+            </p>
+            <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-[#514664]">
+              {selectedAnnouncement.body}
+            </p>
+            <div className="mt-7 border-t border-line pt-5 text-right">
+              <button
+                type="button"
+                onClick={closeAnnouncement}
+                className="sl-action-primary min-h-11 px-6"
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </dialog>
     </main>
   );
 }
 
-function LatestCard({ update, index }: { update: Update; index: number }) {
+function AnnouncementCard({
+  announcement,
+  index,
+  onOpen,
+}: {
+  announcement: PublicAnnouncement;
+  index: number;
+  onOpen: (announcement: PublicAnnouncement, opener: HTMLButtonElement) => void;
+}) {
   const tones = [
     'bg-[linear-gradient(135deg,#3b176c,#8959f3,#3a8079)]',
     'bg-[linear-gradient(135deg,#187250,#64a76e)]',
@@ -445,33 +550,37 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
   ];
   const cover = tones[index % tones.length];
 
-  if (update.kind === 'announcement') {
-    return (
-      <article className="sl-surface relative h-full overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
-        <div
-          className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}
+  return (
+    <article className="sl-surface relative h-full overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
+      <div
+        className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}
+      >
+        <strong className="text-[23px]">ประกาศ</strong>
+      </div>
+      <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-sm font-bold text-[#6d28d9]">
+        ข่าวงาน
+      </span>
+      <div className="p-[17px]">
+        <h3 className="text-[15px] font-extrabold">{announcement.title}</h3>
+        <p className="mt-1.5 min-h-[38px] line-clamp-2 text-sm leading-[1.65] text-muted">
+          {announcement.body}
+        </p>
+        <p className="mt-2 text-xs text-muted">
+          {announcement.organizationName}
+        </p>
+        <button
+          type="button"
+          onClick={(event) => onOpen(announcement, event.currentTarget)}
+          className="mt-3 inline-block text-sm font-bold text-[#6d28d9] hover:underline"
         >
-          <strong className="text-[23px]">ประกาศ</strong>
-        </div>
-        <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-sm font-bold text-[#6d28d9]">
-          ข่าวงาน
-        </span>
-        <div className="p-[17px]">
-          <h3 className="text-[15px] font-extrabold">
-            {update.announcement.title}
-          </h3>
-          <p className="mt-1.5 min-h-[38px] line-clamp-2 text-sm leading-[1.65] text-muted">
-            {update.announcement.body}
-          </p>
-          <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">
-            อ่านประกาศ →
-          </span>
-        </div>
-      </article>
-    );
-  }
+          ดูเพิ่มเติม →
+        </button>
+      </div>
+    </article>
+  );
+}
 
-  const { event } = update;
+function EventCard({ event }: { event: DiscoveryEvent }) {
   const bookable = isEventBookable(event);
   return (
     <Link
@@ -489,7 +598,11 @@ function LatestCard({ update, index }: { update: Update; index: number }) {
       <span
         className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}
       >
-        {bookable ? 'เปิดจอง' : 'ปิดรับจอง'}
+        {isEventEnded(event.endDate)
+          ? 'สิ้นสุดแล้ว'
+          : bookable
+            ? 'เปิดจอง'
+            : 'ปิดรับจอง'}
       </span>
       <div className="p-[17px]">
         <h3 className="text-[15px] font-extrabold">{event.name}</h3>
@@ -531,7 +644,7 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
       className="shell !mt-[56px] max-sm:!mt-[42px]"
       aria-labelledby="recommended-heading"
     >
-      <span className="sl-kicker">Recommended locations</span>
+      <span className="sl-kicker">พื้นที่แนะนำ</span>
       <h2
         id="recommended-heading"
         className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
@@ -599,9 +712,7 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
       description:
         'ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย',
       icon: MapPinned,
-      href: event
-        ? `/events/${encodeURIComponent(event.slug)}/map`
-        : '#latest-updates',
+      href: event ? `/events/${encodeURIComponent(event.slug)}/map` : '#events',
       action: 'ดูตัวอย่างแผนผัง',
     },
     {
@@ -621,7 +732,7 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
       aria-labelledby="booking-journey-heading"
     >
       <div className="mx-auto max-w-[680px] text-center">
-        <span className="sl-kicker">How it works</span>
+        <span className="sl-kicker">วิธีการจอง</span>
         <h2
           id="booking-journey-heading"
           className="mt-2 text-[clamp(27px,3vw,36px)] font-black tracking-[-0.035em]"
@@ -714,7 +825,7 @@ function PlatformBenefits() {
         <div className="relative grid items-center gap-8 lg:grid-cols-[.72fr_1.28fr]">
           <div>
             <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-[#c8a9ff]">
-              Why SpaceLink
+              ทำไมต้อง SpaceLink
             </span>
             <h2
               id="benefit-heading"
@@ -777,7 +888,7 @@ function HomepageCallToAction() {
               <ShieldCheck aria-hidden className="h-6 w-6" />
             </span>
             <div>
-              <span className="sl-kicker">Ready to explore</span>
+              <span className="sl-kicker">เริ่มสำรวจพื้นที่</span>
               <h2
                 id="homepage-cta-heading"
                 className="mt-1.5 text-[clamp(23px,2.8vw,31px)] font-black tracking-[-0.035em]"
