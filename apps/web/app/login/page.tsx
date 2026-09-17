@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AuthLayout } from '@/components/auth-layout';
 import { OTP_LENGTH, OtpInput } from '@/components/otp-input';
+import { INVALID_EMAIL_MESSAGE } from '@/lib/auth-errors';
 import { useEmailOtp } from '@/lib/use-email-otp';
 
 export default function LoginPage() {
@@ -14,6 +15,7 @@ export default function LoginPage() {
     setCode,
     pending,
     error,
+    setError,
     cooldown,
     submitEmail,
     verify,
@@ -56,6 +58,7 @@ export default function LoginPage() {
       eyebrow="สำหรับผู้ขายและผู้ดูแลองค์กร"
       headline="จองบูธในงานที่ใช่ ได้ในไม่กี่ขั้นตอน"
       description="เข้าสู่ระบบด้วยอีเมล เราจะส่งรหัสยืนยัน 6 หลักไปให้ ไม่ต้องตั้งและไม่ต้องจำรหัสผ่าน"
+      step={step === 'email' ? 'details' : 'verify'}
     >
       {step === 'email' ? (
         <form
@@ -65,7 +68,7 @@ export default function LoginPage() {
           }}
           noValidate
         >
-          <span className="sl-kicker">Welcome back</span>
+          <span className="sl-kicker">ยินดีต้อนรับกลับ</span>
           <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             เข้าสู่ระบบ
           </h1>
@@ -88,9 +91,12 @@ export default function LoginPage() {
             placeholder="name@example.com"
             value={email}
             disabled={pending}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={error?.text === INVALID_EMAIL_MESSAGE.text || undefined}
+            aria-describedby={error?.text === INVALID_EMAIL_MESSAGE.text ? errorId : undefined}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError(null);
+            }}
             className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
@@ -122,7 +128,7 @@ export default function LoginPage() {
           }}
           noValidate
         >
-          <span className="sl-kicker">Secure verification</span>
+          <span className="sl-kicker">ยืนยันตัวตน</span>
           <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             กรอกรหัสยืนยัน
           </h1>

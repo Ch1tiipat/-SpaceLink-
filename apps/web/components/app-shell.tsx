@@ -292,6 +292,13 @@ const BOTTOM_NAV: NavItem[] = [
  * a page the visitor cannot open yet.
  */
 const BARE_ROUTES = new Set(['/login', '/register']);
+const PRIVATE_USER_ROUTES = [
+  '/bookings',
+  '/reviews',
+  '/notifications',
+  '/profile',
+  '/refunds',
+];
 const DISMISSED_BROADCAST_KEY = 'spacelink:dismissed-system-broadcast-id';
 const SELECTED_ADMIN_ORGANIZATION_KEY =
   'spacelink:selected-admin-organization-id';
@@ -304,6 +311,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { auth, signOut } = useAuthState();
+  const requiresUserSession =
+    PRIVATE_USER_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`),
+    ) || /^\/events\/[^/]+\/book(?:\/|$)/.test(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] =
     useState(false);
@@ -384,6 +395,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.addEventListener('hashchange', syncHash);
     return () => window.removeEventListener('hashchange', syncHash);
   }, [pathname]);
+
+  useEffect(() => {
+    if (requiresUserSession && auth.status === 'signed-out') {
+      router.replace('/login');
+    }
+  }, [auth.status, requiresUserSession, router]);
 
   useEffect(() => {
     if (!mobileSidebarOpen) return;
@@ -667,6 +684,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   if (isBareRoute) return <>{header}{children}</>;
+
+  if (requiresUserSession && auth.status !== 'signed-in') {
+    return (
+      <>
+        {header}
+        <main
+          role="status"
+          className="grid min-h-[calc(100vh-63px)] place-items-center bg-[#faf7ff] px-6 text-center text-sm font-semibold text-muted lg:min-h-[calc(100vh-72px)]"
+        >
+          {auth.status === 'loading'
+            ? 'กำลังตรวจสอบการเข้าสู่ระบบ…'
+            : 'กำลังพาไปหน้าเข้าสู่ระบบ…'}
+        </main>
+      </>
+    );
+  }
 
   return (
     <AdminOrganizationContext.Provider
