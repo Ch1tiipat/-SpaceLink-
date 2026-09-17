@@ -43,6 +43,7 @@ const status = {
 
 const STATUS_LEGEND = [
   { key: 'available', label: 'ว่าง' },
+  { key: 'selected', label: 'เลือกแล้ว' },
   { key: 'held', label: 'กำลังถูกจอง' },
   { key: 'booked', label: 'ไม่ว่าง' },
   { key: 'disabled', label: 'ปิดใช้งาน' },
@@ -505,6 +506,9 @@ function OverviewGridMap({
                           logoUrl={booth.occupant?.logoUrl ?? null}
                           shopName={shopName}
                         />
+                        <span className="absolute bottom-0 inset-x-0 bg-[#123c2b]/90 px-1 py-0.5 text-[10px] font-bold text-white">
+                          จองแล้ว · {booth.code}
+                        </span>
                       </button>
                     );
                   }
@@ -540,7 +544,7 @@ function OverviewGridMap({
                       <a
                         key={booth.id}
                         href={href}
-                        aria-label={`บูธ ${booth.code} AVAILABLE`}
+                        aria-label={`บูธ ${booth.code} ว่าง`}
                         onClick={(event) => event.stopPropagation()}
                         className={`${shared} border-[#7c3aed] bg-white text-[#6d28d9] hover:-translate-y-1 hover:bg-[#faf7ff] hover:shadow-[0_10px_22px_rgba(109,40,217,.13)] ${recommended ? 'ring-2 ring-[#7c3aed] ring-offset-2 shadow-[0_0_0_5px_rgba(124,58,237,.12)]' : ''}`}
                       >
@@ -560,7 +564,7 @@ function OverviewGridMap({
                       type="button"
                       disabled={readOnly}
                       aria-pressed={selected}
-                      aria-label={`บูธ ${booth.code} AVAILABLE`}
+                      aria-label={`บูธ ${booth.code} ${selected ? 'เลือกแล้ว' : 'ว่าง'}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onSelectBooth(booth);
@@ -573,6 +577,9 @@ function OverviewGridMap({
                         </span>
                       ) : null}
                       <strong className="text-sm">{booth.code}</strong>
+                      <span className="text-[10px] font-bold">
+                        {selected ? 'เลือกแล้ว' : 'ว่าง'}
+                      </span>
                     </button>
                   );
                 })}
@@ -629,8 +636,18 @@ function OverviewGridMap({
 
             <div className="p-5">
               <h3 className="text-base font-black text-ink">
-                ร้านนี้จำหน่ายอะไร?
+                ข้อมูลร้านที่เผยแพร่
               </h3>
+              <p className="mt-2 text-sm text-muted">
+                ชื่อร้าน: {selectedShop.booth.occupant?.name ?? 'ไม่ระบุ'}
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                พื้นที่: Zone {selectedShop.zone.code} · Booth{' '}
+                {selectedShop.booth.code}
+              </p>
+              <h4 className="mt-4 text-sm font-bold text-ink">
+                หมวดสินค้าของ Zone นี้
+              </h4>
               {selectedShop.zone.categories.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedShop.zone.categories.map((category) => (
@@ -644,12 +661,13 @@ function OverviewGridMap({
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-muted">
-                  ร้านค้ายังไม่ได้ระบุหมวดสินค้าในข้อมูลสาธารณะ
+                  Zone นี้ยังไม่ได้ระบุหมวดสินค้า
                 </p>
               )}
               <p className="mt-4 rounded-[14px] bg-[#f7f5fa] p-3 text-sm leading-6 text-muted">
-                หมวดสินค้านี้อ้างอิงจากประเภทสินค้าที่ผู้จัดงานกำหนดให้ Zone{' '}
-                {selectedShop.zone.code}
+                หมวดด้านบนเป็นข้อกำหนดของ Zone ไม่ใช่หมวดสินค้าของร้าน
+                ข้อมูลเจ้าของ รายละเอียดสินค้า ช่วงราคา เวลา
+                และวิธีชำระเงินของร้าน ยังไม่มีในข้อมูลสาธารณะที่ API ส่งมา
               </p>
             </div>
           </section>
@@ -676,8 +694,9 @@ function MapLegend() {
             aria-hidden
             className="h-3 w-3 shrink-0 rounded-[4px] border"
             style={{
-              backgroundColor: status[key].fill,
-              borderColor: status[key].stroke,
+              backgroundColor:
+                key === 'selected' ? '#201B2E' : status[key].fill,
+              borderColor: key === 'selected' ? '#201B2E' : status[key].stroke,
             }}
           />
           {label}
