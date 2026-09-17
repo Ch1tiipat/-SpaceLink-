@@ -31,10 +31,14 @@ import {
 import { AdminSlipActions } from '@/components/admin-slip-actions';
 import { describeAdminTimelineItem } from '@/lib/admin-booking-timeline';
 import {
+  approveRefundRequest,
   getAdminTransactionBookingDetail,
+  processRefundRequest,
+  rejectRefundRequest,
   type AdminPaymentStatus,
   type AdminTransactionBookingDetail,
   type BookingStatus,
+  uploadRefundPayoutSlip,
 } from '@/lib/api';
 
 const BOOKING_LABELS: Record<BookingStatus, string> = {
@@ -151,13 +155,27 @@ export function AdminBookingDetailScreen({ bookingId }: { bookingId: string }) {
             />
           </AdminPanel>
         ) : null}
-        {detail ? <DetailContent detail={detail} /> : null}
+        {detail && token ? (
+          <DetailContent
+            detail={detail}
+            token={token}
+            onChanged={() => setReloadKey((value) => value + 1)}
+          />
+        ) : null}
       </AdminPage>
     </AdminAccessGate>
   );
 }
 
-function DetailContent({ detail }: { detail: AdminTransactionBookingDetail }) {
+function DetailContent({
+  detail,
+  token,
+  onChanged,
+}: {
+  detail: AdminTransactionBookingDetail;
+  token: string;
+  onChanged: () => void;
+}) {
   const { booking, payment } = detail;
   return (
     <>
@@ -314,7 +332,12 @@ function DetailContent({ detail }: { detail: AdminTransactionBookingDetail }) {
             <SlipTable slips={payment.slips} />
           </AdminPanel>
 
-          <RefundSection refunds={detail.refunds} />
+          <RefundSection
+            refunds={detail.refunds}
+            bookingId={detail.booking.id}
+            token={token}
+            onChanged={onChanged}
+          />
         </div>
 
         <AdminPanel
@@ -410,8 +433,14 @@ function SlipTable({
 
 function RefundSection({
   refunds,
+  bookingId,
+  token,
+  onChanged,
 }: {
   refunds: AdminTransactionBookingDetail['refunds'];
+  bookingId: string;
+  token: string;
+  onChanged: () => void;
 }) {
   return (
     <AdminPanel title="คำร้องคืนเงิน" description={`${refunds.length} รายการ`}>
@@ -424,50 +453,192 @@ function RefundSection({
       ) : (
         <div className="divide-y divide-[#eee9f3]">
           {refunds.map((refund) => (
-            <article
+            <RefundItem
               key={refund.id}
-              className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_auto]"
-            >
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <strong className="text-sm text-ink">{refund.status}</strong>
-                  {refund.payoutNameMismatch ? (
-                    <span className="rounded-full bg-[#fff0ef] px-2 py-1 text-[10px] font-extrabold text-[#b42318]">
-                      ชื่อบัญชีควรตรวจสอบ
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-sm text-muted">{refund.reason}</p>
-                <p className="mt-2 text-xs text-muted">
-                  ผู้ขอ {refund.requestedBy.fullName} ·{' '}
-                  {formatAdminDateTime(refund.createdAt)}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  บัญชีรับเงิน {refund.payoutAccountName || 'ไม่ระบุ'} ·{' '}
-                  {refund.payoutMethod || 'ไม่ระบุวิธี'}
-                </p>
-              </div>
-              <div className="md:text-right">
-                <strong className="block text-sm text-ink">
-                  ขอ {formatAdminMoney(refund.requestedAmount)}
-                </strong>
-                <span className="mt-1 block text-xs text-muted">
-                  อนุมัติ{' '}
-                  {refund.approvedAmount
-                    ? formatAdminMoney(refund.approvedAmount)
-                    : '—'}
-                </span>
-                {refund.reviewedAt ? (
-                  <span className="mt-2 block text-xs text-muted">
-                    ตรวจเมื่อ {formatAdminDateTime(refund.reviewedAt)}
-                  </span>
-                ) : null}
-              </div>
-            </article>
+              refund={refund}
+              bookingId={bookingId}
+              token={token}
+              onChanged={onChanged}
+            />
           ))}
         </div>
       )}
     </AdminPanel>
+  );
+}
+
+function RefundItem({
+  refund,
+  bookingId,
+  token,
+  onChanged,
+}: {
+  refund: AdminTransactionBookingDetail['refunds'][number];
+  bookingId: string;
+  token: string;
+  onChanged: () => void;
+}) {
+  const [approvedAmount, setApprovedAmount] = useState(refund.requestedAmount);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ดำเนินการไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <strong className="text-sm text-ink">{refund.status}</strong>
+          {refund.payoutNameMismatch ? (
+            <span className="rounded-full bg-[#fff6e6] px-2 py-1 text-[10px] font-extrabold text-[#9a570f]">
+              ชื่อบัญชีที่แจ้งควรตรวจสอบ
+            </span>
+          ) : null}
+          {refund.nameMismatchWarning ? (
+            <span className="rounded-full bg-[#fff0ef] px-2 py-1 text-[10px] font-extrabold text-[#b42318]">
+              ชื่อผู้รับในสลิปไม่ตรงกับชื่อบัญชีที่แจ้ง
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-2 text-sm text-muted">{refund.reason}</p>
+        <p className="mt-2 text-xs text-muted">
+          ผู้ขอ {refund.requestedBy.fullName} ·{' '}
+          {formatAdminDateTime(refund.createdAt)}
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          บัญชีรับเงิน {refund.payoutAccountName || 'ไม่ระบุ'} ·{' '}
+          {refund.payoutMethod === 'PROMPTPAY'
+            ? `PromptPay ${refund.payoutPromptPayId || '—'}`
+            : refund.payoutMethod || 'คำร้องเดิมไม่ระบุวิธี'}
+        </p>
+        {refund.status === 'PENDING' ? (
+          <div className="mt-4 flex flex-wrap items-end gap-2">
+            <label className="text-xs font-bold text-muted">
+              ยอดที่อนุมัติ (บาท)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={approvedAmount}
+                onChange={(event) => setApprovedAmount(event.target.value)}
+                className="mt-1 block h-10 w-40 rounded-xl border border-[#ddd4e7] px-3 text-sm text-ink"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={busy || !approvedAmount.trim()}
+              onClick={() =>
+                void run(() =>
+                  approveRefundRequest(
+                    bookingId,
+                    refund.id,
+                    approvedAmount.trim(),
+                    token,
+                  ),
+                )
+              }
+              className="h-10 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:opacity-50"
+            >
+              อนุมัติคำร้อง
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() => rejectRefundRequest(bookingId, refund.id, token))
+              }
+              className="h-10 rounded-xl border border-[#fac5bf] px-4 text-xs font-extrabold text-[#b42318] disabled:opacity-50"
+            >
+              ไม่อนุมัติ
+            </button>
+          </div>
+        ) : null}
+        {refund.status === 'APPROVED' && !refund.hasPayoutSlip ? (
+          <div className="mt-4 rounded-2xl border border-[#e8e1ee] bg-[#fcfbff] p-4">
+            <p className="text-xs font-bold text-muted">
+              แนบสลิปที่โอนคืนแล้ว ระบบจะตรวจยอดและเลขอ้างอิงผ่าน SlipOK
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="file"
+                accept="image/jpeg,image/png"
+                disabled={busy}
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                className="max-w-full text-xs text-muted"
+              />
+              <button
+                type="button"
+                disabled={busy || !file}
+                onClick={() =>
+                  file
+                    ? void run(() =>
+                        uploadRefundPayoutSlip(
+                          bookingId,
+                          refund.id,
+                          file,
+                          token,
+                        ),
+                      )
+                    : undefined
+                }
+                className="h-10 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:opacity-50"
+              >
+                อัปโหลดและตรวจสลิป
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {refund.status === 'APPROVED' && refund.hasPayoutSlip ? (
+          <div className="mt-4 rounded-2xl border border-[#b9dfd3] bg-[#eaf8f1] p-4">
+            <p className="text-xs font-bold text-[#147653]">
+              SlipOK ตรวจสลิปแล้ว โปรดตรวจคำเตือนชื่อผู้รับก่อนยืนยันขั้นสุดท้าย
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() => processRefundRequest(bookingId, refund.id, token))
+              }
+              className="mt-3 h-10 rounded-xl bg-[#147653] px-4 text-xs font-extrabold text-white disabled:opacity-50"
+            >
+              ยืนยันว่าโอนคืนแล้ว
+            </button>
+          </div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-3 text-xs font-bold text-[#b42318]">
+            {error}
+          </p>
+        ) : null}
+      </div>
+      <div className="md:text-right">
+        <strong className="block text-sm text-ink">
+          ขอ {formatAdminMoney(refund.requestedAmount)}
+        </strong>
+        <span className="mt-1 block text-xs text-muted">
+          อนุมัติ{' '}
+          {refund.approvedAmount
+            ? formatAdminMoney(refund.approvedAmount)
+            : '—'}
+        </span>
+        {refund.reviewedAt ? (
+          <span className="mt-2 block text-xs text-muted">
+            ตรวจเมื่อ {formatAdminDateTime(refund.reviewedAt)}
+          </span>
+        ) : null}
+      </div>
+    </article>
   );
 }
 

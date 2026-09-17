@@ -37,13 +37,8 @@ export function RefundRequestPanel({
   const [submitError, setSubmitError] = useState('');
   const [reason, setReason] = useState('');
   const [requestedAmount, setRequestedAmount] = useState(booking.boothPrice);
-  const [payoutMethod, setPayoutMethod] = useState<
-    CreateRefundRequestInput['payoutMethod']
-  >('PROMPTPAY');
   const [payoutAccountName, setPayoutAccountName] = useState('');
   const [payoutPromptPayId, setPayoutPromptPayId] = useState('');
-  const [payoutBankName, setPayoutBankName] = useState('');
-  const [payoutAccountNumber, setPayoutAccountNumber] = useState('');
 
   useEffect(() => {
     if (isPreview) {
@@ -91,23 +86,12 @@ export function RefundRequestPanel({
       setSubmitError('กรุณาระบุชื่อบัญชีผู้รับเงิน');
       return;
     }
-    if (
-      payoutMethod === 'PROMPTPAY' &&
-      !/^(\d{10}|\d{13}|\d{15})$/.test(payoutPromptPayId)
-    ) {
+    if (!/^(\d{10}|\d{13}|\d{15})$/.test(payoutPromptPayId)) {
       setSubmitError(
         'PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัว 13/15 หลัก',
       );
       return;
     }
-    if (
-      payoutMethod === 'BANK_TRANSFER' &&
-      (!payoutBankName.trim() || !/^\d{6,20}$/.test(payoutAccountNumber))
-    ) {
-      setSubmitError('กรุณาระบุธนาคารและเลขบัญชี 6–20 หลักให้ครบถ้วน');
-      return;
-    }
-
     setIsSubmitting(true);
     setSubmitError('');
     try {
@@ -116,16 +100,11 @@ export function RefundRequestPanel({
         return;
       }
       const input: CreateRefundRequestInput = {
-        payoutMethod,
+        payoutMethod: 'PROMPTPAY',
         payoutAccountName: trimmedAccountName,
+        payoutPromptPayId,
         reason: trimmedReason,
         requestedAmount: trimmedAmount,
-        ...(payoutMethod === 'PROMPTPAY'
-          ? { payoutPromptPayId }
-          : {
-              payoutBankName: payoutBankName.trim(),
-              payoutAccountNumber,
-            }),
       };
       const created = await createRefundRequest(booking.id, input, token);
       setRefunds((current) => [created, ...current]);
@@ -188,21 +167,9 @@ export function RefundRequestPanel({
               className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
             />
           </label>
-          <label className="grid gap-1.5 text-sm font-bold">
-            ช่องทางรับเงิน
-            <select
-              value={payoutMethod}
-              onChange={(event) =>
-                setPayoutMethod(
-                  event.target.value as CreateRefundRequestInput['payoutMethod'],
-                )
-              }
-              className="rounded-xl border border-line bg-white px-4 py-3 font-normal outline-none focus:border-violet"
-            >
-              <option value="PROMPTPAY">PromptPay</option>
-              <option value="BANK_TRANSFER">โอนเข้าบัญชีธนาคาร</option>
-            </select>
-          </label>
+          <div className="rounded-xl border border-violet/20 bg-violet/5 px-4 py-3 text-sm">
+            ช่องทางรับเงิน: <strong>PromptPay เท่านั้น</strong>
+          </div>
           <label className="grid gap-1.5 text-sm font-bold">
             ชื่อบัญชีผู้รับเงิน
             <input
@@ -213,42 +180,17 @@ export function RefundRequestPanel({
               className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
             />
           </label>
-          {payoutMethod === 'PROMPTPAY' ? (
-            <label className="grid gap-1.5 text-sm font-bold">
-              หมายเลข PromptPay
-              <input
-                value={payoutPromptPayId}
-                onChange={(event) => setPayoutPromptPayId(event.target.value)}
-                inputMode="numeric"
-                placeholder="เบอร์โทร หรือเลขประจำตัว"
-                required
-                className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
-              />
-            </label>
-          ) : (
-            <>
-              <label className="grid gap-1.5 text-sm font-bold">
-                ธนาคาร
-                <input
-                  value={payoutBankName}
-                  onChange={(event) => setPayoutBankName(event.target.value)}
-                  maxLength={100}
-                  required
-                  className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
-                />
-              </label>
-              <label className="grid gap-1.5 text-sm font-bold">
-                เลขบัญชี
-                <input
-                  value={payoutAccountNumber}
-                  onChange={(event) => setPayoutAccountNumber(event.target.value)}
-                  inputMode="numeric"
-                  required
-                  className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
-                />
-              </label>
-            </>
-          )}
+          <label className="grid gap-1.5 text-sm font-bold">
+            หมายเลข PromptPay
+            <input
+              value={payoutPromptPayId}
+              onChange={(event) => setPayoutPromptPayId(event.target.value)}
+              inputMode="numeric"
+              placeholder="เบอร์โทร หรือเลขประจำตัว"
+              required
+              className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
+            />
+          </label>
           {submitError ? (
             <p role="alert" className="text-sm font-semibold text-danger">
               {submitError}

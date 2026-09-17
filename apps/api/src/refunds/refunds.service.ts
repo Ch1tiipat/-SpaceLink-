@@ -15,6 +15,16 @@ import {
 } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  BookingSlipStorageService,
+  type AdminSlipAccess,
+  type UploadedSlipFile,
+} from '../bookings/booking-slip-storage.service';
+import {
+  RefundSlipVerificationService,
+  parseRefundPayoutEvidence,
+  type RefundPayoutVerificationResponse,
+} from '../slips/refund-slip-verification.service';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
 import { CreateRefundRequestDto } from './dto/create-refund-request.dto';
 
@@ -47,10 +57,12 @@ type RefundRecord = Prisma.RefundRequestGetPayload<{
 
 export type RefundResponse = Omit<
   RefundRecord,
-  'requestedAmount' | 'approvedAmount'
+  'requestedAmount' | 'approvedAmount' | 'evidenceUrls'
 > & {
   requestedAmount: string;
   approvedAmount: string | null;
+  hasPayoutSlip: boolean;
+  nameMismatchWarning: boolean;
 };
 
 const refundOverviewSelect = {
@@ -98,16 +110,20 @@ type RefundOverviewRecord = Prisma.RefundRequestGetPayload<{
 }>;
 export type RefundOverviewResponse = Omit<
   RefundOverviewRecord,
-  'requestedAmount' | 'approvedAmount'
+  'requestedAmount' | 'approvedAmount' | 'evidenceUrls'
 > & {
   requestedAmount: string;
   approvedAmount: string | null;
+  hasPayoutSlip: boolean;
+  nameMismatchWarning: boolean;
 };
 
 const adminRefundSelect = {
   status: true,
   requestedAmount: true,
   approvedAmount: true,
+  evidenceUrls: true,
+  payoutAccountName: true,
   requestedByUserId: true,
   booking: {
     select: {
@@ -128,6 +144,8 @@ export class RefundsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly slipStorage: BookingSlipStorageService,
+    private readonly refundSlipVerification: RefundSlipVerificationService,
   ) {}
 
   async create(
@@ -265,12 +283,9 @@ export class RefundsService {
         status: RefundStatus.PENDING,
         payoutMethod: dto.payoutMethod,
         payoutAccountName: dto.payoutAccountName,
-        payoutPromptPayId:
-          dto.payoutMethod === 'PROMPTPAY' ? dto.payoutPromptPayId : null,
-        payoutBankName:
-          dto.payoutMethod === 'BANK_TRANSFER' ? dto.payoutBankName : null,
-        payoutAccountNumber:
-          dto.payoutMethod === 'BANK_TRANSFER' ? dto.payoutAccountNumber : null,
+        payoutPromptPayId: dto.payoutPromptPayId,
+        payoutBankName: null,
+        payoutAccountNumber: null,
       },
       select: refundSelect,
     });
@@ -503,6 +518,49 @@ export class RefundsService {
     return response;
   }
 
+  async uploadPayoutSlip(
+    bookingId: string,
+    refundId: string,
+    organizationId: string,
+    adminUserId: string,
+    file: UploadedSlipFile,
+  ): Promise<RefundPayoutVerificationResponse> {
+    const refund = await this.findAdminRefund(
+      bookingId,
+      refundId,
+      organizationId,
+    );
+    if (
+      refund.status !== RefundStatus.APPROVED ||
+      refund.approvedAmount === null
+    ) {
+      throw new ConflictException('ต้องอนุมัติคำร้องก่อนอัปโหลดสลิปคืนเงิน');
+    }
+    if (parseRefundPayoutEvidence(refund.evidenceUrls)) {
+      throw new ConflictException('คำร้องนี้มีสลิปคืนเงินที่ตรวจสอบแล้ว');
+    }
+
+    const stored = await this.slipStorage.uploadRefundForVerification(
+      file,
+      refundId,
+      adminUserId,
+    );
+    try {
+      return await this.refundSlipVerification.verifyAndStore({
+        refundId,
+        expectedAmount: refund.approvedAmount,
+        payoutAccountName: refund.payoutAccountName,
+        objectPath: stored.objectPath,
+        slipImageUrl: stored.verificationUrl,
+      });
+    } catch (error) {
+      await this.slipStorage
+        .removeObject(stored.objectPath)
+        .catch(() => undefined);
+      throw error;
+    }
+  }
+
   async process(
     bookingId: string,
     refundId: string,
@@ -518,6 +576,15 @@ export class RefundsService {
       refund.approvedAmount === null
     ) {
       throw new ConflictException('ต้องอนุมัติคำร้องก่อนยืนยันการคืนเงิน');
+    }
+    const evidence = parseRefundPayoutEvidence(refund.evidenceUrls);
+    if (!evidence) {
+      throw new ConflictException(
+        'ต้องอัปโหลดและตรวจสอบสลิปคืนเงินก่อนยืนยันการคืนเงิน',
+      );
+    }
+    if (!new Prisma.Decimal(evidence.amount).equals(refund.approvedAmount)) {
+      throw new ConflictException('ยอดสลิปคืนเงินไม่ตรงกับยอดที่อนุมัติ');
     }
 
     const updated = await this.prisma.refundRequest.updateMany({
@@ -548,6 +615,22 @@ export class RefundsService {
       `ผู้จัดงานยืนยันการคืนเงิน ${response.approvedAmount ?? '0'} บาทแล้ว`,
     );
     return response;
+  }
+
+  async createVendorPayoutSlipAccess(
+    refundId: string,
+    vendorUserId: string,
+  ): Promise<AdminSlipAccess> {
+    const refund = await this.prisma.refundRequest.findFirst({
+      where: { id: refundId, requestedByUserId: vendorUserId },
+      select: { status: true, evidenceUrls: true },
+    });
+    const evidence = parseRefundPayoutEvidence(refund?.evidenceUrls);
+    if (!refund || refund.status !== RefundStatus.PROCESSED || !evidence) {
+      // Unknown, another vendor's and unavailable evidence share one answer.
+      throw new NotFoundException('ไม่พบสลิปการคืนเงิน');
+    }
+    return this.slipStorage.createRefundAccess(evidence.objectPath);
   }
 
   private async findAdminRefund(
@@ -624,11 +707,14 @@ export class RefundsService {
   }
 
   private toResponse(refund: RefundRecord): RefundResponse {
-    const { requestedAmount, approvedAmount, ...rest } = refund;
+    const { requestedAmount, approvedAmount, evidenceUrls, ...rest } = refund;
+    const payoutEvidence = parseRefundPayoutEvidence(evidenceUrls);
     return {
       ...rest,
       requestedAmount: requestedAmount.toString(),
       approvedAmount: approvedAmount?.toString() ?? null,
+      hasPayoutSlip: payoutEvidence !== null,
+      nameMismatchWarning: payoutEvidence?.nameMismatchWarning ?? false,
     };
   }
 

@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
-import { getMyRefunds, type RefundRequest } from '@/lib/api';
+import {
+  getMyRefunds,
+  getRefundPayoutSlipAccess,
+  type RefundRequest,
+} from '@/lib/api';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
@@ -39,6 +43,7 @@ export function MyRefundsScreen() {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [openingRefundId, setOpeningRefundId] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.status === 'loading') return;
@@ -79,6 +84,31 @@ export function MyRefundsScreen() {
       controller.abort();
     };
   }, [state]);
+
+  useEffect(() => {
+    if (refunds.length === 0) return;
+    const refundId = new URLSearchParams(window.location.search).get('refundId');
+    if (!refundId) return;
+    document
+      .getElementById(`refund-${refundId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [refunds]);
+
+  async function openPayoutSlip(refundId: string) {
+    if (state.status !== 'ready') return;
+    setOpeningRefundId(refundId);
+    setError('');
+    try {
+      const access = await getRefundPayoutSlipAccess(refundId, state.token);
+      window.open(access.viewUrl, '_blank', 'noopener,noreferrer');
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'เปิดสลิปการคืนเงินไม่สำเร็จ',
+      );
+    } finally {
+      setOpeningRefundId(null);
+    }
+  }
 
   if (state.status === 'signed-out') {
     return (
@@ -133,7 +163,11 @@ export function MyRefundsScreen() {
         ) : (
           <section className="mt-7 grid gap-4">
             {refunds.map((refund) => (
-              <article key={refund.id} className="sl-surface p-5 sm:p-6">
+              <article
+                id={`refund-${refund.id}`}
+                key={refund.id}
+                className="sl-surface scroll-mt-24 p-5 sm:p-6"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold text-muted">
@@ -179,12 +213,26 @@ export function MyRefundsScreen() {
                     </dd>
                   </div>
                 </dl>
-                <Link
-                  href={`/bookings/${encodeURIComponent(refund.bookingId)}`}
-                  className="sl-action-secondary mt-5 text-violet"
-                >
-                  เปิดรายละเอียดการจอง
-                </Link>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Link
+                    href={`/bookings/${encodeURIComponent(refund.bookingId)}`}
+                    className="sl-action-secondary text-violet"
+                  >
+                    เปิดรายละเอียดการจอง
+                  </Link>
+                  {refund.status === 'PROCESSED' && refund.hasPayoutSlip ? (
+                    <button
+                      type="button"
+                      disabled={openingRefundId === refund.id}
+                      onClick={() => void openPayoutSlip(refund.id)}
+                      className="sl-action-primary disabled:opacity-50"
+                    >
+                      {openingRefundId === refund.id
+                        ? 'กำลังเปิดสลิป...'
+                        : 'ดูสลิปการคืนเงิน'}
+                    </button>
+                  ) : null}
+                </div>
               </article>
             ))}
           </section>

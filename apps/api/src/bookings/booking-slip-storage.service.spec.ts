@@ -112,6 +112,30 @@ describe('BookingSlipStorageService', () => {
     expect(signInit.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('stores refund payout evidence under an isolated private prefix', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ signedUrl: '/signed/refund' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    const result = await service.uploadRefundForVerification(
+      { buffer: PNG },
+      'refund-id',
+      'admin-id',
+    );
+
+    expect(result.objectPath).toMatch(
+      /^refund-payouts\/refund-id\/admin-id\/[a-f0-9-]+\.png$/,
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(
+      /\/storage\/v1\/object\/slips\/refund-payouts\/refund-id\/admin-id\/[a-f0-9-]+\.png$/,
+    );
+  });
+
   it('creates short-lived view and download URLs without persisting either', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ signedUrl: '/signed/path?token=test' }), {
@@ -132,6 +156,21 @@ describe('BookingSlipStorageService', () => {
     expect(signInit.body).toBe(
       JSON.stringify({ expiresIn: SIGNED_URL_TTL_SECONDS }),
     );
+  });
+
+  it('uses a refund-specific download filename for payout evidence', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ signedUrl: '/signed/path?token=test' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      service.createRefundAccess('refund-payouts/refund-id/slip.jpg'),
+    ).resolves.toMatchObject({
+      downloadUrl: `${SUPABASE_URL}/storage/v1/signed/path?token=test&download=refund-slip.jpg`,
+    });
   });
 
   it('rejects content whose bytes are not JPEG or PNG', async () => {

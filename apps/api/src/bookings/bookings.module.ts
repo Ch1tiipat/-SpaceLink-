@@ -22,6 +22,6 @@ import { OrganizationBookingsController } from './organization-bookings.controll
     BookingSlipStorageService,
     BookingHoldExpiryService,
   ],
-  exports: [BookingsService],
+  exports: [BookingsService, BookingSlipStorageService],
 })
 export class BookingsModule {}

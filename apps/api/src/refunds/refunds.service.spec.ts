@@ -15,6 +15,8 @@ import {
 } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookingSlipStorageService } from '../bookings/booking-slip-storage.service';
+import { RefundSlipVerificationService } from '../slips/refund-slip-verification.service';
 import { RefundsService } from './refunds.service';
 
 const VENDOR_ID = '11111111-1111-4111-8111-111111111111';
@@ -32,8 +34,20 @@ const CREATE_DTO = {
   payoutMethod: 'PROMPTPAY',
   payoutAccountName: 'Vendor One',
   payoutPromptPayId: '0123456789',
-};
+} as const;
 const APPROVE_DTO = { approvedAmount: '1000' };
+const PAYOUT_EVIDENCE = {
+  kind: 'REFUND_PAYOUT_SLIP',
+  version: 1,
+  objectPath: `refund-payouts/${REFUND_ID}/slip.png`,
+  transRef: 'refund-trans-ref',
+  amount: '1000',
+  sendingBank: 'TEST',
+  senderName: 'Organizer',
+  receiverName: 'Vendor One',
+  verifiedAt: NOW.toISOString(),
+  nameMismatchWarning: false,
+};
 
 const REFUND = {
   id: REFUND_ID,
@@ -81,6 +95,17 @@ const REFUND_OVERVIEW = {
   },
 };
 
+function refundResponse<T extends typeof REFUND>(refund: T) {
+  const { evidenceUrls: _evidenceUrls, ...publicRefund } = refund;
+  return {
+    ...publicRefund,
+    requestedAmount: refund.requestedAmount.toString(),
+    approvedAmount: null,
+    hasPayoutSlip: false,
+    nameMismatchWarning: false,
+  };
+}
+
 const bookingFindFirst = jest.fn();
 const refundRequestFindFirst = jest.fn();
 const refundRequestFindMany = jest.fn();
@@ -91,6 +116,10 @@ const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 const createForRole = jest.fn();
 const createForOrganizationAdmins = jest.fn();
+const uploadRefundForVerification = jest.fn();
+const removeObject = jest.fn();
+const createRefundAccess = jest.fn();
+const verifyAndStoreRefundSlip = jest.fn();
 
 const mockPrismaService = {
   booking: { findFirst: bookingFindFirst },
@@ -110,6 +139,16 @@ const mockNotificationsService = {
   createForOrganizationAdmins,
 };
 
+const mockSlipStorage = {
+  uploadRefundForVerification,
+  removeObject,
+  createRefundAccess,
+};
+
+const mockRefundSlipVerification = {
+  verifyAndStore: verifyAndStoreRefundSlip,
+};
+
 function eligibleBooking() {
   return {
     bookingCode: 'BK-REFUND-001',
@@ -125,11 +164,14 @@ function eligibleBooking() {
 function adminRefund(
   status: RefundStatus = RefundStatus.PENDING,
   approvedAmount: Prisma.Decimal | null = null,
+  evidenceUrls: unknown = null,
 ) {
   return {
     status,
     requestedAmount: new Prisma.Decimal(CREATE_DTO.requestedAmount),
     approvedAmount,
+    evidenceUrls,
+    payoutAccountName: CREATE_DTO.payoutAccountName,
     requestedByUserId: VENDOR_ID,
     booking: {
       boothPrice: BOOTH_PRICE,
@@ -159,6 +201,23 @@ describe('RefundsService', () => {
     createForUser.mockResolvedValue(null);
     createForRole.mockResolvedValue(1);
     createForOrganizationAdmins.mockResolvedValue(2);
+    uploadRefundForVerification.mockResolvedValue({
+      objectPath: `refund-payouts/${REFUND_ID}/slip.png`,
+      verificationUrl: 'https://storage.example/signed',
+    });
+    removeObject.mockResolvedValue(undefined);
+    createRefundAccess.mockResolvedValue({
+      viewUrl: 'https://storage.example/view',
+      downloadUrl: 'https://storage.example/download',
+      expiresInSeconds: 300,
+    });
+    verifyAndStoreRefundSlip.mockResolvedValue({
+      status: 'VERIFIED',
+      amount: '1000',
+      receiverName: 'Vendor One',
+      verifiedAt: NOW.toISOString(),
+      nameMismatchWarning: false,
+    });
     prismaTransaction.mockImplementation(
       (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         operation(mockPrismaService as unknown as Prisma.TransactionClient),
@@ -169,6 +228,11 @@ describe('RefundsService', () => {
         RefundsService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: BookingSlipStorageService, useValue: mockSlipStorage },
+        {
+          provide: RefundSlipVerificationService,
+          useValue: mockRefundSlipVerification,
+        },
       ],
     }).compile();
     service = module.get<RefundsService>(RefundsService);
@@ -180,11 +244,7 @@ describe('RefundsService', () => {
     it('creates one request for an owned, cancelled and verified paid booking', async () => {
       await expect(
         service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO),
-      ).resolves.toEqual({
-        ...REFUND,
-        requestedAmount: '1200',
-        approvedAmount: null,
-      });
+      ).resolves.toEqual(refundResponse(REFUND));
 
       expect(bookingFindFirst).toHaveBeenCalledWith({
         where: { id: BOOKING_ID, vendorUserId: VENDOR_ID },
@@ -377,7 +437,7 @@ describe('RefundsService', () => {
 
   it('lists only caller-owned requests and stringifies money', async () => {
     await expect(service.findMine(VENDOR_ID)).resolves.toEqual([
-      { ...REFUND, requestedAmount: '1200', approvedAmount: null },
+      refundResponse(REFUND),
     ]);
     expect(refundRequestFindMany).toHaveBeenCalledWith({
       where: { requestedByUserId: VENDOR_ID },
@@ -386,19 +446,15 @@ describe('RefundsService', () => {
     });
   });
 
-  it('stores only the selected bank payout details', async () => {
-    await service.create(BOOKING_ID, VENDOR_ID, {
-      ...CREATE_DTO,
-      payoutMethod: 'BANK_TRANSFER',
-      payoutBankName: 'Test Bank',
-      payoutAccountNumber: '0012345678',
-    });
+  it('stores PromptPay-only payout details and clears legacy bank fields', async () => {
+    await service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO);
     expect(refundRequestCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          payoutMethod: 'BANK_TRANSFER',
-          payoutAccountNumber: '0012345678',
-          payoutPromptPayId: null,
+          payoutMethod: 'PROMPTPAY',
+          payoutPromptPayId: '0123456789',
+          payoutBankName: null,
+          payoutAccountNumber: null,
         }) as object,
       }),
     );
@@ -451,9 +507,9 @@ describe('RefundsService', () => {
 
     await expect(service.findAllAcrossOrganizations()).resolves.toEqual([
       {
-        ...REFUND_OVERVIEW,
-        requestedAmount: '1200',
-        approvedAmount: null,
+        ...refundResponse(REFUND),
+        booking: REFUND_OVERVIEW.booking,
+        requestedBy: REFUND_OVERVIEW.requestedBy,
       },
     ]);
 
@@ -498,6 +554,34 @@ describe('RefundsService', () => {
       },
       orderBy: { createdAt: 'desc' },
     });
+  });
+
+  it('creates fresh payout-slip access only for the requesting vendor', async () => {
+    refundRequestFindFirst.mockResolvedValueOnce({
+      status: RefundStatus.PROCESSED,
+      evidenceUrls: PAYOUT_EVIDENCE,
+    });
+
+    await expect(
+      service.createVendorPayoutSlipAccess(REFUND_ID, VENDOR_ID),
+    ).resolves.toEqual({
+      viewUrl: 'https://storage.example/view',
+      downloadUrl: 'https://storage.example/download',
+      expiresInSeconds: 300,
+    });
+    expect(refundRequestFindFirst).toHaveBeenCalledWith({
+      where: { id: REFUND_ID, requestedByUserId: VENDOR_ID },
+      select: { status: true, evidenceUrls: true },
+    });
+    expect(createRefundAccess).toHaveBeenCalledWith(PAYOUT_EVIDENCE.objectPath);
+  });
+
+  it('hides payout-slip evidence from another vendor', async () => {
+    refundRequestFindFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.createVendorPayoutSlipAccess(REFUND_ID, 'another-vendor'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(createRefundAccess).not.toHaveBeenCalled();
   });
 
   describe('admin transitions', () => {
@@ -668,15 +752,73 @@ describe('RefundsService', () => {
       });
     });
 
+    it('uploads and verifies payout evidence while keeping the refund APPROVED', async () => {
+      refundRequestFindFirst.mockResolvedValueOnce(
+        adminRefund(RefundStatus.APPROVED, new Prisma.Decimal('1000')),
+      );
+      const file = { buffer: Buffer.from('refund-slip') };
+
+      await expect(
+        service.uploadPayoutSlip(
+          BOOKING_ID,
+          REFUND_ID,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+          file,
+        ),
+      ).resolves.toMatchObject({ status: 'VERIFIED' });
+
+      expect(uploadRefundForVerification).toHaveBeenCalledWith(
+        file,
+        REFUND_ID,
+        ADMIN_ID,
+      );
+      expect(verifyAndStoreRefundSlip).toHaveBeenCalledWith({
+        refundId: REFUND_ID,
+        expectedAmount: new Prisma.Decimal('1000'),
+        payoutAccountName: CREATE_DTO.payoutAccountName,
+        objectPath: `refund-payouts/${REFUND_ID}/slip.png`,
+        slipImageUrl: 'https://storage.example/signed',
+      });
+      expect(refundRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('removes an uploaded object when verification fails', async () => {
+      refundRequestFindFirst.mockResolvedValueOnce(
+        adminRefund(RefundStatus.APPROVED, new Prisma.Decimal('1000')),
+      );
+      verifyAndStoreRefundSlip.mockRejectedValueOnce(
+        new BadRequestException('invalid payout slip'),
+      );
+
+      await expect(
+        service.uploadPayoutSlip(
+          BOOKING_ID,
+          REFUND_ID,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+          { buffer: Buffer.from('refund-slip') },
+        ),
+      ).rejects.toThrow('invalid payout slip');
+      expect(removeObject).toHaveBeenCalledWith(
+        `refund-payouts/${REFUND_ID}/slip.png`,
+      );
+    });
+
     it('processes only APPROVED and preserves its approved amount', async () => {
       refundRequestFindFirst
         .mockResolvedValueOnce(
-          adminRefund(RefundStatus.APPROVED, new Prisma.Decimal('1000')),
+          adminRefund(
+            RefundStatus.APPROVED,
+            new Prisma.Decimal('1000'),
+            PAYOUT_EVIDENCE,
+          ),
         )
         .mockResolvedValueOnce({
           ...REFUND,
           status: RefundStatus.PROCESSED,
           approvedAmount: new Prisma.Decimal('1000'),
+          evidenceUrls: PAYOUT_EVIDENCE,
           reviewedByUserId: ADMIN_ID,
           reviewedAt: NOW,
           processedAt: NOW,
