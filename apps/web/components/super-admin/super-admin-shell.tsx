@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Bell,
   Building2,
@@ -150,6 +151,8 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const [notificationToken, setNotificationToken] = useState('');
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
@@ -159,7 +162,26 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   useEffect(() => {
     setDrawerOpen(false);
     setNotificationOpen(false);
+    setAccountOpen(false);
   }, [pathname, queryString]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [accountOpen]);
 
   useEffect(() => {
     setNotificationToken('');
@@ -319,7 +341,6 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
       platformOpen={platformOpen}
       onTogglePlatform={() => setPlatformOpen((value) => !value)}
       onCollapse={() => setCollapsed(true)}
-      onSignOut={signOut}
     />
   );
 
@@ -364,7 +385,6 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               platformOpen={platformOpen}
               onTogglePlatform={() => setPlatformOpen((value) => !value)}
               onCollapse={() => setDrawerOpen(false)}
-              onSignOut={signOut}
               mobile
             />
           </aside>
@@ -372,26 +392,43 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
       ) : null}
 
       <div className="min-w-0 bg-[linear-gradient(180deg,rgba(250,247,255,.82),rgba(255,255,255,.2)_44%,rgba(245,240,255,.52))]">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-5 border-b border-[#ebe4ef] bg-white/90 px-[18px] shadow-[0_8px_24px_rgba(74,48,112,.04)] backdrop-blur-[14px] sm:h-[72px] sm:px-[34px]">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.matchMedia('(min-width: 1024px)').matches) {
-                setCollapsed(false);
-              } else {
-                setDrawerOpen(true);
-              }
-            }}
-            className={`h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] ${
-              collapsed ? 'lg:absolute lg:left-5 lg:grid' : 'lg:hidden'
-            } grid`}
-            aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
-          >
-            <Menu className="h-[18px] w-[18px]" />
-          </button>
-          <span className="hidden text-xs text-[#82788b] sm:inline">
-            ข้อมูลล่าสุด {THAI_DATE.format(new Date())}
-          </span>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[#e8def7] bg-[#f5efff] px-[18px] shadow-[0_8px_24px_rgba(74,48,112,.04)] sm:h-[72px] sm:px-[30px]">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.matchMedia('(min-width: 1024px)').matches) {
+                  setCollapsed(false);
+                } else {
+                  setDrawerOpen(true);
+                }
+              }}
+              className={`grid h-10 w-10 place-items-center rounded-xl border border-[#e8def7] bg-white text-[#716675] ${collapsed ? 'lg:grid' : 'lg:hidden'}`}
+              aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
+            >
+              <Menu className="h-[18px] w-[18px]" />
+            </button>
+            <Link
+              href="/super-admin"
+              aria-label="SpaceLink ภาพรวม Super Admin"
+              className="flex min-w-0 items-center gap-2.5"
+            >
+              <Image
+                src="/brand/spacelink-mark.png"
+                alt=""
+                width={38}
+                height={38}
+                className="h-[38px] w-[38px] object-contain"
+              />
+              <span className="hidden bg-[linear-gradient(100deg,#4c16ad,#8b3df3)] bg-clip-text text-lg font-black tracking-[-.5px] text-transparent min-[390px]:inline sm:text-2xl">
+                SpaceLink
+              </span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="hidden text-xs text-[#82788b] xl:inline">
+              ข้อมูลล่าสุด {THAI_DATE.format(new Date())}
+            </span>
           <div className="relative">
             <button
               type="button"
@@ -428,18 +465,56 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               </>
             ) : null}
           </div>
-          <Link
-            href="/profile"
-            aria-label="ดูข้อมูลส่วนตัว"
-            className="flex items-center gap-2 rounded-xl bg-[#f2eaff] px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4] transition hover:bg-[#e9ddff] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#e9ddff]"
-          >
-            <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-[11px] font-extrabold text-white">
-              {initials(auth.fullName)}
-            </span>
-            <span className="hidden max-w-[180px] truncate sm:inline">
-              {auth.fullName}
-            </span>
-          </Link>
+            <div ref={accountMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setAccountOpen((open) => !open)}
+                aria-label="เปิดเมนูโปรไฟล์"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                className="flex min-h-10 items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] font-bold text-[#6331c4] transition hover:bg-white/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#e9ddff]"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-xs font-extrabold text-white">
+                  {initials(auth.fullName)}
+                </span>
+                <span className="hidden max-w-[180px] truncate sm:inline">
+                  {auth.fullName}
+                </span>
+                <ChevronDown className="h-4 w-4" aria-hidden />
+              </button>
+              {accountOpen ? (
+                <div
+                  role="menu"
+                  aria-label="เมนูบัญชี"
+                  className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] rounded-2xl border border-[#e7def2] bg-white p-2 shadow-[0_20px_55px_rgba(39,24,63,.18)]"
+                >
+                  <p className="border-b border-[#ebe4ef] px-3 py-2 text-xs font-bold text-[#82788b]">
+                    บัญชีผู้ดูแลแพลตฟอร์ม
+                  </p>
+                  <Link
+                    href="/profile"
+                    role="menuitem"
+                    onClick={() => setAccountOpen(false)}
+                    className="mt-1 flex min-h-11 items-center rounded-xl px-3 text-sm font-bold text-[#554b5e] hover:bg-[#f5efff]"
+                  >
+                    โปรไฟล์ของฉัน
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      signOut();
+                    }}
+                    className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-[#b42318] hover:bg-[#fff0ee]"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                    ออกจากระบบ
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </header>
         <main className="min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-72px)]">
           {children}
@@ -602,7 +677,6 @@ function SidebarContent({
   platformOpen,
   onTogglePlatform,
   onCollapse,
-  onSignOut,
   mobile = false,
 }: {
   pathname: string;
@@ -610,7 +684,6 @@ function SidebarContent({
   platformOpen: boolean;
   onTogglePlatform: () => void;
   onCollapse: () => void;
-  onSignOut: () => void;
   mobile?: boolean;
 }) {
   return (
@@ -650,16 +723,6 @@ function SidebarContent({
         ))}
       </div>
 
-      <div className="mt-auto border-t border-[#ebe4ef] pt-4">
-        <button
-          type="button"
-          onClick={onSignOut}
-          className="flex min-h-[46px] w-full items-center gap-2.5 rounded-[11px] border border-[#e7dfea] bg-[#faf7ff] px-3 text-left text-[13px] font-extrabold text-[#6d28d9] transition hover:border-[#d5c3e8] hover:bg-[#f2eaff]"
-        >
-          <LogOut className="h-[18px] w-[18px]" />
-          ออกจากระบบ
-        </button>
-      </div>
     </>
   );
 }
