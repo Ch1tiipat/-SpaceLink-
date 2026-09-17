@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CalendarDays,
   Check,
@@ -56,6 +56,11 @@ const EVENT_INFORMATION_TYPE_LABELS: Record<EventInformationType, string> = {
   FACILITY: 'สิ่งอำนวยความสะดวก',
 };
 
+function bookingStatusLabel(event: EventMap['event']): string {
+  if (isEventBookable(event)) return 'กำลังเปิดให้สำรองพื้นที่';
+  return event.status === 'DRAFT' ? 'ยังไม่เปิดรับจอง' : 'ปิดรับจอง';
+}
+
 type SavedEventsAccess =
   | { status: 'loading' }
   | { status: 'signed-out' }
@@ -92,6 +97,101 @@ function safeHttpsUrl(value: string | null): string | null {
 
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [resolvedEvent, setResolvedEvent] = useState<{
+    eventId: string;
+    event: EventMap['event'];
+  } | null>(null);
+  const event = resolvedEvent?.eventId === eventId ? resolvedEvent.event : null;
+  const eventBookable = event ? isEventBookable(event) : false;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  const close = () => dialogRef.current?.close();
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-modal="true"
+      aria-labelledby="event-dialog-title"
+      onClose={() => router.replace('/')}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
+      className="w-[min(1100px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[26px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65"
+    >
+      <div className="flex max-h-[calc(100dvh-24px)] flex-col">
+        <header className="flex shrink-0 items-center justify-between border-b border-line bg-white px-5 py-4 sm:px-8">
+          <h2 id="event-dialog-title" className="text-lg font-black">
+            รายละเอียด Event
+          </h2>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="ปิดรายละเอียด Event"
+            className="grid h-9 w-9 place-items-center rounded-full border border-line text-xl text-muted hover:text-violet"
+          >
+            ×
+          </button>
+        </header>
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
+          <EventDetailContent
+            eventId={eventId}
+            onClose={close}
+            onEventResolved={setResolvedEvent}
+          />
+        </div>
+        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line bg-white px-5 py-4 max-sm:gap-2 sm:px-8">
+          {event && !eventBookable ? (
+            <p className="mr-auto text-sm font-semibold text-muted">
+              {bookingStatusLabel(event)} — ไม่สามารถเลือกบูธได้
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={close}
+            className="sl-action-secondary min-w-[110px] text-violet max-sm:flex-1"
+          >
+            ปิด
+          </button>
+          {eventBookable && event ? (
+            <Link
+              href={`/events/${encodeURIComponent(event.slug)}/map`}
+              className="sl-action-primary min-w-[140px] max-sm:flex-1"
+            >
+              เลือกบูธ
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="sl-action-primary min-w-[140px] cursor-not-allowed opacity-50 max-sm:flex-1"
+            >
+              เลือกบูธ
+            </button>
+          )}
+        </footer>
+      </div>
+    </dialog>
+  );
+}
+
+function EventDetailContent({
+  eventId,
+  onClose,
+  onEventResolved,
+}: {
+  eventId: string;
+  onClose: () => void;
+  onEventResolved: (result: {
+    eventId: string;
+    event: EventMap['event'];
+  }) => void;
+}) {
+  const router = useRouter();
   const [result, setResult] = useState<{
     eventId: string;
     data: EventMap | null;
@@ -107,7 +207,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
     status: 'loading',
   });
-  const [savingEvent, setSavingEvent] = useState(false);
+  const savePendingRef = useRef(false);
+  const [pendingSaveAction, setPendingSaveAction] = useState<
+    'save' | 'unsave' | null
+  >(null);
+  const [savedLoadAttempt, setSavedLoadAttempt] = useState(0);
   const [saveNotice, setSaveNotice] = useState<{
     kind: 'success' | 'error';
     message: string;
@@ -122,6 +226,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       .then((data) => {
         if (!active) return;
         setResult({ eventId, data, error: null });
+        onEventResolved({ eventId, event: data.event });
         if (legacyUuid) {
           router.replace(
             `/events/${encodeURIComponent(data.event.slug)}${window.location.search}`,
@@ -142,7 +247,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       active = false;
       controller.abort();
     };
-  }, [eventId, router]);
+  }, [eventId, onEventResolved, router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -190,7 +295,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [savedLoadAttempt]);
 
   useEffect(() => {
     if (!saveNotice) return;
@@ -221,7 +326,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
 
   if (!data && !error) {
     return (
-      <main className="sl-page">
+      <div className="sl-page">
         <div className="shell max-w-[1100px] py-10">
           <div className="skeleton h-[390px] rounded-[32px]" />
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -230,21 +335,25 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             ))}
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error || !data) {
     return (
-      <main className="sl-page">
+      <div className="sl-page">
         <div className="shell max-w-[1100px] py-20 text-center">
           <h1 className="text-2xl font-black">เปิดรายละเอียด Event ไม่ได้</h1>
           <p className="mt-3 text-muted">{error ?? 'ไม่พบข้อมูล Event'}</p>
-          <Link href="/" className="sl-action-primary mt-7">
-            กลับหน้าค้นหา Event
-          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            className="sl-action-primary mt-7"
+          >
+            ปิด
+          </button>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -275,16 +384,21 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
   const isSaved =
-    savedEvents.status === 'ready' &&
-    savedEvents.eventIds.includes(event.id);
+    savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id);
 
   async function toggleSavedEvent() {
     if (savedEvents.status === 'signed-out') {
       router.push('/login');
       return;
     }
-    if (savedEvents.status !== 'ready' || savingEvent) return;
+    if (savedEvents.status === 'error') {
+      setSavedEvents({ status: 'loading' });
+      setSavedLoadAttempt((attempt) => attempt + 1);
+      return;
+    }
+    if (savedEvents.status !== 'ready' || savePendingRef.current) return;
 
+    savePendingRef.current = true;
     const wasSaved = savedEvents.eventIds.includes(event.id);
     const nextEventIds = wasSaved
       ? savedEvents.eventIds.filter((savedId) => savedId !== event.id)
@@ -292,7 +406,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
     const token = savedEvents.token;
 
     setSavedEvents({ status: 'ready', token, eventIds: nextEventIds });
-    setSavingEvent(true);
+    setPendingSaveAction(wasSaved ? 'unsave' : 'save');
     setSaveNotice(null);
 
     try {
@@ -321,12 +435,13 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
               : 'บันทึก Event ไม่สำเร็จ',
       });
     } finally {
-      setSavingEvent(false);
+      savePendingRef.current = false;
+      setPendingSaveAction(null);
     }
   }
 
   return (
-    <main className="sl-page pb-0">
+    <div className="sl-page pb-0">
       {saveNotice ? (
         <div
           role={saveNotice.kind === 'error' ? 'alert' : 'status'}
@@ -338,12 +453,8 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         </div>
       ) : null}
       <div className="shell max-w-[1100px] py-8">
-        <Link href="/" className="sl-chip">
-          ← กลับไปค้นหา Event
-        </Link>
-
         <section
-          className="relative mt-5 flex min-h-[390px] items-center overflow-hidden rounded-[32px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] px-11 py-12 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[340px] max-sm:px-7"
+          className="relative flex min-h-[280px] items-center overflow-hidden rounded-[26px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] px-8 py-9 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[260px] max-sm:px-6"
           style={{
             backgroundImage: `linear-gradient(100deg,rgba(36,16,62,.93),rgba(78,30,150,.74),rgba(56,101,104,.58)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
             backgroundPosition: 'center',
@@ -352,7 +463,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         >
           <div className="relative z-10 max-w-[720px]">
             <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">
-              {eventBookable ? 'กำลังเปิดให้สำรองพื้นที่' : 'ปิดรับจอง'}
+              {bookingStatusLabel(event)}
             </span>
             <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
               {event.name}
@@ -372,11 +483,12 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                 type="button"
                 onClick={() => void toggleSavedEvent()}
                 disabled={
-                  savedEvents.status === 'loading' ||
-                  savedEvents.status === 'error' ||
-                  savingEvent
+                  savedEvents.status === 'loading' || pendingSaveAction !== null
                 }
                 aria-pressed={isSaved}
+                aria-busy={
+                  savedEvents.status === 'loading' || pendingSaveAction !== null
+                }
                 title={
                   savedEvents.status === 'error'
                     ? 'โหลดสถานะการบันทึก Event ไม่สำเร็จ'
@@ -393,13 +505,15 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
                   fill={isSaved ? 'currentColor' : 'none'}
                   aria-hidden
                 />{' '}
-                {savingEvent
-                  ? isSaved
+                {savedEvents.status === 'error'
+                  ? 'ลองโหลดสถานะอีกครั้ง'
+                  : pendingSaveAction === 'save'
                     ? 'กำลังบันทึก…'
-                    : 'กำลังยกเลิก…'
-                  : isSaved
-                    ? 'บันทึกแล้ว'
-                    : 'บันทึก Event'}
+                    : pendingSaveAction === 'unsave'
+                      ? 'กำลังยกเลิก…'
+                      : isSaved
+                        ? 'บันทึกแล้ว'
+                        : 'บันทึก Event'}
               </button>
             </div>
           </div>
@@ -791,7 +905,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           </article>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 
