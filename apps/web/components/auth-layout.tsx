@@ -7,6 +7,7 @@ type AuthLayoutProps = {
   eyebrow: string;
   headline: string;
   description: string;
+  step: 'details' | 'verify';
   children: ReactNode;
 };
 
@@ -26,21 +27,25 @@ export function AuthLayout({
   eyebrow,
   headline,
   description,
+  step,
   children,
 }: AuthLayoutProps) {
   return (
     <div className="flex min-h-[calc(100vh-63px)] flex-col bg-[#f8f6ff] lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(440px,0.92fr)_minmax(540px,1.08fr)]">
-      <aside className="relative hidden overflow-hidden bg-[radial-gradient(circle_at_15%_12%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,#7c3aed,#4e21bd)] px-[clamp(40px,5vw,76px)] py-12 text-white lg:flex lg:flex-col">
+      <aside className="relative hidden overflow-hidden bg-[radial-gradient(circle_at_15%_12%,rgba(255,255,255,0.16),transparent_18rem),linear-gradient(145deg,#6428cc,#3e168f)] px-[clamp(40px,5vw,76px)] py-12 text-white lg:flex lg:flex-col">
         <span className="absolute -right-24 -top-24 h-80 w-80 rounded-full border-[55px] border-white/[0.055]" />
         <span className="absolute -bottom-36 left-1/3 h-96 w-96 rounded-full bg-[#b44de7]/20 blur-3xl" />
-        <BrandMark />
+        <span className="relative inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold tracking-wide text-white/90">
+          <span className="h-2 w-2 rounded-full bg-[#d6b3ff]" />
+          บัญชี SpaceLink
+        </span>
 
         <div className="mt-auto pt-10">
           <span className="inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/90">
             {eyebrow}
           </span>
 
-          <h2 className="sl-thai-heading mt-6 max-w-[21ch] text-[clamp(34px,3.25vw,48px)] font-black leading-[1.24] tracking-[-0.028em]">
+          <h2 className="sl-thai-heading mt-6 max-w-[21ch] text-[clamp(36px,3.4vw,52px)] font-black leading-[1.18] tracking-[-0.028em]">
             {headline}
           </h2>
 
@@ -56,7 +61,7 @@ export function AuthLayout({
         </div>
       </aside>
 
-      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-5 lg:items-center lg:bg-[radial-gradient(circle_at_85%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_15%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
+      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-8 lg:items-center lg:bg-[radial-gradient(circle_at_85%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_15%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
         <span className="pointer-events-none absolute -bottom-40 -right-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
         <Link
           href="/"
@@ -64,7 +69,14 @@ export function AuthLayout({
         >
           ← กลับหน้าแรก
         </Link>
-        <div className="relative w-full max-w-[460px] rounded-[26px] border border-[#eee8f7] bg-white p-5 shadow-[0_18px_50px_rgba(67,34,139,0.1)] sm:rounded-[28px] sm:p-8 lg:max-w-[480px] lg:rounded-[32px] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
+        <div className="relative w-full max-w-[460px] rounded-[26px] border border-[#e9def8] bg-white p-5 shadow-[0_18px_50px_rgba(67,34,139,0.1)] sm:rounded-[28px] sm:p-8 lg:max-w-[480px] lg:rounded-[32px] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
+          <div aria-label="ขั้นตอนการเข้าสู่ระบบ" className="mb-7 flex items-center gap-3 border-b border-line pb-6">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet text-sm font-extrabold text-white">1</span>
+            <span className="text-xs font-bold text-ink sm:text-sm">กรอกข้อมูล</span>
+            <span aria-hidden className="h-px min-w-4 flex-1 bg-line" />
+            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${step === 'verify' ? 'bg-violet text-white' : 'bg-violet-tint text-violet'}`}>2</span>
+            <span className={`text-xs font-bold sm:text-sm ${step === 'verify' ? 'text-ink' : 'text-muted'}`}>ยืนยันรหัส</span>
+          </div>
           {children}
           <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
@@ -101,20 +113,6 @@ function AuthBenefits() {
           <span className="leading-6">{label}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-/** The `S` tile and wordmark, inverted for the decorative dark panel. */
-function BrandMark() {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-lg font-black text-violet">
-        S
-      </span>
-      <span className="text-xl font-extrabold tracking-[-0.03em] text-white">
-        SpaceLink
-      </span>
     </div>
   );
 }

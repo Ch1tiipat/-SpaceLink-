@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AuthLayout } from '@/components/auth-layout';
 import { OTP_LENGTH, OtpInput } from '@/components/otp-input';
-import { MISSING_NAME_MESSAGE } from '@/lib/auth-errors';
+import { INVALID_EMAIL_MESSAGE, MISSING_NAME_MESSAGE } from '@/lib/auth-errors';
 import { useEmailOtp } from '@/lib/use-email-otp';
 
 export default function RegisterPage() {
   // Stays on the page: this screen is the only one that collects a name, and
   // the flow itself has no use for it beyond handing it to Supabase below.
   const [fullName, setFullName] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState(false);
 
   const {
     step,
@@ -48,6 +50,14 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!acceptedTerms) {
+      setTermsError(true);
+      setError(null);
+      return;
+    }
+
+    setTermsError(false);
+
     // Normalising the name is deferred to the hook's callback so that it, like
     // the address, happens only once the address is known to be valid.
     await submitEmail(() => setFullName(name));
@@ -80,10 +90,11 @@ export default function RegisterPage() {
       eyebrow="สมัครใช้งานฟรี"
       headline="เปิดร้านในงานถัดไป เริ่มจากบัญชีเดียว"
       description="สร้างบัญชีด้วยอีเมล ไม่ต้องตั้งรหัสผ่าน แล้วเริ่มมองหาบูธที่ใช่ได้ทันที"
+      step={step === 'email' ? 'details' : 'verify'}
     >
       {step === 'email' ? (
         <form onSubmit={handleDetailsSubmit} noValidate>
-          <span className="sl-kicker">Create your space</span>
+          <span className="sl-kicker">เริ่มต้นใช้งาน</span>
           <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             สร้างบัญชีใหม่
           </h1>
@@ -105,9 +116,12 @@ export default function RegisterPage() {
             placeholder="เช่น สมชาย ใจดี"
             value={fullName}
             disabled={pending}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            onChange={(event) => setFullName(event.target.value)}
+            aria-invalid={error?.text === MISSING_NAME_MESSAGE.text || undefined}
+            aria-describedby={error?.text === MISSING_NAME_MESSAGE.text ? errorId : undefined}
+            onChange={(event) => {
+              setFullName(event.target.value);
+              setError(null);
+            }}
             className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
@@ -126,13 +140,47 @@ export default function RegisterPage() {
             placeholder="name@example.com"
             value={email}
             disabled={pending}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={error?.text === INVALID_EMAIL_MESSAGE.text || undefined}
+            aria-describedby={error?.text === INVALID_EMAIL_MESSAGE.text ? errorId : undefined}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError(null);
+            }}
             className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
           />
 
           {errorBox}
+
+          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#eee7f8] bg-[#faf7ff] px-4 py-3.5 text-sm leading-6 text-[#554b5e]">
+            <input
+              id="register-accept-terms"
+              type="checkbox"
+              checked={acceptedTerms}
+              disabled={pending}
+              aria-invalid={termsError || undefined}
+              aria-describedby={termsError ? 'register-terms-error' : undefined}
+              onChange={(event) => {
+                setAcceptedTerms(event.target.checked);
+                if (event.target.checked) setTermsError(false);
+              }}
+              className="mt-1 h-4 w-4 shrink-0 accent-violet"
+            />
+            <span>
+              <label htmlFor="register-accept-terms" className="cursor-pointer">ฉันอ่านและยอมรับ</label>{' '}
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-violet underline underline-offset-2">
+                เงื่อนไขการใช้งาน
+              </Link>{' '}
+              และ{' '}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-violet underline underline-offset-2">
+                นโยบายความเป็นส่วนตัว
+              </Link>
+            </span>
+          </div>
+          {termsError ? (
+            <p id="register-terms-error" role="alert" className="mt-2 text-sm font-semibold text-danger">
+              กรุณายอมรับเงื่อนไขการใช้งานก่อนสมัครสมาชิก
+            </p>
+          ) : null}
 
           <button
             type="submit"
@@ -160,7 +208,7 @@ export default function RegisterPage() {
           }}
           noValidate
         >
-          <span className="sl-kicker">Secure verification</span>
+          <span className="sl-kicker">ยืนยันตัวตน</span>
           <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
             กรอกรหัสยืนยัน
           </h1>
