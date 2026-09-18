@@ -1277,9 +1277,26 @@ export function PreviewSlipUploadPanel({
   onConfirmed: () => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [detailsConfirmed, setDetailsConfirmed] = useState(false);
 
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
-    setFileName(event.target.files?.[0]?.name ?? null);
+    const selected = event.target.files?.[0] ?? null;
+    setFileName(null);
+    setFileError(null);
+    setDetailsConfirmed(false);
+    if (!selected) return;
+    if (selected.type !== 'image/jpeg' && selected.type !== 'image/png') {
+      setFileError('รองรับเฉพาะไฟล์ JPEG หรือ PNG เท่านั้น');
+      event.target.value = '';
+      return;
+    }
+    if (selected.size > 5 * 1024 * 1024) {
+      setFileError('ไฟล์ต้องมีขนาดไม่เกิน 5 MB');
+      event.target.value = '';
+      return;
+    }
+    setFileName(selected.name);
   };
 
   return (
@@ -1311,10 +1328,26 @@ export function PreviewSlipUploadPanel({
       {fileName ? (
         <p className="mt-2 text-xs text-muted">เลือกแล้ว: {fileName}</p>
       ) : null}
+      {fileError ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {fileError}
+        </p>
+      ) : null}
+
+      <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm text-muted">
+        <input
+          type="checkbox"
+          checked={detailsConfirmed}
+          disabled={disabled}
+          onChange={(event) => setDetailsConfirmed(event.target.checked)}
+          className="mt-1 h-4 w-4 accent-violet"
+        />
+        ฉันตรวจสอบยอดเงินและข้อมูลการจองแล้ว
+      </label>
 
       <button
         type="button"
-        disabled={!fileName || disabled}
+        disabled={!fileName || !detailsConfirmed || disabled}
         onClick={onConfirmed}
         className="sl-action-primary mt-4 w-full"
       >
