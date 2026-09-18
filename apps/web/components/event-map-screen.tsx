@@ -16,6 +16,7 @@ import {
   getEventMap,
   getEventMapBySlug,
   getZoneRecommendations,
+  type BoothAvailability,
   type EventMap,
   type EventZone,
   type ZoneRecommendation,
@@ -49,6 +50,14 @@ const moneyFormatter = new Intl.NumberFormat('th-TH', {
   maximumFractionDigits: 2,
 });
 
+const mapZoomLevels = [1, 1.25, 1.5, 1.75, 2] as const;
+
+function boothSize(booth: EventZone['booths'][number]): string {
+  return booth.widthM && booth.heightM
+    ? `${booth.widthM} × ${booth.heightM} ม.`
+    : 'ไม่ระบุขนาด';
+}
+
 type BookingAccessDialog =
   | { kind: 'signed-out' }
   | { kind: 'missing-shop' }
@@ -71,6 +80,12 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedBoothIds, setSelectedBoothIds] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<BoothAvailability | 'ALL'>(
+    'ALL',
+  );
+  const [sizeFilter, setSizeFilter] = useState('ALL');
+  const [positionFilter, setPositionFilter] = useState('ALL');
+  const [zoomIndex, setZoomIndex] = useState(0);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [bookingAccessDialog, setBookingAccessDialog] =
     useState<BookingAccessDialog>(null);
@@ -95,6 +110,15 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setData(null);
+    setError(null);
+    setSelectedZoneId(null);
+    setSelectedBoothIds([]);
+    setStatusFilter('ALL');
+    setSizeFilter('ALL');
+    setPositionFilter('ALL');
+    setZoomIndex(0);
+    setRecommendation(null);
     const legacyUuid = isUuid(eventId);
     const request = legacyUuid ? getEventMap : getEventMapBySlug;
     request(eventId, controller.signal)
@@ -129,6 +153,42 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     () => data?.zones.find((zone) => zone.id === selectedZoneId) ?? null,
     [data, selectedZoneId],
   );
+
+  const sizeOptions = useMemo(() => {
+    const sizes = new Set(
+      data?.zones.flatMap((zone) => zone.booths.map(boothSize)) ?? [],
+    );
+    return [...sizes].sort((first, second) =>
+      first.localeCompare(second, 'th', { numeric: true }),
+    );
+  }, [data]);
+
+  const visibleZones = useMemo(
+    () =>
+      (data?.zones ?? [])
+        .filter(
+          (zone) => positionFilter === 'ALL' || zone.id === positionFilter,
+        )
+        .map((zone) => ({
+          ...zone,
+          booths: zone.booths.filter(
+            (booth) =>
+              (statusFilter === 'ALL' || booth.availability === statusFilter) &&
+              (sizeFilter === 'ALL' || boothSize(booth) === sizeFilter),
+          ),
+        }))
+        .filter((zone) => zone.booths.length > 0),
+    [data, positionFilter, sizeFilter, statusFilter],
+  );
+
+  const filtersActive =
+    statusFilter !== 'ALL' || sizeFilter !== 'ALL' || positionFilter !== 'ALL';
+
+  function clearFilters() {
+    setStatusFilter('ALL');
+    setSizeFilter('ALL');
+    setPositionFilter('ALL');
+  }
 
   const selectedBooths = useMemo(() => {
     if (!data) return [];
@@ -510,29 +570,164 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               <span
                 className={`h-2 w-2 rounded-full ring-4 ${eventBookable ? 'bg-[#22c55e] ring-[#22c55e]/10' : 'bg-[#9b929e] ring-[#9b929e]/10'}`}
               />
-              เห็นทุก Zone · {bookingAvailabilityText}
+              {filtersActive ? 'กำลังกรองบูธ' : 'เห็นทุก Zone'} ·{' '}
+              {bookingAvailabilityText}
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-b border-line bg-white px-4 py-4 sm:grid-cols-3">
+            <label className="text-xs font-bold text-muted">
+              สถานะบูธ
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value as BoothAvailability | 'ALL',
+                  )
+                }
+                className="mt-1 block min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink"
+              >
+                <option value="ALL">ทุกสถานะ</option>
+                <option value="AVAILABLE">ว่าง</option>
+                <option value="HELD">กำลังถูกจอง</option>
+                <option value="BOOKED">จองแล้ว</option>
+                <option value="UNAVAILABLE">ปิดใช้งาน</option>
+              </select>
+            </label>
+            <label className="text-xs font-bold text-muted">
+              ขนาดบูธ
+              <select
+                value={sizeFilter}
+                onChange={(event) => setSizeFilter(event.target.value)}
+                className="mt-1 block min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink"
+              >
+                <option value="ALL">ทุกขนาด</option>
+                {sizeOptions.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-bold text-muted">
+              ตำแหน่ง / Zone
+              <select
+                value={positionFilter}
+                onChange={(event) => {
+                  setPositionFilter(event.target.value);
+                  setSelectedZoneId(
+                    event.target.value === 'ALL' ? null : event.target.value,
+                  );
+                }}
+                className="mt-1 block min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm text-ink"
+              >
+                <option value="ALL">ทุก Zone</option>
+                {data.zones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    Zone {zone.code} {zone.name ?? ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-[#fbf9ff] px-4 py-2">
+            <p role="status" className="text-xs text-muted">
+              แสดง{' '}
+              {visibleZones.reduce((sum, zone) => sum + zone.booths.length, 0)}{' '}
+              จาก {metrics.booths} บูธ · การกรองไม่เปลี่ยนรายการที่เลือกไว้
+            </p>
+            <div className="flex items-center gap-2">
+              {filtersActive ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="sl-chip min-h-9"
+                >
+                  ล้างตัวกรอง
+                </button>
+              ) : null}
+              <span className="text-xs font-bold text-muted">Zoom</span>
+              <button
+                type="button"
+                aria-label="ย่อแผนผัง"
+                disabled={zoomIndex === 0}
+                onClick={() =>
+                  setZoomIndex((current) => Math.max(0, current - 1))
+                }
+                className="sl-chip min-h-9 min-w-9 justify-center disabled:opacity-40"
+              >
+                −
+              </button>
+              <output className="min-w-10 text-center text-xs font-bold text-ink">
+                {Math.round(mapZoomLevels[zoomIndex] * 100)}%
+              </output>
+              <button
+                type="button"
+                aria-label="ขยายแผนผัง"
+                disabled={zoomIndex === mapZoomLevels.length - 1}
+                onClick={() =>
+                  setZoomIndex((current) =>
+                    Math.min(mapZoomLevels.length - 1, current + 1),
+                  )
+                }
+                className="sl-chip min-h-9 min-w-9 justify-center disabled:opacity-40"
+              >
+                +
+              </button>
             </div>
           </div>
 
           {data.zones.length > 0 ? (
-            <div className="[&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
-              <ZoneMap
-                readOnly={!eventBookable}
-                multiSelect
-                mapImageUrl={data.event.mapImageUrl}
-                zones={data.zones}
-                focusedZoneId={selectedZoneId}
-                selectedBoothIds={selectedBoothIds}
-                recommendedBoothId={recommendation?.boothId ?? null}
-                keepOverview
-                showLegend={false}
-                onFocusZone={setSelectedZoneId}
-                onSelectBooth={(booth) => {
-                  if (!eventBookable) return;
-                  toggleBooth(booth);
-                }}
-              />
-            </div>
+            visibleZones.length > 0 ? (
+              <div
+                role="region"
+                aria-label="แผนผังบูธ เลื่อนแนวนอนภายในกรอบนี้ได้เมื่อขยายภาพ"
+                tabIndex={0}
+                className="max-w-full overflow-x-auto overscroll-x-contain [&_div]:scroll-m-4"
+              >
+                <div
+                  style={{
+                    width: `${mapZoomLevels[zoomIndex] * 100}%`,
+                    minWidth: `${720 * mapZoomLevels[zoomIndex]}px`,
+                  }}
+                  className="[&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none"
+                >
+                  <ZoneMap
+                    readOnly={!eventBookable}
+                    multiSelect
+                    mapImageUrl={data.event.mapImageUrl}
+                    zones={visibleZones}
+                    focusedZoneId={selectedZoneId}
+                    selectedBoothIds={selectedBoothIds}
+                    recommendedBoothId={recommendation?.boothId ?? null}
+                    keepOverview
+                    showLegend={false}
+                    onFocusZone={setSelectedZoneId}
+                    onSelectBooth={(booth) => {
+                      if (!eventBookable) return;
+                      toggleBooth(booth);
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid min-h-[240px] place-items-center px-6 text-center">
+                <div>
+                  <strong className="text-sm">ไม่พบบูธตามตัวกรอง</strong>
+                  <p className="mt-1 text-sm text-muted">
+                    ลองเปลี่ยนสถานะ ขนาด หรือ Zone
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="sl-action-secondary mt-4"
+                  >
+                    ล้างตัวกรอง
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <div className="grid min-h-[600px] place-items-center bg-[#fcfbff] p-8 text-center">
               <div>
@@ -607,7 +802,10 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                   key={zone.id}
                   type="button"
                   aria-pressed={selectedZoneId === zone.id}
-                  onClick={() => setSelectedZoneId(zone.id)}
+                  onClick={() => {
+                    setSelectedZoneId(zone.id);
+                    setPositionFilter(zone.id);
+                  }}
                   className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-sm font-bold transition ${selectedZoneId === zone.id ? 'border-violet bg-violet text-white' : 'border-line bg-white hover:border-violet'}`}
                 >
                   <span
@@ -627,6 +825,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             <h2 className="mt-1 text-base font-black">สถานะ Booth</h2>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Legend color="#fff" border="#7c3aed" label="ว่าง" />
+              <Legend color="#201b2e" label="เลือกแล้ว" />
               <Legend color="#2c8b61" label="จองแล้ว" />
               <Legend color="#e7a339" label="กำลังจอง" />
               <Legend color="#cfc8d1" label="ปิดใช้งาน" />
