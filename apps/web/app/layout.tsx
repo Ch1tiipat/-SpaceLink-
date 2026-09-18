@@ -5,6 +5,7 @@ import '@fontsource/ibm-plex-sans-thai/600.css';
 import '@fontsource/ibm-plex-sans-thai/700.css';
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
+import { ServiceWorkerRegistrar } from '@/components/service-worker-registrar';
 
 export const metadata: Metadata = {
   title: 'SpaceLink — ค้นหาและจองบูธ',
@@ -24,6 +25,7 @@ export default function RootLayout({
   return (
     <html lang="th">
       <body>
+        <ServiceWorkerRegistrar />
         <AppShell>{children}</AppShell>
       </body>
     </html>
