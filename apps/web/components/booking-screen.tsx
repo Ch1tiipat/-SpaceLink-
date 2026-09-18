@@ -8,6 +8,7 @@ import { Building2, MapPin, QrCode, ShieldCheck } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
+  ApiError,
   createBooking,
   createBookingsBatch,
   getAverageRating,
@@ -75,6 +76,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   );
   const [holdExpired, setHoldExpired] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [submitConflict, setSubmitConflict] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [boothRating, setBoothRating] = useState<BoothRatingState>({
     status: 'idle',
@@ -118,6 +120,22 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
     if (multiSelectionMode) {
       const availableBooths = data.zones.flatMap((zone) => zone.booths);
+      const unavailableCode = requestedBoothCodes.find((code) => {
+        const booth = availableBooths.find(
+          (candidate) =>
+            candidate.code.toLocaleLowerCase() === code.toLocaleLowerCase(),
+        );
+        return booth?.availability !== 'AVAILABLE';
+      });
+      if (requestedBoothCodes.length === 0 || unavailableCode) {
+        setSelectedBooths([]);
+        setActionError(
+          unavailableCode
+            ? `Booth ${unavailableCode} ไม่ว่างแล้ว กรุณากลับไปเลือกจากแผนผังอีกครั้ง`
+            : 'ไม่พบ Booth ที่เลือก กรุณากลับไปเลือกจากแผนผังอีกครั้ง',
+        );
+        return;
+      }
       const requestedBooths = requestedBoothCodes.flatMap((code) => {
         const booth = availableBooths.find(
           (candidate) =>
@@ -266,6 +284,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             : 'ยังไม่มีรีวิว';
 
   function selectBooth(booth: EventBooth) {
+    setSubmitConflict(false);
     if (selectedBooths.some((candidate) => candidate.id === booth.id)) {
       setSelectedBooths((current) =>
         current.filter((candidate) => candidate.id !== booth.id),
@@ -307,6 +326,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       vendor.status !== 'ready' ||
       !vendor.shop ||
       selectedBooths.length === 0 ||
+      submitConflict ||
       !data ||
       !isEventBookable(data.event) ||
       quota.status !== 'ready' ||
@@ -378,9 +398,17 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`,
       );
     } catch (cause) {
-      setActionError(
-        cause instanceof Error ? cause.message : 'สร้างการจองไม่สำเร็จ',
-      );
+      if (cause instanceof ApiError && cause.status === 409) {
+        setSubmitConflict(true);
+        setSelectedBooths([]);
+        setActionError(
+          'Booth หรือโควตาเปลี่ยนระหว่างตรวจสอบ กรุณากลับไปแผนผังเพื่อเลือกรายการที่ยังว่าง',
+        );
+      } else {
+        setActionError(
+          cause instanceof Error ? cause.message : 'สร้างการจองไม่สำเร็จ',
+        );
+      }
     } finally {
       setIsCreating(false);
     }
@@ -771,7 +799,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                                     quota.value.effectiveSelectionLimit))
                             }
                             aria-pressed={selected}
-                            aria-label={`Booth ${booth.code} ${booth.availability}`}
+                            aria-label={`Booth ${booth.code} ${selected ? 'เลือกแล้ว' : available ? 'ว่าง' : booth.availability === 'BOOKED' ? 'จองแล้ว' : booth.availability === 'HELD' ? 'กำลังจอง' : 'ปิดใช้งาน'}`}
                             onClick={() => selectBooth(booth)}
                             className={`min-h-[70px] rounded-[12px] border p-2 text-center transition disabled:cursor-not-allowed ${statusClass}`}
                           >
@@ -817,7 +845,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               </span>
               <h2 className="mt-1 text-lg font-black">
                 {selectedBooths.length > 1
-                  ? `${selectedBooths.length} Booth ที่เลือก`
+                  ? selectedBooths.map((booth) => booth.code).join(' + ')
                   : selectedBooth
                     ? `Booth ${selectedBooth.code}`
                     : 'ยังไม่ได้เลือก Booth'}
@@ -834,6 +862,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                           Zone {zone?.code ?? '-'} · Booth {booth.code}
                         </strong>
                         <span className="text-xs text-muted">
+                          {booth.widthM ?? '-'} × {booth.heightM ?? '-'} เมตร ·{' '}
                           {formatMoney(booth.boothPrice)} บาท
                         </span>
                       </div>
@@ -848,13 +877,15 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                     </div>
                   ))}
                   <div className="flex items-center justify-between border-t border-line pt-3">
-                    <strong className="text-sm">ราคารวม</strong>
+                    <strong className="text-sm">ยอดประมาณการ</strong>
                     <strong className="text-lg text-violet">
                       {formatMoney(String(selectedTotal))} บาท
                     </strong>
                   </div>
                   <p className="text-xs leading-5 text-muted">
-                    ระบบจะสร้าง Booking และรายการชำระเงินแยกสำหรับทุก Booth
+                    ระบบสร้าง Booking แยกตาม Booth แต่รวมยอดเป็น QR
+                    เดียวและแนบสลิปครั้งเดียว ยอดจริงจะยืนยันจาก backend
+                    ก่อนสร้างรายการ
                   </p>
                 </div>
               ) : selectedBooth ? (
@@ -1047,18 +1078,26 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 </p>
                 <small className="mt-1 block text-xs leading-4 text-[#829084]">
                   {selectedBooths.length > 1
-                    ? 'ระบบจะ Hold แต่ละ Booth แยกกัน และให้ชำระเงินทีละ Booking'
+                    ? 'ระบบจะ Hold ทุก Booth ในกลุ่ม และพาไปชำระยอดรวมด้วย QR เดียว'
                     : 'หลังสร้าง Booking ระบบจะพาไปหน้าชำระเงินและ Hold Booth ตามเวลาที่ระบบกำหนด'}
                 </small>
               </section>
 
               {actionError && (
-                <p
-                  role="alert"
-                  className="mt-4 rounded-xl bg-[#fff0ee] px-4 py-3 text-sm text-[#b42318]"
-                >
-                  {actionError}
-                </p>
+                <div className="mt-4 rounded-xl bg-[#fff0ee] px-4 py-3 text-sm text-[#b42318]">
+                  <p role="alert">{actionError}</p>
+                  {submitConflict ||
+                  (multiSelectionMode &&
+                    requestedBoothCodes.length > 0 &&
+                    selectedBooths.length === 0) ? (
+                    <Link
+                      href={`/events/${encodeURIComponent(data.event.slug)}/map`}
+                      className="mt-2 inline-flex font-bold underline"
+                    >
+                      กลับไปเลือก Booth จากแผนผัง →
+                    </Link>
+                  ) : null}
+                </div>
               )}
 
               <button
@@ -1074,6 +1113,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   isCreating ||
                   !eventBookable ||
                   selectedBooths.length === 0 ||
+                  submitConflict ||
                   vendor.status === 'loading' ||
                   vendor.status === 'signed-out' ||
                   vendor.status === 'error' ||
@@ -1091,7 +1131,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                       : vendor.status === 'ready' && !shop
                         ? 'เพิ่มข้อมูลร้านค้าก่อนจอง'
                         : selectedBooths.length > 1
-                          ? `สร้าง ${selectedBooths.length} Booking →`
+                          ? `ยืนยัน ${selectedBooths.length} Booth และไปชำระยอดรวม →`
                           : 'สร้าง Booking และไปชำระเงิน →'}
               </button>
             </aside>
