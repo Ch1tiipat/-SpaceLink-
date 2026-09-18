@@ -39,7 +39,11 @@ const withPWA = withPWAInit({
     '!event-travel-map-sut-2569.png',
     '!hero-spacelink.png',
   ],
-  register: true,
+  // The injected registration script only reaches the Pages Router `main.js`
+  // entry, which this App Router app never loads. `<ServiceWorkerRegistrar />`
+  // in app/layout.tsx registers /sw.js instead, so this stays off to keep one
+  // owner of registration.
+  register: false,
   runtimeCaching,
   skipWaiting: true,
 });
