@@ -10,8 +10,15 @@ import {
   BookingPageMessage,
   formatBookingMoney,
 } from '@/components/booking-detail-screen';
-import { PaymentGroupSlipUploadPanel } from '@/components/slip-upload-panel';
-import { getPaymentGroup, type PaymentGroupRecord } from '@/lib/api';
+import {
+  PaymentGroupSlipUploadPanel,
+  PaymentSuccessDialog,
+} from '@/components/slip-upload-panel';
+import {
+  getMyBookings,
+  getPaymentGroup,
+  type PaymentGroupRecord,
+} from '@/lib/api';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 type GroupState =
@@ -27,17 +34,21 @@ export function BookingPaymentGroupScreen({
 }) {
   const { state: vendor } = useVendorProfile();
   const [group, setGroup] = useState<PaymentGroupRecord | null>(null);
+  const [boothCodes, setBoothCodes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [reloadCount, setReloadCount] = useState(0);
   const [holdExpired, setHoldExpired] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     if (vendor.status !== 'ready') return;
     const controller = new AbortController();
+    setGroup(null);
+    setBoothCodes({});
     setError(null);
 
     getPaymentGroup(paymentGroupId, vendor.token, controller.signal)
       .then((response) => {
+        if (controller.signal.aborted) return;
         setGroup(response);
         setHoldExpired(false);
       })
@@ -51,8 +62,21 @@ export function BookingPaymentGroupScreen({
         );
       });
 
+    getMyBookings(vendor.token, controller.signal)
+      .then((bookings) => {
+        if (controller.signal.aborted) return;
+        setBoothCodes(
+          Object.fromEntries(
+            bookings.map((booking) => [booking.id, booking.booth.code]),
+          ),
+        );
+      })
+      .catch(() => {
+        // Booth labels are optional; the payment group is still usable.
+      });
+
     return () => controller.abort();
-  }, [paymentGroupId, reloadCount, vendor]);
+  }, [paymentGroupId, vendor]);
 
   let state: GroupState;
   if (vendor.status === 'signed-out') state = { status: 'signed-out' };
@@ -92,14 +116,28 @@ export function BookingPaymentGroupScreen({
   }
 
   const currentGroup = state.group;
+  const boothList = currentGroup.bookings.map(
+    (booking) => boothCodes[booking.id],
+  );
+  const boothSummary = boothList.every(Boolean)
+    ? boothList.join(' + ')
+    : `${currentGroup.bookings.length} บูธ`;
   if (currentGroup.status === 'CONFIRMED') {
     return (
-      <BookingPageMessage
-        title="ยืนยันการจองทั้งหมดเรียบร้อยแล้ว"
-        detail={`ระบบบันทึกการชำระเงิน ${currentGroup.paymentCode} ครบ ${currentGroup.bookings.length} รายการแล้ว`}
-        href="/bookings"
-        action="ดูการจองของฉัน"
-      />
+      <>
+        <BookingPageMessage
+          title="ยืนยันการจองทั้งหมดเรียบร้อยแล้ว"
+          detail={`ระบบบันทึกการชำระเงิน ${currentGroup.paymentCode} ครบ ${currentGroup.bookings.length} รายการแล้ว`}
+          href="/bookings"
+          action="ดูการจองของฉัน"
+        />
+        {showSuccess ? (
+          <PaymentSuccessDialog
+            detail={`ชำระยอดรวม ${formatBookingMoney(currentGroup.totalAmount)} บาทสำหรับ ${boothSummary} สำเร็จแล้ว`}
+            onDismiss={() => setShowSuccess(false)}
+          />
+        ) : null}
+      </>
     );
   }
   if (currentGroup.status !== 'PENDING_PAYMENT') {
@@ -166,7 +204,7 @@ export function BookingPaymentGroupScreen({
         <section className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
           {[
             ['รหัสชำระเงิน', currentGroup.paymentCode],
-            ['จำนวน Booking', `${currentGroup.bookings.length} รายการ`],
+            ['Booth', boothSummary],
             [
               'ยอดชำระรวม',
               `${formatBookingMoney(currentGroup.totalAmount)} บาท`,
@@ -200,7 +238,8 @@ export function BookingPaymentGroupScreen({
                   >
                     <div>
                       <span className="text-xs text-muted">
-                        Booking {index + 1}
+                        Booking {index + 1} · Booth{' '}
+                        {boothCodes[booking.id] ?? booking.boothId.slice(0, 8)}
                       </span>
                       <strong className="block">{booking.bookingCode}</strong>
                     </div>
@@ -220,7 +259,18 @@ export function BookingPaymentGroupScreen({
               <PaymentGroupSlipUploadPanel
                 paymentGroupId={currentGroup.id}
                 token={state.token}
-                onConfirmed={() => setReloadCount((value) => value + 1)}
+                onConfirmed={(response) => {
+                  setGroup((previous) =>
+                    previous
+                      ? {
+                          ...previous,
+                          status: response.paymentGroup.status,
+                          confirmedAt: response.paymentGroup.confirmedAt,
+                        }
+                      : previous,
+                  );
+                  setShowSuccess(true);
+                }}
               />
             ) : null}
           </section>

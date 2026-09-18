@@ -1,6 +1,7 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   FileImage,
@@ -62,6 +63,7 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
 }: SlipUploadFormProps<TResponse>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [detailsConfirmed, setDetailsConfirmed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TResponse | null>(null);
@@ -70,6 +72,7 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
     const selected = event.target.files?.[0] ?? null;
     setError(null);
     setResult(null);
+    setDetailsConfirmed(false);
 
     if (!selected) {
       setFile(null);
@@ -95,7 +98,7 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!file || disabled || isUploading) return;
+    if (!file || !detailsConfirmed || disabled || isUploading) return;
 
     setIsUploading(true);
     setError(null);
@@ -111,6 +114,7 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
       }
 
       setFile(null);
+      setDetailsConfirmed(false);
       if (inputRef.current) inputRef.current.value = '';
     } catch (cause) {
       setError(
@@ -194,6 +198,17 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
           ) : null}
         </div>
 
+        <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-muted">
+          <input
+            type="checkbox"
+            checked={detailsConfirmed}
+            disabled={disabled || isUploading}
+            onChange={(event) => setDetailsConfirmed(event.target.checked)}
+            className="mt-1 h-4 w-4 accent-violet"
+          />
+          <span>ฉันตรวจสอบยอดเงินและข้อมูลการจองแล้ว</span>
+        </label>
+
         {error ? (
           <div
             className="rounded-2xl border border-[#f1c6d0] bg-[#fff4f6] px-4 py-3 text-sm text-danger"
@@ -223,7 +238,7 @@ function SlipUploadForm<TResponse extends VerificationResponse>({
 
         <button
           type="submit"
-          disabled={!file || disabled || isUploading}
+          disabled={!file || !detailsConfirmed || disabled || isUploading}
           className="sl-action-primary w-full"
         >
           <ShieldCheck className="h-4 w-4" aria-hidden />
@@ -276,5 +291,84 @@ export function PaymentGroupSlipUploadPanel({
       onResult={onResult}
       onConfirmed={onConfirmed}
     />
+  );
+}
+
+export function PaymentSuccessDialog({
+  detail,
+  onDismiss,
+}: {
+  detail: string;
+  onDismiss: () => void;
+}) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onDismiss();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href]',
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-[#201b2e]/60 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onDismiss();
+      }}
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-success-title"
+        className="w-full max-w-md rounded-[24px] bg-white p-6 text-center shadow-2xl sm:p-8"
+      >
+        <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#e7f8ee] text-emerald">
+          <CheckCircle2 className="h-9 w-9" aria-hidden />
+        </span>
+        <h2 id="payment-success-title" className="mt-5 text-2xl font-black">
+          ชำระเงินสำเร็จ
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-muted">{detail}</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onDismiss}
+            className="sl-action-secondary w-full"
+          >
+            ปิด
+          </button>
+          <Link href="/bookings" className="sl-action-primary w-full">
+            ไปการจองของฉัน
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }

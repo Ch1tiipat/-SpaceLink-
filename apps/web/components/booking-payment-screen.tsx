@@ -12,11 +12,15 @@ import {
   formatBookingMoney,
   useBookingDetail,
 } from '@/components/booking-detail-screen';
-import { SlipUploadPanel } from '@/components/slip-upload-panel';
+import {
+  PaymentSuccessDialog,
+  SlipUploadPanel,
+} from '@/components/slip-upload-panel';
 
 export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
   const state = useBookingDetail(bookingId);
-  const [previewConfirmed, setPreviewConfirmed] = useState(false);
+  const [paymentSucceeded, setPaymentSucceeded] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [holdExpired, setHoldExpired] = useState(false);
 
   if (state.status === 'loading') return <BookingPageLoading />;
@@ -48,14 +52,22 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
       />
     );
   }
-  if (previewConfirmed || booking.status === 'CONFIRMED') {
+  if (paymentSucceeded || booking.status === 'CONFIRMED') {
     return (
-      <BookingPageMessage
-        title="ยืนยันการจองเรียบร้อยแล้ว"
-        detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`}
-        href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
-        action="ดูรายละเอียดการจอง"
-      />
+      <>
+        <BookingPageMessage
+          title="ยืนยันการจองเรียบร้อยแล้ว"
+          detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`}
+          href="/bookings"
+          action="ไปการจองของฉัน"
+        />
+        {showSuccess ? (
+          <PaymentSuccessDialog
+            detail={`ระบบตรวจสอบสลิปและยืนยัน Booking ${booking.bookingCode} แล้ว`}
+            onDismiss={() => setShowSuccess(false)}
+          />
+        ) : null}
+      </>
     );
   }
   if (booking.status !== 'PENDING_PAYMENT') {
@@ -276,14 +288,20 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
             ) : state.isPreview ? (
               <PreviewSlipUploadPanel
                 disabled={false}
-                onConfirmed={() => setPreviewConfirmed(true)}
+                onConfirmed={() => {
+                  setPaymentSucceeded(true);
+                  setShowSuccess(true);
+                }}
               />
             ) : canUpload ? (
               <SlipUploadPanel
                 bookingId={booking.id}
                 token={state.token}
                 disabled={false}
-                onConfirmed={() => state.refresh()}
+                onConfirmed={() => {
+                  setPaymentSucceeded(true);
+                  setShowSuccess(true);
+                }}
               />
             ) : null}
           </section>
