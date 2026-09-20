@@ -390,16 +390,22 @@ export class NotificationsService {
     transaction: Prisma.TransactionClient,
   ): Promise<number> {
     const candidateBookings = await transaction.booking.findMany({
+      where: {
+        status: BookingStatus.COMPLETED,
+        event: { endDate: { lte: this.bangkokCalendarDate() } },
+      },
       select: {
         id: true,
         vendorUserId: true,
         vendor: { select: { notificationPreferences: true } },
-        event: { select: { name: true } },
+        event: { select: { name: true, endDate: true, endTime: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
-    const eligibleBookings = candidateBookings;
+    const eligibleBookings = candidateBookings.filter((booking) =>
+      this.hasEventEnded(booking.event.endDate, booking.event.endTime),
+    );
 
     if (eligibleBookings.length === 0) return 0;
 
@@ -486,5 +492,15 @@ export class NotificationsService {
     return new Date(
       Date.UTC(valueOf('year'), valueOf('month') - 1, valueOf('day')),
     );
+  }
+
+  private hasEventEnded(
+    endDate: Date,
+    endTime: string | null,
+    now = new Date(),
+  ): boolean {
+    const date = endDate.toISOString().slice(0, 10);
+    const time = endTime?.slice(0, 5) || '23:59';
+    return now >= new Date(`${date}T${time}:00+07:00`);
   }
 }
