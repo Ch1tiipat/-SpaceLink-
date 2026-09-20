@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Clock3, Search, X } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import {
   getPreviewBookings,
@@ -23,8 +23,17 @@ type AccessState =
   | { status: 'ready'; token: string }
   | { status: 'error'; message: string };
 
-type BookingFilter = 'ALL' | BookingStatus;
-type SortOrder = 'newest' | 'oldest' | 'price-desc' | 'price-asc';
+type BookingFilter =
+  'ALL' | 'PAYMENT' | 'CONFIRMATION' | 'COMPLETED' | 'CANCELLED';
+type SortOrder = 'newest' | 'oldest';
+
+type BookingGroup = {
+  key: string;
+  bookings: MyBooking[];
+  primary: MyBooking;
+  status: BookingStatus;
+  totalAmount: string;
+};
 
 const statusLabel: Record<BookingStatus, string> = {
   PENDING_PAYMENT: 'รอชำระเงิน',
@@ -44,11 +53,10 @@ const statusTone: Record<BookingStatus, string> = {
 
 const bookingFilters: readonly { value: BookingFilter; label: string }[] = [
   { value: 'ALL', label: 'ทั้งหมด' },
-  { value: 'PENDING_PAYMENT', label: 'รอชำระ' },
-  { value: 'CONFIRMED', label: 'ยืนยันแล้ว' },
+  { value: 'PAYMENT', label: 'การชำระเงิน' },
+  { value: 'CONFIRMATION', label: 'การยืนยัน' },
   { value: 'COMPLETED', label: 'เสร็จสิ้น' },
   { value: 'CANCELLED', label: 'ยกเลิก' },
-  { value: 'NO_SHOW', label: 'ไม่มาเข้าร่วม' },
 ];
 
 const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
@@ -70,6 +78,72 @@ function formatMoney(value: string): string {
   return fraction && !/^0+$/.test(fraction)
     ? `${grouped}.${fraction}`
     : grouped;
+}
+
+function toSatang(value: string): bigint {
+  const normalized = value.trim();
+  const [whole = '0', fraction = ''] = normalized.split('.');
+  return (
+    BigInt(whole || '0') * BigInt(100) +
+    BigInt(fraction.padEnd(2, '0').slice(0, 2))
+  );
+}
+
+function fromSatang(value: bigint): string {
+  return `${value / BigInt(100)}.${(value % BigInt(100)).toString().padStart(2, '0')}`;
+}
+
+function resolveGroupStatus(items: MyBooking[]): BookingStatus {
+  if (items.some((booking) => booking.status === 'PENDING_PAYMENT')) {
+    return 'PENDING_PAYMENT';
+  }
+  if (items.some((booking) => booking.status === 'CONFIRMED')) {
+    return 'CONFIRMED';
+  }
+  if (items.every((booking) => booking.status === 'COMPLETED')) {
+    return 'COMPLETED';
+  }
+  if (items.every((booking) => booking.status === 'NO_SHOW')) return 'NO_SHOW';
+  if (
+    items.every(
+      (booking) =>
+        booking.status === 'CANCELLED' || booking.status === 'NO_SHOW',
+    )
+  ) {
+    return 'CANCELLED';
+  }
+  return items[0]?.status ?? 'CANCELLED';
+}
+
+function groupBookings(bookings: MyBooking[]): BookingGroup[] {
+  const groups = new Map<string, MyBooking[]>();
+  bookings.forEach((booking) => {
+    const key = booking.paymentGroupId
+      ? `payment-group:${booking.paymentGroupId}`
+      : `booking:${booking.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), booking]);
+  });
+
+  return Array.from(groups, ([key, items]) => ({
+    key,
+    bookings: items,
+    primary: items[0],
+    status: resolveGroupStatus(items),
+    totalAmount: fromSatang(
+      items.reduce(
+        (total, booking) => total + toSatang(booking.boothPrice),
+        BigInt(0),
+      ),
+    ),
+  }));
+}
+
+function matchesFilter(group: BookingGroup, filter: BookingFilter): boolean {
+  if (filter === 'ALL') return true;
+  if (filter === 'PAYMENT') return group.status === 'PENDING_PAYMENT';
+  if (filter === 'CONFIRMATION') return group.status === 'CONFIRMED';
+  if (filter === 'COMPLETED') return group.status === 'COMPLETED';
+  return group.status === 'CANCELLED' || group.status === 'NO_SHOW';
 }
 
 function isExpired(booking: MyBooking): boolean {
@@ -100,6 +174,7 @@ export function MyBookingsScreen() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingFilter>('ALL');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [selectedGroup, setSelectedGroup] = useState<BookingGroup | null>(null);
 
   async function refreshBookings(token: string, signal?: AbortSignal) {
     setIsLoading(true);
@@ -196,12 +271,14 @@ export function MyBookingsScreen() {
       ?.toLowerCase();
     const filtersByTab: Record<string, BookingFilter> = {
       all: 'ALL',
-      pending: 'PENDING_PAYMENT',
-      pending_payment: 'PENDING_PAYMENT',
-      confirmed: 'CONFIRMED',
+      pending: 'PAYMENT',
+      pending_payment: 'PAYMENT',
+      payment: 'PAYMENT',
+      confirmed: 'CONFIRMATION',
+      confirmation: 'CONFIRMATION',
       completed: 'COMPLETED',
       cancelled: 'CANCELLED',
-      no_show: 'NO_SHOW',
+      no_show: 'CANCELLED',
     };
     if (requestedTab && filtersByTab[requestedTab]) {
       setStatusFilter(filtersByTab[requestedTab]);
@@ -238,49 +315,55 @@ export function MyBookingsScreen() {
     }
   }
 
-  const pendingCount = bookings.filter(
-    (booking) => booking.status === 'PENDING_PAYMENT',
+  const bookingGroups = useMemo(() => groupBookings(bookings), [bookings]);
+  const pendingCount = bookingGroups.filter(
+    (group) => group.status === 'PENDING_PAYMENT',
   ).length;
-  const confirmedCount = bookings.filter(
-    (booking) => booking.status === 'CONFIRMED',
+  const confirmedCount = bookingGroups.filter(
+    (group) => group.status === 'CONFIRMED',
   ).length;
-  const completedCount = bookings.filter(
-    (booking) => booking.status === 'COMPLETED',
+  const completedCount = bookingGroups.filter(
+    (group) => group.status === 'COMPLETED',
   ).length;
   const statusCounts = useMemo(() => {
-    const counts = new Map<BookingStatus, number>();
-    bookings.forEach((booking) => {
-      counts.set(booking.status, (counts.get(booking.status) ?? 0) + 1);
+    const counts = new Map<BookingFilter, number>();
+    bookingGroups.forEach((group) => {
+      const filter: BookingFilter =
+        group.status === 'PENDING_PAYMENT'
+          ? 'PAYMENT'
+          : group.status === 'CONFIRMED'
+            ? 'CONFIRMATION'
+            : group.status === 'COMPLETED'
+              ? 'COMPLETED'
+              : 'CANCELLED';
+      counts.set(filter, (counts.get(filter) ?? 0) + 1);
     });
     return counts;
-  }, [bookings]);
+  }, [bookingGroups]);
   const visibleBookings = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('th');
-    const filtered = bookings.filter((booking) => {
-      const matchesStatus =
-        statusFilter === 'ALL' || booking.status === statusFilter;
+    const filtered = bookingGroups.filter((group) => {
+      const searchableBookings = group.bookings
+        .map(
+          (booking) =>
+            `${booking.bookingCode} ${booking.booth.code} ${booking.booth.zone.name ?? booking.booth.zone.code}`,
+        )
+        .join(' ');
       const matchesKeyword =
         !keyword ||
-        `${booking.event.name} ${booking.bookingCode} ${booking.booth.code} ${booking.shop.name}`
+        `${group.primary.event.name} ${group.primary.shop.name} ${searchableBookings}`
           .toLocaleLowerCase('th')
           .includes(keyword);
-      return matchesStatus && matchesKeyword;
+      return matchesFilter(group, statusFilter) && matchesKeyword;
     });
 
     return filtered.sort((left, right) => {
-      if (sortOrder === 'price-desc') {
-        return Number(right.boothPrice) - Number(left.boothPrice);
-      }
-      if (sortOrder === 'price-asc') {
-        return Number(left.boothPrice) - Number(right.boothPrice);
-      }
-
       const difference =
-        new Date(right.createdAt).getTime() -
-        new Date(left.createdAt).getTime();
+        new Date(right.primary.createdAt).getTime() -
+        new Date(left.primary.createdAt).getTime();
       return sortOrder === 'oldest' ? -difference : difference;
     });
-  }, [bookings, query, sortOrder, statusFilter]);
+  }, [bookingGroups, query, sortOrder, statusFilter]);
 
   return (
     <main className="sl-page pb-16">
@@ -309,9 +392,13 @@ export function MyBookingsScreen() {
             aria-label="สรุปการจอง"
           >
             {[
-              ['การจองทั้งหมด', bookings.length, 'bg-[#f4efff] text-violet'],
+              [
+                'การจองทั้งหมด',
+                bookingGroups.length,
+                'bg-[#f4efff] text-violet',
+              ],
               ['รอชำระเงิน', pendingCount, 'bg-[#edf6ff] text-[#1d67a8]'],
-              ['ยืนยันแล้ว', confirmedCount, 'bg-[#ebfaf3] text-[#13795b]'],
+              ['รอยืนยัน', confirmedCount, 'bg-[#ebfaf3] text-[#13795b]'],
               ['เสร็จสิ้น', completedCount, 'bg-[#eef7fb] text-[#276b87]'],
             ].map(([label, value, tone]) => (
               <div key={label} className="sl-soft-surface p-4 sm:p-5">
@@ -326,8 +413,8 @@ export function MyBookingsScreen() {
                     ? 'ALL BOOKINGS'
                     : label === 'รอชำระเงิน'
                       ? 'PENDING'
-                      : label === 'ยืนยันแล้ว'
-                        ? 'CONFIRMED'
+                      : label === 'รอยืนยัน'
+                        ? 'AWAITING CONFIRMATION'
                         : 'COMPLETED'}
                 </p>
               </div>
@@ -360,8 +447,6 @@ export function MyBookingsScreen() {
                 >
                   <option value="newest">ล่าสุดก่อน</option>
                   <option value="oldest">เก่าก่อน</option>
-                  <option value="price-desc">ราคาสูง → ต่ำ</option>
-                  <option value="price-asc">ราคาต่ำ → สูง</option>
                 </select>
               </label>
             </div>
@@ -373,7 +458,7 @@ export function MyBookingsScreen() {
               {bookingFilters.map((filter) => {
                 const count =
                   filter.value === 'ALL'
-                    ? bookings.length
+                    ? bookingGroups.length
                     : (statusCounts.get(filter.value) ?? 0);
                 const active = statusFilter === filter.value;
 
@@ -484,20 +569,36 @@ export function MyBookingsScreen() {
                 </button>
               </section>
             )}
-            {visibleBookings.map((booking) => {
-              const holdExpired =
-                expiredIds.has(booking.id) || isExpired(booking);
+            {visibleBookings.map((group) => {
+              const booking = group.primary;
+              const holdExpired = group.bookings.some(
+                (item) => expiredIds.has(item.id) || isExpired(item),
+              );
+              const boothCodes = group.bookings
+                .map((item) => item.booth.code)
+                .join(' + ');
+              const zoneNames = Array.from(
+                new Set(
+                  group.bookings.map(
+                    (item) => item.booth.zone.name ?? item.booth.zone.code,
+                  ),
+                ),
+              ).join(', ');
+              const reviewBooking =
+                group.status === 'COMPLETED'
+                  ? group.bookings.find((item) => isBookingReviewEligible(item))
+                  : undefined;
               return (
-                <article key={booking.id} className="sl-surface p-5 sm:p-7">
+                <article key={group.key} className="sl-surface p-5 sm:p-7">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap gap-2">
                         <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[booking.status]}`}
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${statusTone[group.status]}`}
                         >
-                          {statusLabel[booking.status]}
+                          {statusLabel[group.status]}
                         </span>
-                        {isNearCancelDeadline(booking) ? (
+                        {group.bookings.some(isNearCancelDeadline) ? (
                           <span className="inline-flex rounded-full border border-[#f5d28c] bg-[#fff8e8] px-3 py-1 text-xs font-bold text-[#895b08]">
                             ใกล้หมดเขตยกเลิก
                           </span>
@@ -507,10 +608,12 @@ export function MyBookingsScreen() {
                         {booking.event.name}
                       </h2>
                       <p className="mt-1 text-sm text-muted">
-                        รหัสการจอง {booking.bookingCode}
+                        {group.bookings.length === 1
+                          ? `รหัสการจอง ${booking.bookingCode}`
+                          : `${group.bookings.length} รายการในชุดชำระเงินเดียว`}
                       </p>
                     </div>
-                    {booking.status === 'PENDING_PAYMENT' && (
+                    {group.status === 'PENDING_PAYMENT' && (
                       <BookingCountdown
                         expiresAt={booking.holdExpiresAt}
                         active
@@ -520,27 +623,15 @@ export function MyBookingsScreen() {
                   </div>
 
                   <dl className="mt-5 grid gap-3 rounded-[20px] border border-[#ebe5f4] bg-[#faf8ff] p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <BookingDetail label="บูธ" value={booking.booth.code} />
+                    <BookingDetail label="บูธ" value={boothCodes} />
+                    <BookingDetail label="พื้นที่" value={zoneNames} />
                     <BookingDetail
-                      label="โซน"
-                      value={booking.booth.zone.name ?? booking.booth.zone.code}
-                    />
-                    <BookingDetail label="ร้านค้า" value={booking.shop.name} />
-                    <BookingDetail
-                      label="ราคา"
-                      value={`${formatMoney(booking.boothPrice)} บาท`}
+                      label="ยอดรวม"
+                      value={`${formatMoney(group.totalAmount)} บาท`}
                     />
                     <BookingDetail
-                      label="วันเริ่มงาน"
-                      value={dateFormatter.format(
-                        new Date(booking.bookingStartDate),
-                      )}
-                    />
-                    <BookingDetail
-                      label="วันสิ้นสุด"
-                      value={dateFormatter.format(
-                        new Date(booking.bookingEndDate),
-                      )}
+                      label="วันที่จัดงาน"
+                      value={`${dateFormatter.format(new Date(booking.bookingStartDate))} – ${dateFormatter.format(new Date(booking.bookingEndDate))}`}
                     />
                   </dl>
 
@@ -551,19 +642,20 @@ export function MyBookingsScreen() {
                   ) : null}
 
                   <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-5">
-                    <Link
-                      href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGroup(group)}
                       className="sl-action-secondary text-violet"
                     >
                       ดูรายละเอียด
-                    </Link>
+                    </button>
                     <Link
                       href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
                       className="sl-action-secondary text-violet"
                     >
                       ดู Event
                     </Link>
-                    {booking.status === 'PENDING_PAYMENT' && !holdExpired ? (
+                    {group.status === 'PENDING_PAYMENT' && !holdExpired ? (
                       <Link
                         href={
                           booking.paymentGroupId
@@ -581,9 +673,9 @@ export function MyBookingsScreen() {
                     >
                       ดู Zone Map
                     </Link>
-                    {isBookingReviewEligible(booking) ? (
+                    {reviewBooking ? (
                       <Link
-                        href={`/bookings/${encodeURIComponent(booking.bookingCode)}/review`}
+                        href={`/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`}
                         className="sl-action-secondary text-violet"
                       >
                         รีวิวพื้นที่
@@ -591,7 +683,7 @@ export function MyBookingsScreen() {
                     ) : null}
                   </div>
 
-                  {booking.status === 'CANCELLED' && booking.cancelReason && (
+                  {group.status === 'CANCELLED' && booking.cancelReason && (
                     <p className="mt-5 text-sm text-muted">
                       เหตุผลที่ยกเลิก: {booking.cancelReason}
                     </p>
@@ -602,6 +694,12 @@ export function MyBookingsScreen() {
           </div>
         )}
       </div>
+      {selectedGroup ? (
+        <BookingDetailDialog
+          group={selectedGroup}
+          onClose={() => setSelectedGroup(null)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -611,6 +709,222 @@ function BookingDetail({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs font-bold text-muted">{label}</dt>
       <dd className="mt-1 font-bold text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function BookingDetailDialog({
+  group,
+  onClose,
+}: {
+  group: BookingGroup;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const booking = group.primary;
+  const boothCodes = group.bookings.map((item) => item.booth.code).join(' + ');
+  const hasPayment = group.bookings.every(
+    (item) =>
+      item.isPaymentExempt ||
+      Boolean(item.confirmedAt) ||
+      item.status === 'CONFIRMED' ||
+      item.status === 'COMPLETED' ||
+      item.status === 'NO_SHOW',
+  );
+  const hasConfirmation = group.bookings.every(
+    (item) =>
+      item.status === 'CONFIRMED' ||
+      item.status === 'COMPLETED' ||
+      item.status === 'NO_SHOW',
+  );
+  const hasFinished = group.bookings.every(
+    (item) => item.status === 'COMPLETED' || item.status === 'NO_SHOW',
+  );
+  const timeline = [
+    { label: 'ส่งคำขอจอง', detail: `เลือก Booth ${boothCodes}`, done: true },
+    {
+      label: 'ชำระเงิน / ตรวจสอบ',
+      detail: hasPayment ? 'ระบบได้รับและตรวจสอบการชำระแล้ว' : 'รอการชำระเงิน',
+      done: hasPayment,
+    },
+    {
+      label: 'ยืนยันการจอง',
+      detail: hasConfirmation ? 'การจองได้รับการยืนยันแล้ว' : 'รอการยืนยัน',
+      done: hasConfirmation,
+    },
+    {
+      label: 'จบงาน',
+      detail: hasFinished ? 'รายการนี้เสร็จสิ้นแล้ว' : 'รอวันสิ้นสุด Event',
+      done: hasFinished,
+    },
+  ];
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href]',
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [onClose]);
+
+  const paymentHref = booking.paymentGroupId
+    ? `/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`
+    : `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center overflow-y-auto bg-[#201b2e]/60 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-detail-title"
+        className="my-6 w-full max-w-3xl rounded-[28px] bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-line pb-5">
+          <div>
+            <span className="sl-kicker">Booking detail</span>
+            <h2 id="booking-detail-title" className="mt-2 text-2xl font-black">
+              รายละเอียดการจอง
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              {booking.event.name} · Booth {boothCodes}
+            </p>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดรายละเอียดการจอง"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-muted transition hover:bg-mist hover:text-ink"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </header>
+
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <BookingDetail label="สถานะ" value={statusLabel[group.status]} />
+          <BookingDetail label="ร้านค้า" value={booking.shop.name} />
+          <BookingDetail
+            label="จำนวนบูธ"
+            value={`${group.bookings.length} บูธ`}
+          />
+          <BookingDetail
+            label="ยอดรวม"
+            value={`${formatMoney(group.totalAmount)} บาท`}
+          />
+        </section>
+
+        <section className="mt-6 rounded-[22px] border border-line bg-[#faf8ff] p-4 sm:p-5">
+          <h3 className="font-black">รายการบูธ</h3>
+          <div className="mt-3 divide-y divide-line">
+            {group.bookings.map((item) => (
+              <div
+                key={item.id}
+                className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4"
+              >
+                <div>
+                  <strong>Booth {item.booth.code}</strong>
+                  <p className="mt-1 text-muted">
+                    {item.booth.zone.name ?? item.booth.zone.code} ·{' '}
+                    {item.bookingCode}
+                  </p>
+                </div>
+                <strong>{formatMoney(item.boothPrice)} บาท</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-6" aria-label="ลำดับสถานะการจอง">
+          <h3 className="font-black">ติดตามสถานะ</h3>
+          <ol className="mt-4 grid gap-3 sm:grid-cols-4">
+            {timeline.map((step, index) => (
+              <li
+                key={step.label}
+                className="relative rounded-2xl border border-line p-4"
+              >
+                <span
+                  className={`grid h-8 w-8 place-items-center rounded-full ${
+                    step.done
+                      ? 'bg-violet text-white'
+                      : 'bg-[#f1eef5] text-muted'
+                  }`}
+                >
+                  {step.done ? (
+                    <Check className="h-4 w-4" aria-hidden />
+                  ) : (
+                    <Clock3 className="h-4 w-4" aria-hidden />
+                  )}
+                </span>
+                <strong className="mt-3 block text-sm">
+                  {index + 1}. {step.label}
+                </strong>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {step.detail}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <footer className="mt-6 flex flex-wrap justify-end gap-3 border-t border-line pt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="sl-action-secondary"
+          >
+            ปิด
+          </button>
+          {group.status === 'PENDING_PAYMENT' ? (
+            <Link href={paymentHref} className="sl-action-primary">
+              ชำระเงิน
+            </Link>
+          ) : (
+            <Link
+              href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
+              className="sl-action-primary"
+            >
+              เปิดหน้ารายละเอียดเต็ม
+            </Link>
+          )}
+        </footer>
+      </section>
     </div>
   );
 }
