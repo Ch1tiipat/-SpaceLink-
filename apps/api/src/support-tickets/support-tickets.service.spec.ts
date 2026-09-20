@@ -255,6 +255,52 @@ describe('SupportTicketsService', () => {
     });
   });
 
+  describe('vendor request tracking', () => {
+    it('lists only tickets owned by the authenticated vendor', async () => {
+      supportTicketFindMany.mockResolvedValue([]);
+
+      await service.findAllForVendor(VENDOR_ID);
+
+      expect(supportTicketFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: VENDOR_ID },
+          orderBy: { createdAt: 'desc' },
+          select: expect.objectContaining({
+            booking: expect.any(Object) as object,
+            quotaGrant: { select: { id: true, consumedAt: true } },
+          }) as object,
+        }),
+      );
+    });
+
+    it('scopes vendor detail to both ticket id and authenticated vendor', async () => {
+      supportTicketFindFirst.mockResolvedValue({ id: TICKET_ID, messages: [] });
+
+      await expect(
+        service.findOneForVendor(TICKET_ID, VENDOR_ID),
+      ).resolves.toEqual({ id: TICKET_ID, messages: [] });
+
+      expect(supportTicketFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: TICKET_ID, userId: VENDOR_ID },
+          select: expect.objectContaining({
+            messages: expect.objectContaining({
+              orderBy: { createdAt: 'asc' },
+            }) as object,
+          }) as object,
+        }),
+      );
+    });
+
+    it('returns 404 instead of revealing another vendor ticket', async () => {
+      supportTicketFindFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findOneForVendor(TICKET_ID, VENDOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('updateStatus', () => {
     it('moves an open ticket to processing and returns the updated status', async () => {
       const updated = {

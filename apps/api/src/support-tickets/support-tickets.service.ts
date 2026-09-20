@@ -107,6 +107,53 @@ export type SupportTicketDetailResponse = Prisma.SupportTicketGetPayload<{
   select: typeof supportTicketDetailSelect;
 }>;
 
+const vendorSupportTicketOverviewSelect = {
+  id: true,
+  type: true,
+  subject: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  organization: { select: { id: true, name: true } },
+  booking: {
+    select: {
+      id: true,
+      bookingCode: true,
+      event: { select: { id: true, name: true } },
+      booth: {
+        select: {
+          id: true,
+          code: true,
+          zone: { select: { id: true, code: true, name: true } },
+        },
+      },
+    },
+  },
+  quotaGrant: { select: { id: true, consumedAt: true } },
+} satisfies Prisma.SupportTicketSelect;
+
+export type VendorSupportTicketOverviewResponse =
+  Prisma.SupportTicketGetPayload<{
+    select: typeof vendorSupportTicketOverviewSelect;
+  }>;
+
+const vendorSupportTicketDetailSelect = {
+  ...vendorSupportTicketOverviewSelect,
+  messages: {
+    select: {
+      id: true,
+      message: true,
+      createdAt: true,
+      sender: { select: { id: true, fullName: true } },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.SupportTicketSelect;
+
+export type VendorSupportTicketDetailResponse = Prisma.SupportTicketGetPayload<{
+  select: typeof vendorSupportTicketDetailSelect;
+}>;
+
 const supportTicketStatusSelect = {
   id: true,
   status: true,
@@ -410,6 +457,32 @@ export class SupportTicketsService {
       select: supportTicketOverviewSelect,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findAllForVendor(
+    vendorUserId: string,
+  ): Promise<VendorSupportTicketOverviewResponse[]> {
+    return this.prisma.supportTicket.findMany({
+      where: { userId: vendorUserId },
+      select: vendorSupportTicketOverviewSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOneForVendor(
+    ticketId: string,
+    vendorUserId: string,
+  ): Promise<VendorSupportTicketDetailResponse> {
+    const ticket = await this.prisma.supportTicket.findFirst({
+      where: { id: ticketId, userId: vendorUserId },
+      select: vendorSupportTicketDetailSelect,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('ไม่พบคำร้อง');
+    }
+
+    return ticket;
   }
 
   async findOneForSuperAdmin(

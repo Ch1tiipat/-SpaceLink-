@@ -6,16 +6,27 @@ import {
   Suspense,
   type FormEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from 'react';
 import {
   AlertCircle,
+  BarChart3,
   CheckCircle2,
+  ChevronRight,
   ClipboardCheck,
+  FileText,
+  Headphones,
+  Info,
+  ListFilter,
+  MessageCircleWarning,
+  Paperclip,
+  Search,
   Send,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import {
   ApiError,
@@ -23,6 +34,8 @@ import {
   createSupportTicket,
   getBooths,
   getEventMap,
+  getMySupportTicketDetail,
+  getMySupportTickets,
   getMyBookings,
   getMe,
   type BoothOption,
@@ -30,10 +43,12 @@ import {
   type MyBooking,
   type SupportTicketRecord,
   type UserRole,
+  type VendorSupportTicket,
+  type VendorSupportTicketDetail,
 } from '@/lib/api';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
-import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
+import { getUxPreviewMode, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 import {
   parseQuotaRequestQuery,
   resolveQuotaRequestContext,
@@ -52,6 +67,17 @@ const inputClass =
   'mt-2 h-12 w-full rounded-2xl border border-[#ded5eb] bg-[#fcfbff] px-4 text-base text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-[#7c3aed18]';
 
 type VendorRequestType = 'QUOTA_INCREASE' | 'ISSUE_REPORT';
+
+type VendorTab = VendorRequestType | 'TRACKING';
+type IssueKind = 'PAYMENT' | 'BOOKING' | 'UPLOAD' | 'ACCOUNT' | 'OTHER';
+type IssuePriority = 'NORMAL' | 'URGENT';
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_ATTACHMENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'application/pdf',
+]);
 
 const ACTIVE_BOOKING_STATUSES = new Set(['PENDING_PAYMENT', 'CONFIRMED']);
 
@@ -174,6 +200,81 @@ const PREVIEW_EVENT_MAP = {
   ],
 } as EventMap;
 
+const PREVIEW_TICKETS: VendorSupportTicket[] = [
+  {
+    id: 'QT-2026-001',
+    type: 'OTHER',
+    subject: 'ขอโควต้าบูธเพิ่ม',
+    status: 'OPEN',
+    createdAt: '2026-09-14T09:30:00.000Z',
+    updatedAt: '2026-09-14T09:30:00.000Z',
+    organization: { id: 'preview-organization', name: 'SpaceLink Fair' },
+    booking: PREVIEW_BOOKINGS[0]
+      ? {
+          id: PREVIEW_BOOKINGS[0].id,
+          bookingCode: PREVIEW_BOOKINGS[0].bookingCode,
+          event: PREVIEW_BOOKINGS[0].event,
+          booth: PREVIEW_BOOKINGS[0].booth,
+        }
+      : null,
+    quotaGrant: null,
+  },
+  {
+    id: 'IS-2026-002',
+    type: 'ISSUE_REPORT',
+    subject: 'ตรวจสอบสถานะการชำระเงิน',
+    status: 'CLOSED',
+    createdAt: '2026-09-10T10:15:00.000Z',
+    updatedAt: '2026-09-11T08:00:00.000Z',
+    organization: { id: 'preview-organization', name: 'SpaceLink Fair' },
+    booking: PREVIEW_BOOKINGS[0]
+      ? {
+          id: PREVIEW_BOOKINGS[0].id,
+          bookingCode: PREVIEW_BOOKINGS[0].bookingCode,
+          event: PREVIEW_BOOKINGS[0].event,
+          booth: PREVIEW_BOOKINGS[0].booth,
+        }
+      : null,
+    quotaGrant: null,
+  },
+  {
+    id: 'QT-2026-003',
+    type: 'OTHER',
+    subject: 'ขอโควต้าบูธเพิ่ม',
+    status: 'CLOSED',
+    createdAt: '2026-09-05T04:40:00.000Z',
+    updatedAt: '2026-09-06T06:20:00.000Z',
+    organization: { id: 'preview-organization', name: 'SpaceLink Fair' },
+    booking: PREVIEW_BOOKINGS[0]
+      ? {
+          id: PREVIEW_BOOKINGS[0].id,
+          bookingCode: PREVIEW_BOOKINGS[0].bookingCode,
+          event: PREVIEW_BOOKINGS[0].event,
+          booth: PREVIEW_BOOKINGS[0].booth,
+        }
+      : null,
+    quotaGrant: { id: 'preview-grant', consumedAt: null },
+  },
+  {
+    id: 'QT-2026-004',
+    type: 'OTHER',
+    subject: 'ขอโควต้าบูธเพิ่ม',
+    status: 'CLOSED',
+    createdAt: '2026-09-02T03:20:00.000Z',
+    updatedAt: '2026-09-03T05:00:00.000Z',
+    organization: { id: 'preview-organization', name: 'SpaceLink Fair' },
+    booking: PREVIEW_BOOKINGS[0]
+      ? {
+          id: PREVIEW_BOOKINGS[0].id,
+          bookingCode: PREVIEW_BOOKINGS[0].bookingCode,
+          event: PREVIEW_BOOKINGS[0].event,
+          booth: PREVIEW_BOOKINGS[0].booth,
+        }
+      : null,
+    quotaGrant: null,
+  },
+];
+
 export function SupportTicketScreen() {
   return (
     <Suspense
@@ -200,8 +301,13 @@ function SupportTicketScreenContent() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
 
   useEffect(() => {
-    if (canUseUxPreview()) {
-      setAccess({ status: 'ready', token: UX_PREVIEW_TOKEN, role: 'VENDOR' });
+    const previewMode = getUxPreviewMode();
+    if (previewMode) {
+      setAccess(
+        previewMode === 'signed-in'
+          ? { status: 'ready', token: UX_PREVIEW_TOKEN, role: 'VENDOR' }
+          : { status: 'signed-out' },
+      );
       return;
     }
 
@@ -251,11 +357,9 @@ function SupportTicketScreenContent() {
   if (access.status === 'signed-out') {
     return (
       <section className="sl-soft-surface mt-8 p-6 sm:p-8">
-        <h2 className="text-xl font-black text-ink">
-          คำร้องขอเพิ่มโควตาการจอง
-        </h2>
+        <h2 className="text-xl font-black text-ink">ติดต่อสอบถาม</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          กรุณาเข้าสู่ระบบก่อนส่งหรือตรวจสอบคำร้อง
+          กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา ขอเพิ่มโควต้า หรือติดตามคำร้อง
         </p>
         <button
           type="button"
@@ -305,8 +409,9 @@ function VendorTicketForm({
   preview: boolean;
   quotaRequestQuery: ParsedQuotaRequestQuery;
 }) {
-  const [requestType, setRequestType] =
-    useState<VendorRequestType>('QUOTA_INCREASE');
+  const [activeTab, setActiveTab] = useState<VendorTab>(
+    quotaRequestQuery.status === 'ready' ? 'QUOTA_INCREASE' : 'ISSUE_REPORT',
+  );
   const [bookings, setBookings] = useState<MyBooking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
@@ -323,11 +428,26 @@ function VendorTicketForm({
   const [contextNotice, setContextNotice] = useState<string | null>(null);
   const [contextError, setContextError] = useState<string | null>(null);
   const [issueBookingId, setIssueBookingId] = useState('');
-  const [subject, setSubject] = useState('ขอโควต้าบูธเพิ่ม');
-  const [message, setMessage] = useState('');
+  const [issueKind, setIssueKind] = useState<IssueKind>('PAYMENT');
+  const [issuePriority, setIssuePriority] = useState<IssuePriority>('NORMAL');
+  const [issueSubject, setIssueSubject] = useState('');
+  const [issueDetail, setIssueDetail] = useState('');
+  const [quotaReason, setQuotaReason] = useState('');
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ticket, setTicket] = useState<SupportTicketRecord | null>(null);
+  const [tickets, setTickets] = useState<VendorSupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketTypeFilter, setTicketTypeFilter] = useState('ALL');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('ALL');
+  const [ticketSort, setTicketSort] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
+  const [detail, setDetail] = useState<VendorSupportTicketDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const activeBookings = bookings.filter((booking) =>
     ACTIVE_BOOKING_STATUSES.has(booking.status),
@@ -369,6 +489,39 @@ function VendorTicketForm({
             booking.booth.zone.id === selectedQuotaOption.zoneId),
       )
     : [];
+
+  const loadTickets = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoadingTickets(true);
+      setTicketsError(null);
+      try {
+        const loaded = preview
+          ? PREVIEW_TICKETS
+          : await getMySupportTickets(token, signal);
+        setTickets(loaded);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          return;
+        }
+        setTicketsError(describeError(cause, 'โหลดรายการคำร้องไม่สำเร็จ'));
+      } finally {
+        if (!signal?.aborted) setLoadingTickets(false);
+      }
+    },
+    [preview, token],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadTickets(controller.signal);
+    return () => controller.abort();
+  }, [loadTickets]);
+
+  useEffect(() => {
+    if (quotaRequestQuery.status === 'ready') {
+      setActiveTab('QUOTA_INCREASE');
+    }
+  }, [quotaRequestQuery.status]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -445,7 +598,7 @@ function VendorTicketForm({
   }, [preview, quotaRequestQuery, token]);
 
   useEffect(() => {
-    if (requestType !== 'QUOTA_INCREASE' || !selectedQuotaZoneId) {
+    if (activeTab !== 'QUOTA_INCREASE' || !selectedQuotaZoneId) {
       setBoothOptions([]);
       setRequestedBoothId('');
       setBoothError(null);
@@ -502,16 +655,16 @@ function VendorTicketForm({
     contextRequestedBoothId,
     preview,
     quotaContext,
-    requestType,
+    activeTab,
     selectedQuotaZoneId,
   ]);
 
-  function changeRequestType(nextType: VendorRequestType) {
-    setRequestType(nextType);
-    setSubject(nextType === 'QUOTA_INCREASE' ? 'ขอโควต้าบูธเพิ่ม' : '');
-    setMessage('');
+  function changeTab(nextTab: VendorTab) {
+    setActiveTab(nextTab);
     setError(null);
     setTicket(null);
+    setAttachment(null);
+    setAttachmentError(null);
   }
 
   function changeQuotaContext(nextContext: string) {
@@ -519,17 +672,76 @@ function VendorTicketForm({
     setRequestedBoothId('');
   }
 
+  function changeAttachment(file: File | null) {
+    setAttachmentError(null);
+    if (!file) {
+      setAttachment(null);
+      return;
+    }
+    if (!ACCEPTED_ATTACHMENT_TYPES.has(file.type)) {
+      setAttachment(null);
+      setAttachmentError('รองรับเฉพาะไฟล์ JPG, PNG หรือ PDF');
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachment(null);
+      setAttachmentError('ไฟล์ต้องมีขนาดไม่เกิน 10 MB');
+      return;
+    }
+    setAttachment(file);
+  }
+
+  async function openTicketDetail(ticketId: string) {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      if (preview) {
+        const selected = tickets.find((item) => item.id === ticketId);
+        if (!selected) throw new Error('missing preview ticket');
+        setDetail({
+          ...selected,
+          messages: [
+            {
+              id: `${ticketId}-message`,
+              message:
+                selected.type === 'OTHER'
+                  ? 'ต้องการเพิ่มโควตาอีก 1 บูธสำหรับงานนี้'
+                  : 'กรุณาช่วยตรวจสอบรายการที่แจ้งไว้',
+              createdAt: selected.createdAt,
+              sender: { id: 'preview-vendor', fullName: 'Vithavin' },
+            },
+          ],
+        });
+      } else {
+        setDetail(await getMySupportTicketDetail(ticketId, token));
+      }
+    } catch (cause) {
+      setDetailError(describeError(cause, 'โหลดรายละเอียดคำร้องไม่สำเร็จ'));
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!subject.trim() || !message.trim()) {
+    if (activeTab === 'TRACKING') return;
+
+    if (
+      activeTab === 'ISSUE_REPORT' &&
+      (!issueSubject.trim() || !issueDetail.trim())
+    ) {
       setError('กรุณากรอกหัวข้อและรายละเอียดให้ครบ');
       return;
     }
     if (
-      requestType === 'QUOTA_INCREASE' &&
-      (!selectedQuotaOption || !requestedBoothId)
+      activeTab === 'QUOTA_INCREASE' &&
+      (!selectedQuotaOption || !requestedBoothId || !quotaReason.trim())
     ) {
-      setError('กรุณาเลือกงาน โซน และบูธที่ต้องการเพิ่ม');
+      setError('กรุณาเลือกงาน โซน บูธ และระบุเหตุผลให้ครบ');
+      return;
+    }
+    if (attachmentError) {
+      setError('กรุณาแก้ไขไฟล์อ้างอิงก่อนส่งคำร้อง');
       return;
     }
 
@@ -537,9 +749,33 @@ function VendorTicketForm({
     setError(null);
     setTicket(null);
     try {
+      const requestType: VendorRequestType = activeTab;
+      const subject =
+        activeTab === 'QUOTA_INCREASE'
+          ? 'ขอโควต้าบูธเพิ่ม'
+          : issueSubject.trim();
+      const message =
+        activeTab === 'QUOTA_INCREASE'
+          ? [
+              'จำนวนที่ขอเพิ่ม: 1 บูธ',
+              attachment ? `ไฟล์อ้างอิง: ${attachment.name}` : null,
+              '',
+              quotaReason.trim(),
+            ]
+              .filter((line): line is string => line !== null)
+              .join('\n')
+          : [
+              `ประเภทปัญหา: ${issueKindLabel(issueKind)}`,
+              `ความสำคัญ: ${issuePriorityLabel(issuePriority)}`,
+              attachment ? `ไฟล์อ้างอิง: ${attachment.name}` : null,
+              '',
+              issueDetail.trim(),
+            ]
+              .filter((line): line is string => line !== null)
+              .join('\n');
       const created = preview
         ? {
-            id: 'preview-support-ticket',
+            id: `${requestType === 'QUOTA_INCREASE' ? 'QT' : 'IS'}-${Date.now()}`,
             userId: 'preview-vendor',
             organizationId: null,
             bookingId: null,
@@ -571,6 +807,51 @@ function VendorTicketForm({
               token,
             );
       setTicket(created);
+      if (activeTab === 'ISSUE_REPORT') {
+        setIssueSubject('');
+        setIssueDetail('');
+      } else {
+        setQuotaReason('');
+      }
+      setAttachment(null);
+      if (preview) {
+        setTickets((current) => [
+          {
+            id: created.id,
+            type: created.type,
+            subject: created.subject,
+            status: created.status,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+            organization: {
+              id: 'preview-organization',
+              name: 'SpaceLink Fair',
+            },
+            booking:
+              (bookings.find((booking) => booking.id === issueBookingId) ??
+              PREVIEW_BOOKINGS[0])
+                ? {
+                    id:
+                      bookings.find((booking) => booking.id === issueBookingId)
+                        ?.id ?? PREVIEW_BOOKINGS[0].id,
+                    bookingCode:
+                      bookings.find((booking) => booking.id === issueBookingId)
+                        ?.bookingCode ?? PREVIEW_BOOKINGS[0].bookingCode,
+                    event:
+                      bookings.find((booking) => booking.id === issueBookingId)
+                        ?.event ?? PREVIEW_BOOKINGS[0].event,
+                    booth:
+                      bookings.find((booking) => booking.id === issueBookingId)
+                        ?.booth ?? PREVIEW_BOOKINGS[0].booth,
+                  }
+                : null,
+            quotaGrant: null,
+          },
+          ...current,
+        ]);
+      } else {
+        await loadTickets();
+      }
     } catch (cause) {
       setError(describeError(cause, 'ส่งคำร้องไม่สำเร็จ'));
     } finally {
@@ -578,203 +859,817 @@ function VendorTicketForm({
     }
   }
 
+  const filteredTickets = useMemo(() => {
+    const keyword = ticketSearch.trim().toLocaleLowerCase('th');
+    return tickets
+      .filter((item) => {
+        const kind = item.type === 'OTHER' ? 'QUOTA' : 'ISSUE';
+        const status = vendorTicketStatus(item).key;
+        const searchable = [
+          item.id,
+          item.subject,
+          item.organization?.name,
+          item.booking?.bookingCode,
+          item.booking?.event.name,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLocaleLowerCase('th');
+        return (
+          (!keyword || searchable.includes(keyword)) &&
+          (ticketTypeFilter === 'ALL' || ticketTypeFilter === kind) &&
+          (ticketStatusFilter === 'ALL' || ticketStatusFilter === status)
+        );
+      })
+      .sort((left, right) => {
+        const delta =
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime();
+        return ticketSort === 'NEWEST' ? delta : -delta;
+      });
+  }, [ticketSearch, ticketSort, ticketStatusFilter, ticketTypeFilter, tickets]);
+
+  const counts = useMemo(
+    () => ({
+      total: tickets.length,
+      pending: tickets.filter(
+        (item) => vendorTicketStatus(item).key === 'PENDING',
+      ).length,
+      approved: tickets.filter(
+        (item) => vendorTicketStatus(item).key === 'APPROVED',
+      ).length,
+      rejected: tickets.filter(
+        (item) => vendorTicketStatus(item).key === 'REJECTED',
+      ).length,
+    }),
+    [tickets],
+  );
+
   return (
-    <section
-      aria-labelledby="vendor-request-heading"
-      className="sl-surface mt-8 p-6 sm:p-8"
-    >
-      <div className="flex items-start gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
-          <Send className="h-5 w-5" aria-hidden />
-        </span>
+    <section aria-labelledby="vendor-request-heading" className="mt-1">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
-            Vendor request
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-violet">
+            Vendor support
           </p>
-          <h2
+          <h1
             id="vendor-request-heading"
-            className="mt-1 text-2xl font-black text-ink"
+            className="mt-2 text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl"
           >
-            ติดต่อและขอความช่วยเหลือ
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            เลือกส่งคำขอเพิ่มโควต้าบูธ
-            หรือติดต่อปัญหาที่ต้องการให้ผู้ดูแลช่วยตรวจสอบ
+            ติดต่อสอบถาม
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-muted sm:text-base">
+            แจ้งปัญหา ขอเพิ่มโควต้า และติดตามทุกคำขอได้ในที่เดียว
           </p>
-          {preview ? (
-            <p className="mt-3 rounded-xl bg-violet-tint px-3 py-2 text-xs font-semibold text-violet">
-              โหมดตรวจ UX/UI — การส่งแบบฟอร์มจะไม่สร้างคำร้องจริง
-            </p>
-          ) : null}
         </div>
+        {preview ? (
+          <span className="rounded-full bg-violet-tint px-4 py-2 text-xs font-bold text-violet">
+            โหมดตรวจ UX/UI
+          </span>
+        ) : null}
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-        <Field label="ประเภทคำขอ">
-          <select
-            value={requestType}
-            onChange={(event) =>
-              changeRequestType(event.target.value as VendorRequestType)
-            }
-            className={inputClass}
-          >
-            <option value="QUOTA_INCREASE">ขอโควต้าบูธเพิ่ม</option>
-            <option value="ISSUE_REPORT">ติดต่อปัญหา</option>
-          </select>
-        </Field>
+      <div
+        role="tablist"
+        aria-label="ประเภทการติดต่อ"
+        className="mt-7 grid gap-3 md:grid-cols-3"
+      >
+        <SupportTab
+          active={activeTab === 'ISSUE_REPORT'}
+          icon={MessageCircleWarning}
+          title="แจ้งปัญหา"
+          description="แจ้งปัญหาการใช้งานหรือการจอง"
+          onClick={() => changeTab('ISSUE_REPORT')}
+        />
+        <SupportTab
+          active={activeTab === 'QUOTA_INCREASE'}
+          icon={FileText}
+          title="ขอเพิ่มโควต้า"
+          description="ขอสิทธิ์จองบูธเพิ่มอีก 1 รายการ"
+          onClick={() => changeTab('QUOTA_INCREASE')}
+        />
+        <SupportTab
+          active={activeTab === 'TRACKING'}
+          icon={BarChart3}
+          title="ติดตามสถานะคำขอ"
+          description={`${counts.pending} รายการกำลังดำเนินการ`}
+          onClick={() => changeTab('TRACKING')}
+        />
+      </div>
 
-        {requestType === 'QUOTA_INCREASE' ? (
-          <>
-            {contextError ? <ErrorMessage message={contextError} /> : null}
-            <Field label="งานและโซนที่จองอยู่">
-              <select
-                value={quotaContext}
-                onChange={(event) => changeQuotaContext(event.target.value)}
-                className={inputClass}
-                disabled={loadingBookings || quotaOptions.length === 0}
-                required
-              >
-                <option value="">
-                  {loadingBookings
-                    ? 'กำลังโหลดข้อมูลการจอง...'
-                    : 'เลือกงานและโซน'}
-                </option>
-                {quotaOptions.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.eventName} — {option.zoneName}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="บูธที่ต้องการเพิ่ม">
-              <select
-                value={requestedBoothId}
-                onChange={(event) => setRequestedBoothId(event.target.value)}
-                className={inputClass}
-                disabled={loadingBooths || boothOptions.length === 0}
-                required
-              >
-                <option value="">
-                  {loadingBooths
-                    ? 'กำลังโหลดบูธ...'
-                    : 'เลือกบูธที่ต้องการเพิ่ม'}
-                </option>
-                {boothOptions.map((booth) => (
-                  <option key={booth.id} value={booth.id}>
-                    บูธ {booth.code} — {formatBoothSize(booth)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            {!loadingBooths &&
-            selectedQuotaZoneId &&
-            boothOptions.length === 0 ? (
-              <ErrorMessage message="ยังไม่มีบูธว่างในโซนนี้" />
-            ) : null}
-
-            {selectedQuotaBookings.length > 0 ? (
-              <div className="rounded-2xl border border-[#ded5eb] bg-violet-tint/50 p-4">
-                <p className="text-sm font-extrabold text-ink">
-                  {selectedQuotaOption?.source === 'context'
-                    ? 'บูธที่คุณจองใน Event นี้'
-                    : 'บูธที่คุณจองในงานและโซนนี้'}
+      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="sl-surface p-5 sm:p-7">
+          {activeTab === 'TRACKING' ? (
+            <TrackingPanel
+              counts={counts}
+              loading={loadingTickets}
+              error={ticketsError}
+              tickets={filteredTickets}
+              search={ticketSearch}
+              typeFilter={ticketTypeFilter}
+              statusFilter={ticketStatusFilter}
+              sort={ticketSort}
+              onSearch={setTicketSearch}
+              onTypeFilter={setTicketTypeFilter}
+              onStatusFilter={setTicketStatusFilter}
+              onSort={setTicketSort}
+              onOpen={(ticketId) => void openTicketDetail(ticketId)}
+            />
+          ) : (
+            <form onSubmit={handleSubmit} className="grid gap-5">
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+                  ข้อมูลคำขอ
                 </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {selectedQuotaBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="rounded-xl border border-white bg-white px-4 py-3 text-sm"
+                <h2 className="mt-1 text-2xl font-black text-ink">
+                  {activeTab === 'ISSUE_REPORT'
+                    ? 'แจ้งปัญหาให้ทีมงานตรวจสอบ'
+                    : 'ขอเพิ่มโควต้าการจอง'}
+                </h2>
+              </div>
+
+              {activeTab === 'ISSUE_REPORT' ? (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="ประเภทปัญหา *">
+                      <select
+                        value={issueKind}
+                        onChange={(event) =>
+                          setIssueKind(event.target.value as IssueKind)
+                        }
+                        className={inputClass}
+                        required
+                      >
+                        <option value="PAYMENT">การชำระเงิน</option>
+                        <option value="BOOKING">การจองบูธ</option>
+                        <option value="UPLOAD">การอัปโหลดไฟล์</option>
+                        <option value="ACCOUNT">บัญชีและร้านค้า</option>
+                        <option value="OTHER">อื่น ๆ</option>
+                      </select>
+                    </Field>
+                    <Field label="ความสำคัญ *">
+                      <select
+                        value={issuePriority}
+                        onChange={(event) =>
+                          setIssuePriority(event.target.value as IssuePriority)
+                        }
+                        className={inputClass}
+                        required
+                      >
+                        <option value="NORMAL">ปกติ</option>
+                        <option value="URGENT">เร่งด่วน</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Event / Booking ที่เกี่ยวข้อง">
+                    <select
+                      value={issueBookingId}
+                      onChange={(event) =>
+                        setIssueBookingId(event.target.value)
+                      }
+                      className={inputClass}
+                      disabled={loadingBookings}
                     >
-                      <p className="font-extrabold text-ink">
-                        บูธ {booking.booth.code}
+                      <option value="">ไม่เกี่ยวข้องกับการจอง</option>
+                      {bookings.map((booking) => (
+                        <option key={booking.id} value={booking.id}>
+                          {booking.bookingCode} — {booking.event.name} — บูธ{' '}
+                          {booking.booth.code}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="หัวข้อปัญหา *">
+                    <input
+                      value={issueSubject}
+                      onChange={(event) => setIssueSubject(event.target.value)}
+                      className={inputClass}
+                      maxLength={200}
+                      placeholder="สรุปปัญหาสั้น ๆ"
+                      required
+                    />
+                  </Field>
+                  <Field label="รายละเอียดปัญหา *">
+                    <textarea
+                      value={issueDetail}
+                      onChange={(event) => setIssueDetail(event.target.value)}
+                      className={`${inputClass} min-h-32 py-3`}
+                      maxLength={2000}
+                      placeholder="อธิบายสิ่งที่พบ ขั้นตอนที่ทำ และผลลัพธ์ที่ต้องการ"
+                      required
+                    />
+                  </Field>
+                </>
+              ) : (
+                <>
+                  {contextError ? (
+                    <ErrorMessage message={contextError} />
+                  ) : null}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Event และ Zone *">
+                      <select
+                        value={quotaContext}
+                        onChange={(event) =>
+                          changeQuotaContext(event.target.value)
+                        }
+                        className={inputClass}
+                        disabled={loadingBookings || quotaOptions.length === 0}
+                        required
+                      >
+                        <option value="">
+                          {loadingBookings
+                            ? 'กำลังโหลดข้อมูลการจอง...'
+                            : 'เลือก Event และ Zone'}
+                        </option>
+                        {quotaOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.eventName} — {option.zoneName}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="บูธที่ต้องการ *">
+                      <select
+                        value={requestedBoothId}
+                        onChange={(event) =>
+                          setRequestedBoothId(event.target.value)
+                        }
+                        className={inputClass}
+                        disabled={loadingBooths || boothOptions.length === 0}
+                        required
+                      >
+                        <option value="">
+                          {loadingBooths ? 'กำลังโหลดบูธ...' : 'เลือกบูธ'}
+                        </option>
+                        {boothOptions.map((booth) => (
+                          <option key={booth.id} value={booth.id}>
+                            บูธ {booth.code} — {formatBoothSize(booth)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="จำนวนที่ขอเพิ่ม">
+                    <input
+                      value="1 บูธ"
+                      disabled
+                      className={`${inputClass} cursor-not-allowed bg-[#f4f1f8] text-muted`}
+                    />
+                  </Field>
+                  <Field label="เหตุผลที่ขอเพิ่มโควต้า *">
+                    <textarea
+                      value={quotaReason}
+                      onChange={(event) => setQuotaReason(event.target.value)}
+                      className={`${inputClass} min-h-32 py-3`}
+                      maxLength={2000}
+                      placeholder="อธิบายเหตุผลและแผนการใช้บูธเพิ่มเติม"
+                      required
+                    />
+                  </Field>
+                  {!loadingBooths &&
+                  selectedQuotaZoneId &&
+                  boothOptions.length === 0 ? (
+                    <ErrorMessage message="ยังไม่มีบูธว่างในโซนนี้" />
+                  ) : null}
+                  {selectedQuotaBookings.length > 0 ? (
+                    <div className="rounded-2xl border border-[#ded5eb] bg-violet-tint/50 p-4">
+                      <p className="text-sm font-extrabold text-ink">
+                        การจองปัจจุบันในบริบทนี้
                       </p>
-                      <p className="mt-1 text-xs text-muted">
-                        {booking.bookingCode} ·{' '}
-                        {bookingStatusLabel(booking.status)}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedQuotaBookings.map((booking) => (
+                          <span
+                            key={booking.id}
+                            className="rounded-full bg-white px-3 py-2 text-xs font-bold text-ink"
+                          >
+                            บูธ {booking.booth.code} ·{' '}
+                            {bookingStatusLabel(booking.status)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!loadingBookings && quotaOptions.length === 0 ? (
+                    <ErrorMessage message="ยังไม่มีการจองที่ใช้งานอยู่สำหรับส่งคำขอเพิ่มโควต้า" />
+                  ) : null}
+                </>
+              )}
+
+              <AttachmentInput
+                file={attachment}
+                error={attachmentError}
+                onChange={changeAttachment}
+              />
+
+              {bookingsError ? <ErrorMessage message={bookingsError} /> : null}
+              {boothError ? <ErrorMessage message={boothError} /> : null}
+              {error ? <ErrorMessage message={error} /> : null}
+              {ticket ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                  <div className="flex items-start gap-3 text-emerald-900">
+                    <CheckCircle2
+                      className="mt-0.5 h-5 w-5 shrink-0"
+                      aria-hidden
+                    />
+                    <div>
+                      <p className="font-extrabold">ส่งคำขอสำเร็จ</p>
+                      <p className="mt-1 text-sm">
+                        Request ID:{' '}
+                        <strong className="break-all">{ticket.id}</strong>
                       </p>
                     </div>
-                  ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => changeTab('TRACKING')}
+                    className="sl-action-secondary mt-4 text-violet"
+                  >
+                    ไปหน้าติดตามคำขอ
+                    <ChevronRight className="h-4 w-4" aria-hidden />
+                  </button>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {!loadingBookings && quotaOptions.length === 0 ? (
-              <ErrorMessage message="ยังไม่มีการจองที่ใช้งานอยู่สำหรับส่งคำขอเพิ่มโควต้า" />
-            ) : null}
-          </>
-        ) : (
-          <Field label="การจองที่เกี่ยวข้อง (ไม่บังคับ)">
-            <select
-              value={issueBookingId}
-              onChange={(event) => setIssueBookingId(event.target.value)}
-              className={inputClass}
-              disabled={loadingBookings}
-            >
-              <option value="">ไม่เกี่ยวข้องกับการจอง</option>
-              {bookings.map((booking) => (
-                <option key={booking.id} value={booking.id}>
-                  {booking.bookingCode} — {booking.event.name} — บูธ{' '}
-                  {booking.booth.code}
-                </option>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="sl-action-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Send className="h-4 w-4" aria-hidden />
+                {submitting
+                  ? 'กำลังส่งคำร้อง...'
+                  : activeTab === 'QUOTA_INCREASE'
+                    ? 'ส่งคำขอเพิ่มโควต้า'
+                    : 'ส่งคำขอแจ้งปัญหา'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        <aside className="grid gap-4">
+          <InfoCard icon={ClipboardCheck} title="ขั้นตอนการช่วยเหลือ">
+            <ol className="mt-4 grid gap-4">
+              {[
+                ['1', 'ส่งคำขอ', 'กรอกข้อมูลและส่งคำขอให้ทีมงาน'],
+                ['2', 'ทีมงานตรวจสอบ', 'ตรวจสอบรายละเอียดและดำเนินการ'],
+                ['3', 'แจ้งผลกลับ', 'ติดตามผลได้จากแท็บติดตามสถานะ'],
+              ].map(([step, title, description]) => (
+                <li key={step} className="flex gap-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-tint text-sm font-black text-violet">
+                    {step}
+                  </span>
+                  <span>
+                    <strong className="block text-sm text-ink">{title}</strong>
+                    <small className="mt-0.5 block leading-5 text-muted">
+                      {description}
+                    </small>
+                  </span>
+                </li>
               ))}
-            </select>
-          </Field>
-        )}
+            </ol>
+          </InfoCard>
+          <InfoCard icon={Headphones} title="ข้อมูลติดต่อด่วน">
+            <div className="mt-4 grid gap-3 text-sm">
+              <p>
+                <strong>Facebook:</strong> SpaceLink
+              </p>
+              <p>
+                <strong>อีเมล:</strong> support@spacelink.co
+              </p>
+              <p>
+                <strong>เวลาทำการ:</strong> จ.–ศ. 09:00–18:00 น.
+              </p>
+            </div>
+          </InfoCard>
+          <InfoCard icon={Info} title="คำแนะนำก่อนส่งคำขอ">
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-muted">
+              <li>ระบุ Event หรือ Booking ให้ตรงกับปัญหา</li>
+              <li>หลีกเลี่ยงการใส่รหัสผ่านหรือข้อมูลการเงิน</li>
+              <li>คำขอเพิ่มโควต้าอนุมัติครั้งละ 1 บูธ</li>
+            </ul>
+          </InfoCard>
+        </aside>
+      </div>
 
-        <Field
-          label={requestType === 'ISSUE_REPORT' ? 'หัวข้อปัญหา' : 'หัวข้อคำขอ'}
-        >
-          <input
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            className={inputClass}
-            required
-          />
-        </Field>
-        <Field
-          label={
-            requestType === 'ISSUE_REPORT'
-              ? 'รายละเอียดปัญหา'
-              : 'เหตุผลและรายละเอียดเพิ่มเติม'
-          }
-        >
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            className={`${inputClass} min-h-28 py-3`}
-            placeholder={
-              requestType === 'ISSUE_REPORT'
-                ? 'อธิบายปัญหาที่พบและข้อมูลที่ช่วยให้ตรวจสอบได้'
-                : 'อธิบายเหตุผลที่ต้องการขอโควต้าบูธเพิ่ม'
-            }
-            required
-          />
-        </Field>
+      {(detail || detailLoading || detailError) && (
+        <TicketDetailDialog
+          ticket={detail}
+          loading={detailLoading}
+          error={detailError}
+          onClose={() => {
+            setDetail(null);
+            setDetailError(null);
+          }}
+        />
+      )}
+    </section>
+  );
+}
 
-        {bookingsError && <ErrorMessage message={bookingsError} />}
-        {boothError && <ErrorMessage message={boothError} />}
-        {error && <ErrorMessage message={error} />}
-        {ticket && (
-          <SuccessMessage>
-            ส่งคำร้องเรียบร้อยแล้ว Ticket ID:{' '}
-            <strong className="break-all">{ticket.id}</strong>
-          </SuccessMessage>
-        )}
+function SupportTab({
+  active,
+  icon: Icon,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean;
+  icon: typeof Send;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`flex min-h-24 items-center gap-4 rounded-2xl border p-4 text-left transition ${
+        active
+          ? 'border-violet bg-violet-tint shadow-[0_12px_28px_rgba(91,44,207,0.12)]'
+          : 'border-line bg-white hover:border-[#cdbcf0]'
+      }`}
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <strong className="block text-base text-ink">{title}</strong>
+        <small className="mt-1 block leading-5 text-muted">{description}</small>
+      </span>
+      <ChevronRight className="h-4 w-4 text-violet" aria-hidden />
+    </button>
+  );
+}
 
+function AttachmentInput({
+  file,
+  error,
+  onChange,
+}: {
+  file: File | null;
+  error: string | null;
+  onChange: (file: File | null) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-extrabold text-ink">
+        ไฟล์อ้างอิง (ถ้ามี)
+      </label>
+      <label className="mt-2 flex min-h-24 cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-[#cbb9ef] bg-[#fcfaff] px-4 py-5 text-center transition hover:border-violet hover:bg-violet-tint/40">
+        <Paperclip className="h-5 w-5 text-violet" aria-hidden />
+        <span>
+          <strong className="block text-sm text-ink">
+            {file ? file.name : 'เลือกไฟล์จากอุปกรณ์'}
+          </strong>
+          <small className="mt-1 block text-muted">
+            JPG, PNG หรือ PDF ขนาดไม่เกิน 10 MB
+          </small>
+        </span>
+        <input
+          type="file"
+          accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+          onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+          className="sr-only"
+        />
+      </label>
+      {error ? (
+        <p className="mt-2 text-sm font-semibold text-red-700">{error}</p>
+      ) : null}
+      {file ? (
         <button
-          type="submit"
-          disabled={submitting}
-          className="sl-action-primary w-fit disabled:opacity-60"
+          type="button"
+          onClick={() => onChange(null)}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-violet"
         >
-          {submitting
-            ? 'กำลังส่งคำร้อง...'
-            : requestType === 'QUOTA_INCREASE'
-              ? 'ส่งคำขอโควต้าบูธเพิ่ม'
-              : 'ส่งเรื่องติดต่อปัญหา'}
+          <X className="h-3.5 w-3.5" aria-hidden /> ล้างไฟล์
         </button>
-      </form>
+      ) : null}
+    </div>
+  );
+}
+
+function TrackingPanel({
+  counts,
+  loading,
+  error,
+  tickets,
+  search,
+  typeFilter,
+  statusFilter,
+  sort,
+  onSearch,
+  onTypeFilter,
+  onStatusFilter,
+  onSort,
+  onOpen,
+}: {
+  counts: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
+  loading: boolean;
+  error: string | null;
+  tickets: VendorSupportTicket[];
+  search: string;
+  typeFilter: string;
+  statusFilter: string;
+  sort: 'NEWEST' | 'OLDEST';
+  onSearch: (value: string) => void;
+  onTypeFilter: (value: string) => void;
+  onStatusFilter: (value: string) => void;
+  onSort: (value: 'NEWEST' | 'OLDEST') => void;
+  onOpen: (ticketId: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+        Request tracking
+      </p>
+      <h2 className="mt-1 text-2xl font-black text-ink">รายการคำขอของฉัน</h2>
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        {[
+          ['ทั้งหมด', counts.total, 'bg-violet-tint text-violet'],
+          ['รอตรวจสอบ', counts.pending, 'bg-amber-50 text-amber-700'],
+          ['อนุมัติ', counts.approved, 'bg-emerald-50 text-emerald-700'],
+          ['ปฏิเสธ', counts.rejected, 'bg-red-50 text-red-700'],
+        ].map(([label, value, tone]) => (
+          <div
+            key={String(label)}
+            className="rounded-2xl border border-line bg-white p-4"
+          >
+            <span
+              className={`inline-flex rounded-xl px-2.5 py-1 text-xs font-bold ${tone}`}
+            >
+              {label}
+            </span>
+            <strong className="mt-3 block text-2xl text-ink">{value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_160px_130px]">
+        <label className="relative">
+          <Search
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="ค้นหาเลขคำขอ หัวข้อ หรือ Event"
+            className="h-11 w-full rounded-xl border border-line bg-white pl-11 pr-4 text-sm outline-none focus:border-violet"
+          />
+        </label>
+        <select
+          value={typeFilter}
+          onChange={(event) => onTypeFilter(event.target.value)}
+          aria-label="กรองประเภทคำขอ"
+          className="h-11 rounded-xl border border-line bg-white px-3 text-sm"
+        >
+          <option value="ALL">ทุกประเภท</option>
+          <option value="ISSUE">แจ้งปัญหา</option>
+          <option value="QUOTA">เพิ่มโควต้า</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(event) => onStatusFilter(event.target.value)}
+          aria-label="กรองสถานะคำขอ"
+          className="h-11 rounded-xl border border-line bg-white px-3 text-sm"
+        >
+          <option value="ALL">ทุกสถานะ</option>
+          <option value="PENDING">รอตรวจสอบ</option>
+          <option value="APPROVED">อนุมัติ</option>
+          <option value="REJECTED">ปฏิเสธ</option>
+          <option value="RESOLVED">ดำเนินการแล้ว</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(event) =>
+            onSort(event.target.value as 'NEWEST' | 'OLDEST')
+          }
+          aria-label="เรียงลำดับคำขอ"
+          className="h-11 rounded-xl border border-line bg-white px-3 text-sm"
+        >
+          <option value="NEWEST">ล่าสุด</option>
+          <option value="OLDEST">เก่าสุด</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <p
+          className="mt-6 rounded-2xl bg-[#faf8fd] p-5 text-sm text-muted"
+          aria-busy="true"
+        >
+          กำลังโหลดรายการคำขอ...
+        </p>
+      ) : error ? (
+        <ErrorMessage message={error} />
+      ) : tickets.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-line px-6 py-12 text-center">
+          <ListFilter className="mx-auto h-8 w-8 text-violet" aria-hidden />
+          <p className="mt-3 font-extrabold text-ink">
+            ไม่พบคำขอที่ตรงกับตัวกรอง
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-3">
+          {tickets.map((item) => {
+            const status = vendorTicketStatus(item);
+            return (
+              <article
+                key={item.id}
+                className="grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-violet-tint px-2.5 py-1 text-xs font-bold text-violet">
+                      {item.type === 'OTHER' ? 'เพิ่มโควต้า' : 'แจ้งปัญหา'}
+                    </span>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.tone}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 truncate font-extrabold text-ink">
+                    {item.subject}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted">
+                    {item.id} · {formatThaiDate(item.createdAt)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {item.booking
+                      ? `${item.booking.event.name} · Booth ${item.booking.booth.code}`
+                      : (item.organization?.name ?? 'คำขอทั่วไป')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpen(item.id)}
+                  className="sl-action-secondary justify-center text-violet"
+                >
+                  ดูรายละเอียด <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TicketDetailDialog({
+  ticket,
+  loading,
+  error,
+  onClose,
+}: {
+  ticket: VendorSupportTicketDetail | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-[#171126]/55 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ticket-detail-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[28px] bg-white p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+              Request detail
+            </p>
+            <h2
+              id="ticket-detail-title"
+              className="mt-1 text-2xl font-black text-ink"
+            >
+              รายละเอียดคำขอ
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดรายละเอียดคำขอ"
+            className="grid h-10 w-10 place-items-center rounded-full bg-[#f4f1f8] text-muted hover:text-violet"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+        {loading ? (
+          <p className="mt-6 text-sm text-muted" aria-busy="true">
+            กำลังโหลดรายละเอียด...
+          </p>
+        ) : error ? (
+          <div className="mt-6">
+            <ErrorMessage message={error} />
+          </div>
+        ) : ticket ? (
+          <div className="mt-6 grid gap-5">
+            <div className="rounded-2xl bg-[#faf8fd] p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">
+                  {ticket.type === 'OTHER' ? 'เพิ่มโควต้า' : 'แจ้งปัญหา'}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${vendorTicketStatus(ticket).tone}`}
+                >
+                  {vendorTicketStatus(ticket).label}
+                </span>
+              </div>
+              <h3 className="mt-4 text-lg font-black text-ink">
+                {ticket.subject}
+              </h3>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <DetailTerm label="เลขคำขอ" value={ticket.id} />
+                <DetailTerm
+                  label="วันที่ส่ง"
+                  value={formatThaiDate(ticket.createdAt)}
+                />
+                <DetailTerm
+                  label="Event"
+                  value={ticket.booking?.event.name ?? '-'}
+                />
+                <DetailTerm
+                  label="Booth"
+                  value={ticket.booking?.booth.code ?? '-'}
+                />
+              </dl>
+            </div>
+            <div>
+              <h3 className="font-extrabold text-ink">รายละเอียดที่ส่ง</h3>
+              <div className="mt-3 grid gap-3">
+                {ticket.messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className="rounded-2xl border border-line p-4"
+                  >
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-ink">
+                      {message.message}
+                    </p>
+                    <p className="mt-2 text-xs text-muted">
+                      {message.sender.fullName} ·{' '}
+                      {formatThaiDate(message.createdAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function DetailTerm({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-bold text-muted">{label}</dt>
+      <dd className="mt-1 break-words font-extrabold text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function InfoCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof Info;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="sl-surface p-5">
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-tint text-violet">
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+        <h2 className="font-black text-ink">{title}</h2>
+      </div>
+      {children}
     </section>
   );
 }
@@ -995,6 +1890,60 @@ function formatBoothSize(booth: QuotaBoothOption): string {
   return booth.widthM && booth.heightM
     ? `${booth.widthM} × ${booth.heightM} เมตร`
     : 'ไม่ระบุขนาด';
+}
+
+function issueKindLabel(kind: IssueKind): string {
+  return {
+    PAYMENT: 'การชำระเงิน',
+    BOOKING: 'การจองบูธ',
+    UPLOAD: 'การอัปโหลดไฟล์',
+    ACCOUNT: 'บัญชีและร้านค้า',
+    OTHER: 'อื่น ๆ',
+  }[kind];
+}
+
+function issuePriorityLabel(priority: IssuePriority): string {
+  return priority === 'URGENT' ? 'เร่งด่วน' : 'ปกติ';
+}
+
+function vendorTicketStatus(ticket: VendorSupportTicket): {
+  key: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RESOLVED';
+  label: string;
+  tone: string;
+} {
+  if (ticket.status !== 'CLOSED') {
+    return {
+      key: 'PENDING',
+      label: ticket.status === 'PROCESSING' ? 'กำลังดำเนินการ' : 'รอตรวจสอบ',
+      tone: 'bg-amber-50 text-amber-700',
+    };
+  }
+  if (ticket.type === 'OTHER') {
+    return ticket.quotaGrant
+      ? {
+          key: 'APPROVED',
+          label: 'อนุมัติ',
+          tone: 'bg-emerald-50 text-emerald-700',
+        }
+      : {
+          key: 'REJECTED',
+          label: 'ปฏิเสธ',
+          tone: 'bg-red-50 text-red-700',
+        };
+  }
+  return {
+    key: 'RESOLVED',
+    label: 'ดำเนินการแล้ว',
+    tone: 'bg-blue-50 text-blue-700',
+  };
+}
+
+function formatThaiDate(value: string): string {
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Bangkok',
+  }).format(new Date(value));
 }
 
 function describeError(cause: unknown, fallback: string): string {

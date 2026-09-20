@@ -165,18 +165,16 @@ const NAV_GROUPS: NavGroup[] = [
       {
         kind: 'link',
         label: 'ติดต่อสอบถาม',
-        href: '/help#vendor-request-heading',
+        href: '/support',
         icon: Phone,
-        matches: (pathname, hash) =>
-          pathname.startsWith('/help') && hash === '#vendor-request-heading',
+        matches: (pathname) => pathname.startsWith('/support'),
       },
       {
         kind: 'link',
         label: 'ช่วยเหลือ',
         href: '/help',
         icon: MessageCircle,
-        matches: (pathname, hash) =>
-          pathname.startsWith('/help') && hash !== '#vendor-request-heading',
+        matches: (pathname) => pathname.startsWith('/help'),
       },
     ],
   },
