@@ -1,10 +1,16 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ReviewStatus, ReviewTargetType } from '@prisma/client';
+import {
+  BookingStatus,
+  Prisma,
+  ReviewStatus,
+  ReviewTargetType,
+} from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminReviewsQueryDto } from './dto/admin-reviews-query.dto';
@@ -314,10 +320,13 @@ export class ReviewsService {
         id: true,
         vendorUserId: true,
         boothId: true,
+        status: true,
         eventId: true,
         event: {
           select: {
             organizationId: true,
+            endDate: true,
+            endTime: true,
           },
         },
         booth: { select: { zoneId: true } },
@@ -326,6 +335,20 @@ export class ReviewsService {
 
     if (!booking || booking.vendorUserId !== userId) {
       throw new ForbiddenException('การจองนี้ไม่อนุญาตให้บัญชีนี้รีวิว');
+    }
+
+    if (
+      booking.status !== BookingStatus.COMPLETED ||
+      !this.hasEventEnded(booking.event.endDate, booking.event.endTime)
+    ) {
+      throw new ForbiddenException(
+        'เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น',
+      );
+    }
+
+    const comment = dto.comment?.trim();
+    if (!comment) {
+      throw new BadRequestException('กรุณาเขียนความคิดเห็นก่อนส่งรีวิว');
     }
 
     const targetMatches =
@@ -346,7 +369,7 @@ export class ReviewsService {
 
     const data = {
       rating: dto.rating,
-      comment: dto.comment,
+      comment,
       reviewerDisplayName: dto.reviewerDisplayName,
     };
 
@@ -364,6 +387,16 @@ export class ReviewsService {
             status: ReviewStatus.PUBLISHED,
           },
         });
+  }
+
+  private hasEventEnded(
+    endDate: Date,
+    endTime: string | null,
+    now = new Date(),
+  ): boolean {
+    const date = endDate.toISOString().slice(0, 10);
+    const time = endTime?.slice(0, 5) || '23:59';
+    return now >= new Date(`${date}T${time}:00+07:00`);
   }
 
   private async moderate(

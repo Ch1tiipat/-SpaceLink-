@@ -1,9 +1,27 @@
 'use client';
 
-import Link from 'next/link';
-import { type FormEvent, useState } from 'react';
-import { CheckCircle2, MessageSquareText, Star } from 'lucide-react';
-import { createReview } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  CheckCircle2,
+  MessageSquareText,
+  Star,
+  X,
+} from 'lucide-react';
+import {
+  createReview,
+  type MyBooking,
+  type MyReview,
+} from '@/lib/api';
+import { isBookingReviewEligible } from '@/lib/review-eligibility';
 import {
   BookingPageLoading,
   BookingPageMessage,
@@ -15,101 +33,129 @@ const quickTags = [
   'พื้นที่สะอาด',
   'เข้าออกสะดวก',
   'ตรงตามรายละเอียด',
-];
+] as const;
 
-export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
-  const state = useBookingDetail(bookingId);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+export type SavedReviewDraft = {
+  rating: number;
+  comment: string;
+};
+
+type ReviewEditorPopupProps = {
+  booking: MyBooking;
+  token: string;
+  isPreview?: boolean;
+  existingReview?: Pick<MyReview, 'rating' | 'comment'> | null;
+  onClose: () => void;
+  onSaved?: (draft: SavedReviewDraft) => void;
+};
+
+function splitExistingComment(comment: string | null | undefined): {
+  tags: string[];
+  comment: string;
+} {
+  const parts = comment
+    ?.split(' · ')
+    .map((part) => part.trim())
+    .filter(Boolean) ?? [];
+
+  return {
+    tags: parts.filter((part) =>
+      quickTags.includes(part as (typeof quickTags)[number]),
+    ),
+    comment: parts
+      .filter((part) => !quickTags.includes(part as (typeof quickTags)[number]))
+      .join(' · '),
+  };
+}
+
+export function ReviewEditorPopup({
+  booking,
+  token,
+  isPreview = false,
+  existingReview = null,
+  onClose,
+  onSaved,
+}: ReviewEditorPopupProps) {
+  const initial = useMemo(
+    () => splitExistingComment(existingReview?.comment),
+    [existingReview?.comment],
+  );
+  const [rating, setRating] = useState(existingReview?.rating ?? 0);
+  const [comment, setComment] = useState(initial.comment);
+  const [tags, setTags] = useState<string[]>(initial.tags);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  if (state.status === 'loading') return <BookingPageLoading />;
-  if (state.status === 'signed-out')
-    return (
-      <BookingPageMessage
-        title="กรุณาเข้าสู่ระบบก่อน"
-        detail="การรีวิวเปิดให้เฉพาะเจ้าของการจอง"
-        href="/login"
-        action="เข้าสู่ระบบ"
-      />
-    );
-  if (state.status === 'error')
-    return (
-      <BookingPageMessage title="เปิดหน้ารีวิวไม่ได้" detail={state.message} />
-    );
+  useEffect(() => setIsMounted(true), []);
 
-  const { booking } = state;
-  if (success) {
-    return (
-      <main className="sl-page pb-16">
-        <div className="shell max-w-3xl py-12 sm:py-20">
-          <section className="sl-surface overflow-hidden text-center">
-            <div className="bg-[linear-gradient(135deg,#f5efff,#ffffff)] px-6 py-10 sm:px-10 sm:py-14">
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#ecfdf3] text-[#176c50] shadow-sm">
-                <CheckCircle2 className="h-8 w-8" aria-hidden />
-              </span>
-              <span className="sl-kicker mt-6">Review completed</span>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.045em]">
-                ขอบคุณสำหรับรีวิว
-              </h1>
-              <p className="mx-auto mt-3 max-w-xl leading-7 text-muted">
-                ระบบบันทึกความคิดเห็นสำหรับบูธ {booking.booth.code} ใน{' '}
-                {booking.event.name} เรียบร้อยแล้ว
-              </p>
-            </div>
-            <div className="grid gap-3 border-t border-line p-5 sm:grid-cols-3 sm:p-6">
-              <Link
-                href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
-                className="sl-action-secondary"
-              >
-                ดู Event
-              </Link>
-              <Link
-                href="/bookings?tab=completed"
-                className="sl-action-secondary text-violet"
-              >
-                การจองที่เสร็จสิ้น
-              </Link>
-              <Link
-                href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
-                className="sl-action-primary"
-              >
-                ดูรายละเอียดการจอง
-              </Link>
-            </div>
-          </section>
-        </div>
-      </main>
+  useEffect(() => {
+    if (!isMounted) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape' && !isSubmitting) onClose();
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMounted, isSubmitting, onClose]);
+
+  function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
     );
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (rating < 1) {
-      setError('กรุณาเลือกคะแนน 1–5 ดาว');
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
     const combinedComment = [...tags, comment.trim()]
       .filter(Boolean)
       .join(' · ');
+    if (rating < 1 || rating > 5) {
+      setError('กรุณาเลือกคะแนน 1–5 ดาว');
+      return;
+    }
+    if (!combinedComment) {
+      setError('กรุณาเขียนความคิดเห็นก่อนส่งรีวิว');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
     try {
-      if (state.status !== 'ready') return;
-      if (!state.isPreview)
+      if (!isPreview) {
         await createReview(
           {
             bookingId: booking.id,
             targetType: 'BOOTH',
             targetId: booking.booth.id,
             rating,
-            ...(combinedComment ? { comment: combinedComment } : {}),
+            comment: combinedComment,
           },
-          state.token,
+          token,
         );
+      }
+      onSaved?.({ rating, comment: combinedComment });
       setSuccess(true);
     } catch (cause) {
       setError(
@@ -120,34 +166,80 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
     }
   }
 
-  return (
-    <main className="sl-page pb-16">
-      <div className="shell max-w-3xl py-8">
-        <Link
-          href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
-          className="sl-chip"
-        >
-          ← กลับรายละเอียดการจอง
-        </Link>
-        <section className="sl-surface mt-6 overflow-hidden">
-          <div className="border-b border-line bg-[linear-gradient(135deg,#fbf8ff,#ffffff)] p-6 sm:p-9">
+  const zoneName = booking.booth.zone.name ?? booking.booth.zone.code;
+  const isEditing = Boolean(existingReview);
+  if (!isMounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-[#171022]/55 px-4 py-8 backdrop-blur-[2px]"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSubmitting) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-popup-title"
+        onKeyDown={trapFocus}
+        className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-[#e6dcf5] bg-white shadow-[0_28px_90px_rgba(56,34,92,.28)]"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-line bg-[linear-gradient(135deg,#f4ecff,#ffffff)] px-6 py-5 sm:px-8">
+          <div>
             <span className="sl-kicker">
-              <MessageSquareText className="h-4 w-4" aria-hidden /> Review
+              <MessageSquareText className="h-4 w-4" aria-hidden />{' '}
+              {isEditing ? 'Edit review' : 'Write a review'}
             </span>
-            <h1 className="mt-3 text-3xl font-black tracking-[-0.045em]">
-              รีวิวพื้นที่บูธ
-            </h1>
-            <p className="mt-2 text-muted">
-              {booking.event.name} · บูธ {booking.booth.code} ·{' '}
-              {booking.booth.zone.name ?? booking.booth.zone.code}
+            <h2
+              id="review-popup-title"
+              className="mt-2 text-2xl font-black tracking-[-0.035em] text-ink"
+            >
+              {isEditing ? 'แก้ไขรีวิวของคุณ' : 'รีวิวพื้นที่บูธ'}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              {booking.event.name} · บูธ {booking.booth.code} · {zoneName}
             </p>
           </div>
-          <form onSubmit={handleSubmit} className="p-6 sm:p-9">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            aria-label="ปิดหน้าต่างรีวิว"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-white text-muted transition hover:border-violet hover:text-violet disabled:opacity-50"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+
+        {success ? (
+          <div className="px-6 py-10 text-center sm:px-10 sm:py-12">
+            <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#eaf9f2] text-[#16845e]">
+              <CheckCircle2 className="h-9 w-9" aria-hidden />
+            </span>
+            <h3 className="mt-5 text-2xl font-black">
+              {isEditing ? 'แก้ไขรีวิวเรียบร้อยแล้ว' : 'ขอบคุณสำหรับรีวิว'}
+            </h3>
+            <p className="mx-auto mt-2 max-w-md leading-7 text-muted">
+              คะแนนและความคิดเห็นของคุณถูกบันทึกแล้ว
+              และสรุปในหน้าการรีวิวได้รับการอัปเดตทันที
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="sl-action-primary mt-7 min-w-48"
+            >
+              กลับหน้าการรีวิวของฉัน
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="px-6 py-6 sm:px-8 sm:py-7">
             <fieldset>
-              <legend className="text-lg font-black">
-                ประสบการณ์โดยรวมเป็นอย่างไร
+              <legend className="text-base font-black">
+                ให้คะแนนประสบการณ์ของคุณ <span className="text-danger">*</span>
               </legend>
-              <div className="mt-4 flex gap-2" aria-label="เลือกคะแนนพื้นที่">
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="เลือกคะแนนพื้นที่">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button
                     key={value}
@@ -158,7 +250,7 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
                       setRating(value);
                       setError(null);
                     }}
-                    className={`grid h-12 w-12 place-items-center rounded-2xl border transition ${rating >= value ? 'border-[#f3b61f] bg-[#fff8dc] text-[#b77900]' : 'border-line bg-white text-[#aaa3b2]'}`}
+                    className={`grid h-12 w-12 place-items-center rounded-2xl border transition ${rating >= value ? 'border-[#f3b61f] bg-[#fff8dc] text-[#b77900]' : 'border-line bg-white text-[#aaa3b2] hover:border-[#f3b61f]'}`}
                   >
                     <Star
                       className="h-6 w-6"
@@ -169,9 +261,10 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
                 ))}
               </div>
             </fieldset>
-            <fieldset className="mt-7">
-              <legend className="text-sm font-bold">
-                เลือกคำที่ตรงกับพื้นที่ (ไม่บังคับ)
+
+            <fieldset className="mt-6">
+              <legend className="text-sm font-bold text-ink">
+                เลือกคำที่ตรงกับพื้นที่
               </legend>
               <div className="mt-3 flex flex-wrap gap-2">
                 {quickTags.map((tag) => {
@@ -181,14 +274,15 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
                       key={tag}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() =>
+                      onClick={() => {
                         setTags((current) =>
                           selected
                             ? current.filter((item) => item !== tag)
                             : [...current, tag],
-                        )
-                      }
-                      className={`rounded-full border px-4 py-2 text-sm font-bold ${selected ? 'border-violet bg-violet-tint text-violet' : 'border-line bg-white text-muted'}`}
+                        );
+                        setError(null);
+                      }}
+                      className={`rounded-full border px-4 py-2 text-sm font-bold transition ${selected ? 'border-violet bg-violet-tint text-violet' : 'border-line bg-white text-muted hover:border-violet'}`}
                     >
                       {tag}
                     </button>
@@ -196,35 +290,109 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
                 })}
               </div>
             </fieldset>
-            <label className="mt-7 block text-sm font-bold">
-              ความคิดเห็นเพิ่มเติม (ไม่บังคับ)
+
+            <label className="mt-6 block text-sm font-bold">
+              ความคิดเห็น <span className="text-danger">*</span>
               <textarea
                 value={comment}
-                onChange={(event) => setComment(event.target.value)}
+                onChange={(event) => {
+                  setComment(event.target.value);
+                  setError(null);
+                }}
                 maxLength={1000}
                 rows={5}
-                placeholder="บอกผู้จัดงานว่าพื้นที่นี้เป็นอย่างไร"
-                className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-base outline-none focus:border-violet"
+                placeholder="เล่าประสบการณ์เกี่ยวกับทำเล พื้นที่ หรือการให้บริการ"
+                className="mt-2 w-full resize-none rounded-2xl border border-line px-4 py-3 text-base outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
               />
             </label>
-            <p className="mt-2 text-xs text-muted">
-              รีวิวจะแสดงแบบไม่ระบุตัวตน และสามารถส่งซ้ำเพื่ออัปเดตคะแนนเดิมได้
-            </p>
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
+              <span>รีวิวจะแสดงโดยไม่เปิดเผยข้อมูลติดต่อของคุณ</span>
+              <span>{comment.length}/1,000</span>
+            </div>
+
             {error ? (
               <p role="alert" className="mt-4 text-sm font-bold text-danger">
                 {error}
               </p>
             ) : null}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="sl-action-primary mt-6 w-full"
-            >
-              {isSubmitting ? 'กำลังบันทึก…' : 'ส่งรีวิวพื้นที่'}
-            </button>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="sl-action-secondary"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="sl-action-primary"
+              >
+                {isSubmitting
+                  ? 'กำลังบันทึก…'
+                  : isEditing
+                    ? 'บันทึกการแก้ไข'
+                    : 'ส่งรีวิวพื้นที่'}
+              </button>
+            </div>
           </form>
-        </section>
+        )}
       </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
+  const state = useBookingDetail(bookingId);
+  const router = useRouter();
+
+  if (state.status === 'loading') return <BookingPageLoading />;
+  if (state.status === 'signed-out') {
+    return (
+      <BookingPageMessage
+        title="กรุณาเข้าสู่ระบบก่อน"
+        detail="การรีวิวเปิดให้เฉพาะเจ้าของการจอง"
+        href="/login"
+        action="เข้าสู่ระบบ"
+      />
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <BookingPageMessage title="เปิดหน้ารีวิวไม่ได้" detail={state.message} />
+    );
+  }
+
+  const { booking } = state;
+  const bookingHref = `/bookings/${encodeURIComponent(booking.bookingCode)}`;
+  if (!isBookingReviewEligible(booking)) {
+    return (
+      <BookingPageMessage
+        title="ยังเขียนรีวิวไม่ได้"
+        detail="เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น"
+        href={bookingHref}
+        action="กลับรายละเอียดการจอง"
+      />
+    );
+  }
+
+  return (
+    <main className="sl-page min-h-[70vh] pb-16">
+      <div className="shell py-10">
+        <span className="sl-kicker">My reviews</span>
+        <h1 className="mt-3 text-3xl font-black">การรีวิวของฉัน</h1>
+        <p className="mt-2 text-muted">กรอกคะแนนและความคิดเห็นใน Popup</p>
+      </div>
+      <ReviewEditorPopup
+        booking={booking}
+        token={state.token}
+        isPreview={state.isPreview}
+        onClose={() => router.push(bookingHref)}
+        onSaved={() => undefined}
+      />
     </main>
   );
 }
