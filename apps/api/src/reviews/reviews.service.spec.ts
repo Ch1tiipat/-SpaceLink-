@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BookingStatus,
@@ -61,14 +65,18 @@ const mockPrismaService = {
   $transaction: prismaTransaction,
 };
 
-function eligibleBooking(status: BookingStatus = BookingStatus.CONFIRMED) {
+function eligibleBooking(status: BookingStatus = BookingStatus.COMPLETED) {
   return {
     id: bookingId,
     vendorUserId: userId,
     boothId: targetId,
     status,
     eventId,
-    event: { organizationId },
+    event: {
+      organizationId,
+      endDate: new Date('2026-09-05T00:00:00.000Z'),
+      endTime: '20:00',
+    },
     booth: { zoneId },
   };
 }
@@ -234,30 +242,61 @@ describe('ReviewsService', () => {
     expect(call.select).not.toHaveProperty('reviewerDisplayName');
   });
 
-  it.each(Object.values(BookingStatus))(
-    'creates one booking-scoped review immediately for %s',
-    async (status) => {
-      transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
+  it('creates one booking-scoped review after a completed event', async () => {
+    await expect(service.create(userId, dto)).resolves.toEqual({
+      id: reviewId,
+    });
+    expect(transactionReviewCreate).toHaveBeenCalledWith({
+      data: {
+        rating: dto.rating,
+        comment: dto.comment,
+        reviewerDisplayName: undefined,
+        reviewerUserId: userId,
+        targetType: dto.targetType,
+        targetId,
+        bookingId,
+        eventId,
+        organizationId,
+        status: ReviewStatus.PUBLISHED,
+      },
+    });
+  });
 
-      await expect(service.create(userId, dto)).resolves.toEqual({
-        id: reviewId,
-      });
-      expect(transactionReviewCreate).toHaveBeenCalledWith({
-        data: {
-          rating: dto.rating,
-          comment: dto.comment,
-          reviewerDisplayName: undefined,
-          reviewerUserId: userId,
-          targetType: dto.targetType,
-          targetId,
-          bookingId,
-          eventId,
-          organizationId,
-          status: ReviewStatus.PUBLISHED,
-        },
-      });
-    },
-  );
+  it.each(
+    Object.values(BookingStatus).filter(
+      (status) => status !== BookingStatus.COMPLETED,
+    ),
+  )('rejects a %s booking before review lookup', async (status) => {
+    transactionBookingFindUnique.mockResolvedValue(eligibleBooking(status));
+
+    await expect(service.create(userId, dto)).rejects.toThrow(
+      'เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น',
+    );
+    expect(transactionReviewFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a completed booking before the event end time', async () => {
+    transactionBookingFindUnique.mockResolvedValue({
+      ...eligibleBooking(),
+      event: {
+        organizationId,
+        endDate: new Date('2026-09-05T00:00:00.000Z'),
+        endTime: '23:30',
+      },
+    });
+
+    await expect(service.create(userId, dto)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(transactionReviewFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('requires a non-empty comment', async () => {
+    await expect(
+      service.create(userId, { ...dto, comment: '   ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transactionReviewFindUnique).not.toHaveBeenCalled();
+  });
 
   it('rejects an unknown or another user booking', async () => {
     transactionBookingFindUnique.mockResolvedValue({

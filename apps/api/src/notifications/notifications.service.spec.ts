@@ -427,14 +427,17 @@ describe('NotificationsService', () => {
     error.mockRestore();
   });
 
-  it('creates an in-app invitation immediately for the booking owner', async () => {
+  it('creates an in-app invitation after a completed event', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
         vendor: { notificationPreferences: null },
-        status: BookingStatus.PENDING_PAYMENT,
-        event: { name: 'งานเกษตร มทส. 2569' },
+        event: {
+          name: 'งานเกษตร มทส. 2569',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
     ]);
@@ -447,11 +450,17 @@ describe('NotificationsService', () => {
     );
 
     expect(bookingFindMany).toHaveBeenCalledWith({
+      where: {
+        status: BookingStatus.COMPLETED,
+        event: {
+          endDate: { lte: new Date('2026-08-19T00:00:00.000Z') },
+        },
+      },
       select: {
         id: true,
         vendorUserId: true,
         vendor: { select: { notificationPreferences: true } },
-        event: { select: { name: true } },
+        event: { select: { name: true, endDate: true, endTime: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
@@ -480,7 +489,11 @@ describe('NotificationsService', () => {
         id: REVIEW_BOOKING_ID,
         vendorUserId: USER_ID,
         vendor: { notificationPreferences: { SYSTEM: false } },
-        event: { name: 'งานเกษตร มทส. 2569' },
+        event: {
+          name: 'งานเกษตร มทส. 2569',
+          endDate: new Date('2026-08-18T00:00:00.000Z'),
+          endTime: '23:59',
+        },
         booth: { code: 'A05' },
       },
     ]);
@@ -490,6 +503,28 @@ describe('NotificationsService', () => {
     await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
       0,
     );
+    expect(notificationCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not invite before the event end time', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
+        event: {
+          name: 'งานเกษตร มทส. 2569',
+          endDate: new Date('2026-08-19T00:00:00.000Z'),
+          endTime: '01:00',
+        },
+        booth: { code: 'A05' },
+      },
+    ]);
+
+    await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
+      0,
+    );
+    expect(reviewFindMany).not.toHaveBeenCalled();
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
