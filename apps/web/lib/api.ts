@@ -424,6 +424,36 @@ export type SupportTicketRecord = {
   updatedAt: string;
 };
 
+export type VendorSupportTicket = {
+  id: string;
+  type: string;
+  subject: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  organization: { id: string; name: string } | null;
+  booking: {
+    id: string;
+    bookingCode: string;
+    event: { id: string; name: string };
+    booth: {
+      id: string;
+      code: string;
+      zone: { id: string; code: string; name: string | null };
+    };
+  } | null;
+  quotaGrant: { id: string; consumedAt: string | null } | null;
+};
+
+export type VendorSupportTicketDetail = VendorSupportTicket & {
+  messages: Array<{
+    id: string;
+    message: string;
+    createdAt: string;
+    sender: { id: string; fullName: string };
+  }>;
+};
+
 export type CreateSupportTicketInput =
   | {
       requestType: 'QUOTA_INCREASE';
@@ -3211,6 +3241,27 @@ export function createSupportTicket(
         },
     { signal, token },
     'ไม่สามารถส่งคำร้องได้',
+  );
+}
+
+export function getMySupportTickets(
+  token: string,
+  signal?: AbortSignal,
+): Promise<VendorSupportTicket[]> {
+  return getJson<VendorSupportTicket[]>('/support-tickets/my', {
+    signal,
+    token,
+  });
+}
+
+export function getMySupportTicketDetail(
+  ticketId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<VendorSupportTicketDetail> {
+  return getJson<VendorSupportTicketDetail>(
+    `/support-tickets/my/${encodeURIComponent(ticketId)}`,
+    { signal, token },
   );
 }
 

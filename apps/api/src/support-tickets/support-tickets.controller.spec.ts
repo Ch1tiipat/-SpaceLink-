@@ -62,6 +62,8 @@ const findAllForOrganizationAdmin = jest.fn();
 const findOneForOrganizationAdmin = jest.fn();
 const findAllAcrossOrganizations = jest.fn();
 const findOneForSuperAdmin = jest.fn();
+const findAllForVendor = jest.fn();
+const findOneForVendor = jest.fn();
 const updateStatus = jest.fn();
 const mockSupportTicketsService = {
   create,
@@ -72,6 +74,8 @@ const mockSupportTicketsService = {
   findOneForOrganizationAdmin,
   findAllAcrossOrganizations,
   findOneForSuperAdmin,
+  findAllForVendor,
+  findOneForVendor,
   updateStatus,
 };
 
@@ -85,6 +89,8 @@ function controllerHandler(
     | 'findOneForOrganizationAdmin'
     | 'findAllAcrossOrganizations'
     | 'findOneForSuperAdmin'
+    | 'findMy'
+    | 'findMyDetail'
     | 'updateStatus',
 ): object {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -146,6 +152,28 @@ describe('SupportTicketsController', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, controllerHandler('findOneForSuperAdmin')),
     ).toBeUndefined();
+  });
+
+  it('lists only the authenticated vendor tickets', async () => {
+    findAllForVendor.mockResolvedValue([]);
+
+    await controller.findMy(CURRENT_USER);
+
+    expect(findAllForVendor).toHaveBeenCalledWith(VENDOR_ID);
+    expect(Reflect.getMetadata(ROLES_KEY, controllerHandler('findMy'))).toEqual(
+      [UserRole.VENDOR],
+    );
+  });
+
+  it('loads vendor ticket detail with the authenticated vendor id', async () => {
+    findOneForVendor.mockResolvedValue({ id: TICKET_ID });
+
+    await controller.findMyDetail(TICKET_ID, CURRENT_USER);
+
+    expect(findOneForVendor).toHaveBeenCalledWith(TICKET_ID, VENDOR_ID);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, controllerHandler('findMyDetail')),
+    ).toEqual([UserRole.VENDOR]);
   });
 
   it('passes the validated target status to the service', async () => {

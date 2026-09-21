@@ -31,6 +31,24 @@ export class SupportTicketsController {
     return this.supportTicketsService.findAllAcrossOrganizations();
   }
 
+  @Get('my')
+  @Roles(UserRole.VENDOR)
+  findMy(@CurrentUser() currentUser: User) {
+    return this.supportTicketsService.findAllForVendor(currentUser.id);
+  }
+
+  @Get('my/:ticketId')
+  @Roles(UserRole.VENDOR)
+  findMyDetail(
+    @Param('ticketId') ticketId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.supportTicketsService.findOneForVendor(
+      ticketId,
+      currentUser.id,
+    );
+  }
+
   @Get(':ticketId')
   findOneForSuperAdmin(@Param('ticketId') ticketId: string) {
     return this.supportTicketsService.findOneForSuperAdmin(ticketId);
