@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BadgeCheck,
   Bell,
@@ -10,13 +11,16 @@ import {
   ImageUp,
   Layers3,
   LoaderCircle,
+  MapPin,
   Mail,
   MessageSquareText,
   Package,
+  Pencil,
   Phone,
   Star,
   Store,
   UserRound,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { MultiSelectMenu } from '@/components/multi-select-menu';
@@ -100,7 +104,8 @@ function readImageDimensions(
 
 export function ProfileShopScreen() {
   const { state, refresh } = useVendorProfile();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [categories, setCategories] = useState<ProductCategory[] | null>(null);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   // Lives here rather than in ShopForm because the form is gone by the time it
@@ -267,6 +272,24 @@ export function ProfileShopScreen() {
 
         {ready && isVendor && ready.shop && (
           <>
+            {savedNotice && (
+              <div
+                role="status"
+                className="fixed right-4 top-24 z-[70] flex max-w-sm items-center gap-3 rounded-2xl border border-[#bee9d5] bg-white px-4 py-3 font-bold text-[#13795b] shadow-[0_20px_50px_rgba(40,24,65,.18)] sm:right-8"
+              >
+                <BadgeCheck className="h-5 w-5 shrink-0" aria-hidden />
+                <span className="text-sm">{savedNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setSavedNotice(null)}
+                  className="ml-1 rounded-lg p-1 text-muted hover:bg-[#f4f0ff] hover:text-violet"
+                  aria-label="ปิดข้อความแจ้งเตือน"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            )}
+
             {phoneSaveWarning && (
               <p
                 role="alert"
@@ -286,11 +309,7 @@ export function ProfileShopScreen() {
                   aria-hidden
                   className="absolute -left-10 -top-14 h-40 w-40 rounded-full bg-violet-tint blur-3xl"
                 />
-                <ShopLogoUploader
-                  shop={ready.shop}
-                  token={ready.token}
-                  refresh={refresh}
-                />
+                <ShopLogoAvatar shop={ready.shop} />
                 <div className="min-w-0 flex-1">
                   <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-sm font-extrabold uppercase tracking-[.12em] text-violet">
                     Vendor profile
@@ -305,22 +324,35 @@ export function ProfileShopScreen() {
                     {ready.profile.email}
                   </p>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-2 self-start rounded-full px-3 py-2 text-xs font-extrabold sm:self-center ${
-                    ready.profile.isBlacklisted
-                      ? 'bg-[#fff0ee] text-[#b42318]'
-                      : 'bg-[#ebfaf3] text-[#13795b]'
-                  }`}
-                >
-                  {ready.profile.isBlacklisted ? (
-                    <CircleAlert className="h-4 w-4" aria-hidden />
-                  ) : (
-                    <BadgeCheck className="h-4 w-4" aria-hidden />
-                  )}
-                  {ready.profile.isBlacklisted
-                    ? 'บัญชีถูกระงับ'
-                    : 'บัญชีพร้อมใช้งาน'}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-extrabold ${
+                      ready.profile.isBlacklisted
+                        ? 'bg-[#fff0ee] text-[#b42318]'
+                        : 'bg-[#ebfaf3] text-[#13795b]'
+                    }`}
+                  >
+                    {ready.profile.isBlacklisted ? (
+                      <CircleAlert className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <BadgeCheck className="h-4 w-4" aria-hidden />
+                    )}
+                    {ready.profile.isBlacklisted
+                      ? 'บัญชีถูกระงับ'
+                      : 'บัญชีพร้อมใช้งาน'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedNotice(null);
+                      setIsEditorOpen(true);
+                    }}
+                    className="sl-action-primary inline-flex items-center gap-2"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden />
+                    แก้ไขโปรไฟล์
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -379,74 +411,66 @@ export function ProfileShopScreen() {
                   <span className="sl-kicker">Shop information</span>
                   <h2 className="mt-2 text-lg font-bold">ข้อมูลร้านค้า</h2>
                 </div>
-                {!isEditing && (
-                  <div className="flex flex-wrap gap-2">
-                    <Link href="/bookings" className="sl-chip text-violet">
-                      การจองของฉัน
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditing(true)}
-                      className="sl-chip text-violet"
-                    >
-                      แก้ไขข้อมูล
-                    </button>
-                  </div>
-                )}
+                <Link href="/bookings" className="sl-chip text-violet">
+                  การจองของฉัน
+                </Link>
               </div>
 
-              {isEditing ? (
-                <div className="mt-5 max-w-2xl">
-                  <ShopForm
-                    mode="edit"
-                    profile={ready.profile}
-                    shop={ready.shop}
-                    token={ready.token}
-                    refresh={refresh}
-                    setPhoneSaveWarning={setPhoneSaveWarning}
-                    options={categoryOptions}
-                    optionsLoading={categoriesLoading}
-                    optionsError={categoriesError}
-                    onCancel={() => setIsEditing(false)}
-                  />
-                </div>
-              ) : (
-                <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <InfoLine
-                    icon={UserRound}
-                    label="ชื่อร้าน"
-                    value={ready.shop.name}
-                  />
-                  <InfoLine
-                    icon={Phone}
-                    label="เบอร์โทรศัพท์"
-                    value={ready.profile.phone ?? 'ยังไม่ระบุ'}
-                  />
-                  <InfoLine
-                    icon={Mail}
-                    label="อีเมล"
-                    value={ready.profile.email}
-                  />
-                  <InfoLine
-                    icon={Store}
-                    label="รายละเอียดร้าน"
-                    // `||`, not `??`: clearing the textarea now sends `''`
-                    // and the API stores it as-is, so a description that was
-                    // emptied comes back as an empty string rather than null.
-                    value={ready.shop.description || 'ยังไม่ระบุ'}
-                  />
-                  <InfoLine
-                    icon={Package}
-                    label="สินค้าที่ขาย"
-                    value={
-                      ready.shop.categories
-                        .map((category) => category.name)
-                        .join(', ') || 'ยังไม่ระบุ'
-                    }
-                  />
-                </dl>
-              )}
+              <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+                <InfoLine
+                  icon={UserRound}
+                  label="ชื่อร้าน"
+                  value={ready.shop.name}
+                />
+                <InfoLine
+                  icon={Phone}
+                  label="เบอร์โทรศัพท์"
+                  value={ready.profile.phone ?? 'ยังไม่ระบุ'}
+                />
+                <InfoLine
+                  icon={Mail}
+                  label="อีเมล"
+                  value={ready.profile.email}
+                />
+                <InfoLine
+                  icon={Store}
+                  label="รายละเอียดร้าน"
+                  value={ready.shop.description || 'ยังไม่ระบุ'}
+                />
+                <InfoLine
+                  icon={Package}
+                  label="สินค้าที่ขาย"
+                  value={
+                    ready.shop.categories
+                      .map((category) => category.name)
+                      .join(', ') || 'ยังไม่ระบุ'
+                  }
+                />
+                <InfoLine
+                  icon={MapPin}
+                  label="จังหวัด"
+                  value="ยังไม่ระบุ"
+                />
+              </dl>
             </section>
+
+            {isEditorOpen && (
+              <ProfileEditorDialog
+                profile={ready.profile}
+                shop={ready.shop}
+                token={ready.token}
+                refresh={refresh}
+                setPhoneSaveWarning={setPhoneSaveWarning}
+                options={categoryOptions}
+                optionsLoading={categoriesLoading}
+                optionsError={categoriesError}
+                onClose={() => setIsEditorOpen(false)}
+                onSaved={(message) => {
+                  setIsEditorOpen(false);
+                  setSavedNotice(message);
+                }}
+              />
+            )}
           </>
         )}
       </div>
@@ -868,6 +892,293 @@ function PushNotificationCard({ token }: { token: string }) {
   );
 }
 
+function ShopLogoAvatar({ shop }: { shop: VendorShop }) {
+  if (shop.logoUrl) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element -- the remote
+         Supabase host is configured at runtime and cannot be declared in
+         next/image remotePatterns at build time. */
+      <img
+        src={shop.logoUrl}
+        alt={`โลโก้ของ ${shop.name}`}
+        width={82}
+        height={82}
+        className="relative mx-auto block h-[82px] w-[82px] rounded-[28px] object-cover shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+    >
+      {[...shop.name.trim()][0] ?? '?'}
+    </span>
+  );
+}
+
+function ProfileEditorDialog({
+  profile,
+  shop,
+  token,
+  refresh,
+  setPhoneSaveWarning,
+  options,
+  optionsLoading,
+  optionsError,
+  onClose,
+  onSaved,
+}: {
+  profile: CurrentUser;
+  shop: VendorShop;
+  token: string;
+  refresh: () => void;
+  setPhoneSaveWarning: (message: string | null) => void;
+  options: SelectMenuOption[];
+  optionsLoading: boolean;
+  optionsError: string | null;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [activeTab, setActiveTab] = useState<'profile' | 'shop'>('profile');
+  const [phone, setPhone] = useState(profile.phone ?? '');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSavingProfile) onClose();
+    };
+    document.addEventListener('keydown', handleKeyboard);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyboard);
+    };
+  }, [isSavingProfile, onClose]);
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSavingProfile) return;
+
+    const normalizedPhone = phone.replace(/[\s-]/g, '');
+    if (!/^0\d{9}$/.test(normalizedPhone)) {
+      setPhoneError('กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0');
+      setNotice(null);
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setPhoneError(null);
+    setNotice(null);
+    try {
+      await updateMe({ phone: normalizedPhone }, token);
+      refresh();
+      onSaved('บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว');
+    } catch (cause) {
+      setNotice(
+        cause instanceof Error
+          ? cause.message
+          : 'บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      );
+      setIsSavingProfile(false);
+    }
+  }
+
+  const fieldClass =
+    'h-11 w-full rounded-xl border border-line bg-white px-4 text-base outline-none focus:border-violet focus:ring-4 focus:ring-violet-tint';
+  const readOnlyClass = `${fieldClass} cursor-not-allowed bg-[#F7F5FA] text-muted`;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center overflow-y-auto bg-[#21172f]/55 p-3 backdrop-blur-[3px] sm:p-5"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target && !isSavingProfile) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-editor-title"
+        className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_30px_90px_rgba(34,20,52,.28)] sm:max-h-[calc(100vh-2.5rem)]"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7 sm:py-5">
+          <div>
+            <span className="sl-kicker">Profile editor</span>
+            <h2
+              id="profile-editor-title"
+              className="mt-1 text-xl font-black tracking-[-0.03em] text-ink sm:text-2xl"
+            >
+              แก้ไขโปรไฟล์และร้านค้า
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              อัปเดตข้อมูลที่ใช้สำหรับการจองและหน้าร้านของคุณ
+            </p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            disabled={isSavingProfile}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-muted transition hover:border-violet hover:text-violet disabled:opacity-50"
+            aria-label="ปิดหน้าต่างแก้ไขโปรไฟล์"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </header>
+
+        <div className="grid grid-cols-2 gap-1 bg-[#f6f2ff] p-1.5" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'profile'}
+            onClick={() => setActiveTab('profile')}
+            className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
+              activeTab === 'profile'
+                ? 'bg-white text-violet shadow-sm'
+                : 'text-muted hover:text-violet'
+            }`}
+          >
+            ข้อมูลโปรไฟล์
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'shop'}
+            onClick={() => setActiveTab('shop')}
+            className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
+              activeTab === 'shop'
+                ? 'bg-white text-violet shadow-sm'
+                : 'text-muted hover:text-violet'
+            }`}
+          >
+            ข้อมูลร้านค้า
+          </button>
+        </div>
+
+        {activeTab === 'profile' ? (
+          <form
+            onSubmit={saveProfile}
+            noValidate
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+              <div className="mb-6 flex items-center gap-4 rounded-2xl bg-[linear-gradient(135deg,#f8f5ff,#fff)] p-4">
+                <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">
+                  {[...profile.fullName.trim()][0] ?? '?'}
+                </span>
+                <div>
+                  <p className="font-black text-ink">{profile.fullName}</p>
+                  <p className="mt-1 text-sm text-muted">{profile.email}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    ระบบยังไม่รองรับการอัปโหลดรูปประจำตัวผู้ใช้
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">ชื่อผู้ติดต่อ</span>
+                  <input value={profile.fullName} readOnly className={readOnlyClass} />
+                  <span className="mt-1.5 block text-xs text-muted">
+                    ชื่อนี้มาจากบัญชีผู้ใช้ที่ยืนยันตัวตนแล้ว
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">อีเมล</span>
+                  <input value={profile.email} readOnly className={readOnlyClass} />
+                  <span className="mt-1.5 block text-xs text-muted">
+                    อีเมลใช้สำหรับเข้าสู่ระบบ จึงแก้ไขที่นี่ไม่ได้
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">
+                    เบอร์โทรศัพท์ <span className="text-danger">*</span>
+                  </span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value.replace(/[^\d-\s]/g, ''));
+                      setPhoneError(null);
+                    }}
+                    aria-invalid={phoneError ? true : undefined}
+                    aria-describedby={phoneError ? 'profile-phone-error' : undefined}
+                    placeholder="0812345678"
+                    className={`${fieldClass} ${phoneError ? 'border-danger' : ''}`}
+                  />
+                  {phoneError && (
+                    <span id="profile-phone-error" role="alert" className="mt-1.5 block text-sm text-danger">
+                      {phoneError}
+                    </span>
+                  )}
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">จังหวัด</span>
+                  <input value="ยังไม่ระบุ" readOnly className={readOnlyClass} />
+                  <span className="mt-1.5 block text-xs text-muted">
+                    ระบบปัจจุบันยังไม่มีข้อมูลจังหวัดในโปรไฟล์
+                  </span>
+                </label>
+              </div>
+
+              {notice && (
+                <p role="alert" className="mt-4 rounded-xl bg-[#fff4f6] px-4 py-3 text-sm text-danger">
+                  {notice}
+                </p>
+              )}
+            </div>
+            <footer className="flex flex-col-reverse gap-3 border-t border-line bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSavingProfile}
+                className="rounded-xl border border-violet px-5 py-3 font-bold text-violet disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingProfile}
+                className="rounded-xl bg-violet px-6 py-3 font-bold text-white shadow-[0_10px_24px_rgba(109,40,217,.22)] disabled:bg-slate-300"
+              >
+                {isSavingProfile ? 'กำลังบันทึก…' : 'บันทึกข้อมูลโปรไฟล์'}
+              </button>
+            </footer>
+          </form>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+            <ShopLogoUploader shop={shop} token={token} refresh={refresh} />
+            <div className="mt-5 border-t border-line pt-5">
+              <ShopForm
+                mode="edit"
+                profile={profile}
+                shop={shop}
+                token={token}
+                refresh={refresh}
+                setPhoneSaveWarning={setPhoneSaveWarning}
+                options={options}
+                optionsLoading={optionsLoading}
+                optionsError={optionsError}
+                onCancel={onClose}
+                onSaved={() => onSaved('บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว')}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
 /**
  * The shop avatar and the control that replaces it, together — the preview a
  * vendor needs before uploading *is* the avatar, so keeping them apart would
@@ -1022,26 +1333,17 @@ function ShopLogoUploader({
 
   return (
     <div className="relative">
-      {shownLogoUrl ? (
-        /* eslint-disable-next-line @next/next/no-img-element --
-           next/image would route this through the optimizer, which needs the
-           Supabase host in `images.remotePatterns` — and that host comes from
-           an env var, so it is not known at build time. `zone-map.tsx` renders
-           the same URL raw for the same reason. */
+      {shownLogoUrl === shop.logoUrl ? (
+        <ShopLogoAvatar shop={shop} />
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element -- local object URL */
         <img
-          src={shownLogoUrl}
-          alt={`โลโก้ของ ${shop.name}`}
+          src={shownLogoUrl ?? ''}
+          alt="ตัวอย่างโลโก้ร้านที่เลือก"
           width={82}
           height={82}
           className="relative mx-auto block h-[82px] w-[82px] rounded-[28px] object-cover shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
         />
-      ) : (
-        <span
-          aria-hidden
-          className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
-        >
-          {[...shop.name.trim()][0] ?? '?'}
-        </span>
       )}
 
       <div className="mt-3">
@@ -1160,8 +1462,7 @@ function InfoLine({
  * The fields are identical, so the mode changes the submit label and whether
  * there is anything to cancel back to.
  *
- * Inline rather than a modal — this codebase has no dialog anywhere yet, and a
- * flat page matches the screens around it.
+ * Creation stays inline; editing is mounted inside ProfileEditorDialog.
  */
 function ShopForm({
   mode,
@@ -1174,6 +1475,7 @@ function ShopForm({
   optionsLoading,
   optionsError,
   onCancel,
+  onSaved,
 }: {
   mode: 'create' | 'edit';
   profile: CurrentUser;
@@ -1190,6 +1492,7 @@ function ShopForm({
   optionsLoading: boolean;
   optionsError: string | null;
   onCancel?: () => void;
+  onSaved?: () => void;
 }) {
   const [name, setName] = useState(shop?.name ?? '');
   const [description, setDescription] = useState(shop?.description ?? '');
@@ -1200,6 +1503,7 @@ function ShopForm({
   const [nameError, setNameError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1211,16 +1515,25 @@ function ShopForm({
     const nextNameError = name.trim() ? null : 'กรุณากรอกชื่อร้าน';
     const nextCategoryError =
       categoryIds.length > 0 ? null : 'กรุณาเลือกหมวดสินค้าอย่างน้อย 1 หมวด';
-    const nextPhoneError =
-      normalizedPhone && !THAI_PHONE_PATTERN.test(normalizedPhone)
-        ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0'
-        : null;
+    const nextPhoneError = !/^0\d{9}$/.test(normalizedPhone)
+      ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0'
+      : null;
+    const nextDescriptionError =
+      description.length <= 500
+        ? null
+        : 'รายละเอียดร้านต้องมีความยาวไม่เกิน 500 ตัวอักษร';
 
     setNameError(nextNameError);
     setCategoryError(nextCategoryError);
     setPhoneError(nextPhoneError);
+    setDescriptionError(nextDescriptionError);
 
-    if (nextNameError || nextCategoryError || nextPhoneError) {
+    if (
+      nextNameError ||
+      nextCategoryError ||
+      nextPhoneError ||
+      nextDescriptionError
+    ) {
       setNotice(null);
       return;
     }
@@ -1282,7 +1595,10 @@ function ShopForm({
     // Editing closes back to the read-only card; the refreshed profile and
     // shop then arrive as props. Creating has nothing to close — the page
     // swaps to the shop card on its own once `refresh()` lands.
-    if (mode === 'edit') onCancel?.();
+    if (mode === 'edit') {
+      onSaved?.();
+      onCancel?.();
+    }
   }
 
   return (
@@ -1314,11 +1630,28 @@ function ShopForm({
         <span className="mb-2 block text-sm font-bold">รายละเอียดร้าน</span>
         <textarea
           value={description}
-          onChange={(event) => setDescription(event.target.value)}
+          onChange={(event) => {
+            setDescription(event.target.value);
+            setDescriptionError(null);
+          }}
+          maxLength={500}
           rows={3}
           placeholder="อธิบายสินค้าและจุดเด่นของร้านสั้น ๆ"
-          className="w-full rounded-xl border border-line bg-white px-4 py-3 text-base outline-none"
+          aria-invalid={descriptionError ? true : undefined}
+          aria-describedby="shop-description-help"
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-base outline-none ${
+            descriptionError ? 'border-danger' : 'border-line'
+          }`}
         />
+        <span
+          id="shop-description-help"
+          className={`mt-1.5 flex justify-between gap-3 text-xs ${
+            descriptionError ? 'text-danger' : 'text-muted'
+          }`}
+        >
+          <span>{descriptionError ?? 'อธิบายสินค้าและจุดเด่นของร้าน'}</span>
+          <span>{description.length}/500</span>
+        </span>
       </label>
 
       <div>
@@ -1363,7 +1696,10 @@ function ShopForm({
           type="tel"
           inputMode="tel"
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onChange={(event) => {
+            setPhone(event.target.value.replace(/[^\d-\s]/g, ''));
+            setPhoneError(null);
+          }}
           aria-invalid={phoneError ? true : undefined}
           aria-describedby={phoneError ? 'shop-phone-error' : undefined}
           placeholder="0812345678"
@@ -1383,6 +1719,18 @@ function ShopForm({
       </label>
 
       <label className="block">
+        <span className="mb-2 block text-sm font-bold">ชื่อผู้ติดต่อ</span>
+        <input
+          value={profile.fullName}
+          readOnly
+          className="w-full cursor-not-allowed rounded-xl border border-line bg-[#F7F5FA] px-4 py-3 text-base text-muted outline-none"
+        />
+        <span className="mt-2 block text-xs text-muted">
+          ชื่อนี้มาจากบัญชีผู้ใช้ที่ยืนยันตัวตนแล้ว
+        </span>
+      </label>
+
+      <label className="block">
         <span className="mb-2 block text-sm font-bold">อีเมล</span>
         {/* Read-only on purpose: the address is the Supabase Auth identity
             (AGENTS.md §7) and there is no endpoint that changes it. */}
@@ -1397,6 +1745,18 @@ function ShopForm({
         </span>
       </label>
 
+      <label className="block">
+        <span className="mb-2 block text-sm font-bold">จังหวัด</span>
+        <input
+          value="ยังไม่ระบุ"
+          readOnly
+          className="w-full cursor-not-allowed rounded-xl border border-line bg-[#F7F5FA] px-4 py-3 text-base text-muted outline-none"
+        />
+        <span className="mt-2 block text-xs text-muted">
+          ระบบปัจจุบันยังไม่มีข้อมูลจังหวัดในร้านค้า
+        </span>
+      </label>
+
       {notice && (
         <p
           role="alert"
@@ -1406,7 +1766,23 @@ function ShopForm({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div
+        className={`flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end ${
+          mode === 'edit'
+            ? 'sticky -bottom-5 -mx-5 border-t border-line px-5 py-4 sm:-bottom-5 sm:-mx-7 sm:px-7'
+            : ''
+        }`}
+      >
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="rounded-xl border border-violet px-5 py-3 font-bold text-violet disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            ยกเลิก
+          </button>
+        )}
         <button
           type="submit"
           disabled={isSubmitting || optionsLoading}
@@ -1418,16 +1794,6 @@ function ShopForm({
               ? 'สร้างร้านค้า'
               : 'บันทึกข้อมูล'}
         </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className="rounded-xl border border-line px-5 py-3 font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            ยกเลิก
-          </button>
-        )}
       </div>
     </form>
   );
