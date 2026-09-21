@@ -3,18 +3,21 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRight,
   Bell,
   CalendarDays,
   Check,
   CheckCheck,
-  ChevronDown,
   CircleAlert,
   Clock3,
   CreditCard,
+  ListChecks,
   Megaphone,
   Settings2,
   ShieldAlert,
   Sparkles,
+  Star,
+  X,
 } from 'lucide-react';
 
 import {
@@ -137,6 +140,7 @@ function toUserNotification(
 ): UserNotification {
   const isReviewInvitation =
     notification.relatedEntityType?.toUpperCase() === 'BOOKING_REVIEW';
+  const href = notificationHref(notification, role);
   return {
     id: notification.id,
     kind: KIND_BY_TYPE[notification.type],
@@ -144,9 +148,33 @@ function toUserNotification(
     description: notification.body ?? '',
     createdAt: notification.createdAt,
     unread: !notification.isRead,
-    href: notificationHref(notification, role),
-    actionLabel: isReviewInvitation ? 'เขียนรีวิวพื้นที่' : undefined,
+    href,
+    actionLabel: isReviewInvitation
+      ? 'เขียนรีวิว'
+      : notificationActionLabel(notification.type, Boolean(href)),
   };
+}
+
+function notificationActionLabel(
+  type: NotificationType,
+  hasHref: boolean,
+): string | undefined {
+  if (!hasHref) return undefined;
+  switch (type) {
+    case 'BOOKING_STATUS':
+      return 'ดูการจอง';
+    case 'PAYMENT':
+      return 'ดูการชำระเงิน';
+    case 'ANNOUNCEMENT':
+      return 'ดูข่าวสาร';
+    case 'REFUND':
+    case 'SUPPORT_TICKET':
+      return 'ติดตามคำขอ';
+    case 'SYSTEM':
+      return 'ดูรายละเอียด';
+    case 'PENALTY':
+      return undefined;
+  }
 }
 
 function notificationHref(
@@ -243,6 +271,7 @@ function createPreviewNotifications(): UserNotification[] {
       createdAt: new Date(now - 8 * 60_000).toISOString(),
       unread: true,
       href: '/bookings/local-preview-booking/payment',
+      actionLabel: 'ดูการชำระเงิน',
     },
     {
       id: 'preview-confirmed',
@@ -252,6 +281,7 @@ function createPreviewNotifications(): UserNotification[] {
       createdAt: new Date(now - 65 * 60_000).toISOString(),
       unread: true,
       href: '/bookings/local-preview-confirmed-booking',
+      actionLabel: 'ดูการจอง',
     },
     {
       id: 'preview-event',
@@ -261,6 +291,7 @@ function createPreviewNotifications(): UserNotification[] {
       createdAt: new Date(now - 5 * 3_600_000).toISOString(),
       unread: false,
       href: '/events/demo-event',
+      actionLabel: 'ดูข่าวสาร',
     },
     {
       id: 'preview-review',
@@ -270,7 +301,7 @@ function createPreviewNotifications(): UserNotification[] {
       createdAt: new Date(now - 2 * 86_400_000).toISOString(),
       unread: false,
       href: '/bookings/local-preview-completed-booking/review',
-      actionLabel: 'เขียนรีวิวพื้นที่',
+      actionLabel: 'เขียนรีวิว',
     },
   ];
 }
@@ -558,10 +589,10 @@ export default function NotificationsPage() {
                 <button
                   type="button"
                   onClick={markAllAsRead}
-                  className="sl-action-secondary"
+                  className="sl-action-primary"
                 >
                   <CheckCheck className="h-4 w-4" aria-hidden />
-                  อ่านทั้งหมดแล้ว
+                  อ่านทั้งหมด
                 </button>
               ) : null}
             </div>
@@ -583,6 +614,7 @@ export default function NotificationsPage() {
               <NotificationSettings
                 preferences={preferences}
                 onToggle={togglePreference}
+                onClose={() => setSettingsOpen(false)}
                 saving={savingPreference}
               />
             ) : null}
@@ -596,79 +628,276 @@ export default function NotificationsPage() {
               </p>
             ) : null}
 
-            <section className="sl-surface overflow-hidden">
-              <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between">
-                <div className="w-full min-w-0 md:order-2 md:w-72 md:shrink-0">
-                  <label htmlFor="notification-filter" className="sr-only">
-                    กรองการแจ้งเตือน
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="notification-filter"
-                      value={filter}
-                      onChange={(event) =>
-                        setFilter(
-                          event.currentTarget.value as NotificationFilter,
-                        )
-                      }
-                      className="h-11 w-full min-w-0 appearance-none rounded-2xl border border-line bg-white px-4 pr-11 text-sm font-bold text-ink outline-none transition focus:border-violet focus:ring-4 focus:ring-violet/10"
+            <NotificationSummary
+              unread={unreadCount}
+              booking={notificationCounts.booking}
+              payment={notificationCounts.payment}
+              event={notificationCounts.event}
+              onFilter={setFilter}
+            />
+
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <section className="min-w-0">
+                <div
+                  className="mb-4 flex gap-2 overflow-x-auto pb-1"
+                  aria-label="กรองการแจ้งเตือน"
+                >
+                  {FILTER_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFilter(value)}
+                      aria-pressed={filter === value}
+                      className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-extrabold transition ${
+                        filter === value
+                          ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(124,58,237,.2)]'
+                          : 'border-line bg-white text-muted hover:border-[#cfc1ef] hover:text-violet'
+                      }`}
                     >
-                      {FILTER_OPTIONS.map(({ value, label }) => (
-                        <option key={value} value={value}>
-                          {label} ({notificationCounts[value]})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
-                      aria-hidden
-                    />
-                  </div>
-                </div>
-
-                <div className="min-w-0 md:order-1">
-                  <h2 className="mb-1 text-sm font-bold text-ink">รายการ</h2>
-                  <span
-                    role="status"
-                    aria-live="polite"
-                    className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-muted"
-                  >
-                    <Clock3 className="h-4 w-4 shrink-0" aria-hidden />
-                    แสดง {visibleNotifications.length} รายการ · เรียงจากล่าสุด
-                  </span>
-                </div>
-              </div>
-
-              {visibleNotifications.length > 0 ? (
-                <div className="divide-y divide-[#f0edf4]">
-                  {visibleNotifications.map((notification) => (
-                    <NotificationRow
-                      key={notification.id}
-                      notification={notification}
-                      onRead={() => markAsRead(notification.id)}
-                    />
+                      {label} ({notificationCounts[value]})
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div className="px-6 py-16 text-center">
-                  <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
-                    <CheckCheck className="h-7 w-7" aria-hidden />
-                  </span>
-                  <h2 className="mt-5 text-xl font-extrabold">
-                    {notifications.length === 0
-                      ? 'ยังไม่มีการแจ้งเตือน'
-                      : 'อ่านการแจ้งเตือนครบแล้ว'}
-                  </h2>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-                    เมื่อมีข่าวงานหรือสถานะการจองใหม่ รายการจะแสดงที่หน้านี้
-                  </p>
+
+                <div className="sl-surface overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+                    <div>
+                      <h2 className="text-base font-extrabold text-ink">
+                        รายการแจ้งเตือน
+                      </h2>
+                      <span
+                        role="status"
+                        aria-live="polite"
+                        className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-muted"
+                      >
+                        <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                        {visibleNotifications.length} รายการ · ล่าสุดก่อน
+                      </span>
+                    </div>
+                  </div>
+
+                  {visibleNotifications.length > 0 ? (
+                    <div className="divide-y divide-[#f0edf4]">
+                      {visibleNotifications.map((notification) => (
+                        <NotificationRow
+                          key={notification.id}
+                          notification={notification}
+                          onRead={() => markAsRead(notification.id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-6 py-16 text-center">
+                      <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-violet-tint text-violet">
+                        <CheckCheck className="h-7 w-7" aria-hidden />
+                      </span>
+                      <h2 className="mt-5 text-xl font-extrabold">
+                        {notifications.length === 0
+                          ? 'ยังไม่มีการแจ้งเตือน'
+                          : 'ไม่มีรายการในหมวดนี้'}
+                      </h2>
+                      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
+                        เมื่อมีข่าวงานหรือสถานะการจองใหม่ รายการจะแสดงที่หน้านี้
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </section>
+              </section>
+
+              <NotificationSidebar
+                bookingCount={notificationCounts.booking}
+                paymentCount={notificationCounts.payment}
+                reviewCount={notifications.filter(
+                  (notification) => notification.actionLabel === 'เขียนรีวิว',
+                ).length}
+                onOpenSettings={() => setSettingsOpen(true)}
+              />
+            </div>
           </>
         )}
       </div>
     </main>
+  );
+}
+
+function NotificationSummary({
+  unread,
+  booking,
+  payment,
+  event,
+  onFilter,
+}: {
+  unread: number;
+  booking: number;
+  payment: number;
+  event: number;
+  onFilter: (filter: NotificationFilter) => void;
+}) {
+  const cards: Array<{
+    label: string;
+    value: number;
+    filter: NotificationFilter;
+    icon: typeof Bell;
+    tone: string;
+  }> = [
+    {
+      label: 'ยังไม่อ่าน',
+      value: unread,
+      filter: 'unread',
+      icon: Bell,
+      tone: 'bg-[#f1eaff] text-violet',
+    },
+    {
+      label: 'การจอง',
+      value: booking,
+      filter: 'booking',
+      icon: CalendarDays,
+      tone: 'bg-[#eef5ff] text-[#2563c9]',
+    },
+    {
+      label: 'การชำระเงิน',
+      value: payment,
+      filter: 'payment',
+      icon: CreditCard,
+      tone: 'bg-[#fff3df] text-[#c56b00]',
+    },
+    {
+      label: 'ข่าวสาร',
+      value: event,
+      filter: 'event',
+      icon: Megaphone,
+      tone: 'bg-[#e8f8f0] text-[#16855f]',
+    },
+  ];
+
+  return (
+    <section
+      className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      aria-label="สรุปการแจ้งเตือน"
+    >
+      {cards.map(({ label, value, filter, icon: Icon, tone }) => (
+        <button
+          key={filter}
+          type="button"
+          onClick={() => onFilter(filter)}
+          className="sl-surface group flex min-h-[112px] items-center gap-4 px-5 py-5 text-left transition hover:-translate-y-0.5 hover:border-[#d9cdf5] hover:shadow-[0_18px_36px_rgba(71,42,116,.1)]"
+        >
+          <span
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${tone}`}
+          >
+            <Icon className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-muted">
+              {label}
+            </span>
+            <strong className="mt-1 block text-3xl font-black leading-none text-ink transition group-hover:text-violet">
+              {value.toLocaleString('th-TH')}
+            </strong>
+          </span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function NotificationSidebar({
+  bookingCount,
+  paymentCount,
+  reviewCount,
+  onOpenSettings,
+}: {
+  bookingCount: number;
+  paymentCount: number;
+  reviewCount: number;
+  onOpenSettings: () => void;
+}) {
+  const tasks = [
+    {
+      label: 'ตรวจสอบการชำระเงิน',
+      detail: `${paymentCount.toLocaleString('th-TH')} รายการแจ้งเตือน`,
+      href: '/bookings?tab=pending',
+      icon: CreditCard,
+      tone: 'bg-[#fff3df] text-[#c56b00]',
+    },
+    {
+      label: 'ติดตามสถานะการจอง',
+      detail: `${bookingCount.toLocaleString('th-TH')} รายการแจ้งเตือน`,
+      href: '/bookings',
+      icon: CalendarDays,
+      tone: 'bg-[#eef5ff] text-[#2563c9]',
+    },
+    {
+      label: 'รีวิวที่ยังไม่ได้เขียน',
+      detail: `${reviewCount.toLocaleString('th-TH')} รายการ`,
+      href: '/reviews',
+      icon: Star,
+      tone: 'bg-[#e8f8f0] text-[#16855f]',
+    },
+  ];
+
+  return (
+    <aside className="grid gap-4 xl:sticky xl:top-24">
+      <section className="sl-surface overflow-hidden p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+            <ListChecks className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-lg font-extrabold text-ink">ต้องทำวันนี้</h2>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              ทางลัดไปยังรายการที่ควรติดตาม
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 divide-y divide-line">
+          {tasks.map(({ label, detail, href, icon: Icon, tone }) => (
+            <Link
+              key={label}
+              href={href}
+              className="group flex items-center gap-3 py-4 first:pt-0 last:pb-0"
+            >
+              <span
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${tone}`}
+              >
+                <Icon className="h-4.5 w-4.5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block text-sm text-ink">{label}</strong>
+                <small className="mt-0.5 block text-xs text-muted">
+                  {detail}
+                </small>
+              </span>
+              <ArrowRight
+                className="h-4 w-4 shrink-0 text-[#a89db6] transition group-hover:translate-x-0.5 group-hover:text-violet"
+                aria-hidden
+              />
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[24px] border border-[#dfd2ff] bg-[linear-gradient(145deg,#fbf8ff_0%,#f1e8ff_100%)] p-5 sm:p-6">
+        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-violet shadow-sm">
+          <Settings2 className="h-5 w-5" aria-hidden />
+        </span>
+        <h2 className="mt-4 text-lg font-extrabold text-ink">
+          ควบคุมข่าวสารที่ได้รับ
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          เลือกเปิด–ปิดการแจ้งเตือน 7 หมวดให้เหมาะกับการใช้งานของคุณ
+        </p>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-extrabold text-violet shadow-sm transition hover:-translate-y-0.5"
+        >
+          ตั้งค่าการแจ้งเตือน
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </button>
+      </section>
+    </aside>
   );
 }
 
@@ -702,10 +931,12 @@ function NotificationErrorState({
 function NotificationSettings({
   preferences,
   onToggle,
+  onClose,
   saving,
 }: {
   preferences: NotificationPreferences;
   onToggle: (key: NotificationType | 'all') => void;
+  onClose: () => void;
   saving: boolean;
 }) {
   const options: {
@@ -760,17 +991,48 @@ function NotificationSettings({
   const allEnabled = NOTIFICATION_PREFERENCE_TYPES.every(
     (type) => preferences[type],
   );
+  const someEnabled = NOTIFICATION_PREFERENCE_TYPES.some(
+    (type) => preferences[type],
+  );
 
   return (
     <section
       className="sl-surface mb-5 overflow-hidden"
       aria-label="ตั้งค่าการแจ้งเตือน"
     >
-      <div className="flex flex-col gap-4 border-b border-line bg-[#fbf9ff] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+      <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-5 sm:px-7">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
+            <Settings2 className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-lg font-extrabold">ตั้งค่าการแจ้งเตือน</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              เลือกหมวดที่ต้องการรับการแจ้งเตือนภายใน SpaceLink
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="ปิดการตั้งค่าการแจ้งเตือน"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition hover:border-[#d4c5f5] hover:text-violet"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-b border-line bg-[#fbf9ff] px-5 py-4 sm:px-7">
         <div>
-          <h2 className="text-lg font-extrabold">เลือกสิ่งที่ต้องการรับแจ้ง</h2>
-          <p className="mt-1 text-sm leading-6 text-muted">
-            ตั้งค่าหมวดที่ต้องการเห็นภายในเว็บไซต์และรับผ่านการแจ้งเตือนบนอุปกรณ์
+          <p className="text-sm font-extrabold text-ink">
+            เปิดการแจ้งเตือนทั้งหมด
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            {allEnabled
+              ? 'เปิดครบทั้ง 7 หมวด'
+              : someEnabled
+                ? 'เปิดบางหมวด'
+                : 'ปิดทุกหมวด'}
           </p>
         </div>
         <ToggleSwitch
@@ -808,6 +1070,11 @@ function NotificationSettings({
           </div>
         ))}
       </div>
+
+      <p className="border-t border-line bg-[#fbf9ff] px-5 py-3 text-xs leading-5 text-muted sm:px-7">
+        การตั้งค่านี้ใช้กับการแจ้งเตือนในระบบเท่านั้น ไม่มีตัวเลือก Email
+        หรือ LINE ในรอบนี้
+      </p>
     </section>
   );
 }
@@ -855,79 +1122,70 @@ function NotificationRow({
 }) {
   const meta = KIND_META[notification.kind];
   const Icon = meta.icon;
-  const content = (
-    <>
+
+  return (
+    <article
+      className={`relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 px-5 py-5 transition sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-6 ${
+        notification.unread ? 'bg-[#fbf9ff]' : 'bg-white'
+      }`}
+    >
+      {notification.unread ? (
+        <span
+          className="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-violet"
+          aria-label="ยังไม่ได้อ่าน"
+        />
+      ) : null}
+
       <span
         className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${meta.tone}`}
       >
         <Icon className="h-5 w-5" aria-hidden />
       </span>
 
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <strong className="text-[15px] text-ink">{notification.title}</strong>
-          {notification.unread ? (
-            <span
-              className="h-2 w-2 rounded-full bg-violet"
-              aria-label="ยังไม่ได้อ่าน"
-            />
-          ) : null}
+      <div className="min-w-0">
+        <span className="inline-flex rounded-full bg-[#f5f1fa] px-2.5 py-1 text-[11px] font-extrabold text-violet">
+          {meta.label}
         </span>
+        <h3 className="mt-2 text-[15px] font-extrabold text-ink">
+          {notification.title}
+        </h3>
         {notification.description ? (
-          <span className="mt-1.5 block max-w-3xl text-sm leading-6 text-muted">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">
             {notification.description}
-          </span>
+          </p>
         ) : null}
-        <span className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8b8296]">
-          <span>{meta.label}</span>
-          <span aria-hidden>•</span>
-          <time dateTime={notification.createdAt}>
-            {formatRelativeTime(notification.createdAt)}
-          </time>
-        </span>
-        {notification.actionLabel ? (
-          <span className="mt-3 inline-flex min-h-9 items-center rounded-xl bg-violet px-3.5 text-xs font-extrabold text-white shadow-[0_7px_18px_rgba(124,58,237,.2)]">
+        <time
+          dateTime={notification.createdAt}
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#8b8296]"
+        >
+          <Clock3 className="h-3.5 w-3.5" aria-hidden />
+          {formatRelativeTime(notification.createdAt)}
+        </time>
+      </div>
+
+      <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1 sm:pl-2">
+        {notification.href && notification.actionLabel ? (
+          <Link
+            href={notification.href}
+            onClick={onRead}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#d9c8ff] bg-white px-4 text-xs font-extrabold text-violet transition hover:border-violet hover:bg-violet hover:text-white"
+          >
             {notification.actionLabel}
-          </span>
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
         ) : null}
-      </span>
-    </>
-  );
 
-  return (
-    <article
-      className={`relative flex gap-4 px-5 py-5 transition sm:px-7 ${
-        notification.unread ? 'bg-[#fbf9ff]' : 'bg-white'
-      }`}
-    >
-      {notification.href ? (
-        <Link
-          href={notification.href}
-          onClick={onRead}
-          className="flex min-w-0 flex-1 gap-4 rounded-xl focus-visible:outline-offset-4"
-        >
-          {content}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={onRead}
-          className="flex min-w-0 flex-1 gap-4 rounded-xl text-left focus-visible:outline-offset-4"
-        >
-          {content}
-        </button>
-      )}
-
-      {notification.unread ? (
-        <button
-          type="button"
-          onClick={onRead}
-          aria-label={`ทำเครื่องหมายว่าอ่านแล้ว: ${notification.title}`}
-          className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition hover:border-[#d8cdf0] hover:text-violet sm:grid"
-        >
-          <Check className="h-4 w-4" aria-hidden />
-        </button>
-      ) : null}
+        {notification.unread ? (
+          <button
+            type="button"
+            onClick={onRead}
+            aria-label={`ทำเครื่องหมายว่าอ่านแล้ว: ${notification.title}`}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-muted transition hover:border-[#d8cdf0] hover:text-violet"
+          >
+            <Check className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }
