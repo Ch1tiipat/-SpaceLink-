@@ -25,10 +25,14 @@ export function RefundRequestPanel({
   booking,
   token,
   isPreview,
+  onCreated,
+  embedded = false,
 }: {
   booking: MyBooking;
   token: string;
   isPreview: boolean;
+  onCreated?: (refund: RefundRequest) => void;
+  embedded?: boolean;
 }) {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,6 +112,7 @@ export function RefundRequestPanel({
       };
       const created = await createRefundRequest(booking.id, input, token);
       setRefunds((current) => [created, ...current]);
+      onCreated?.(created);
     } catch (cause) {
       setSubmitError(
         cause instanceof Error ? cause.message : 'ส่งคำร้องคืนเงินไม่สำเร็จ',
@@ -120,8 +125,8 @@ export function RefundRequestPanel({
   if (booking.status !== 'CANCELLED') return null;
 
   return (
-    <section className="sl-surface p-5">
-      <h2 className="font-black">ขอคืนเงิน</h2>
+    <section className={embedded ? '' : 'sl-surface p-5'}>
+      {!embedded ? <h2 className="font-black">ขอคืนเงิน</h2> : null}
       {isLoading ? (
         <p className="mt-2 text-sm text-muted">กำลังตรวจสอบคำร้องเดิม…</p>
       ) : loadError ? (

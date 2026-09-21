@@ -1,23 +1,38 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
+  Check,
   CircleHelp,
   Clock3,
   Landmark,
   Plus,
   ReceiptText,
   RotateCcw,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import {
+  getPreviewBookings,
+} from '@/components/booking-detail-screen';
+import { RefundRequestPanel } from '@/components/refund-request-panel';
+import {
+  getMyBookings,
   getMyRefunds,
   getRefundPayoutSlipAccess,
+  type MyBooking,
   type RefundRequest,
 } from '@/lib/api';
+import { canRequestRefund } from '@/lib/refund-request-policy';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
@@ -48,12 +63,22 @@ function formatMoney(value: string): string {
     : grouped;
 }
 
+function maskPromptPayId(value: string | null): string {
+  if (!value) return 'ไม่มีหมายเลข PromptPay (คำร้องเดิม)';
+  const visibleDigits = value.slice(-4);
+  return `${'•'.repeat(Math.max(4, value.length - visibleDigits.length))}${visibleDigits}`;
+}
+
 export function MyRefundsScreen() {
   const { state } = useVendorProfile();
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
+  const [bookings, setBookings] = useState<MyBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [openingRefundId, setOpeningRefundId] = useState<string | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [createdRefund, setCreatedRefund] = useState<RefundRequest | null>(null);
   const summary = useMemo(
     () => ({
       all: refunds.length,
@@ -73,6 +98,7 @@ export function MyRefundsScreen() {
     }
     if (canUseUxPreview()) {
       setRefunds([]);
+      setBookings(getPreviewBookings());
       setIsLoading(false);
       return;
     }
@@ -81,9 +107,14 @@ export function MyRefundsScreen() {
     let active = true;
     setIsLoading(true);
     setError('');
-    getMyRefunds(state.token, controller.signal)
-      .then((items) => {
-        if (active) setRefunds(items);
+    Promise.all([
+      getMyRefunds(state.token, controller.signal),
+      getMyBookings(state.token, controller.signal),
+    ])
+      .then(([refundItems, bookingItems]) => {
+        if (!active) return;
+        setRefunds(refundItems);
+        setBookings(bookingItems);
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -104,6 +135,11 @@ export function MyRefundsScreen() {
       controller.abort();
     };
   }, [state]);
+
+  const eligibleBookings = useMemo(
+    () => bookings.filter((booking) => canRequestRefund(booking, refunds)),
+    [bookings, refunds],
+  );
 
   useEffect(() => {
     if (refunds.length === 0) return;
@@ -151,34 +187,33 @@ export function MyRefundsScreen() {
 
   return (
     <main className="sl-page pb-16">
-      <div className="shell py-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="shell py-7 sm:py-9">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <span className="sl-kicker">
-              <ReceiptText className="h-4 w-4" aria-hidden /> My refunds
-            </span>
-            <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+            <span className="sl-kicker">My refunds</span>
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
               คำขอคืนเงินของฉัน
             </h1>
-            <p className="mt-2 text-muted">
+            <p className="mt-1.5 text-sm text-muted sm:text-base">
               ติดตามสถานะคำขอและยอดเงินคืนจากการจองที่ยกเลิก
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
-              href="/bookings?tab=cancelled"
-              className="sl-action-primary inline-flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              ขอคืนเงิน
-            </Link>
-            <Link
               href="/bookings"
-              className="sl-action-secondary inline-flex items-center gap-2 text-violet"
+              className="sl-action-secondary inline-flex min-h-12 items-center gap-2 px-5 text-violet"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden />
               กลับการจองของฉัน
             </Link>
+            <button
+              type="button"
+              onClick={() => setRequestOpen(true)}
+              className="sl-action-primary inline-flex min-h-12 items-center gap-2 px-5"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              ขอคืนเงิน
+            </button>
           </div>
         </div>
 
@@ -226,7 +261,7 @@ export function MyRefundsScreen() {
           <div className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="grid gap-4" aria-label="รายการคำขอคืนเงิน">
               {refunds.length === 0 ? (
-                <div className="sl-surface grid min-h-[390px] place-items-center p-8 text-center">
+                <div className="sl-surface grid min-h-[390px] place-items-center p-6 text-center sm:p-8">
                   <div>
                     <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-violet-tint text-violet">
                       <RotateCcw className="h-11 w-11" aria-hidden />
@@ -235,15 +270,31 @@ export function MyRefundsScreen() {
                       ยังไม่มีคำขอคืนเงิน
                     </h2>
                     <p className="mx-auto mt-2 max-w-lg leading-7 text-muted">
-                      หากการจองที่เคยชำระเงินถูกยกเลิก
+                      หากการจองที่เคยยืนยันถูกยกเลิก
                       คุณสามารถยื่นคำขอจากหน้ารายละเอียดการจองได้
                     </p>
-                    <Link
-                      href="/bookings?tab=cancelled"
-                      className="sl-action-primary mt-6"
-                    >
-                      ดูการจองที่ยกเลิก
-                    </Link>
+                    <div className="mt-6 flex flex-wrap justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setRequestOpen(true)}
+                        className="sl-action-primary"
+                      >
+                        ขอคืนเงิน
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTermsOpen(true)}
+                        className="sl-action-secondary text-violet"
+                      >
+                        เงื่อนไขการคืนเงิน
+                      </button>
+                      <Link
+                        href="/bookings"
+                        className="sl-action-secondary text-violet"
+                      >
+                        ดูการจองของฉัน
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -277,9 +328,8 @@ export function MyRefundsScreen() {
                         <dt className="font-bold text-muted">
                           หมายเลข PromptPay
                         </dt>
-                        <dd className="mt-1">
-                          {refund.payoutPromptPayId ??
-                            'ไม่มีหมายเลข PromptPay (คำร้องเดิม)'}
+                        <dd className="mt-1 font-semibold tracking-[.08em]">
+                          {maskPromptPayId(refund.payoutPromptPayId)}
                         </dd>
                       </div>
                       <div>
@@ -355,14 +405,44 @@ export function MyRefundsScreen() {
                 </h2>
                 <ul className="mt-4 grid gap-3 text-sm leading-6 text-muted">
                   <li>• คืนเงินเฉพาะรายการที่เข้าเงื่อนไข</li>
-                  <li>• ระยะเวลาตรวจสอบประมาณ 3–7 วันทำการ</li>
-                  <li>• รับเงินคืนผ่านหมายเลข PromptPay ที่ระบุ</li>
+                  <li>
+                    • สถานะคำขอ: รอตรวจสอบ / อนุมัติ / ปฏิเสธ / โอนคืนแล้ว
+                  </li>
+                  <li>• เลขพร้อมเพย์จะแสดงแบบปกปิดบางส่วน</li>
                 </ul>
               </section>
             </aside>
           </div>
         )}
       </div>
+
+      {requestOpen && state.status === 'ready' ? (
+        <RefundRequestDialog
+          bookings={eligibleBookings}
+          token={state.token}
+          isPreview={canUseUxPreview()}
+          onClose={() => setRequestOpen(false)}
+          onCreated={(refund) => {
+            setRefunds((current) => [
+              refund,
+              ...current.filter((item) => item.id !== refund.id),
+            ]);
+            setRequestOpen(false);
+            setCreatedRefund(refund);
+          }}
+        />
+      ) : null}
+
+      {termsOpen ? (
+        <RefundTermsDialog onClose={() => setTermsOpen(false)} />
+      ) : null}
+
+      {createdRefund ? (
+        <RefundSuccessDialog
+          refund={createdRefund}
+          onClose={() => setCreatedRefund(null)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -399,6 +479,247 @@ function RefundStat({
         </strong>
       </div>
     </article>
+  );
+}
+
+function RefundRequestDialog({
+  bookings,
+  token,
+  isPreview,
+  onClose,
+  onCreated,
+}: {
+  bookings: MyBooking[];
+  token: string;
+  isPreview: boolean;
+  onClose: () => void;
+  onCreated: (refund: RefundRequest) => void;
+}) {
+  const [selectedBookingId, setSelectedBookingId] = useState(
+    bookings[0]?.id ?? '',
+  );
+  const booking =
+    bookings.find((item) => item.id === selectedBookingId) ?? bookings[0];
+
+  return (
+    <RefundDialogFrame title="ขอคืนเงิน" onClose={onClose}>
+      {!booking ? (
+        <div className="py-8 text-center">
+          <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-violet-tint text-violet">
+            <RotateCcw className="h-9 w-9" aria-hidden />
+          </span>
+          <h3 className="mt-5 text-xl font-black">
+            ยังไม่มีการจองที่ขอคืนเงินได้
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
+            คำขอคืนเงินเปิดสำหรับการจองที่เคยยืนยันและชำระเงินแล้ว
+            ก่อนถูกยกเลิกเท่านั้น
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="sl-action-secondary"
+            >
+              ปิด
+            </button>
+            <Link
+              href="/bookings?tab=cancelled"
+              className="sl-action-primary"
+            >
+              ดูการจองที่ยกเลิก
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div>
+          {bookings.length > 1 ? (
+            <label className="grid gap-2 text-sm font-bold">
+              เลือกรายการที่ต้องการขอคืนเงิน
+              <select
+                value={booking.id}
+                onChange={(event) => setSelectedBookingId(event.target.value)}
+                className="min-h-12 rounded-xl border border-line bg-white px-4 font-normal outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
+              >
+                {bookings.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.event.name} · {item.bookingCode} · Booth{' '}
+                    {item.booth.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <p className="text-sm leading-6 text-muted">
+            {booking.event.name} · Booking {booking.bookingCode} · Booth{' '}
+            {booking.booth.code}
+          </p>
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-2xl bg-[#f8f3ff] px-4 py-4 text-sm text-muted">
+            คืนเงินได้ไม่เกิน
+            <strong className="text-xl font-black text-violet">
+              {formatMoney(booking.boothPrice)} บาท
+            </strong>
+            <span>ตามยอดราคาบูธที่ชำระ</span>
+          </div>
+          <div className="mt-4">
+            <RefundRequestPanel
+              key={booking.id}
+              booking={booking}
+              token={token}
+              isPreview={isPreview}
+              onCreated={onCreated}
+              embedded
+            />
+          </div>
+        </div>
+      )}
+    </RefundDialogFrame>
+  );
+}
+
+function RefundTermsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <RefundDialogFrame title="เงื่อนไขการคืนเงิน" onClose={onClose}>
+      <div className="rounded-2xl bg-[#f8f3ff] p-5">
+        <h3 className="font-black">รายการที่ยื่นคำขอได้</h3>
+        <ul className="mt-3 grid gap-3 text-sm leading-6 text-muted">
+          <li>• เป็นการจองที่เคยได้รับการยืนยันและมีการชำระเงินแล้ว</li>
+          <li>• สถานะการจองถูกยกเลิก และยังไม่มีคำขอคืนเงินเดิม</li>
+          <li>• ยอดที่ขอคืนต้องมากกว่า 0 และไม่เกินราคาบูธที่ชำระ</li>
+          <li>• รับเงินคืนผ่านหมายเลข PromptPay ที่ระบุเท่านั้น</li>
+        </ul>
+      </div>
+      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-line p-4 text-sm leading-6 text-muted">
+        <CircleHelp className="mt-0.5 h-5 w-5 shrink-0 text-violet" aria-hidden />
+        <p>
+          ทีมงานจะแจ้งผลผ่านระบบ เมื่ออนุมัติแล้วสถานะจะเปลี่ยนเป็น
+          “โอนคืนแล้ว” หลังดำเนินการสำเร็จ
+        </p>
+      </div>
+      <div className="mt-5 flex justify-end">
+        <button type="button" onClick={onClose} className="sl-action-primary">
+          รับทราบ
+        </button>
+      </div>
+    </RefundDialogFrame>
+  );
+}
+
+function RefundSuccessDialog({
+  refund,
+  onClose,
+}: {
+  refund: RefundRequest;
+  onClose: () => void;
+}) {
+  return (
+    <RefundDialogFrame title="ส่งคำขอคืนเงินสำเร็จ" onClose={onClose}>
+      <div className="py-5 text-center">
+        <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#e8f8ef] text-[#19975a]">
+          <Check className="h-10 w-10" aria-hidden />
+        </span>
+        <h3 className="mt-5 text-2xl font-black">รับคำขอของคุณแล้ว</h3>
+        <p className="mt-2 text-sm text-muted">หมายเลข {refund.id}</p>
+        <p className="mt-3 font-bold">
+          ยอดที่ขอคืน {formatMoney(refund.requestedAmount)} บาท ·{' '}
+          {statusLabels[refund.status]}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="sl-action-primary mt-7"
+        >
+          ติดตามคำขอคืนเงิน
+        </button>
+      </div>
+    </RefundDialogFrame>
+  );
+}
+
+function RefundDialogFrame({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input, textarea, select',
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-[#201b2e]/65 px-3 pb-3 pt-20 backdrop-blur-[2px] sm:px-5 sm:pb-5 sm:pt-24"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="refund-dialog-title"
+        className="flex max-h-[calc(100vh-5.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl sm:max-h-[calc(100vh-7.25rem)]"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
+          <h2 id="refund-dialog-title" className="text-xl font-black">
+            {title}
+          </h2>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดหน้าต่าง"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-muted transition hover:bg-mist hover:text-ink"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+          {children}
+        </div>
+      </section>
+    </div>
   );
 }
 
