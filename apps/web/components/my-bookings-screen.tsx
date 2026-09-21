@@ -2,7 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clock3, Search, X } from 'lucide-react';
+import {
+  Check,
+  Clock3,
+  Plus,
+  ReceiptText,
+  Search,
+  X,
+} from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import {
   getPreviewBookings,
@@ -368,7 +375,7 @@ export function MyBookingsScreen() {
   return (
     <main className="sl-page pb-16">
       <div className="shell py-8">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <span className="sl-kicker">My bookings</span>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
@@ -378,12 +385,22 @@ export function MyBookingsScreen() {
               ตรวจสอบสถานะ ชำระเงิน หรือยกเลิกการจองที่ยังดำเนินการอยู่
             </p>
           </div>
-          <Link
-            href="/"
-            className="sl-action-secondary mt-4 text-violet sm:mt-0"
-          >
-            ค้นหา Event เพิ่ม
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/"
+              className="sl-action-primary inline-flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              จองบูธเพิ่ม
+            </Link>
+            <Link
+              href="/refunds"
+              className="sl-action-secondary inline-flex items-center gap-2 text-violet"
+            >
+              <ReceiptText className="h-4 w-4" aria-hidden />
+              ติดตามคำขอคืนเงิน
+            </Link>
+          </div>
         </div>
 
         {access.status === 'ready' && !isLoading && !loadError ? (
