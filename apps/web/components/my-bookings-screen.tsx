@@ -734,6 +734,9 @@ export function MyBookingsScreen() {
       {selectedGroup ? (
         <BookingDetailDialog
           group={selectedGroup}
+          holdExpired={selectedGroup.bookings.some(
+            (item) => expiredIds.has(item.id) || isExpired(item),
+          )}
           onClose={() => setSelectedGroup(null)}
         />
       ) : null}
@@ -836,9 +839,11 @@ function BookingKeyValue({
 
 function BookingDetailDialog({
   group,
+  holdExpired,
   onClose,
 }: {
   group: BookingGroup;
+  holdExpired: boolean;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
@@ -935,9 +940,9 @@ function BookingDetailDialog({
     }
   }
 
-  function handleDownload() {
+  function handleDownloadSummary() {
     const content = [
-      'SpaceLink · ใบเสร็จการจอง',
+      'SpaceLink · สรุปการจอง',
       `Booking: ${booking.bookingCode}`,
       `Event: ${booking.event.name}`,
       `Booth: ${boothCodes}`,
@@ -950,10 +955,10 @@ function BookingDetailDialog({
     );
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `SpaceLink_Receipt_${booking.bookingCode}.txt`;
+    anchor.download = `SpaceLink_Booking_Summary_${booking.bookingCode}.txt`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-    setActionMessage('ดาวน์โหลดใบเสร็จแล้ว');
+    setActionMessage('ดาวน์โหลดสรุปการจองแล้ว');
   }
 
   return (
@@ -1144,17 +1149,25 @@ function BookingDetailDialog({
             >
               ปิด
             </button>
-            {group.status === 'PENDING_PAYMENT' ? (
+            {group.status === 'PENDING_PAYMENT' && !holdExpired ? (
               <Link href={paymentHref} className="sl-action-primary">
                 ไปหน้าชำระเงิน
               </Link>
+            ) : group.status === 'PENDING_PAYMENT' ? (
+              <button
+                type="button"
+                disabled
+                className="sl-action-primary cursor-not-allowed opacity-55"
+              >
+                หมดเวลาชำระเงิน
+              </button>
             ) : (
               <button
                 type="button"
-                onClick={handleDownload}
+                onClick={handleDownloadSummary}
                 className="sl-action-primary"
               >
-                ดาวน์โหลดใบเสร็จ
+                ดาวน์โหลดสรุปการจอง
               </button>
             )}
             <Link
