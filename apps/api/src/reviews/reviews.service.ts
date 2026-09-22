@@ -12,6 +12,7 @@ import {
   ReviewTargetType,
 } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { hasEventEndInstantPassed } from '../common/event-time';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminReviewsQueryDto } from './dto/admin-reviews-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -339,7 +340,7 @@ export class ReviewsService {
 
     if (
       booking.status !== BookingStatus.COMPLETED ||
-      !this.hasEventEnded(booking.event.endDate, booking.event.endTime)
+      !hasEventEndInstantPassed(booking.event.endDate, booking.event.endTime)
     ) {
       throw new ForbiddenException(
         'เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น',
@@ -387,16 +388,6 @@ export class ReviewsService {
             status: ReviewStatus.PUBLISHED,
           },
         });
-  }
-
-  private hasEventEnded(
-    endDate: Date,
-    endTime: string | null,
-    now = new Date(),
-  ): boolean {
-    const date = endDate.toISOString().slice(0, 10);
-    const time = endTime?.slice(0, 5) || '23:59';
-    return now >= new Date(`${date}T${time}:00+07:00`);
   }
 
   private async moderate(

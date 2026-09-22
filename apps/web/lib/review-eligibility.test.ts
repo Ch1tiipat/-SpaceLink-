@@ -22,6 +22,16 @@ reviewTest('allows a completed booking after the event end time', () => {
   );
 });
 
+reviewTest('allows a completed booking exactly at the event end time', () => {
+  reviewAssert.equal(
+    isBookingReviewEligible(
+      { status: 'COMPLETED', event: endedEvent },
+      new Date('2026-09-05T13:00:00.000Z'),
+    ),
+    true,
+  );
+});
+
 reviewTest('rejects a booking that is not completed', () => {
   reviewAssert.equal(
     isBookingReviewEligible(

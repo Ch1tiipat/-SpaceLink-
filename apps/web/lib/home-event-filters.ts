@@ -1,4 +1,5 @@
 import type { DiscoveryEvent } from './api';
+import { hasEventEndCalendarDayPassed } from './event-time.ts';
 
 export type EventStatusFilter = 'all' | 'bookable' | 'ongoing' | 'ended';
 
@@ -8,9 +9,6 @@ export type HomeEventFilters = {
   categoryId: string;
   eventStatus: EventStatusFilter;
 };
-
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const EMPTY_HOME_EVENT_FILTERS: HomeEventFilters = {
   query: '',
@@ -24,15 +22,6 @@ export function provinceFromAddress(address: string): string {
   if (prefixed) return prefixed[1];
   if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
   return address;
-}
-
-export function isEventEnded(endDate: string, now = new Date()): boolean {
-  const eventEnd = new Date(endDate);
-  if (Number.isNaN(eventEnd.getTime())) return false;
-
-  const bangkokDay = (date: Date) =>
-    Math.floor((date.getTime() + BANGKOK_OFFSET_MS) / DAY_MS);
-  return bangkokDay(eventEnd) < bangkokDay(now);
 }
 
 export function filterHomeEvents(
@@ -69,8 +58,9 @@ export function filterHomeEvents(
         (filters.eventStatus === 'bookable' && isBookable(event, now)) ||
         (filters.eventStatus === 'ongoing' &&
           event.status === 'ONGOING' &&
-          !isEventEnded(event.endDate, now)) ||
-        (filters.eventStatus === 'ended' && isEventEnded(event.endDate, now)))
+          !hasEventEndCalendarDayPassed(event.endDate, now)) ||
+        (filters.eventStatus === 'ended' &&
+          hasEventEndCalendarDayPassed(event.endDate, now)))
     );
   });
 }
