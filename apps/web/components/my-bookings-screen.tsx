@@ -26,6 +26,7 @@ import {
   isBookingReviewEligible,
 } from '@/components/booking-detail-screen';
 import { getMyBookings, type BookingStatus, type MyBooking } from '@/lib/api';
+import { getEventCoverUrl } from '@/lib/event-cover';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   getUxPreviewMode,
@@ -90,12 +91,6 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
 
 function formatBookingDateRange(startDate: string, endDate: string): string {
   return `${dateFormatter.format(new Date(startDate))} – ${dateFormatter.format(new Date(endDate))}`;
-}
-
-function getBookingCover(eventName: string): string {
-  if (/creative|craft/i.test(eventName)) return '/home-hero.jpg';
-  if (/campus|business/i.test(eventName)) return '/event-plan-sut-2569.png';
-  return '/hero-spacelink.png';
 }
 
 function formatMoney(value: string): string {
@@ -600,7 +595,7 @@ export function MyBookingsScreen() {
                       <div className="grid gap-4 md:grid-cols-[104px_minmax(0,1fr)_170px_178px] md:items-center">
                         <div className="relative h-28 overflow-hidden rounded-2xl md:h-[104px]">
                           <Image
-                            src={getBookingCover(booking.event.name)}
+                            src={getEventCoverUrl(booking.event.bannerUrl)}
                             alt={booking.event.name}
                             fill
                             sizes="(max-width: 767px) 100vw, 104px"
@@ -998,7 +993,7 @@ function BookingDetailDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-7 sm:pb-6">
           <div className="relative h-28 overflow-hidden rounded-2xl sm:h-36">
             <Image
-              src={getBookingCover(booking.event.name)}
+              src={getEventCoverUrl(booking.event.bannerUrl)}
               alt={`บรรยากาศ ${booking.event.name}`}
               fill
               sizes="(max-width: 896px) 100vw, 840px"
