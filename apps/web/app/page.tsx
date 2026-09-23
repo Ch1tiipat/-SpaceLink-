@@ -25,10 +25,10 @@ import {
   type EventZone,
 } from '@/lib/api';
 import { getEventCoverUrl } from '@/lib/event-cover';
+import { hasEventEndCalendarDayPassed } from '@/lib/event-time';
 import {
   EMPTY_HOME_EVENT_FILTERS,
   filterHomeEvents,
-  isEventEnded,
   provinceFromAddress,
   type EventStatusFilter,
   type HomeEventFilters,
@@ -586,7 +586,7 @@ function EventCard({ event }: { event: DiscoveryEvent }) {
       <span
         className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}
       >
-        {isEventEnded(event.endDate)
+        {hasEventEndCalendarDayPassed(event.endDate)
           ? 'สิ้นสุดแล้ว'
           : bookable
             ? 'เปิดจอง'

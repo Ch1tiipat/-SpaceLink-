@@ -8,6 +8,7 @@ import {
   UserRole,
   type Notification,
 } from '@prisma/client';
+import { hasEventEndInstantPassed } from '../common/event-time';
 import { PrismaService } from '../prisma/prisma.service';
 import { isNotificationTypeEnabled } from './notification-preferences';
 import { PushSenderService } from './push-sender.service';
@@ -404,7 +405,7 @@ export class NotificationsService {
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
     const eligibleBookings = candidateBookings.filter((booking) =>
-      this.hasEventEnded(booking.event.endDate, booking.event.endTime),
+      hasEventEndInstantPassed(booking.event.endDate, booking.event.endTime),
     );
 
     if (eligibleBookings.length === 0) return 0;
@@ -492,15 +493,5 @@ export class NotificationsService {
     return new Date(
       Date.UTC(valueOf('year'), valueOf('month') - 1, valueOf('day')),
     );
-  }
-
-  private hasEventEnded(
-    endDate: Date,
-    endTime: string | null,
-    now = new Date(),
-  ): boolean {
-    const date = endDate.toISOString().slice(0, 10);
-    const time = endTime?.slice(0, 5) || '23:59';
-    return now >= new Date(`${date}T${time}:00+07:00`);
   }
 }

@@ -8,9 +8,10 @@ type DiscoveryEvent = import('./api').DiscoveryEvent;
 const {
   EMPTY_HOME_EVENT_FILTERS,
   filterHomeEvents,
-  isEventEnded,
   provinceFromAddress,
 } = require('./home-event-filters.ts') as typeof import('./home-event-filters');
+const { hasEventEndCalendarDayPassed } =
+  require('./event-time.ts') as typeof import('./event-time');
 
 const isBookableForTest = (
   candidate: Pick<DiscoveryEvent, 'status' | 'endDate'>,
@@ -135,6 +136,28 @@ homeFilterTest(
       ).map(({ id }) => id),
       ['ended'],
     );
-    homeFilterAssert.equal(isEventEnded(events[2].endDate, NOW), true);
+    homeFilterAssert.equal(
+      hasEventEndCalendarDayPassed(events[2].endDate, NOW),
+      true,
+    );
+  },
+);
+
+homeFilterTest(
+  'keeps an event ongoing through its final Bangkok calendar day',
+  () => {
+    const sameDayEnd = '2026-09-21T00:00:00.000Z';
+
+    homeFilterAssert.equal(
+      hasEventEndCalendarDayPassed(sameDayEnd, NOW),
+      false,
+    );
+    homeFilterAssert.equal(
+      hasEventEndCalendarDayPassed(
+        sameDayEnd,
+        new Date('2026-09-21T17:00:00.000Z'),
+      ),
+      true,
+    );
   },
 );
