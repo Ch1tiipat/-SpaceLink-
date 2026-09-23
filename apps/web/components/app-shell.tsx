@@ -715,7 +715,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ? `grid min-h-[calc(100vh-63px)] transition-[grid-template-columns] duration-300 lg:min-h-[calc(100vh-72px)] ${
                 sidebarCollapsed
                   ? 'lg:grid-cols-[minmax(0,1fr)]'
-                  : 'lg:grid-cols-[280px_minmax(0,1fr)]'
+                  : 'lg:grid-cols-[240px_minmax(0,1fr)]'
               }`
             : 'min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]'
         }
@@ -731,7 +731,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         )}
 
-        <div className="min-w-0">
+        <div className="min-w-0 bg-[linear-gradient(180deg,rgba(250,247,255,.7),rgba(255,255,255,.22)_45%,rgba(245,240,255,.5))]">
           {activeBroadcast ? (
             <SystemBroadcastBanner
               broadcast={activeBroadcast}
@@ -792,7 +792,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             setSidebarCollapsed(false);
           }}
           style={{ top: sidebarLauncherY, touchAction: 'none' }}
-          className="fixed left-0 z-40 hidden h-11 w-11 place-items-center rounded-r-2xl border border-l-0 border-[#d8caeb] bg-white text-violet shadow-[0_8px_24px_rgba(54,36,91,.16)] transition-colors hover:bg-violet-tint lg:grid"
+          className="fixed left-0 z-40 hidden h-11 w-11 place-items-center rounded-r-2xl border border-l-0 border-[#d8caeb] bg-white/95 text-violet shadow-[0_10px_28px_rgba(54,36,91,.18)] backdrop-blur transition hover:w-12 hover:bg-violet-tint lg:grid"
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
@@ -881,7 +881,7 @@ function Sidebar({
   onToggleGroup: (groupLabel: string) => void;
 }) {
   return (
-    <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] flex-col border-r border-[#ebe5ef] bg-white px-4 py-5 shadow-[8px_0_30px_rgba(69,49,99,0.025)] lg:flex">
+    <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] flex-col overflow-hidden border-r border-[#ebe5ef] bg-[linear-gradient(180deg,#fff_0%,#fefcff_68%,#f8f3ff_100%)] px-4 py-5 shadow-[12px_0_34px_rgba(69,49,99,0.045)] lg:flex">
       <div className="flex justify-end pb-4">
         <button
           type="button"
@@ -889,7 +889,7 @@ function Sidebar({
           aria-label="ย่อแถบเมนู"
           aria-expanded={true}
           title="ย่อแถบเมนู"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#ece7f3] bg-white text-[#655D70] shadow-[0_6px_18px_rgba(54,36,91,0.05)] transition hover:border-[#d9cdf3] hover:bg-violet-tint hover:text-violet"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#e5dcef] bg-white text-[#655D70] shadow-[0_8px_22px_rgba(54,36,91,0.07)] transition hover:-translate-y-0.5 hover:border-[#d3c3ee] hover:bg-violet-tint hover:text-violet"
         >
           <Menu className="h-5 w-5" aria-hidden />
         </button>
@@ -1166,7 +1166,7 @@ function Topbar({
   onRequestSignOut: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-[63px] items-center justify-between gap-3 border-b border-[#e8def7] bg-[#f5efff] px-[18px] shadow-[0_5px_20px_rgba(61,43,88,0.025)] lg:h-[72px] lg:px-[30px]">
+    <header className="sticky top-0 z-30 flex h-[63px] items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(61,43,88,0.045)] backdrop-blur-xl lg:h-[72px] lg:px-[30px]">
       <div className="flex min-w-0 items-center gap-2">
         {hasSidebar ? (
           <button
@@ -1308,7 +1308,7 @@ function AccountMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="เปิดเมนูโปรไฟล์"
-        className="flex min-h-10 items-center gap-2 rounded-xl bg-violet-tint px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4] transition hover:bg-[#eee4ff] focus-visible:outline-offset-2"
+        className="flex min-h-10 items-center gap-2 rounded-2xl border border-[#e7daf8] bg-white/75 px-2.5 py-1.5 text-[13px] font-bold text-[#6331C4] shadow-[0_8px_24px_rgba(83,46,128,.07)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#d7c1f4] hover:bg-white focus-visible:outline-offset-2"
         >
         <Avatar name={fullName} className="h-[28px] w-[28px] text-sm" />
         <span

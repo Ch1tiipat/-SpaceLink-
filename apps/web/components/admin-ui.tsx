@@ -139,7 +139,11 @@ export function AdminAccessGate({
 
 export function AdminPage({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
+    <main className="relative isolate min-h-[calc(100vh-72px)] overflow-hidden bg-[radial-gradient(circle_at_92%_8%,rgba(166,120,255,.18),transparent_25%),radial-gradient(circle_at_8%_88%,rgba(218,195,255,.24),transparent_30%),linear-gradient(145deg,#fff_0%,#fbf9ff_44%,#f3edff_100%)] px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-y-[72px] right-0 -z-10 w-[70%] opacity-30 [background-image:radial-gradient(circle,rgba(117,56,238,.2)_1px,transparent_1.2px)] [background-size:28px_28px] [mask-image:linear-gradient(135deg,transparent_8%,#000_44%,transparent_88%)]"
+      />
       <div className="mx-auto max-w-[1440px]">{children}</div>
     </main>
   );
@@ -197,7 +201,7 @@ export function AdminPanel({
 }) {
   return (
     <section
-      className={`rounded-[20px] border border-[#e8e1ee] bg-white shadow-[0_12px_34px_rgba(54,36,91,0.045)] ${className}`}
+      className={`rounded-[24px] border border-white/70 bg-white/90 shadow-[0_18px_50px_rgba(54,36,91,0.07)] backdrop-blur-sm ${className}`}
     >
       {title || description || actions ? (
         <div className="flex flex-col justify-between gap-3 border-b border-[#eee9f3] px-5 py-4 sm:flex-row sm:items-center">
@@ -239,9 +243,9 @@ export function AdminMetric({
   } as const;
 
   return (
-    <article className="rounded-[18px] border border-[#e8e1ee] bg-white p-5 shadow-[0_10px_28px_rgba(54,36,91,0.04)]">
+    <article className="group rounded-[20px] border border-white/75 bg-white/90 p-5 shadow-[0_14px_34px_rgba(54,36,91,0.055)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#dcccf5] hover:shadow-[0_18px_42px_rgba(90,48,145,.1)]">
       <span
-        className={`grid h-11 w-11 place-items-center rounded-[14px] ${tones[tone]}`}
+        className={`grid h-11 w-11 place-items-center rounded-[14px] transition-transform duration-200 group-hover:scale-105 ${tones[tone]}`}
       >
         <Icon className="h-5 w-5" aria-hidden />
       </span>
