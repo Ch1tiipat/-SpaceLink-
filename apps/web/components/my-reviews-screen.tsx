@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import {
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -10,24 +12,32 @@ import {
 } from 'react';
 import {
   ArrowRight,
+  BarChart3,
   CalendarDays,
   CheckCircle2,
   Clock3,
+  MapPin,
   MessageSquareText,
+  Pencil,
   Search,
+  Sparkles,
   Star,
+  X,
 } from 'lucide-react';
 import {
   ReviewEditorPopup,
   type SavedReviewDraft,
 } from '@/components/booking-review-screen';
 import { getPreviewBookings } from '@/components/booking-detail-screen';
+import { EventDetailContent } from '@/components/event-detail-screen';
 import {
   getMyBookings,
   getMyReviews,
+  type EventMap,
   type MyBooking,
   type MyReview,
 } from '@/lib/api';
+import { getEventCoverUrl } from '@/lib/event-cover';
 import { isBookingReviewEligible } from '@/lib/review-eligibility';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
@@ -45,6 +55,7 @@ type AccessState =
 type ReviewFilter = 'all' | 'reviewed' | 'pending' | 'five-stars';
 type ReviewSort = 'newest' | 'oldest' | 'highest' | 'lowest';
 type EditorState = { booking: MyBooking; review: MyReview | null };
+type EventPreviewState = { identifier: string; name: string };
 type ReviewListItem =
   | { kind: 'reviewed'; review: MyReview; booking: MyBooking | null }
   | { kind: 'pending'; booking: MyBooking };
@@ -133,9 +144,13 @@ export function MyReviewsScreen() {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [sort, setSort] = useState<ReviewSort>('newest');
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [eventPreview, setEventPreview] = useState<EventPreviewState | null>(
+    null,
+  );
   const requestRef = useRef(0);
   const currentTokenRef = useRef<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const eventReturnFocusRef = useRef<HTMLElement | null>(null);
 
   async function loadDashboard(token: string, signal?: AbortSignal) {
     const requestId = requestRef.current + 1;
@@ -354,6 +369,20 @@ export function MyReviewsScreen() {
     window.setTimeout(() => returnFocusRef.current?.focus(), 0);
   }, []);
 
+  const openEventPreview = (
+    event: React.MouseEvent<HTMLElement>,
+    identifier: string,
+    name: string,
+  ) => {
+    eventReturnFocusRef.current = event.currentTarget;
+    setEventPreview({ identifier, name });
+  };
+
+  const closeEventPreview = useCallback(() => {
+    setEventPreview(null);
+    window.setTimeout(() => eventReturnFocusRef.current?.focus(), 0);
+  }, []);
+
   function handleSaved(draft: SavedReviewDraft) {
     if (!editor) return;
     if (editor.review) {
@@ -410,7 +439,7 @@ export function MyReviewsScreen() {
           การรีวิวของฉัน
         </h1>
         <p className="mt-2 max-w-2xl leading-7 text-muted">
-          จัดการคะแนนและความคิดเห็นของงานที่จบแล้วได้ในที่เดียว
+          รวมคะแนนและความคิดเห็นเกี่ยวกับพื้นที่ที่คุณเคยจองไว้
         </p>
 
         {access.status === 'loading' || isLoading ? (
@@ -461,10 +490,10 @@ export function MyReviewsScreen() {
         {access.status === 'ready' && !isLoading && !loadError ? (
           <>
             <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="สรุปการรีวิว">
-              <SummaryCard icon={CheckCircle2} label="รีวิวแล้ว" value={reviews.length.toString()} tone="violet" />
+              <SummaryCard icon={CheckCircle2} label="รีวิวทั้งหมด" value={reviews.length.toString()} tone="violet" />
               <SummaryCard icon={Star} label="คะแนนเฉลี่ย" value={average ? average.toFixed(1) : '0.0'} tone="amber" />
-              <SummaryCard icon={Star} label="รีวิว 5 ดาว" value={fiveStarCount.toString()} tone="green" />
-              <SummaryCard icon={Clock3} label="รอรีวิว" value={pendingBookings.length.toString()} tone="blue" />
+              <SummaryCard icon={Star} label="5 ดาว" value={fiveStarCount.toString()} tone="green" />
+              <SummaryCard icon={Clock3} label="รอเขียนรีวิว" value={pendingBookings.length.toString()} tone="blue" />
             </section>
 
             <section className="sl-surface mt-6 p-4 sm:p-5" aria-label="ค้นหาและกรองรีวิว">
@@ -522,12 +551,14 @@ export function MyReviewsScreen() {
                           review={item.review}
                           booking={item.booking}
                           onEdit={openEditor}
+                          onViewEvent={openEventPreview}
                         />
                       ) : (
                         <PendingReviewCard
                           key={item.booking.id}
                           booking={item.booking}
                           onReview={openEditor}
+                          onViewEvent={openEventPreview}
                         />
                       ),
                     )}
@@ -553,38 +584,69 @@ export function MyReviewsScreen() {
                 )}
               </section>
 
-              <aside className="sl-surface h-fit p-5 lg:sticky lg:top-24">
-                <h2 className="text-lg font-black">สรุปการให้คะแนน</h2>
-                <div className="mt-5 flex items-end gap-3">
-                  <strong className="text-4xl font-black text-violet">
-                    {average ? average.toFixed(1) : '0.0'}
-                  </strong>
-                  <span className="pb-1 text-sm text-muted">จาก 5 คะแนน</span>
-                </div>
-                <div className="mt-3 flex gap-1 text-[#e9a800]" aria-label={`${average.toFixed(1)} จาก 5 ดาว`}>
-                  {[1, 2, 3, 4, 5].map((value) => (
-                    <Star key={value} className="h-5 w-5" fill={average >= value - 0.5 ? 'currentColor' : 'none'} aria-hidden />
-                  ))}
-                </div>
-                <div className="mt-6 grid gap-3">
-                  {[5, 4, 3, 2, 1].map((rating) => {
-                    const count = reviews.filter((review) => review.rating === rating).length;
-                    const width = reviews.length ? (count / reviews.length) * 100 : 0;
-                    return (
-                      <div key={rating} className="grid grid-cols-[36px_1fr_24px] items-center gap-2 text-xs text-muted">
-                        <span>{rating} ดาว</span>
-                        <span className="h-2 overflow-hidden rounded-full bg-[#eee8f5]">
-                          <span className="block h-full rounded-full bg-[linear-gradient(90deg,#6f2ee8,#9c62ff)]" style={{ width: `${width}%` }} />
-                        </span>
-                        <span className="text-right font-bold text-ink">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-6 rounded-2xl bg-[#f8f4ff] p-4 text-sm leading-6 text-muted">
-                  รีวิวได้เฉพาะการจองที่เสร็จสิ้นและ Event จบแล้วเท่านั้น
-                  การแก้ไขจะอัปเดตรีวิวเดิมโดยไม่สร้างรายการซ้ำ
-                </div>
+              <aside className="grid h-fit gap-4 lg:sticky lg:top-24">
+                <section className="sl-surface p-5">
+                  <h2 className="flex items-center gap-2 text-lg font-black">
+                    <BarChart3 className="h-5 w-5 text-violet" aria-hidden />
+                    สรุปการรีวิว
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">
+                    ภาพรวมความคิดเห็นของคุณ
+                  </p>
+                  <div className="mt-5 flex items-end gap-3">
+                    <strong className="text-4xl font-black text-violet">
+                      {average ? average.toFixed(1) : '0.0'}
+                    </strong>
+                    <span className="pb-1 text-sm text-muted">จาก 5 คะแนน</span>
+                  </div>
+                  <div className="mt-3 flex gap-1 text-[#e9a800]" aria-label={`${average.toFixed(1)} จาก 5 ดาว`}>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <Star key={value} className="h-5 w-5" fill={average >= value - 0.5 ? 'currentColor' : 'none'} aria-hidden />
+                    ))}
+                  </div>
+                  <div className="mt-6 grid gap-3">
+                    {[5, 4, 3, 2, 1].map((rating) => {
+                      const count = reviews.filter(
+                        (review) => review.rating === rating,
+                      ).length;
+                      const width = reviews.length
+                        ? (count / reviews.length) * 100
+                        : 0;
+                      return (
+                        <div key={rating} className="grid grid-cols-[36px_1fr_24px] items-center gap-2 text-xs text-muted">
+                          <span>{rating} ดาว</span>
+                          <span className="h-2 overflow-hidden rounded-full bg-[#eee8f5]">
+                            <span className="block h-full rounded-full bg-[linear-gradient(90deg,#6f2ee8,#9c62ff)]" style={{ width: `${width}%` }} />
+                          </span>
+                          <span className="text-right font-bold text-ink">
+                            {count}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-6 rounded-2xl bg-[#f8f4ff] p-4 text-sm leading-6 text-muted">
+                    รีวิวได้เฉพาะการจองที่เสร็จสิ้นและ Event จบแล้วเท่านั้น
+                    การแก้ไขจะอัปเดตรีวิวเดิมโดยไม่สร้างรายการซ้ำ
+                  </div>
+                </section>
+                <section className="sl-surface overflow-hidden bg-[linear-gradient(145deg,#fff,#f4edff)] p-5 text-center">
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-violet-tint text-violet">
+                    <Sparkles className="h-6 w-6" aria-hidden />
+                  </span>
+                  <h2 className="mt-4 text-base font-black leading-6">
+                    ความคิดเห็นของคุณช่วยผู้จัดงานพัฒนาพื้นที่ให้ดีขึ้น
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-muted">
+                    การรีวิวเป็นข้อมูลสำคัญสำหรับการเลือกพื้นที่และปรับปรุงงานในอนาคต
+                  </p>
+                  <div className="mt-4 text-xl tracking-[0.35em] text-violet" aria-hidden>
+                    ✦ ★ ✦
+                  </div>
+                  <p className="mt-3 text-xs font-semibold text-muted">
+                    ขอบคุณที่แบ่งปันประสบการณ์บน SpaceLink
+                  </p>
+                </section>
               </aside>
             </div>
           </>
@@ -602,7 +664,134 @@ export function MyReviewsScreen() {
           onSaved={handleSaved}
         />
       ) : null}
+      {eventPreview ? (
+        <ReviewEventPopup
+          key={eventPreview.identifier}
+          eventId={eventPreview.identifier}
+          eventName={eventPreview.name}
+          onClose={closeEventPreview}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function ReviewEventPopup({
+  eventId,
+  eventName,
+  onClose,
+}: {
+  eventId: string;
+  eventName: string;
+  onClose: () => void;
+}) {
+  const [isMounted, setIsMounted] = useState(false);
+  const [resolvedEvent, setResolvedEvent] = useState<EventMap['event'] | null>(
+    null,
+  );
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setIsMounted(true), []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMounted, onClose]);
+
+  const handleEventResolved = useCallback(
+    ({ event }: { eventId: string; event: EventMap['event'] }) => {
+      setResolvedEvent(event);
+    },
+    [],
+  );
+
+  function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  if (!isMounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto bg-[#171022]/60 px-3 py-3 backdrop-blur-[2px] sm:px-5 sm:py-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-event-popup-title"
+        onKeyDown={trapFocus}
+        className="flex max-h-[calc(100dvh-24px)] w-full max-w-[1120px] flex-col overflow-hidden rounded-[26px] border border-[#ded2f3] bg-white text-ink shadow-[0_30px_100px_rgba(28,15,58,.32)] sm:max-h-[calc(100dvh-48px)]"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-white px-5 py-4 sm:px-8">
+          <div className="min-w-0">
+            <p className="sl-kicker">Event preview</p>
+            <h2
+              id="review-event-popup-title"
+              className="mt-1 truncate text-lg font-black"
+            >
+              {resolvedEvent?.name ?? eventName}
+            </h2>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดรายละเอียด Event"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-white text-muted transition hover:border-violet hover:text-violet"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <EventDetailContent
+            eventId={eventId}
+            onClose={onClose}
+            onEventResolved={handleEventResolved}
+            syncCanonicalRoute={false}
+          />
+        </div>
+        <footer className="flex shrink-0 justify-end border-t border-line bg-white px-5 py-4 sm:px-8">
+          <button
+            type="button"
+            onClick={onClose}
+            className="sl-action-secondary min-w-32 text-violet"
+          >
+            ปิด
+          </button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -640,6 +829,7 @@ function ReviewCard({
   review,
   booking,
   onEdit,
+  onViewEvent,
 }: {
   review: MyReview;
   booking: MyBooking | null;
@@ -648,17 +838,34 @@ function ReviewCard({
     booking: MyBooking,
     review: MyReview | null,
   ) => void;
+  onViewEvent: (
+    event: React.MouseEvent<HTMLElement>,
+    identifier: string,
+    name: string,
+  ) => void;
 }) {
   const context = review.context;
   const zoneName = context?.zone.name ?? context?.zone.code;
   const canEdit = Boolean(booking && review.status !== 'DELETED');
+  const eventIdentifier =
+    booking?.event.slug ?? context?.event.slug ?? booking?.event.id;
+  const eventName = context?.event.name ?? booking?.event.name ?? 'Event';
 
   return (
-    <article className="sl-surface overflow-hidden p-5 sm:p-6">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+    <article className="sl-surface overflow-hidden p-4 sm:p-5">
+      <div className="grid gap-4 sm:grid-cols-[112px_minmax(0,1fr)] xl:grid-cols-[112px_minmax(0,1fr)_auto]">
+        <div
+          role="img"
+          aria-label={`ภาพปก ${eventName}`}
+          className="h-28 w-full rounded-2xl bg-cover bg-center sm:h-full sm:min-h-32"
+          style={{
+            backgroundImage: `url("${getEventCoverUrl(booking?.event.bannerUrl)}")`,
+          }}
+        />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">รีวิวแล้ว</span>
+            <span className="rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">รีวิวพื้นที่บูธ</span>
+            <span className="text-xs font-semibold text-muted">จากผู้เข้าร่วม</span>
             {review.status !== 'PUBLISHED' ? (
               <span className="rounded-full bg-[#fff3dd] px-3 py-1 text-xs font-bold text-[#895b08]">
                 {review.status === 'HIDDEN' ? 'ผู้จัดงานซ่อนรีวิว' : 'รีวิวถูกลบ'}
@@ -666,42 +873,67 @@ function ReviewCard({
             ) : null}
           </div>
           <h3 className="mt-3 break-words text-lg font-black text-ink">
-            {context?.event.name ?? 'พื้นที่ที่คุณเคยรีวิว'}
+            {eventName}
           </h3>
           {context ? (
-            <p className="mt-1 text-sm text-muted">
-              {context.bookingCode} · บูธ {context.booth.code} · {zoneName}
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+              {zoneName} · Booth {context.booth.code} · {context.bookingCode}
             </p>
           ) : null}
+          <p className="mt-4 whitespace-pre-wrap break-words rounded-2xl bg-[#faf8fd] px-4 py-3 leading-7 text-[#514b59]">
+            {review.comment?.trim() || 'ไม่มีความคิดเห็น'}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="flex items-center gap-2 text-sm text-muted">
+              <CalendarDays className="h-4 w-4" aria-hidden />
+              ส่งเมื่อ {DATE_FORMATTER.format(new Date(review.createdAt))}
+            </p>
+            <div className="flex flex-wrap gap-2 xl:hidden">
+              {eventIdentifier ? (
+                <button
+                  type="button"
+                  onClick={(event) =>
+                    onViewEvent(event, eventIdentifier, eventName)
+                  }
+                  className="sl-chip text-violet"
+                >
+                  ดู Event
+                </button>
+              ) : null}
+              {canEdit && booking ? (
+                <button type="button" onClick={(event) => onEdit(event, booking, review)} className="sl-action-secondary text-violet">
+                  <Pencil className="h-4 w-4" aria-hidden /> แก้ไขรีวิว
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#fff8dc] px-3 py-2 text-[#9a6700]" aria-label={`${review.rating} จาก 5 ดาว`}>
-          {Array.from({ length: 5 }, (_, index) => (
-            <Star key={index} className="h-4 w-4" fill={index < review.rating ? 'currentColor' : 'none'} aria-hidden />
-          ))}
-          <span className="ml-1 text-sm font-black">{review.rating}/5</span>
-        </div>
-      </div>
-
-      <p className="mt-5 whitespace-pre-wrap break-words rounded-2xl bg-[#faf8fd] px-4 py-4 leading-7 text-[#514b59]">
-        {review.comment?.trim() || 'ไม่มีความคิดเห็น'}
-      </p>
-
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <CalendarDays className="h-4 w-4" aria-hidden />
-          ส่งเมื่อ {DATE_FORMATTER.format(new Date(review.createdAt))}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {context ? (
-            <Link href={`/events/${encodeURIComponent(context.event.slug)}`} className="sl-chip text-violet">
-              ดู Event
-            </Link>
-          ) : null}
-          {canEdit && booking ? (
-            <button type="button" onClick={(event) => onEdit(event, booking, review)} className="sl-action-secondary text-violet">
-              แก้ไขรีวิว
-            </button>
-          ) : null}
+        <div className="flex items-start justify-between gap-3 sm:col-start-2 xl:col-start-auto xl:flex-col xl:items-end">
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#fff8dc] px-3 py-2 text-[#9a6700]" aria-label={`${review.rating} จาก 5 ดาว`}>
+            {Array.from({ length: 5 }, (_, index) => (
+              <Star key={index} className="h-4 w-4" fill={index < review.rating ? 'currentColor' : 'none'} aria-hidden />
+            ))}
+            <span className="ml-1 text-sm font-black">{review.rating}/5</span>
+          </div>
+          <div className="hidden flex-wrap justify-end gap-2 xl:flex">
+            {eventIdentifier ? (
+              <button
+                type="button"
+                onClick={(event) =>
+                  onViewEvent(event, eventIdentifier, eventName)
+                }
+                className="sl-chip text-violet"
+              >
+                ดู Event
+              </button>
+            ) : null}
+            {canEdit && booking ? (
+              <button type="button" onClick={(event) => onEdit(event, booking, review)} className="sl-action-secondary text-violet">
+                <Pencil className="h-4 w-4" aria-hidden /> แก้ไขรีวิว
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>
@@ -711,6 +943,7 @@ function ReviewCard({
 function PendingReviewCard({
   booking,
   onReview,
+  onViewEvent,
 }: {
   booking: MyBooking;
   onReview: (
@@ -718,24 +951,58 @@ function PendingReviewCard({
     booking: MyBooking,
     review: MyReview | null,
   ) => void;
+  onViewEvent: (
+    event: React.MouseEvent<HTMLElement>,
+    identifier: string,
+    name: string,
+  ) => void;
 }) {
+  const eventIdentifier = booking.event.slug ?? booking.event.id;
   return (
-    <article className="sl-surface overflow-hidden border-violet/20 p-5 sm:p-6">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <span className="inline-flex rounded-full bg-[#fff3dd] px-3 py-1 text-xs font-bold text-[#986200]">รอรีวิว</span>
+    <article className="sl-surface overflow-hidden border-violet/20 p-4 sm:p-5">
+      <div className="grid gap-4 sm:grid-cols-[112px_minmax(0,1fr)]">
+        <div
+          role="img"
+          aria-label={`ภาพปก ${booking.event.name}`}
+          className="h-28 w-full rounded-2xl bg-cover bg-center sm:h-full sm:min-h-32"
+          style={{
+            backgroundImage: `url("${getEventCoverUrl(booking.event.bannerUrl)}")`,
+          }}
+        />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">รีวิวพื้นที่บูธ</span>
+            <span className="text-xs font-semibold text-muted">ยังไม่ได้รีวิว</span>
+          </div>
           <h3 className="mt-3 text-lg font-black">{booking.event.name}</h3>
-          <p className="mt-1 text-sm text-muted">
-            {booking.bookingCode} · บูธ {booking.booth.code} · {booking.booth.zone.name ?? booking.booth.zone.code}
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+            <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+            {booking.booth.zone.name ?? booking.booth.zone.code} · Booth {booking.booth.code} · {booking.bookingCode}
           </p>
-          <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+          <p className="mt-3 rounded-2xl bg-[#faf8fd] px-4 py-3 text-sm leading-6 text-muted">
+            งานจบแล้ว คุณสามารถเขียนรีวิวเพื่อแบ่งปันประสบการณ์ได้
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="flex items-center gap-2 text-sm text-muted">
             <CalendarDays className="h-4 w-4" aria-hidden />
             Event จบเมื่อ {DATE_FORMATTER.format(new Date(booking.event.endDate))}
-          </p>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={(event) =>
+                  onViewEvent(event, eventIdentifier, booking.event.name)
+                }
+                className="sl-chip text-violet"
+              >
+                ดู Event
+              </button>
+              <button type="button" onClick={(event) => onReview(event, booking, null)} className="sl-action-primary shrink-0">
+                เขียนรีวิว <ArrowRight className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </div>
         </div>
-        <button type="button" onClick={(event) => onReview(event, booking, null)} className="sl-action-primary shrink-0">
-          เขียนรีวิว <ArrowRight className="h-4 w-4" aria-hidden />
-        </button>
       </div>
     </article>
   );

@@ -179,10 +179,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   );
 }
 
-function EventDetailContent({
+export function EventDetailContent({
   eventId,
   onClose,
   onEventResolved,
+  syncCanonicalRoute = true,
 }: {
   eventId: string;
   onClose: () => void;
@@ -190,6 +191,7 @@ function EventDetailContent({
     eventId: string;
     event: EventMap['event'];
   }) => void;
+  syncCanonicalRoute?: boolean;
 }) {
   const router = useRouter();
   const [result, setResult] = useState<{
@@ -227,7 +229,7 @@ function EventDetailContent({
         if (!active) return;
         setResult({ eventId, data, error: null });
         onEventResolved({ eventId, event: data.event });
-        if (legacyUuid) {
+        if (legacyUuid && syncCanonicalRoute) {
           router.replace(
             `/events/${encodeURIComponent(data.event.slug)}${window.location.search}`,
           );
@@ -247,7 +249,7 @@ function EventDetailContent({
       active = false;
       controller.abort();
     };
-  }, [eventId, onEventResolved, router]);
+  }, [eventId, onEventResolved, router, syncCanonicalRoute]);
 
   useEffect(() => {
     const controller = new AbortController();
