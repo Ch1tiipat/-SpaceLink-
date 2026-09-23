@@ -282,7 +282,7 @@ export class RefundsService {
         requestedAmount,
         status: RefundStatus.PENDING,
         payoutMethod: dto.payoutMethod,
-        payoutAccountName: dto.payoutAccountName,
+        payoutAccountName: dto.payoutAccountName?.trim() || null,
         payoutPromptPayId: dto.payoutPromptPayId,
         payoutBankName: null,
         payoutAccountNumber: null,
