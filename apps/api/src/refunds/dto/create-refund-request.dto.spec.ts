@@ -27,13 +27,21 @@ describe('CreateRefundRequestDto payout validation', () => {
     },
   );
   it.each([undefined, null, '', '   '])(
-    'requires an account name: %s',
+    'accepts an omitted account name: %s',
     async (value) => {
-      expect(
-        (await errors({ ...base, payoutAccountName: value })).length,
-      ).toBeGreaterThan(0);
+      expect(await errors({ ...base, payoutAccountName: value })).toHaveLength(
+        0,
+      );
     },
   );
+  it('rejects invalid account name types and oversized values', async () => {
+    expect(
+      (await errors({ ...base, payoutAccountName: 123 })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await errors({ ...base, payoutAccountName: 'x'.repeat(201) })).length,
+    ).toBeGreaterThan(0);
+  });
   it('rejects bank transfer payout details', async () => {
     const bank = {
       ...base,

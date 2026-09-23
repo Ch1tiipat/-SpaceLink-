@@ -258,7 +258,7 @@ export type RefundRequest = {
 
 export type CreateRefundRequestInput = {
   payoutMethod: 'PROMPTPAY';
-  payoutAccountName: string;
+  payoutAccountName?: string;
   payoutPromptPayId: string;
   reason: string;
   requestedAmount: string;

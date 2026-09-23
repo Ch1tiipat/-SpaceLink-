@@ -460,6 +460,24 @@ describe('RefundsService', () => {
     );
   });
 
+  it('stores an omitted payout account name as null', async () => {
+    await service.create(BOOKING_ID, VENDOR_ID, {
+      reason: CREATE_DTO.reason,
+      requestedAmount: CREATE_DTO.requestedAmount,
+      payoutMethod: CREATE_DTO.payoutMethod,
+      payoutPromptPayId: CREATE_DTO.payoutPromptPayId,
+    });
+
+    expect(refundRequestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payoutAccountName: null,
+          payoutPromptPayId: CREATE_DTO.payoutPromptPayId,
+        }) as object,
+      }),
+    );
+  });
+
   it.each([
     [null, 'Vendor One', [], false],
     ['Vendor One', 'Vendor One', [{ senderName: 'Vendor One' }], false],
