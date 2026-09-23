@@ -120,12 +120,6 @@ const NAVIGATION: NavigationGroup[] = [
   },
 ];
 
-const THAI_DATE = new Intl.DateTimeFormat('th-TH', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Asia/Bangkok',
-});
 const THAI_DATE_TIME = new Intl.DateTimeFormat('th-TH', {
   dateStyle: 'short',
   timeStyle: 'short',
@@ -148,6 +142,8 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const queryString = searchParams.toString();
   const { auth, signOut } = useAuthState();
   const [collapsed, setCollapsed] = useState(false);
+  const [launcherY, setLauncherY] = useState(160);
+  const launcherDragRef = useRef({ startY: 0, top: 160, moved: false });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -349,11 +345,11 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
       className={`min-h-screen bg-[#fbfaff] transition-[grid-template-columns] duration-200 lg:grid ${
         collapsed
           ? 'lg:grid-cols-[0_minmax(0,1fr)]'
-          : 'lg:grid-cols-[254px_minmax(0,1fr)]'
+          : 'lg:grid-cols-[240px_minmax(0,1fr)]'
       }`}
     >
       <aside
-        className={`sticky top-0 hidden h-screen w-[254px] flex-col overflow-y-auto overflow-x-hidden border-r border-[#ebe4ef] bg-[linear-gradient(180deg,#fff_0%,#fdfbff_72%,#faf7ff_100%)] px-[13px] pb-[14px] pt-[18px] transition duration-200 lg:flex ${
+        className={`sticky top-0 hidden h-screen w-[240px] flex-col overflow-y-auto overflow-x-hidden border-r border-[#ebe4ef] bg-[linear-gradient(180deg,#fff_0%,#fdfbff_68%,#f8f3ff_100%)] px-[13px] pb-[14px] pt-[18px] shadow-[12px_0_34px_rgba(69,49,99,.045)] transition duration-200 lg:flex ${
           collapsed
             ? 'pointer-events-none -translate-x-3 opacity-0'
             : 'translate-x-0 opacity-100'
@@ -391,8 +387,35 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <div className="min-w-0 bg-[linear-gradient(180deg,rgba(250,247,255,.82),rgba(255,255,255,.2)_44%,rgba(245,240,255,.52))]">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[#e8def7] bg-[#f5efff] px-[18px] shadow-[0_8px_24px_rgba(74,48,112,.04)] sm:h-[72px] sm:px-[30px]">
+      {collapsed ? (
+        <button
+          type="button"
+          aria-label="เปิดแถบเมนู (ลากเพื่อย้ายตำแหน่ง)"
+          title="เปิดแถบเมนู · ลากเพื่อย้ายตำแหน่ง"
+          style={{ top: launcherY, touchAction: 'none' }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            launcherDragRef.current = { startY: event.clientY, top: launcherY, moved: false };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const offset = event.clientY - launcherDragRef.current.startY;
+            if (Math.abs(offset) > 4) launcherDragRef.current.moved = true;
+            if (launcherDragRef.current.moved) setLauncherY(Math.min(Math.max(launcherDragRef.current.top + offset, 78), Math.max(78, window.innerHeight - 58)));
+          }}
+          onClick={() => {
+            if (launcherDragRef.current.moved) { launcherDragRef.current.moved = false; return; }
+            setCollapsed(false);
+          }}
+          className="fixed left-0 z-40 hidden h-11 w-11 place-items-center rounded-r-2xl border border-l-0 border-[#d8caeb] bg-white/95 text-[#6d28d9] shadow-[0_10px_28px_rgba(54,36,91,.18)] backdrop-blur transition hover:w-12 hover:bg-[#f5efff] lg:grid"
+        >
+          <Menu className="h-5 w-5" aria-hidden />
+        </button>
+      ) : null}
+
+      <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_91%_12%,rgba(169,120,255,.16),transparent_26%),linear-gradient(180deg,rgba(250,247,255,.86),rgba(255,255,255,.22)_44%,rgba(245,240,255,.55))]">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(74,48,112,.045)] backdrop-blur-xl sm:h-[72px] sm:px-[30px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -403,7 +426,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
                   setDrawerOpen(true);
                 }
               }}
-              className={`grid h-10 w-10 place-items-center rounded-xl border border-[#e8def7] bg-white text-[#716675] ${collapsed ? 'lg:grid' : 'lg:hidden'}`}
+              className="grid h-10 w-10 place-items-center rounded-xl border border-[#e8def7] bg-white text-[#716675] lg:hidden"
               aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
             >
               <Menu className="h-[18px] w-[18px]" />
@@ -426,9 +449,6 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
-            <span className="hidden text-xs text-[#82788b] xl:inline">
-              ข้อมูลล่าสุด {THAI_DATE.format(new Date())}
-            </span>
           <div className="relative">
             <button
               type="button"
@@ -472,7 +492,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
                 aria-label="เปิดเมนูโปรไฟล์"
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
-                className="flex min-h-10 items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] font-bold text-[#6331c4] transition hover:bg-white/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#e9ddff]"
+                className="flex min-h-10 items-center gap-2 rounded-2xl border border-[#e7daf8] bg-white/75 px-2.5 py-1.5 text-[13px] font-bold text-[#6331c4] shadow-[0_8px_24px_rgba(83,46,128,.07)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#d7c1f4] hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#e9ddff]"
               >
                 <span className="grid h-8 w-8 place-items-center rounded-full bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-xs font-extrabold text-white">
                   {initials(auth.fullName)}

@@ -198,13 +198,13 @@ export function SuperAdminDashboard() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-[15px] pb-11 pt-[23px] sm:px-[34px] sm:pt-[31px]">
+    <div className="relative mx-auto w-full max-w-[1440px] px-[15px] pb-11 pt-[23px] sm:px-[34px] sm:pt-[31px]">
       <section className="flex flex-col items-start justify-between gap-[18px] sm:flex-row sm:items-end">
         <div>
           <span className="text-[11px] font-extrabold tracking-[1.1px] text-[#7c3aed]">
-            ORGANIZATION OVERVIEW
+            SUPER ADMIN OVERVIEW
           </span>
-          <h1 className="mb-[5px] mt-[7px] text-[27px] font-black tracking-[-.8px] text-[#242032]">
+          <h1 className="mb-[5px] mt-[7px] text-[30px] font-black tracking-[-1px] text-[#242032] sm:text-[38px]">
             ภาพรวมระบบ
           </h1>
           <p className="m-0 text-[15px] text-[#82788b]">
@@ -244,7 +244,29 @@ export function SuperAdminDashboard() {
         </p>
       ) : null}
 
-      <section className="mt-6 flex flex-col gap-3 rounded-[11px] border border-[#e1d5ef] bg-[#fbf8ff] px-3.5 py-3 text-xs text-[#675d70] sm:flex-row sm:items-center sm:justify-between">
+      <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(310px,.65fr)]">
+        <article className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,.97),rgba(241,232,255,.94))] p-7 shadow-[0_22px_60px_rgba(74,48,112,.1)] sm:p-9">
+          <div aria-hidden className="absolute -right-20 -top-24 h-64 w-64 rounded-full border border-[#7c3aed]/15 shadow-[0_0_0_45px_rgba(124,58,237,.05),0_0_0_90px_rgba(124,58,237,.025)]" />
+          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div><p className="text-[11px] font-extrabold tracking-[.16em] text-[#7c3aed]">TODAY&apos;S FOCUS</p><h2 className="mt-2 text-2xl font-black tracking-[-.04em] text-[#242032]">เรื่องที่ควรจัดการวันนี้</h2><p className="mt-2 text-sm text-[#82788b]">ข้อมูลจริงจากทุกองค์กร เรียงตามงานที่ต้องติดตาม</p></div>
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700"><i className="h-2 w-2 rounded-full bg-emerald-500" />ระบบพร้อมใช้งาน</span>
+          </div>
+          <div className="relative mt-7 grid gap-3 sm:grid-cols-3">
+            <FocusLink href="/super-admin/events-bookings?tab=payments" value={pendingRefunds} label="คำขอคืนเงินรอตรวจ" />
+            <FocusLink href="/super-admin/support?tab=tickets" value={openTickets} label="เคสช่วยเหลือที่ยังเปิด" />
+            <FocusLink href="/super-admin/organizations" value={counts.SUSPENDED + counts.INACTIVE} label="องค์กรที่ควรติดตาม" />
+          </div>
+        </article>
+        <article className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,#5b21b6,#7c3aed_56%,#9b5cf6)] p-7 text-white shadow-[0_22px_60px_rgba(91,33,182,.24)] sm:p-8">
+          <div aria-hidden className="absolute -right-12 -top-12 h-40 w-40 rounded-full border border-white/20 shadow-[0_0_0_35px_rgba(255,255,255,.05),0_0_0_70px_rgba(255,255,255,.025)]" />
+          <p className="relative text-[11px] font-extrabold tracking-[.16em] text-white/70">PLATFORM SIGNAL</p>
+          <p className="relative mt-7 text-5xl font-black tracking-[-.06em]">{bookings.length.toLocaleString('th-TH')}</p>
+          <p className="relative mt-2 text-sm font-bold text-white/85">การจองทั้งหมดในระบบ</p>
+          <div className="relative mt-8 flex items-center justify-between border-t border-white/15 pt-5 text-xs text-white/75"><span>กำลังดำเนินการ</span><strong className="text-base text-white">{activeBookings.toLocaleString('th-TH')}</strong></div>
+        </article>
+      </section>
+
+      <section className="mt-5 flex flex-col gap-3 rounded-[16px] border border-[#e1d5ef] bg-white/75 px-4 py-3.5 text-xs text-[#675d70] shadow-[0_10px_30px_rgba(74,48,112,.04)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eee5fb] text-[11px] font-extrabold text-[#6d28d9]">
             i
@@ -580,6 +602,16 @@ export function SuperAdminDashboard() {
   );
 }
 
+function FocusLink({ href, value, label }: { href: string; value: number; label: string }) {
+  return (
+    <Link href={href} className="group rounded-2xl border border-[#e7dcf4] bg-white/75 p-4 shadow-[0_10px_24px_rgba(74,48,112,.05)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#cdb8ed] hover:bg-white">
+      <span className="text-2xl font-black tracking-[-.04em] text-[#5b21b6]">{String(value).padStart(2, '0')}</span>
+      <span className="mt-2 block text-xs font-bold leading-5 text-[#655d70]">{label}</span>
+      <span className="mt-3 inline-flex items-center text-[11px] font-extrabold text-[#7c3aed] transition group-hover:translate-x-0.5">เปิดรายการ →</span>
+    </Link>
+  );
+}
+
 function SystemBroadcastDialog({
   open,
   onClose,
@@ -753,9 +785,9 @@ function MetricCard({
   loading: boolean;
 }) {
   return (
-    <article className="flex items-center gap-3.5 overflow-hidden rounded-[14px] border border-[#e7def4] bg-[linear-gradient(145deg,#fff,#fbf8ff)] p-[17px] shadow-[0_10px_26px_rgba(74,48,112,.05)] transition hover:-translate-y-0.5 hover:border-[#d9c7ef] hover:shadow-[0_17px_35px_rgba(74,48,112,.1)]">
+    <article className="group flex items-center gap-3.5 overflow-hidden rounded-[20px] border border-white/75 bg-white/90 p-[18px] shadow-[0_14px_34px_rgba(74,48,112,.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#d9c7ef] hover:shadow-[0_18px_42px_rgba(74,48,112,.11)]">
       <span
-        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${TONES[tone].icon}`}
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105 ${TONES[tone].icon}`}
       >
         <Icon className="h-5 w-5" />
       </span>
