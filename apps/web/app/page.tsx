@@ -24,11 +24,18 @@ import {
   type DiscoveryEvent,
   type EventZone,
 } from '@/lib/api';
-import { isEventBookable } from '@/lib/event-booking-rules';
 import { getEventCoverUrl } from '@/lib/event-cover';
+import { hasEventEndCalendarDayPassed } from '@/lib/event-time';
+import {
+  EMPTY_HOME_EVENT_FILTERS,
+  filterHomeEvents,
+  provinceFromAddress,
+  type EventStatusFilter,
+  type HomeEventFilters,
+} from '@/lib/home-event-filters';
+import { isEventBookable } from '@/lib/event-booking-rules';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
-type EventStatusFilter = 'all' | 'bookable' | 'ongoing' | 'ended';
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -36,38 +43,21 @@ const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   year: 'numeric',
 });
 
-function provinceFromAddress(address: string): string {
-  const prefixed = /จังหวัด(\S+)/.exec(address);
-  if (prefixed) return prefixed[1];
-  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
-  return address;
-}
-
 function formatDateRange(event: DiscoveryEvent) {
   return `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(
     new Date(event.endDate),
   )}`;
 }
 
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function isEventEnded(endDate: string, now = new Date()) {
-  const eventEnd = new Date(endDate);
-  if (Number.isNaN(eventEnd.getTime())) return false;
-
-  const bangkokDay = (date: Date) =>
-    Math.floor((date.getTime() + BANGKOK_OFFSET_MS) / DAY_MS);
-  return bangkokDay(eventEnd) < bangkokDay(now);
-}
-
 export default function DiscoveryPage() {
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
-  const [query, setQuery] = useState('');
-  const [area, setArea] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [eventStatus, setEventStatus] = useState<EventStatusFilter>('all');
+  const [draftFilters, setDraftFilters] = useState<HomeEventFilters>(
+    EMPTY_HOME_EVENT_FILTERS,
+  );
+  const [appliedFilters, setAppliedFilters] = useState<HomeEventFilters>(
+    EMPTY_HOME_EVENT_FILTERS,
+  );
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<PublicAnnouncement | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,13 +128,18 @@ export default function DiscoveryPage() {
 
   const filters = useMemo(
     () => ({
-      events: uniqueOptions(
-        events.map((event) => ({
+      events: uniqueOptions([
+        ...events.map((event) => ({
           value: event.name,
           label: event.name,
-          hint: event.venue.name,
+          hint: `Event · ${event.venue.name}`,
         })),
-      ),
+        ...events.map((event) => ({
+          value: event.venue.name,
+          label: event.venue.name,
+          hint: 'สถานที่จัดงาน',
+        })),
+      ]),
       areas: uniqueOptions(
         events
           .filter((event) => event.venue.address)
@@ -165,27 +160,10 @@ export default function DiscoveryPage() {
     [events],
   );
 
-  const visibleEvents = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase('th');
-    return events.filter((event) => {
-      const searchable =
-        `${event.name} ${event.description ?? ''} ${event.organization.name} ${event.venue.name}`.toLocaleLowerCase(
-          'th',
-        );
-      return (
-        (!keyword || searchable.includes(keyword)) &&
-        (!area || provinceFromAddress(event.venue.address ?? '') === area) &&
-        (!categoryId ||
-          event.categories.some((category) => category.id === categoryId)) &&
-        (eventStatus === 'all' ||
-          (eventStatus === 'bookable' && isEventBookable(event)) ||
-          (eventStatus === 'ongoing' &&
-            event.status === 'ONGOING' &&
-            !isEventEnded(event.endDate)) ||
-          (eventStatus === 'ended' && isEventEnded(event.endDate)))
-      );
-    });
-  }, [area, categoryId, eventStatus, events, query]);
+  const visibleEvents = useMemo(
+    () => filterHomeEvents(events, appliedFilters, isEventBookable),
+    [appliedFilters, events],
+  );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
 
   useEffect(() => {
@@ -203,6 +181,7 @@ export default function DiscoveryPage() {
   }
 
   function runSearch() {
+    setAppliedFilters(draftFilters);
     window.requestAnimationFrame(() => {
       document
         .getElementById('events')
@@ -278,32 +257,43 @@ export default function DiscoveryPage() {
             label="งานหรือสถานที่"
             placeholder="เลือกงานหรือสถานที่"
             className="[&_button]:min-h-[66px]"
-            value={query}
-            onChange={setQuery}
+            value={draftFilters.query}
+            onChange={(query) =>
+              setDraftFilters((current) => ({ ...current, query }))
+            }
             options={withAllOption(filters.events, 'งานหรือสถานที่ทั้งหมด')}
           />
           <SelectMenu
             label="พื้นที่"
             placeholder="ทุกพื้นที่"
             className="[&_button]:min-h-[66px]"
-            value={area}
-            onChange={setArea}
+            value={draftFilters.area}
+            onChange={(area) =>
+              setDraftFilters((current) => ({ ...current, area }))
+            }
             options={withAllOption(filters.areas, 'ทุกพื้นที่')}
           />
           <SelectMenu
             label="หมวดสินค้า"
             placeholder="ทุกหมวดสินค้า"
             className="[&_button]:min-h-[66px]"
-            value={categoryId}
-            onChange={setCategoryId}
+            value={draftFilters.categoryId}
+            onChange={(categoryId) =>
+              setDraftFilters((current) => ({ ...current, categoryId }))
+            }
             options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')}
           />
           <SelectMenu
             label="สถานะ Event"
             placeholder="ทุกสถานะ"
             className="[&_button]:min-h-[66px]"
-            value={eventStatus}
-            onChange={(value) => setEventStatus(value as EventStatusFilter)}
+            value={draftFilters.eventStatus}
+            onChange={(value) =>
+              setDraftFilters((current) => ({
+                ...current,
+                eventStatus: value as EventStatusFilter,
+              }))
+            }
             options={[
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
@@ -448,10 +438,8 @@ export default function DiscoveryPage() {
             <button
               type="button"
               onClick={() => {
-                setQuery('');
-                setArea('');
-                setCategoryId('');
-                setEventStatus('all');
+                setDraftFilters(EMPTY_HOME_EVENT_FILTERS);
+                setAppliedFilters(EMPTY_HOME_EVENT_FILTERS);
               }}
               className="mt-4 rounded-xl border border-violet px-4 py-2 text-sm font-bold text-violet"
             >
@@ -598,7 +586,7 @@ function EventCard({ event }: { event: DiscoveryEvent }) {
       <span
         className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}
       >
-        {isEventEnded(event.endDate)
+        {hasEventEndCalendarDayPassed(event.endDate)
           ? 'สิ้นสุดแล้ว'
           : bookable
             ? 'เปิดจอง'

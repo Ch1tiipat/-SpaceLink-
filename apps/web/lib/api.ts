@@ -221,6 +221,8 @@ export type MyBooking = BookingRecord & {
     /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
     slug?: string;
     name: string;
+    /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
+    bannerUrl?: string | null;
     endDate: string;
     endTime: string | null;
   };

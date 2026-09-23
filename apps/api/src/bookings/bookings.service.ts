@@ -65,6 +65,7 @@ const bookingListInclude = {
       id: true,
       slug: true,
       name: true,
+      bannerUrl: true,
       endDate: true,
       endTime: true,
       organization: { select: { promptpayId: true } },
@@ -112,6 +113,7 @@ type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
     id: string;
     slug: string;
     name: string;
+    bannerUrl: string | null;
     endDate: Date;
     endTime: string | null;
   };
@@ -1527,6 +1529,7 @@ export class BookingsService {
         id: event.id,
         slug: event.slug,
         name: event.name,
+        bannerUrl: event.bannerUrl,
         endDate: event.endDate,
         endTime: event.endTime,
       },
