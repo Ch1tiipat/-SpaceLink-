@@ -212,14 +212,19 @@ export function AdminRefundsScreen({
                     >
                       {item.status}
                     </span>
+                    {!item.payoutAccountName ? (
+                      <span className="mt-2 block w-fit rounded-full bg-[#fff3d8] px-2.5 py-1 text-[10px] font-extrabold text-[#a96800]">
+                        ไม่ได้ระบุชื่อผู้รับ
+                      </span>
+                    ) : null}
                     {item.payoutNameMismatch ? (
-                      <span className="mt-1 block text-[10px] font-bold text-[#b42318]">
+                      <span className="mt-2 block w-fit rounded-full bg-[#fff0ee] px-2.5 py-1 text-[10px] font-extrabold text-[#b42318]">
                         ชื่อบัญชีควรตรวจสอบ
                       </span>
                     ) : null}
                   </td>
                   <td className="px-4 py-4 text-xs text-muted">
-                    {item.payoutAccountName || '—'}
+                    {item.payoutAccountName || 'ไม่ได้ระบุ'}
                     <br />
                     {item.payoutMethod || ''}
                   </td>
