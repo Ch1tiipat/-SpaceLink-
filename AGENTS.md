@@ -66,9 +66,10 @@ The Prisma schema remains frozen except for these seventeen additive changes:
   a 100-to-0 trust score and reaching zero triggers the existing blacklist state.
 - SCRUM-144: add `RefundRequest.payoutMethod`, `payoutPromptPayId`, `payoutBankName`,
   `payoutAccountNumber`, and `payoutAccountName` as nullable `String?` fields with corresponding
-  snake_case `@map` names. Nullability preserves legacy refund requests; new-request validation
-  must require an account name and the details for the selected `PROMPTPAY` or `BANK_TRANSFER`
-  method in the API. No new enum or changes to existing cancellation/refund rules are authorized.
+  snake_case `@map` names. Nullability preserves legacy refund requests. New requests currently
+  require a valid `PROMPTPAY` id; `payoutAccountName` is optional and a missing name must remain
+  visible to organization admins through a dedicated warning flag rather than being treated as a
+  successful name match. No new enum or changes to existing cancellation/refund rules are authorized.
 - SCRUM-159: add the `Organization.facebookUrl` and `Organization.lineUrl` fields (both nullable
   `String?` with `@map("facebook_url")` / `@map("line_url")`) to the existing `Organization` model,
   following the same pattern as `contactEmail`/`contactPhone`/`logoUrl`, so each organization's

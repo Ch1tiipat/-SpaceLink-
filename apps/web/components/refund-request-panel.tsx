@@ -25,10 +25,14 @@ export function RefundRequestPanel({
   booking,
   token,
   isPreview,
+  onCreated,
+  embedded = false,
 }: {
   booking: MyBooking;
   token: string;
   isPreview: boolean;
+  onCreated?: (refund: RefundRequest) => void;
+  embedded?: boolean;
 }) {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,10 +86,6 @@ export function RefundRequestPanel({
       setSubmitError('ยอดที่ขอคืนต้องมากกว่า 0 และไม่เกินราคาบูธ');
       return;
     }
-    if (!trimmedAccountName) {
-      setSubmitError('กรุณาระบุชื่อบัญชีผู้รับเงิน');
-      return;
-    }
     if (!/^(\d{10}|\d{13}|\d{15})$/.test(payoutPromptPayId)) {
       setSubmitError(
         'PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัว 13/15 หลัก',
@@ -101,13 +101,16 @@ export function RefundRequestPanel({
       }
       const input: CreateRefundRequestInput = {
         payoutMethod: 'PROMPTPAY',
-        payoutAccountName: trimmedAccountName,
+        ...(trimmedAccountName
+          ? { payoutAccountName: trimmedAccountName }
+          : {}),
         payoutPromptPayId,
         reason: trimmedReason,
         requestedAmount: trimmedAmount,
       };
       const created = await createRefundRequest(booking.id, input, token);
       setRefunds((current) => [created, ...current]);
+      onCreated?.(created);
     } catch (cause) {
       setSubmitError(
         cause instanceof Error ? cause.message : 'ส่งคำร้องคืนเงินไม่สำเร็จ',
@@ -120,8 +123,8 @@ export function RefundRequestPanel({
   if (booking.status !== 'CANCELLED') return null;
 
   return (
-    <section className="sl-surface p-5">
-      <h2 className="font-black">ขอคืนเงิน</h2>
+    <section className={embedded ? '' : 'sl-surface p-5'}>
+      {!embedded ? <h2 className="font-black">ขอคืนเงิน</h2> : null}
       {isLoading ? (
         <p className="mt-2 text-sm text-muted">กำลังตรวจสอบคำร้องเดิม…</p>
       ) : loadError ? (
@@ -171,12 +174,12 @@ export function RefundRequestPanel({
             ช่องทางรับเงิน: <strong>PromptPay เท่านั้น</strong>
           </div>
           <label className="grid gap-1.5 text-sm font-bold">
-            ชื่อบัญชีผู้รับเงิน
+            ชื่อบัญชีผู้รับเงิน (ไม่บังคับ)
             <input
               value={payoutAccountName}
               onChange={(event) => setPayoutAccountName(event.target.value)}
               maxLength={200}
-              required
+              placeholder="กรอกเพื่อช่วยตรวจสอบชื่อผู้รับ"
               className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
             />
           </label>

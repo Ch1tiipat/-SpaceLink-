@@ -501,8 +501,13 @@ function RefundItem({
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <strong className="text-sm text-ink">{refund.status}</strong>
+          {!refund.payoutAccountName ? (
+            <span className="rounded-full bg-[#fff3d8] px-2 py-1 text-[10px] font-extrabold text-[#a96800]">
+              ไม่ได้ระบุชื่อผู้รับ
+            </span>
+          ) : null}
           {refund.payoutNameMismatch ? (
-            <span className="rounded-full bg-[#fff6e6] px-2 py-1 text-[10px] font-extrabold text-[#9a570f]">
+            <span className="rounded-full bg-[#fff0ee] px-2 py-1 text-[10px] font-extrabold text-[#b42318]">
               ชื่อบัญชีที่แจ้งควรตรวจสอบ
             </span>
           ) : null}

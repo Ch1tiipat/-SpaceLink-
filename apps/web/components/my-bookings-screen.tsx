@@ -43,12 +43,13 @@ type AccessState =
 type BookingFilter =
   'ALL' | 'PAYMENT' | 'CONFIRMATION' | 'COMPLETED' | 'CANCELLED';
 type SortOrder = 'newest' | 'oldest';
+type GroupStatus = BookingStatus | 'MIXED';
 
 type BookingGroup = {
   key: string;
   bookings: MyBooking[];
   primary: MyBooking;
-  status: BookingStatus;
+  status: GroupStatus;
   totalAmount: string;
 };
 
@@ -60,12 +61,18 @@ const statusLabel: Record<BookingStatus, string> = {
   COMPLETED: 'เสร็จสิ้น',
 };
 
-const statusTone: Record<BookingStatus, string> = {
+const groupStatusLabel: Record<GroupStatus, string> = {
+  ...statusLabel,
+  MIXED: 'หลายสถานะ',
+};
+
+const statusTone: Record<GroupStatus, string> = {
   PENDING_PAYMENT: 'border-[#f3ddae] bg-[#fff3d8] text-[#a96800]',
   CONFIRMED: 'border-[#b9dfd3] bg-[#ebfaf3] text-[#13795b]',
   CANCELLED: 'border-[#fac5bf] bg-[#fff0ee] text-[#b42318]',
   NO_SHOW: 'border-[#ead8b7] bg-[#fff8e8] text-[#895b08]',
   COMPLETED: 'border-[#b9dfd3] bg-[#ebfaf3] text-[#13795b]',
+  MIXED: 'border-[#d9ccff] bg-[#f4f0ff] text-[#5b2bc9]',
 };
 
 const bookingFilters: readonly { value: BookingFilter; label: string }[] = [
@@ -114,7 +121,7 @@ function fromSatang(value: bigint): string {
   return `${value / BigInt(100)}.${(value % BigInt(100)).toString().padStart(2, '0')}`;
 }
 
-function resolveGroupStatus(items: MyBooking[]): BookingStatus {
+function resolveGroupStatus(items: MyBooking[]): GroupStatus {
   if (items.some((booking) => booking.status === 'PENDING_PAYMENT')) {
     return 'PENDING_PAYMENT';
   }
@@ -133,7 +140,7 @@ function resolveGroupStatus(items: MyBooking[]): BookingStatus {
   ) {
     return 'CANCELLED';
   }
-  return items[0]?.status ?? 'CANCELLED';
+  return items.length === 0 ? 'CANCELLED' : 'MIXED';
 }
 
 function groupBookings(bookings: MyBooking[]): BookingGroup[] {
@@ -564,6 +571,7 @@ export function MyBookingsScreen() {
 
                 {visibleBookings.map((group) => {
                   const booking = group.primary;
+                  const hasMixedStatuses = group.status === 'MIXED';
                   const holdExpired = group.bookings.some(
                     (item) => expiredIds.has(item.id) || isExpired(item),
                   );
@@ -654,10 +662,12 @@ export function MyBookingsScreen() {
                           >
                             {group.status === 'PENDING_PAYMENT' ? (
                               <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                            ) : hasMixedStatuses ? (
+                              <Info className="h-3.5 w-3.5" aria-hidden />
                             ) : (
                               <Check className="h-3.5 w-3.5" aria-hidden />
                             )}
-                            {statusLabel[group.status]}
+                            {groupStatusLabel[group.status]}
                           </span>
                           {group.status === 'PENDING_PAYMENT' && !holdExpired ? (
                             <Link
@@ -694,33 +704,35 @@ export function MyBookingsScreen() {
                         </p>
                       ) : null}
 
-                      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-3 text-xs font-bold">
-                        <Link
-                          href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
-                          className="text-violet hover:underline"
-                        >
-                          ดู Event
-                        </Link>
-                        <Link
-                          href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`}
-                          className="text-violet hover:underline"
-                        >
-                          ดู Zone Map
-                        </Link>
-                        {reviewBooking ? (
+                      {!hasMixedStatuses ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-3 text-xs font-bold">
                           <Link
-                            href={`/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`}
+                            href={`/events/${encodeURIComponent(booking.event.slug ?? '')}`}
                             className="text-violet hover:underline"
                           >
-                            เขียนรีวิวพื้นที่
+                            ดู Event
                           </Link>
-                        ) : null}
-                        {group.status === 'CANCELLED' && booking.cancelReason ? (
-                          <span className="font-normal text-muted">
-                            เหตุผลที่ยกเลิก: {booking.cancelReason}
-                          </span>
-                        ) : null}
-                      </div>
+                          <Link
+                            href={`/events/${encodeURIComponent(booking.event.slug ?? '')}/map?zone=${encodeURIComponent(booking.booth.zone.code)}`}
+                            className="text-violet hover:underline"
+                          >
+                            ดู Zone Map
+                          </Link>
+                          {reviewBooking ? (
+                            <Link
+                              href={`/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`}
+                              className="text-violet hover:underline"
+                            >
+                              เขียนรีวิวพื้นที่
+                            </Link>
+                          ) : null}
+                          {group.status === 'CANCELLED' && booking.cancelReason ? (
+                            <span className="font-normal text-muted">
+                              เหตุผลที่ยกเลิก: {booking.cancelReason}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </article>
                   );
                 })}
@@ -850,6 +862,7 @@ function BookingDetailDialog({
   const closeRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const booking = group.primary;
+  const hasMixedStatuses = group.status === 'MIXED';
   const boothCodes = group.bookings.map((item) => item.booth.code).join(' + ');
   const hasPayment = group.bookings.every(
     (item) =>
@@ -948,7 +961,16 @@ function BookingDetailDialog({
       `Booth: ${boothCodes}`,
       `Zone: ${booking.booth.zone.name ?? booking.booth.zone.code}`,
       `ยอดรวม: ${formatMoney(group.totalAmount)} บาท`,
-      `สถานะ: ${statusLabel[group.status]}`,
+      `สถานะรวม: ${groupStatusLabel[group.status]}`,
+      ...(hasMixedStatuses
+        ? [
+            'สถานะแยกรายบูธ:',
+            ...group.bookings.map(
+              (item) =>
+                `- ${item.bookingCode} · Booth ${item.booth.code} · ${statusLabel[item.status]}`,
+            ),
+          ]
+        : []),
     ].join('\n');
     const url = URL.createObjectURL(
       new Blob([content], { type: 'text/plain;charset=utf-8' }),
@@ -1023,12 +1045,19 @@ function BookingDetailDialog({
             <span
               className={`inline-flex min-h-9 w-fit items-center rounded-full border px-4 text-xs font-extrabold ${statusTone[group.status]}`}
             >
-              {statusLabel[group.status]}
+              {groupStatusLabel[group.status]}
             </span>
           </div>
 
           <section className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <BookingFact label="รหัสการจอง" value={booking.bookingCode} />
+            <BookingFact
+              label="รหัสการจอง"
+              value={
+                group.bookings.length === 1
+                  ? booking.bookingCode
+                  : `${group.bookings.length} รายการ`
+              }
+            />
             <BookingFact label="Booth" value={boothCodes} />
             <BookingFact
               label="Zone"
@@ -1088,44 +1117,82 @@ function BookingDetailDialog({
             </section>
           </div>
 
-          <section className="mt-5" aria-label="ลำดับสถานะการจอง">
-            <h3 className="font-black">ขั้นตอนการจอง</h3>
-            <ol className="relative mt-4 grid gap-3 sm:grid-cols-3 before:absolute before:left-[16%] before:right-[16%] before:top-4 before:hidden before:h-px before:bg-line sm:before:block">
-            {timeline.map((step, index) => (
-              <li
-                key={step.label}
-                className="relative z-10 flex items-center gap-3 rounded-2xl bg-white sm:flex-col sm:text-center"
-              >
-                <span
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-4 border-white shadow-sm ${
-                    step.done
-                      ? 'bg-violet text-white'
-                      : 'bg-[#eee8f5] text-muted'
-                  }`}
-                >
-                  {step.done ? (
-                    <CheckCircle2 className="h-4 w-4" aria-hidden />
-                  ) : (
-                    index + 1
-                  )}
-                </span>
-                <div>
-                  <strong className="block text-sm">{step.label}</strong>
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    {step.detail}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          </section>
+          {hasMixedStatuses ? (
+            <section className="mt-5 rounded-2xl border border-[#d9ccff] bg-[#fbf9ff] p-4 sm:p-5">
+              <h3 className="flex items-center gap-2 font-black">
+                <Info className="h-4 w-4 text-violet" aria-hidden />
+                สถานะแยกรายบูธ
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-muted">
+                ชุดจองนี้มีหลายสถานะ โปรดตรวจสอบแต่ละบูธก่อนดำเนินการ
+              </p>
+              <ul className="mt-3 grid gap-2">
+                {group.bookings.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white px-3 py-3 text-xs"
+                  >
+                    <div>
+                      <strong className="block text-sm text-ink">
+                        Booth {item.booth.code}
+                      </strong>
+                      <span className="mt-1 block text-muted">
+                        {item.bookingCode}
+                      </span>
+                    </div>
+                    <span
+                      className={`inline-flex min-h-8 items-center rounded-full border px-3 font-extrabold ${statusTone[item.status]}`}
+                    >
+                      {statusLabel[item.status]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {!hasMixedStatuses ? (
+            <section className="mt-5" aria-label="ลำดับสถานะการจอง">
+              <h3 className="font-black">ขั้นตอนการจอง</h3>
+              <ol className="relative mt-4 grid gap-3 sm:grid-cols-3 before:absolute before:left-[16%] before:right-[16%] before:top-4 before:hidden before:h-px before:bg-line sm:before:block">
+                {timeline.map((step, index) => (
+                  <li
+                    key={step.label}
+                    className="relative z-10 flex items-center gap-3 rounded-2xl bg-white sm:flex-col sm:text-center"
+                  >
+                    <span
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-4 border-white shadow-sm ${
+                        step.done
+                          ? 'bg-violet text-white'
+                          : 'bg-[#eee8f5] text-muted'
+                      }`}
+                    >
+                      {step.done ? (
+                        <CheckCircle2 className="h-4 w-4" aria-hidden />
+                      ) : (
+                        index + 1
+                      )}
+                    </span>
+                    <div>
+                      <strong className="block text-sm">{step.label}</strong>
+                      <p className="mt-1 text-xs leading-5 text-muted">
+                        {step.detail}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
 
           <div className="mt-5 rounded-2xl bg-[#f8f3ff] px-4 py-3 text-sm leading-6 text-muted">
-            {group.status === 'PENDING_PAYMENT'
+            {hasMixedStatuses
+              ? 'ชุดจองนี้มีหลายสถานะ โปรดตรวจสอบสถานะแยกรายบูธก่อนดำเนินการ'
+              : group.status === 'PENDING_PAYMENT'
               ? 'กรุณาชำระเงินตามยอดที่กำหนด และแนบสลิปเพื่อให้ผู้จัดงานตรวจสอบ'
               : hasFinished
                 ? 'รายการนี้เสร็จสิ้นแล้ว คุณสามารถเปิดหน้ารายละเอียดเพื่อรีวิวหรือดำเนินการอื่นได้'
-                : 'การจองได้รับการยืนยันแล้ว คุณสามารถเก็บใบเสร็จเพื่อใช้ตรวจสอบ'}
+                : 'การจองได้รับการยืนยันแล้ว คุณสามารถเก็บสรุปการจองไว้ใช้ตรวจสอบ'}
           </div>
 
           {actionMessage ? (
@@ -1170,12 +1237,14 @@ function BookingDetailDialog({
                 ดาวน์โหลดสรุปการจอง
               </button>
             )}
-            <Link
-              href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
-              className="sl-action-secondary text-violet"
-            >
-              เปิดหน้ารายละเอียดเต็ม
-            </Link>
+            {!hasMixedStatuses ? (
+              <Link
+                href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
+                className="sl-action-secondary text-violet"
+              >
+                เปิดหน้ารายละเอียดเต็ม
+              </Link>
+            ) : null}
           </footer>
         </div>
       </section>

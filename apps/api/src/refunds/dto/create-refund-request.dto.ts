@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   IsIn,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -17,13 +18,15 @@ export class CreateRefundRequestDto {
   @IsIn(['PROMPTPAY'])
   payoutMethod!: 'PROMPTPAY';
 
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(200)
-  payoutAccountName!: string;
+  payoutAccountName?: string;
 
   @Matches(/^(\d{10}|\d{13}|\d{15})$/)
   payoutPromptPayId!: string;

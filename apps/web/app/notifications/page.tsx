@@ -36,8 +36,20 @@ import { refundNotificationHref } from '@/lib/refund-notification-route';
 import { useAuthState } from '@/lib/use-auth-state';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 
-type NotificationKind = 'event' | 'booking' | 'penalty' | 'payment' | 'system';
-type NotificationFilter = 'all' | 'unread' | NotificationKind;
+type NotificationKind =
+  | 'news'
+  | 'booking'
+  | 'penalty'
+  | 'payment'
+  | 'request'
+  | 'system';
+type NotificationFilter =
+  | 'all'
+  | 'unread'
+  | 'booking'
+  | 'payment'
+  | 'news'
+  | 'request';
 
 const NOTIFICATION_PREFERENCE_TYPES = [
   'BOOKING_STATUS',
@@ -72,18 +84,18 @@ type NotificationAccess =
   | { status: 'error'; message: string };
 
 const KIND_BY_TYPE: Record<NotificationType, NotificationKind> = {
-  ANNOUNCEMENT: 'event',
+  ANNOUNCEMENT: 'news',
   BOOKING_STATUS: 'booking',
-  SUPPORT_TICKET: 'booking',
+  SUPPORT_TICKET: 'request',
   PENALTY: 'penalty',
   PAYMENT: 'payment',
-  REFUND: 'payment',
+  REFUND: 'request',
   SYSTEM: 'system',
 };
 
 const KIND_META = {
-  event: {
-    label: 'ข่าวงาน',
+  news: {
+    label: 'ข่าวสาร',
     icon: Megaphone,
     tone: 'bg-[#fff5e9] text-[#b35c00]',
   },
@@ -102,6 +114,11 @@ const KIND_META = {
     icon: CreditCard,
     tone: 'bg-[#edf6ff] text-[#1d67a8]',
   },
+  request: {
+    label: 'คำขอ',
+    icon: ListChecks,
+    tone: 'bg-[#f4efff] text-[#6d28d9]',
+  },
   system: {
     label: 'แนะนำสำหรับคุณ',
     icon: Sparkles,
@@ -116,10 +133,9 @@ const FILTER_OPTIONS = [
   { value: 'all', label: 'ทั้งหมด' },
   { value: 'unread', label: 'ยังไม่ได้อ่าน' },
   { value: 'booking', label: 'การจอง' },
-  { value: 'payment', label: 'ชำระเงิน' },
-  { value: 'event', label: 'ข่าวงาน' },
-  { value: 'penalty', label: 'แต้มโทษ' },
-  { value: 'system', label: 'ระบบ' },
+  { value: 'payment', label: 'การชำระเงิน' },
+  { value: 'news', label: 'ข่าวสาร' },
+  { value: 'request', label: 'คำขอ' },
 ] as const satisfies ReadonlyArray<{
   value: NotificationFilter;
   label: string;
@@ -222,7 +238,7 @@ function notificationHref(
         ? `/bookings/${encodeURIComponent(relatedBookingId)}/payment`
         : '/bookings?tab=pending';
     case 'SUPPORT_TICKET':
-      return '/help';
+      return '/support';
     case 'PENALTY':
       return undefined;
   }
@@ -285,13 +301,23 @@ function createPreviewNotifications(): UserNotification[] {
     },
     {
       id: 'preview-event',
-      kind: 'event',
+      kind: 'news',
       title: 'ประกาศจากผู้จัดงาน',
       description: 'ตรวจสอบเวลาเข้าพื้นที่และกฎร้านค้าก่อนวันเริ่มงาน',
       createdAt: new Date(now - 5 * 3_600_000).toISOString(),
       unread: false,
       href: '/events/demo-event',
       actionLabel: 'ดูข่าวสาร',
+    },
+    {
+      id: 'preview-request',
+      kind: 'request',
+      title: 'คำขอคืนเงินอยู่ระหว่างตรวจสอบ',
+      description: 'ทีมงานรับคำขอ RF-DEMO-001 แล้วและกำลังตรวจสอบข้อมูล',
+      createdAt: new Date(now - 26 * 3_600_000).toISOString(),
+      unread: false,
+      href: '/refunds?requestId=RF-DEMO-001',
+      actionLabel: 'ติดตามคำขอ',
     },
     {
       id: 'preview-review',
@@ -316,11 +342,18 @@ export default function NotificationsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES,
   );
   const [savingPreference, setSavingPreference] = useState(false);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = window.setTimeout(() => setToastMessage(null), 3_500);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
 
   useEffect(() => {
     if (auth.status === 'loading') {
@@ -461,14 +494,11 @@ export default function NotificationsPage() {
       payment: notifications.filter(
         (notification) => notification.kind === 'payment',
       ).length,
-      event: notifications.filter(
-        (notification) => notification.kind === 'event',
+      news: notifications.filter(
+        (notification) => notification.kind === 'news',
       ).length,
-      penalty: notifications.filter(
-        (notification) => notification.kind === 'penalty',
-      ).length,
-      system: notifications.filter(
-        (notification) => notification.kind === 'system',
+      request: notifications.filter(
+        (notification) => notification.kind === 'request',
       ).length,
     }),
     [notifications, unreadCount],
@@ -488,7 +518,12 @@ export default function NotificationsPage() {
       await markAllNotificationsRead(access.token);
     } catch (cause) {
       setNotifications(previous);
-      setActionError(describeError(cause, 'ทำเครื่องหมายอ่านทั้งหมดไม่สำเร็จ'));
+      const message = describeError(
+        cause,
+        'ทำเครื่องหมายอ่านทั้งหมดไม่สำเร็จ',
+      );
+      setActionError(message);
+      setToastMessage(message);
     }
   }
 
@@ -517,7 +552,12 @@ export default function NotificationsPage() {
             : notification,
         ),
       );
-      setActionError(describeError(cause, 'ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ'));
+      const message = describeError(
+        cause,
+        'ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ',
+      );
+      setActionError(message);
+      setToastMessage(message);
     }
   }
 
@@ -543,17 +583,22 @@ export default function NotificationsPage() {
 
     if (access.token === UX_PREVIEW_TOKEN) {
       setSavingPreference(false);
+      setToastMessage('บันทึกการตั้งค่าการแจ้งเตือนแล้ว');
       return;
     }
 
     try {
       const saved = await updateNotificationPreferences(patch, access.token);
       setPreferences(saved);
+      setToastMessage('บันทึกการตั้งค่าการแจ้งเตือนแล้ว');
     } catch (cause) {
       setPreferences(previous);
-      setActionError(
-        describeError(cause, 'บันทึกการตั้งค่าการแจ้งเตือนไม่สำเร็จ'),
+      const message = describeError(
+        cause,
+        'บันทึกการตั้งค่าการแจ้งเตือนไม่สำเร็จ',
       );
+      setActionError(message);
+      setToastMessage(message);
     } finally {
       setSavingPreference(false);
     }
@@ -580,21 +625,21 @@ export default function NotificationsPage() {
                 type="button"
                 onClick={() => setSettingsOpen((current) => !current)}
                 aria-expanded={settingsOpen}
+                aria-controls="notification-settings-panel"
                 className="sl-action-secondary"
               >
                 <Settings2 className="h-4 w-4" aria-hidden />
                 ตั้งค่าการแจ้งเตือน
               </button>
-              {unreadCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={markAllAsRead}
-                  className="sl-action-primary"
-                >
-                  <CheckCheck className="h-4 w-4" aria-hidden />
-                  อ่านทั้งหมด
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={markAllAsRead}
+                disabled={unreadCount === 0}
+                className="sl-action-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCheck className="h-4 w-4" aria-hidden />
+                อ่านทั้งหมด
+              </button>
             </div>
           ) : null}
         </header>
@@ -632,14 +677,14 @@ export default function NotificationsPage() {
               unread={unreadCount}
               booking={notificationCounts.booking}
               payment={notificationCounts.payment}
-              event={notificationCounts.event}
+              news={notificationCounts.news}
               onFilter={setFilter}
             />
 
             <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <section className="min-w-0">
                 <div
-                  className="mb-4 flex gap-2 overflow-x-auto pb-1"
+                  className="mb-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
                   aria-label="กรองการแจ้งเตือน"
                 >
                   {FILTER_OPTIONS.map(({ value, label }) => (
@@ -715,6 +760,15 @@ export default function NotificationsPage() {
             </div>
           </>
         )}
+        {toastMessage ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-24 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-2xl bg-[#241638] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_45px_rgba(31,18,49,.28)] sm:right-6"
+          >
+            {toastMessage}
+          </div>
+        ) : null}
       </div>
     </main>
   );
@@ -724,13 +778,13 @@ function NotificationSummary({
   unread,
   booking,
   payment,
-  event,
+  news,
   onFilter,
 }: {
   unread: number;
   booking: number;
   payment: number;
-  event: number;
+  news: number;
   onFilter: (filter: NotificationFilter) => void;
 }) {
   const cards: Array<{
@@ -763,8 +817,8 @@ function NotificationSummary({
     },
     {
       label: 'ข่าวสาร',
-      value: event,
-      filter: 'event',
+      value: news,
+      filter: 'news',
       icon: Megaphone,
       tone: 'bg-[#e8f8f0] text-[#16855f]',
     },
@@ -997,6 +1051,7 @@ function NotificationSettings({
 
   return (
     <section
+      id="notification-settings-panel"
       className="sl-surface mb-5 overflow-hidden"
       aria-label="ตั้งค่าการแจ้งเตือน"
     >
