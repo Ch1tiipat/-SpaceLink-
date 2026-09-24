@@ -9,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -428,7 +429,7 @@ function VendorTicketForm({
   const [contextNotice, setContextNotice] = useState<string | null>(null);
   const [contextError, setContextError] = useState<string | null>(null);
   const [issueBookingId, setIssueBookingId] = useState('');
-  const [issueKind, setIssueKind] = useState<IssueKind>('PAYMENT');
+  const [issueKind, setIssueKind] = useState<IssueKind | ''>('');
   const [issuePriority, setIssuePriority] = useState<IssuePriority>('NORMAL');
   const [issueSubject, setIssueSubject] = useState('');
   const [issueDetail, setIssueDetail] = useState('');
@@ -728,7 +729,7 @@ function VendorTicketForm({
 
     if (
       activeTab === 'ISSUE_REPORT' &&
-      (!issueSubject.trim() || !issueDetail.trim())
+      (!issueKind || !issueSubject.trim() || !issueDetail.trim())
     ) {
       setError('กรุณากรอกหัวข้อและรายละเอียดให้ครบ');
       return;
@@ -765,7 +766,7 @@ function VendorTicketForm({
               .filter((line): line is string => line !== null)
               .join('\n')
           : [
-              `ประเภทปัญหา: ${issueKindLabel(issueKind)}`,
+              `ประเภทปัญหา: ${issueKind ? issueKindLabel(issueKind) : '-'}`,
               `ความสำคัญ: ${issuePriorityLabel(issuePriority)}`,
               attachment ? `ไฟล์อ้างอิง: ${attachment.name}` : null,
               '',
@@ -808,6 +809,9 @@ function VendorTicketForm({
             );
       setTicket(created);
       if (activeTab === 'ISSUE_REPORT') {
+        setIssueKind('');
+        setIssuePriority('NORMAL');
+        setIssueBookingId('');
         setIssueSubject('');
         setIssueDetail('');
       } else {
@@ -901,9 +905,28 @@ function VendorTicketForm({
       rejected: tickets.filter(
         (item) => vendorTicketStatus(item).key === 'REJECTED',
       ).length,
+      resolved: tickets.filter(
+        (item) => vendorTicketStatus(item).key === 'RESOLVED',
+      ).length,
     }),
     [tickets],
   );
+
+  const activeTabCopy = {
+    ISSUE_REPORT: {
+      title: 'แจ้งปัญหา',
+      description:
+        'แจ้งปัญหาการใช้งานหรือเหตุขัดข้อง เพื่อให้ทีมงานตรวจสอบและช่วยเหลือได้เร็วขึ้น',
+    },
+    QUOTA_INCREASE: {
+      title: 'ขอเพิ่มโควต้า',
+      description: 'กรอกข้อมูลพื้นที่ที่ต้องการเพิ่มเพื่อส่งให้ทีมงานตรวจสอบ',
+    },
+    TRACKING: {
+      title: 'ติดตามสถานะคำขอ',
+      description: 'ตรวจสอบความคืบหน้าของคำขอทุกประเภทได้ในที่เดียว',
+    },
+  }[activeTab];
 
   return (
     <section aria-labelledby="vendor-request-heading" className="mt-1">
@@ -916,10 +939,10 @@ function VendorTicketForm({
             id="vendor-request-heading"
             className="mt-2 text-3xl font-black tracking-[-0.04em] text-ink sm:text-4xl"
           >
-            ติดต่อสอบถาม
+            {activeTabCopy.title}
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted sm:text-base">
-            แจ้งปัญหา ขอเพิ่มโควต้า และติดตามทุกคำขอได้ในที่เดียว
+            {activeTabCopy.description}
           </p>
         </div>
         {preview ? (
@@ -935,6 +958,7 @@ function VendorTicketForm({
         className="mt-7 grid gap-3 md:grid-cols-3"
       >
         <SupportTab
+          tab="ISSUE_REPORT"
           active={activeTab === 'ISSUE_REPORT'}
           icon={MessageCircleWarning}
           title="แจ้งปัญหา"
@@ -942,13 +966,15 @@ function VendorTicketForm({
           onClick={() => changeTab('ISSUE_REPORT')}
         />
         <SupportTab
+          tab="QUOTA_INCREASE"
           active={activeTab === 'QUOTA_INCREASE'}
           icon={FileText}
           title="ขอเพิ่มโควต้า"
-          description="ขอสิทธิ์จองบูธเพิ่มอีก 1 รายการ"
+          description="ส่งคำขอเพิ่มพื้นที่สำหรับร้านของคุณ"
           onClick={() => changeTab('QUOTA_INCREASE')}
         />
         <SupportTab
+          tab="TRACKING"
           active={activeTab === 'TRACKING'}
           icon={BarChart3}
           title="ติดตามสถานะคำขอ"
@@ -958,7 +984,12 @@ function VendorTicketForm({
       </div>
 
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
-        <div className="sl-surface p-5 sm:p-7">
+        <div
+          id={`support-panel-${activeTab.toLowerCase()}`}
+          role="tabpanel"
+          aria-labelledby={`support-tab-${activeTab.toLowerCase()}`}
+          className="sl-surface p-5 sm:p-7"
+        >
           {activeTab === 'TRACKING' ? (
             <TrackingPanel
               counts={counts}
@@ -995,11 +1026,14 @@ function VendorTicketForm({
                       <select
                         value={issueKind}
                         onChange={(event) =>
-                          setIssueKind(event.target.value as IssueKind)
+                          setIssueKind(event.target.value as IssueKind | '')
                         }
                         className={inputClass}
                         required
                       >
+                        <option value="" disabled>
+                          เลือกประเภทปัญหา
+                        </option>
                         <option value="PAYMENT">การชำระเงิน</option>
                         <option value="BOOKING">การจองบูธ</option>
                         <option value="UPLOAD">การอัปโหลดไฟล์</option>
@@ -1007,18 +1041,29 @@ function VendorTicketForm({
                         <option value="OTHER">อื่น ๆ</option>
                       </select>
                     </Field>
-                    <Field label="ความสำคัญ *">
-                      <select
-                        value={issuePriority}
-                        onChange={(event) =>
-                          setIssuePriority(event.target.value as IssuePriority)
-                        }
-                        className={inputClass}
-                        required
-                      >
-                        <option value="NORMAL">ปกติ</option>
-                        <option value="URGENT">เร่งด่วน</option>
-                      </select>
+                    <Field label="ความเร่งด่วน *">
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {(
+                          [
+                            ['NORMAL', 'ปกติ'],
+                            ['URGENT', 'เร่งด่วน'],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <label key={value} className="cursor-pointer">
+                            <input
+                              type="radio"
+                              name="issue-priority"
+                              value={value}
+                              checked={issuePriority === value}
+                              onChange={() => setIssuePriority(value)}
+                              className="peer sr-only"
+                            />
+                            <span className="grid min-h-12 place-items-center rounded-2xl border border-line bg-white px-3 text-sm font-bold text-muted transition peer-checked:border-violet peer-checked:bg-violet-tint peer-checked:text-violet peer-focus-visible:ring-4 peer-focus-visible:ring-violet/20">
+                              {label}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </Field>
                   </div>
                   <Field label="Event / Booking ที่เกี่ยวข้อง">
@@ -1058,6 +1103,9 @@ function VendorTicketForm({
                       placeholder="อธิบายสิ่งที่พบ ขั้นตอนที่ทำ และผลลัพธ์ที่ต้องการ"
                       required
                     />
+                    <span className="mt-2 block text-right text-xs font-semibold text-muted">
+                      {issueDetail.length.toLocaleString('th-TH')}/2,000
+                    </span>
                   </Field>
                 </>
               ) : (
@@ -1164,36 +1212,10 @@ function VendorTicketForm({
               {bookingsError ? <ErrorMessage message={bookingsError} /> : null}
               {boothError ? <ErrorMessage message={boothError} /> : null}
               {error ? <ErrorMessage message={error} /> : null}
-              {ticket ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-                  <div className="flex items-start gap-3 text-emerald-900">
-                    <CheckCircle2
-                      className="mt-0.5 h-5 w-5 shrink-0"
-                      aria-hidden
-                    />
-                    <div>
-                      <p className="font-extrabold">ส่งคำขอสำเร็จ</p>
-                      <p className="mt-1 text-sm">
-                        Request ID:{' '}
-                        <strong className="break-all">{ticket.id}</strong>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => changeTab('TRACKING')}
-                    className="sl-action-secondary mt-4 text-violet"
-                  >
-                    ไปหน้าติดตามคำขอ
-                    <ChevronRight className="h-4 w-4" aria-hidden />
-                  </button>
-                </div>
-              ) : null}
-
               <button
                 type="submit"
                 disabled={submitting}
-                className="sl-action-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
+                className="sl-action-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Send className="h-4 w-4" aria-hidden />
                 {submitting
@@ -1262,17 +1284,27 @@ function VendorTicketForm({
           }}
         />
       )}
+      {ticket ? (
+        <RequestSuccessDialog
+          ticket={ticket}
+          requestType={ticket.type === 'OTHER' ? 'QUOTA' : 'ISSUE'}
+          onClose={() => setTicket(null)}
+          onTrack={() => changeTab('TRACKING')}
+        />
+      ) : null}
     </section>
   );
 }
 
 function SupportTab({
+  tab,
   active,
   icon: Icon,
   title,
   description,
   onClick,
 }: {
+  tab: VendorTab;
   active: boolean;
   icon: typeof Send;
   title: string;
@@ -1281,11 +1313,13 @@ function SupportTab({
 }) {
   return (
     <button
+      id={`support-tab-${tab.toLowerCase()}`}
       type="button"
       role="tab"
       aria-selected={active}
+      aria-controls={`support-panel-${tab.toLowerCase()}`}
       onClick={onClick}
-      className={`flex min-h-24 items-center gap-4 rounded-2xl border p-4 text-left transition ${
+      className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3 text-left transition ${
         active
           ? 'border-violet bg-violet-tint shadow-[0_12px_28px_rgba(91,44,207,0.12)]'
           : 'border-line bg-white hover:border-[#cdbcf0]'
@@ -1330,12 +1364,22 @@ function AttachmentInput({
         <input
           type="file"
           accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
-          onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? 'support-attachment-error' : undefined}
+          onChange={(event) => {
+            onChange(event.currentTarget.files?.[0] ?? null);
+            event.currentTarget.value = '';
+          }}
           className="sr-only"
         />
       </label>
       {error ? (
-        <p className="mt-2 text-sm font-semibold text-red-700">{error}</p>
+        <p
+          id="support-attachment-error"
+          className="mt-2 text-sm font-semibold text-red-700"
+        >
+          {error}
+        </p>
       ) : null}
       {file ? (
         <button
@@ -1370,6 +1414,7 @@ function TrackingPanel({
     pending: number;
     approved: number;
     rejected: number;
+    resolved: number;
   };
   loading: boolean;
   error: string | null;
@@ -1390,12 +1435,13 @@ function TrackingPanel({
         Request tracking
       </p>
       <h2 className="mt-1 text-2xl font-black text-ink">รายการคำขอของฉัน</h2>
-      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[
           ['ทั้งหมด', counts.total, 'bg-violet-tint text-violet'],
           ['รอตรวจสอบ', counts.pending, 'bg-amber-50 text-amber-700'],
           ['อนุมัติ', counts.approved, 'bg-emerald-50 text-emerald-700'],
           ['ปฏิเสธ', counts.rejected, 'bg-red-50 text-red-700'],
+          ['ดำเนินการแล้ว', counts.resolved, 'bg-blue-50 text-blue-700'],
         ].map(([label, value, tone]) => (
           <div
             key={String(label)}
@@ -1479,50 +1525,232 @@ function TrackingPanel({
           </p>
         </div>
       ) : (
-        <div className="mt-5 grid gap-3">
-          {tickets.map((item) => {
-            const status = vendorTicketStatus(item);
-            return (
-              <article
-                key={item.id}
-                className="grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-violet-tint px-2.5 py-1 text-xs font-bold text-violet">
-                      {item.type === 'OTHER' ? 'เพิ่มโควต้า' : 'แจ้งปัญหา'}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.tone}`}
-                    >
-                      {status.label}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 truncate font-extrabold text-ink">
-                    {item.subject}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted">
-                    {item.id} · {formatThaiDate(item.createdAt)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {item.booking
-                      ? `${item.booking.event.name} · Booth ${item.booking.booth.code}`
-                      : (item.organization?.name ?? 'คำขอทั่วไป')}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpen(item.id)}
-                  className="sl-action-secondary justify-center text-violet"
-                >
-                  ดูรายละเอียด <ChevronRight className="h-4 w-4" aria-hidden />
-                </button>
-              </article>
-            );
-          })}
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-line bg-white">
+          <table className="w-full min-w-[780px] border-collapse text-left">
+            <thead className="bg-[#f8f5fc] text-xs font-extrabold text-muted">
+              <tr>
+                <th className="px-4 py-3">หมายเลขคำขอ</th>
+                <th className="px-4 py-3">หัวข้อคำขอ</th>
+                <th className="px-4 py-3">ประเภท</th>
+                <th className="px-4 py-3">วันที่ส่ง</th>
+                <th className="px-4 py-3">สถานะ</th>
+                <th className="px-4 py-3">
+                  <span className="sr-only">การทำงาน</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((item) => {
+                const status = vendorTicketStatus(item);
+                return (
+                  <tr
+                    key={item.id}
+                    className="border-t border-line align-middle transition hover:bg-[#fcfaff]"
+                  >
+                    <td className="px-4 py-4 text-sm font-extrabold text-ink">
+                      {item.id}
+                    </td>
+                    <td className="max-w-64 px-4 py-4">
+                      <strong className="block truncate text-sm text-ink">
+                        {item.subject}
+                      </strong>
+                      <small className="mt-1 block truncate text-muted">
+                        {item.booking
+                          ? `${item.booking.event.name} · Booth ${item.booking.booth.code}`
+                          : (item.organization?.name ?? 'คำขอทั่วไป')}
+                      </small>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="rounded-full bg-violet-tint px-2.5 py-1 text-xs font-bold text-violet">
+                        {item.type === 'OTHER' ? 'เพิ่มโควต้า' : 'แจ้งปัญหา'}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-4 text-xs text-muted">
+                      {formatThaiDate(item.createdAt)}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span
+                        className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${status.tone}`}
+                      >
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onOpen(item.id)}
+                        className="inline-flex min-h-10 items-center gap-1 whitespace-nowrap rounded-xl border border-[#d8c9f3] px-3 text-xs font-extrabold text-violet transition hover:bg-violet-tint"
+                      >
+                        ดูรายละเอียด
+                        <ChevronRight className="h-4 w-4" aria-hidden />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
+  );
+}
+
+function AccessibleDialog({
+  labelledBy,
+  onClose,
+  children,
+  maxWidth = 'max-w-2xl',
+}: {
+  labelledBy: string;
+  onClose: () => void;
+  children: ReactNode;
+  maxWidth?: string;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      const preferred = dialogRef.current?.querySelector<HTMLElement>(
+        '[data-dialog-initial-focus]',
+      );
+      const first = dialogRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      (preferred ?? first)?.focus();
+    }, 0);
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      returnFocusRef.current?.focus();
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-[#171126]/55 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className={`max-h-[88vh] w-full ${maxWidth} overflow-y-auto rounded-[28px] bg-white p-5 shadow-2xl sm:p-7`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RequestSuccessDialog({
+  ticket,
+  requestType,
+  onClose,
+  onTrack,
+}: {
+  ticket: SupportTicketRecord;
+  requestType: 'ISSUE' | 'QUOTA';
+  onClose: () => void;
+  onTrack: () => void;
+}) {
+  return (
+    <AccessibleDialog
+      labelledBy="support-success-title"
+      onClose={onClose}
+      maxWidth="max-w-md"
+    >
+      <div className="text-center">
+        <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+          <CheckCircle2 className="h-8 w-8" aria-hidden />
+        </span>
+        <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+          Request submitted
+        </p>
+        <h2
+          id="support-success-title"
+          className="mt-2 text-2xl font-black text-ink"
+        >
+          ส่งคำขอสำเร็จ
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          {requestType === 'QUOTA'
+            ? 'ระบบได้รับคำขอเพิ่มโควต้าของคุณแล้ว'
+            : 'ระบบได้รับรายละเอียดปัญหาของคุณแล้ว'}
+        </p>
+        <div className="mt-5 rounded-2xl bg-violet-tint p-4">
+          <span className="block text-xs font-bold text-muted">
+            หมายเลขคำขอ
+          </span>
+          <strong className="mt-1 block break-all text-lg text-violet">
+            {ticket.id}
+          </strong>
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            data-dialog-initial-focus
+            onClick={onClose}
+            className="sl-action-secondary justify-center text-violet"
+          >
+            ปิด
+          </button>
+          <button
+            type="button"
+            onClick={onTrack}
+            className="sl-action-primary justify-center"
+          >
+            ติดตามคำขอ
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      </div>
+    </AccessibleDialog>
   );
 }
 
@@ -1537,25 +1765,8 @@ function TicketDetailDialog({
   error: string | null;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-[90] grid place-items-center bg-[#171126]/55 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ticket-detail-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[28px] bg-white p-5 shadow-2xl sm:p-7">
+    <AccessibleDialog labelledBy="ticket-detail-title" onClose={onClose}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
@@ -1570,6 +1781,7 @@ function TicketDetailDialog({
           </div>
           <button
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
             aria-label="ปิดรายละเอียดคำขอ"
             className="grid h-10 w-10 place-items-center rounded-full bg-[#f4f1f8] text-muted hover:text-violet"
@@ -1638,8 +1850,7 @@ function TicketDetailDialog({
             </div>
           </div>
         ) : null}
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }
 
