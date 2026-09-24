@@ -62,12 +62,14 @@ type BookingAccessDialog =
   | { kind: 'signed-out' }
   | { kind: 'missing-shop' }
   | {
-      kind: 'quota-full';
+      kind: 'quota-limit';
       eventId: string;
       zoneId: string;
       boothId: string;
       activeBookingCount: number;
       configuredQuota: number;
+      selectedCount: number;
+      effectiveSelectionLimit: number;
     }
   | null;
 
@@ -340,7 +342,10 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       effectiveSelectionLimit: quota.value.effectiveSelectionLimit,
       remainingQuota: quota.value.remainingQuota,
     });
-    if (quotaDecision === 'open-quota-request') {
+    if (
+      quotaDecision === 'open-quota-full-dialog' ||
+      quotaDecision === 'open-selection-limit-dialog'
+    ) {
       const zone = data?.zones.find(
         (candidate) => candidate.id === booth.zoneId,
       );
@@ -353,21 +358,17 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       setBookingAccessDialog(
         (current) =>
           current ?? {
-            kind: 'quota-full',
+            kind: 'quota-limit',
             eventId: data.event.id,
             zoneId: zone.id,
             boothId: booth.id,
             activeBookingCount: quota.value.activeBookingCount,
             configuredQuota: quota.value.configuredQuota,
+            selectedCount: selectedBoothIds.length,
+            effectiveSelectionLimit: quota.value.effectiveSelectionLimit,
           },
       );
       setSelectionError(null);
-      return;
-    }
-    if (quotaDecision === 'show-selection-limit') {
-      setSelectionError(
-        `เลือกได้สูงสุด ${quota.value.effectiveSelectionLimit} บูธตามโควตาคงเหลือ`,
-      );
       return;
     }
     setSelectedBoothIds((current) => [...current, booth.id]);
@@ -381,6 +382,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
       latestQuota.status !== 'ready' ||
       selectedBooths.length > latestQuota.value.effectiveSelectionLimit
     ) {
+      setBookingAccessDialog(null);
       setSelectionError(
         latestQuota.status === 'ready' && latestQuota.value.remainingQuota === 0
           ? 'โควตาล่าสุดเต็มแล้ว กรุณาส่งคำขอเพิ่มโควตา'
@@ -922,6 +924,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         kind={bookingAccessDialog}
         triggerRef={bookingAccessTriggerRef}
         onClose={closeBookingAccessDialog}
+        onConfirmSelection={() => void continueToBooking()}
       />
     </main>
   );
@@ -931,10 +934,12 @@ function BookingAccessModal({
   kind,
   triggerRef,
   onClose,
+  onConfirmSelection,
 }: {
   kind: BookingAccessDialog;
   triggerRef: MutableRefObject<HTMLElement | SVGElement | null>;
   onClose: () => void;
+  onConfirmSelection: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -978,8 +983,9 @@ function BookingAccessModal({
 
   if (!kind) return null;
   const missingShop = kind.kind === 'missing-shop';
-  const quotaFull = kind.kind === 'quota-full';
-  const closeLabel = quotaFull
+  const quotaLimit = kind.kind === 'quota-limit';
+  const hasPendingSelection = quotaLimit && kind.selectedCount > 0;
+  const closeLabel = quotaLimit
     ? 'ปิดข้อความโควตาเต็ม'
     : 'ปิดข้อความก่อนเลือกบูธ';
 
@@ -1009,7 +1015,7 @@ function BookingAccessModal({
           <X className="h-5 w-5" aria-hidden />
         </button>
         <span className="grid h-14 w-14 place-items-center rounded-[20px] bg-violet-tint text-violet">
-          {quotaFull ? (
+          {quotaLimit ? (
             <Gauge className="h-6 w-6" aria-hidden />
           ) : (
             <Store className="h-6 w-6" aria-hidden />
@@ -1019,8 +1025,10 @@ function BookingAccessModal({
           id="booking-access-title"
           className="mt-5 pr-12 text-xl font-black text-ink"
         >
-          {quotaFull
-            ? 'โควตาการจองบูธเต็มแล้ว'
+          {quotaLimit
+            ? hasPendingSelection
+              ? 'เลือกบูธครบจำนวนที่กำหนดแล้ว'
+              : 'โควตาการจองบูธเต็มแล้ว'
             : missingShop
               ? 'ยังไม่มีร้านค้าสำหรับทำรายการจอง'
               : 'เข้าสู่ระบบก่อนเลือกบูธ'}
@@ -1029,30 +1037,49 @@ function BookingAccessModal({
           id="booking-access-description"
           className="mt-2 text-sm leading-6 text-muted"
         >
-          {quotaFull
-            ? `คุณใช้โควตาครบ ${kind.activeBookingCount}/${kind.configuredQuota} บูธสำหรับ Event นี้ หากต้องการจองเพิ่ม กรุณาส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
+          {quotaLimit
+            ? hasPendingSelection
+              ? `คุณเลือกครบ ${kind.selectedCount}/${kind.effectiveSelectionLimit} บูธที่จองได้ในครั้งนี้แล้ว กรุณายืนยันบูธที่เลือกก่อน หรือส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
+              : `คุณใช้โควตาครบ ${kind.activeBookingCount}/${kind.configuredQuota} บูธสำหรับ Event นี้ หากต้องการจองเพิ่ม กรุณาส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
             : missingShop
               ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าก่อนเลือกจองบูธ'
               : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
         </p>
         <div
-          className={`mt-6 grid gap-3 ${missingShop || quotaFull ? 'sm:grid-cols-2' : 'grid-cols-2'}`}
+          className={`mt-6 grid gap-3 ${missingShop || quotaLimit ? 'sm:grid-cols-2' : 'grid-cols-2'}`}
         >
-          {quotaFull ? (
+          {quotaLimit ? (
             <>
-              <Link
-                href="/bookings"
+              <button
+                type="button"
                 onClick={onClose}
                 className="sl-action-secondary justify-center"
               >
-                ดูการจองของฉัน
-              </Link>
+                กลับไปเลือกใหม่
+              </button>
+              {hasPendingSelection ? (
+                <button
+                  type="button"
+                  onClick={onConfirmSelection}
+                  className="sl-action-primary justify-center"
+                >
+                  ยืนยัน {kind.selectedCount} บูธที่เลือก
+                </button>
+              ) : (
+                <Link
+                  href="/bookings"
+                  onClick={onClose}
+                  className="sl-action-secondary justify-center"
+                >
+                  ดูการจองของฉัน
+                </Link>
+              )}
               <Link
                 href={`/help?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
                 onClick={onClose}
-                className="sl-action-primary justify-center"
+                className={`justify-center ${hasPendingSelection ? 'sl-action-secondary sm:col-span-2' : 'sl-action-primary sm:col-span-2'}`}
               >
-                ขอโควตาเพิ่ม
+                ขอเพิ่มโควตา / ติดต่อผู้จัดงาน
               </Link>
             </>
           ) : missingShop ? (

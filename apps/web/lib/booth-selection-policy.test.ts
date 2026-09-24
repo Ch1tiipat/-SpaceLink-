@@ -72,14 +72,14 @@ boothSelectionTest('continues only for a signed-in vendor with a shop', () => {
   );
 });
 
-boothSelectionTest('opens the quota request only when no quota remains', () => {
+boothSelectionTest('opens the correct quota dialog when the limit is reached', () => {
   boothSelectionAssert.equal(
     decideBoothQuota({
       selectedCount: 0,
       effectiveSelectionLimit: 0,
       remainingQuota: 0,
     }),
-    'open-quota-request',
+    'open-quota-full-dialog',
   );
   boothSelectionAssert.equal(
     decideBoothQuota({
@@ -87,7 +87,7 @@ boothSelectionTest('opens the quota request only when no quota remains', () => {
       effectiveSelectionLimit: 2,
       remainingQuota: 4,
     }),
-    'show-selection-limit',
+    'open-selection-limit-dialog',
   );
 });
 
