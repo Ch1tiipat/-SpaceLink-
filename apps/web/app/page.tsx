@@ -10,7 +10,9 @@ import {
   ChevronRight,
   CreditCard,
   Headphones,
+  MapPin,
   MapPinned,
+  Search,
   ShieldCheck,
   Store,
   type LucideIcon,
@@ -141,12 +143,13 @@ export default function DiscoveryPage() {
         })),
       ]),
       areas: uniqueOptions(
-        events
-          .filter((event) => event.venue.address)
-          .map((event) => {
-            const province = provinceFromAddress(event.venue.address ?? '');
-            return { value: province, label: province };
-          }),
+        events.flatMap((event) => {
+          const address = event.venue.address?.trim() ?? '';
+          const province = provinceFromAddress(address);
+          return [province, event.venue.name, address]
+            .filter(Boolean)
+            .map((area) => ({ value: area, label: area }));
+        }),
       ),
       categories: uniqueOptions(
         events.flatMap((event) =>
@@ -161,8 +164,17 @@ export default function DiscoveryPage() {
   );
 
   const visibleEvents = useMemo(
-    () => filterHomeEvents(events, appliedFilters, isEventBookable),
-    [appliedFilters, events],
+    () =>
+      filterHomeEvents(
+        events,
+        {
+          ...appliedFilters,
+          query: draftFilters.query,
+          area: draftFilters.area,
+        },
+        isEventBookable,
+      ),
+    [appliedFilters, draftFilters.area, draftFilters.query, events],
   );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
 
@@ -253,25 +265,27 @@ export default function DiscoveryPage() {
             runSearch();
           }}
         >
-          <SelectMenu
+          <SearchableFilterInput
+            id="home-event-query"
             label="งานหรือสถานที่"
-            placeholder="เลือกงานหรือสถานที่"
-            className="[&_button]:min-h-[66px]"
+            placeholder="พิมพ์ชื่องานหรือสถานที่"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
             }
-            options={withAllOption(filters.events, 'งานหรือสถานที่ทั้งหมด')}
+            suggestions={filters.events.map((option) => option.label)}
+            icon={Search}
           />
-          <SelectMenu
+          <SearchableFilterInput
+            id="home-area-query"
             label="พื้นที่"
-            placeholder="ทุกพื้นที่"
-            className="[&_button]:min-h-[66px]"
+            placeholder="พิมพ์จังหวัดหรือพื้นที่"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))
             }
-            options={withAllOption(filters.areas, 'ทุกพื้นที่')}
+            suggestions={filters.areas.map((option) => option.label)}
+            icon={MapPin}
           />
           <SelectMenu
             label="หมวดสินค้า"
@@ -307,14 +321,6 @@ export default function DiscoveryPage() {
           >
             ดูผลการค้นหา
           </button>
-          <p
-            aria-live="polite"
-            className="col-span-full text-sm font-semibold text-muted"
-          >
-            {loading
-              ? 'กำลังค้นหา Event…'
-              : `พบ ${visibleEvents.length} Event ที่ตรงกับตัวกรอง`}
-          </p>
         </form>
       </section>
 
@@ -403,13 +409,10 @@ export default function DiscoveryPage() {
         <span className="sl-kicker">ค้นหา Event</span>
         <h2
           id="events-heading"
-          className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+          className="mb-[18px] mt-[7px] text-[26px] font-black tracking-[-0.025em]"
         >
           งานที่เหมาะกับร้านของคุณ
         </h2>
-        <p aria-live="polite" className="mb-[18px] mt-1 text-sm text-muted">
-          พบ {visibleEvents.length} Event ที่ตรงกับตัวกรอง
-        </p>
         {loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
@@ -430,7 +433,7 @@ export default function DiscoveryPage() {
               className="mx-auto h-9 w-9 text-violet"
             />
             <h3 className="mt-3 text-lg font-extrabold">
-              ไม่พบ Event ที่ตรงกับตัวกรอง
+              ไม่พบ Event ตามเงื่อนไขที่เลือก
             </h3>
             <p className="mt-1 text-sm text-muted">
               ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง
@@ -937,4 +940,51 @@ function withAllOption(
   allLabel: string,
 ): SelectMenuOption[] {
   return [{ value: '', label: allLabel }, ...options];
+}
+
+function SearchableFilterInput({
+  id,
+  label,
+  placeholder,
+  value,
+  suggestions,
+  icon: Icon,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  suggestions: string[];
+  icon: LucideIcon;
+  onChange: (value: string) => void;
+}) {
+  const listId = `${id}-suggestions`;
+
+  return (
+    <label htmlFor={id} className="grid gap-1.5">
+      <span className="text-xs font-extrabold text-[#62576d]">{label}</span>
+      <span className="relative block">
+        <Icon
+          aria-hidden
+          className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-violet"
+        />
+        <input
+          id={id}
+          type="search"
+          list={listId}
+          autoComplete="off"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="min-h-[66px] w-full rounded-2xl border border-[#ded5e9] bg-white py-3 pl-11 pr-4 text-base font-semibold text-ink outline-none transition placeholder:font-medium placeholder:text-[#9a91a3] hover:border-[#cab9e5] focus:border-violet focus:ring-4 focus:ring-violet/10"
+        />
+        <datalist id={listId}>
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      </span>
+    </label>
+  );
 }
