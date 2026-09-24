@@ -15,8 +15,6 @@ import {
   LogOut,
   Megaphone,
   Menu,
-  Orbit,
-  PanelLeftClose,
   ScrollText,
   Settings2,
   ShieldAlert,
@@ -341,95 +339,18 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div
-      className={`min-h-screen bg-[#fbfaff] transition-[grid-template-columns] duration-200 lg:grid ${
-        collapsed
-          ? 'lg:grid-cols-[0_minmax(0,1fr)]'
-          : 'lg:grid-cols-[240px_minmax(0,1fr)]'
-      }`}
-    >
-      <aside
-        className={`sticky top-0 hidden h-screen w-[240px] flex-col overflow-y-auto overflow-x-hidden border-r border-[#ebe4ef] bg-[linear-gradient(180deg,#fff_0%,#fdfbff_68%,#f8f3ff_100%)] px-[13px] pb-[14px] pt-[18px] shadow-[12px_0_34px_rgba(69,49,99,.045)] transition duration-200 lg:flex ${
-          collapsed
-            ? 'pointer-events-none -translate-x-3 opacity-0'
-            : 'translate-x-0 opacity-100'
-        }`}
-      >
-        {sidebar}
-      </aside>
-
-      {drawerOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            aria-label="ปิดเมนู"
-            onClick={() => setDrawerOpen(false)}
-            className="absolute inset-0 bg-[#181022]/50 backdrop-blur-[2px]"
-          />
-          <aside className="relative flex h-full w-[254px] flex-col overflow-y-auto bg-[linear-gradient(180deg,#fff_0%,#fdfbff_72%,#faf7ff_100%)] px-[13px] pb-[14px] pt-[18px] shadow-[12px_0_30px_rgba(15,20,38,.2)]">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(false)}
-              className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675]"
-              aria-label="ปิดเมนู"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <SidebarContent
-              pathname={pathname}
-              queryString={queryString}
-              platformOpen={platformOpen}
-              onTogglePlatform={() => setPlatformOpen((value) => !value)}
-              onCollapse={() => setDrawerOpen(false)}
-              mobile
-            />
-          </aside>
-        </div>
-      ) : null}
-
-      {collapsed ? (
-        <button
-          type="button"
-          aria-label="เปิดแถบเมนู (ลากเพื่อย้ายตำแหน่ง)"
-          title="เปิดแถบเมนู · ลากเพื่อย้ายตำแหน่ง"
-          style={{ top: launcherY, touchAction: 'none' }}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            launcherDragRef.current = { startY: event.clientY, top: launcherY, moved: false };
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            const offset = event.clientY - launcherDragRef.current.startY;
-            if (Math.abs(offset) > 4) launcherDragRef.current.moved = true;
-            if (launcherDragRef.current.moved) setLauncherY(Math.min(Math.max(launcherDragRef.current.top + offset, 78), Math.max(78, window.innerHeight - 58)));
-          }}
-          onClick={() => {
-            if (launcherDragRef.current.moved) { launcherDragRef.current.moved = false; return; }
-            setCollapsed(false);
-          }}
-          className="fixed left-0 z-40 hidden h-11 w-11 place-items-center rounded-r-2xl border border-l-0 border-[#d8caeb] bg-white/95 text-[#6d28d9] shadow-[0_10px_28px_rgba(54,36,91,.18)] backdrop-blur transition hover:w-12 hover:bg-[#f5efff] lg:grid"
-        >
-          <Menu className="h-5 w-5" aria-hidden />
-        </button>
-      ) : null}
-
-      <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_91%_12%,rgba(169,120,255,.16),transparent_26%),linear-gradient(180deg,rgba(250,247,255,.86),rgba(255,255,255,.22)_44%,rgba(245,240,255,.55))]">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(74,48,112,.045)] backdrop-blur-xl sm:h-[72px] sm:px-[30px]">
+    <div className="min-h-screen bg-[#fbfaff]">
+      <header className="sticky top-0 z-30 flex h-[63px] items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(61,43,88,.045)] backdrop-blur-xl lg:h-[72px] lg:px-[30px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                if (window.matchMedia('(min-width: 1024px)').matches) {
-                  setCollapsed(false);
-                } else {
-                  setDrawerOpen(true);
-                }
-              }}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-[#e8def7] bg-white text-[#716675] lg:hidden"
-              aria-label={collapsed ? 'เปิดแถบเมนู' : 'เปิดเมนู'}
+              onClick={() => setDrawerOpen(true)}
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#e5deef] bg-white text-[#655d70] transition hover:border-[#d3c6e8] hover:bg-[#f5efff] hover:text-[#7c3aed] lg:hidden"
+              aria-label="เปิดเมนูหลัก"
+              aria-haspopup="dialog"
+              aria-expanded={drawerOpen}
             >
-              <Menu className="h-[18px] w-[18px]" />
+              <Menu className="h-5 w-5" aria-hidden />
             </button>
             <Link
               href="/super-admin"
@@ -448,21 +369,22 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               </span>
             </Link>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            <div className="relative">
             <button
               type="button"
               onClick={toggleNotifications}
-              className="relative grid h-9 w-9 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675] transition hover:border-[#d8c9ed] hover:bg-[#faf7ff] hover:text-[#6d28d9]"
+              className="relative grid h-10 w-10 place-items-center rounded-2xl bg-transparent text-[#655d70] transition hover:bg-white/80 hover:text-[#7c3aed]"
               aria-label={`การแจ้งเตือน${unreadCount ? ` ยังไม่ได้อ่าน ${unreadCount} รายการ` : ''}`}
               aria-expanded={notificationOpen}
               aria-haspopup="dialog"
             >
-              <Bell className="h-[18px] w-[18px]" />
+              <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
               {unreadCount && unreadCount > 0 ? (
-                <span className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-white bg-[#ef4444] px-1 text-[9px] font-extrabold leading-none text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+                <span
+                  aria-hidden
+                  className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-[#ef4444]"
+                />
               ) : null}
             </button>
             {notificationOpen ? (
@@ -484,7 +406,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
                 />
               </>
             ) : null}
-          </div>
+            </div>
             <div ref={accountMenuRef} className="relative">
               <button
                 type="button"
@@ -535,11 +457,98 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               ) : null}
             </div>
           </div>
-        </header>
-        <main className="min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-72px)]">
+      </header>
+
+      <div
+        className={`grid min-h-[calc(100vh-63px)] transition-[grid-template-columns] duration-300 lg:min-h-[calc(100vh-72px)] ${
+          collapsed
+            ? 'lg:grid-cols-[minmax(0,1fr)]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)]'
+        }`}
+      >
+        {!collapsed ? (
+          <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] flex-col overflow-hidden border-r border-[#ebe5ef] bg-[linear-gradient(180deg,#fff_0%,#fefcff_68%,#f8f3ff_100%)] px-4 py-5 shadow-[12px_0_34px_rgba(69,49,99,.045)] lg:flex">
+            {sidebar}
+          </aside>
+        ) : null}
+
+        <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_91%_12%,rgba(169,120,255,.16),transparent_26%),linear-gradient(180deg,rgba(250,247,255,.86),rgba(255,255,255,.22)_44%,rgba(245,240,255,.55))]">
+          <main className="min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]">
           {children}
-        </main>
+          </main>
+        </div>
       </div>
+
+      {drawerOpen ? (
+        <div className="fixed inset-0 z-50 bg-[rgba(24,16,38,.5)] backdrop-blur-[2px] lg:hidden">
+          <button
+            type="button"
+            aria-label="ปิดเมนู"
+            onClick={() => setDrawerOpen(false)}
+            className="absolute inset-0"
+          />
+          <aside className="relative flex h-full w-[min(88vw,340px)] flex-col overflow-y-auto border-r border-[#ebe5ef] bg-white px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] shadow-[18px_0_55px_rgba(35,22,56,.2)]">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(false)}
+              className="absolute right-4 top-5 z-10 grid h-11 w-11 place-items-center rounded-2xl border border-[#e5deef] bg-white text-[#655d70] transition hover:border-[#d3c6e8] hover:bg-[#f5efff] hover:text-[#7c3aed]"
+              aria-label="ปิดเมนูหลัก"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+            <SidebarContent
+              pathname={pathname}
+              queryString={queryString}
+              platformOpen={platformOpen}
+              onTogglePlatform={() => setPlatformOpen((value) => !value)}
+              onCollapse={() => setDrawerOpen(false)}
+              mobile
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      {collapsed ? (
+        <button
+          type="button"
+          aria-label="เปิดแถบเมนู (ลากเพื่อย้ายตำแหน่ง)"
+          aria-expanded={false}
+          title="เปิดแถบเมนู · ลากเพื่อย้ายตำแหน่ง"
+          style={{ top: launcherY, touchAction: 'none' }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            launcherDragRef.current = {
+              startY: event.clientY,
+              top: launcherY,
+              moved: false,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const offset = event.clientY - launcherDragRef.current.startY;
+            if (Math.abs(offset) > 4) launcherDragRef.current.moved = true;
+            if (launcherDragRef.current.moved) {
+              setLauncherY(
+                Math.min(
+                  Math.max(launcherDragRef.current.top + offset, 72),
+                  Math.max(72, window.innerHeight - 56),
+                ),
+              );
+            }
+          }}
+          onClick={() => {
+            if (launcherDragRef.current.moved) {
+              launcherDragRef.current.moved = false;
+              return;
+            }
+            setCollapsed(false);
+          }}
+          className="fixed left-0 z-40 hidden h-11 w-11 place-items-center rounded-r-2xl border border-l-0 border-[#d8caeb] bg-white/95 text-[#7c3aed] shadow-[0_10px_28px_rgba(54,36,91,.18)] backdrop-blur transition hover:w-12 hover:bg-[#f5efff] lg:grid"
+        >
+          <Menu className="h-5 w-5" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -708,27 +717,38 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="flex items-center gap-[7px] px-[5px] pb-3">
-        <Link
-          href="/super-admin"
-          className="flex min-w-0 flex-1 items-center gap-2.5 whitespace-nowrap text-[19px] font-extrabold tracking-[-.4px] text-[#211827]"
-        >
-          <span className="grid h-[31px] w-[31px] place-items-center rounded-[9px] bg-[linear-gradient(135deg,#9b5cf6,#6d28d9)] text-white">
-            <Orbit className="h-[18px] w-[18px]" />
-          </span>
-          SpaceLink
-        </Link>
-        {!mobile ? (
+      {mobile ? (
+        <div className="flex items-center gap-3 px-2 pb-5 pr-14">
+          <Link
+            href="/super-admin"
+            onClick={onCollapse}
+            aria-label="SpaceLink ภาพรวม Super Admin"
+            className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-xl font-black tracking-[-.7px] text-[#242032]"
+          >
+            <Image
+              src="/brand/spacelink-mark.png"
+              alt=""
+              width={38}
+              height={38}
+              className="h-[38px] w-[38px] object-contain"
+            />
+            <span className="truncate">SpaceLink</span>
+          </Link>
+        </div>
+      ) : (
+        <div className="flex justify-end pb-4">
           <button
             type="button"
             onClick={onCollapse}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border border-[#ebe4ef] bg-white text-[#716675]"
-            aria-label="พับเมนู"
+            aria-label="ย่อแถบเมนู"
+            aria-expanded={true}
+            title="ย่อแถบเมนู"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#e5dcef] bg-white text-[#655d70] shadow-[0_8px_22px_rgba(54,36,91,.07)] transition hover:-translate-y-0.5 hover:border-[#d3c3ee] hover:bg-[#f5efff] hover:text-[#7c3aed]"
           >
-            <PanelLeftClose className="h-[18px] w-[18px]" />
+            <Menu className="h-5 w-5" aria-hidden />
           </button>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       <div className="grid gap-[3px]">
         {NAVIGATION.map((group) => (
