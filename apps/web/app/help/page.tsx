@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Bell,
@@ -88,7 +88,7 @@ const HOW_TO_DETAILS = [
       'เปิดรายการรอชำระเงินจากหน้าการจองของฉัน',
       'สแกน PromptPay QR ตามยอดที่ระบบสร้าง',
       'อัปโหลดสลิปที่อ่านได้ชัดเจนก่อนหมดเวลา',
-      'รอผลตรวจสอบจนสถานะเปลี่ยนเป็นยืนยันการจองแล้ว',
+      'รอผลตรวจสอบจนสถานะเปลี่ยนเป็นยืนยันแล้ว',
     ],
     icon: CreditCard,
   },
@@ -181,6 +181,7 @@ const QUICK_LINKS = [
 export default function HelpPage() {
   const [activeTab, setActiveTab] = useState<HelpTab>('faq');
   const [query, setQuery] = useState('');
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const filteredFaqs = useMemo(
     () => filterHelpFaqs(HELP_FAQS, query),
     [query],
@@ -189,6 +190,33 @@ export default function HelpPage() {
   function searchFaq(value: string) {
     setQuery(value);
     if (value.trim()) setActiveTab('faq');
+  }
+
+  function selectTab(index: number) {
+    const tab = TABS[index];
+    if (!tab) return;
+
+    setActiveTab(tab.id);
+    tabRefs.current[index]?.focus();
+  }
+
+  function handleTabKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length;
+    if (event.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + TABS.length) % TABS.length;
+    }
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = TABS.length - 1;
+
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    selectTab(nextIndex);
   }
 
   return (
@@ -245,11 +273,14 @@ export default function HelpPage() {
               aria-label="หมวดศูนย์ช่วยเหลือ"
               className="sl-surface grid gap-2 p-2 sm:grid-cols-3"
             >
-              {TABS.map(({ id, label, icon: Icon }) => {
+              {TABS.map(({ id, label, icon: Icon }, index) => {
                 const selected = activeTab === id;
                 return (
                   <button
                     key={id}
+                    ref={(element) => {
+                      tabRefs.current[index] = element;
+                    }}
                     id={`help-tab-${id}`}
                     type="button"
                     role="tab"
@@ -257,6 +288,7 @@ export default function HelpPage() {
                     aria-controls={`help-panel-${id}`}
                     tabIndex={selected ? 0 : -1}
                     onClick={() => setActiveTab(id)}
+                    onKeyDown={(event) => handleTabKeyDown(event, index)}
                     className={`flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition ${
                       selected
                         ? 'bg-gradient-to-r from-[#7c3aed] to-[#6d28d9] text-white shadow-[0_8px_20px_rgba(124,58,237,0.20)]'
