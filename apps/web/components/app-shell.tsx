@@ -268,7 +268,11 @@ const ADMIN_NAV_GROUP: NavGroup = {
 const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
   ...NAV_GROUPS[1],
   items: NAV_GROUPS[1].items
-    .filter((item) => item.kind !== 'link' || item.href !== '/bookings')
+    .filter(
+      (item) =>
+        item.kind !== 'link' ||
+        (item.href !== '/bookings' && item.href !== '/reviews'),
+    )
     .map((item) =>
       item.kind === 'link' && item.href === '/help'
         ? { ...item, label: 'ส่งคำร้องถึง Super Admin' }
@@ -934,7 +938,7 @@ function SidebarNavigation({
               type="button"
               onClick={() => onToggleGroup(group.label)}
               aria-expanded={!groupCollapsed}
-              className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-sm font-bold uppercase tracking-[1.2px] text-[#A39BAC] transition hover:text-violet"
+              className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-[11px] font-extrabold uppercase tracking-[1.2px] text-[#A39BAC] transition hover:text-violet"
             >
               <span>{group.label}</span>
               <ChevronDown
