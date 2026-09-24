@@ -942,6 +942,10 @@ function ProfileEditorDialog({
   onSaved: (message: string) => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const onCloseRef = useRef(onClose);
+  const isSavingProfileRef = useRef(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'shop'>('profile');
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -949,19 +953,84 @@ function ProfileEditorDialog({
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    isSavingProfileRef.current = isSavingProfile;
+  }, [isSavingProfile]);
+
+  useEffect(() => {
+    const previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     closeButtonRef.current?.focus();
 
     const handleKeyboard = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSavingProfile) onClose();
+      if (event.key === 'Escape' && !isSavingProfileRef.current) {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+      if (!firstElement || !lastElement) return;
+
+      if (
+        event.shiftKey &&
+        (document.activeElement === firstElement ||
+          !dialogRef.current?.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (
+        !event.shiftKey &&
+        document.activeElement === lastElement
+      ) {
+        event.preventDefault();
+        firstElement.focus();
+      }
     };
     document.addEventListener('keydown', handleKeyboard);
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyboard);
+      previouslyFocusedElement?.focus();
     };
-  }, [isSavingProfile, onClose]);
+  }, []);
+
+  function selectTab(tab: 'profile' | 'shop') {
+    const index = tab === 'profile' ? 0 : 1;
+    setActiveTab(tab);
+    tabRefs.current[index]?.focus();
+  }
+
+  function handleTabKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % 2;
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + 2) % 2;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = 1;
+
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    selectTab(nextIndex === 0 ? 'profile' : 'shop');
+  }
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1003,6 +1072,7 @@ function ProfileEditorDialog({
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-editor-title"
@@ -1035,10 +1105,17 @@ function ProfileEditorDialog({
 
         <div className="grid grid-cols-2 gap-1 bg-[#f6f2ff] p-1.5" role="tablist">
           <button
+            ref={(element) => {
+              tabRefs.current[0] = element;
+            }}
+            id="profile-editor-tab-profile"
             type="button"
             role="tab"
             aria-selected={activeTab === 'profile'}
-            onClick={() => setActiveTab('profile')}
+            aria-controls="profile-editor-panel-profile"
+            tabIndex={activeTab === 'profile' ? 0 : -1}
+            onClick={() => selectTab('profile')}
+            onKeyDown={(event) => handleTabKeyDown(event, 0)}
             className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
               activeTab === 'profile'
                 ? 'bg-white text-violet shadow-sm'
@@ -1048,10 +1125,17 @@ function ProfileEditorDialog({
             ข้อมูลโปรไฟล์
           </button>
           <button
+            ref={(element) => {
+              tabRefs.current[1] = element;
+            }}
+            id="profile-editor-tab-shop"
             type="button"
             role="tab"
             aria-selected={activeTab === 'shop'}
-            onClick={() => setActiveTab('shop')}
+            aria-controls="profile-editor-panel-shop"
+            tabIndex={activeTab === 'shop' ? 0 : -1}
+            onClick={() => selectTab('shop')}
+            onKeyDown={(event) => handleTabKeyDown(event, 1)}
             className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
               activeTab === 'shop'
                 ? 'bg-white text-violet shadow-sm'
@@ -1062,12 +1146,15 @@ function ProfileEditorDialog({
           </button>
         </div>
 
-        {activeTab === 'profile' ? (
-          <form
-            onSubmit={saveProfile}
-            noValidate
-            className="flex min-h-0 flex-1 flex-col"
-          >
+        <form
+          id="profile-editor-panel-profile"
+          role="tabpanel"
+          aria-labelledby="profile-editor-tab-profile"
+          hidden={activeTab !== 'profile'}
+          onSubmit={saveProfile}
+          noValidate
+          className={`${activeTab === 'profile' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}
+        >
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
               <div className="mb-6 flex items-center gap-4 rounded-2xl bg-[linear-gradient(135deg,#f8f5ff,#fff)] p-4">
                 <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">
@@ -1152,27 +1239,31 @@ function ProfileEditorDialog({
                 {isSavingProfile ? 'กำลังบันทึก…' : 'บันทึกข้อมูลโปรไฟล์'}
               </button>
             </footer>
-          </form>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-            <ShopLogoUploader shop={shop} token={token} refresh={refresh} />
-            <div className="mt-5 border-t border-line pt-5">
-              <ShopForm
-                mode="edit"
-                profile={profile}
-                shop={shop}
-                token={token}
-                refresh={refresh}
-                setPhoneSaveWarning={setPhoneSaveWarning}
-                options={options}
-                optionsLoading={optionsLoading}
-                optionsError={optionsError}
-                onCancel={onClose}
-                onSaved={() => onSaved('บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว')}
-              />
-            </div>
+        </form>
+        <div
+          id="profile-editor-panel-shop"
+          role="tabpanel"
+          aria-labelledby="profile-editor-tab-shop"
+          hidden={activeTab !== 'shop'}
+          className={`${activeTab === 'shop' ? 'block' : 'hidden'} min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7`}
+        >
+          <ShopLogoUploader shop={shop} token={token} refresh={refresh} />
+          <div className="mt-5 border-t border-line pt-5">
+            <ShopForm
+              mode="edit"
+              profile={profile}
+              shop={shop}
+              token={token}
+              refresh={refresh}
+              setPhoneSaveWarning={setPhoneSaveWarning}
+              options={options}
+              optionsLoading={optionsLoading}
+              optionsError={optionsError}
+              onCancel={onClose}
+              onSaved={() => onSaved('บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว')}
+            />
           </div>
-        )}
+        </div>
       </section>
     </div>,
     document.body,
