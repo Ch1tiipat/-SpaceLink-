@@ -150,6 +150,13 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         kind: 'link',
+        label: 'คำขอคืนเงิน',
+        href: '/refunds',
+        icon: RotateCcw,
+        matches: (pathname) => pathname.startsWith('/refunds'),
+      },
+      {
+        kind: 'link',
         label: 'รีวิว',
         href: '/reviews',
         icon: Star,
@@ -284,8 +291,8 @@ const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
   NAV_GROUPS[1].items[0],
-  NAV_GROUPS[1].items[1],
   NAV_GROUPS[1].items[2],
+  NAV_GROUPS[1].items[3],
 ];
 
 /**
@@ -665,7 +672,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? [NAV_GROUPS[0], visibleAdminNavGroup, ADMIN_MY_SPACE_NAV_GROUP]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
-    ? [NAV_GROUPS[0].items[0], ...visibleAdminItems, NAV_GROUPS[1].items[2]]
+    ? [NAV_GROUPS[0].items[0], ...visibleAdminItems, NAV_GROUPS[1].items[3]]
     : BOTTOM_NAV;
   const header = (
     <Topbar
@@ -1376,6 +1383,7 @@ const UX_REVIEW_ROUTES = [
   ['แผนผังโซน', '/events/demo-event/map'],
   ['เลือกบูธ', '/events/demo-event/book'],
   ['การจอง', '/bookings'],
+  ['คำขอคืนเงิน', '/refunds'],
   ['รายละเอียดจอง', '/bookings/local-preview-confirmed-booking'],
   ['ชำระเงิน', '/bookings/local-preview-booking/payment'],
   ['รีวิว', '/bookings/local-preview-completed-booking/review'],

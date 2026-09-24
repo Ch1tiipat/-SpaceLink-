@@ -33,23 +33,24 @@ export function filterHomeEvents(
   ) => boolean,
   now = new Date(),
 ): DiscoveryEvent[] {
-  const keyword = filters.query.trim().toLocaleLowerCase('th');
+  const keyword = normalizeSearchText(filters.query);
+  const areaKeyword = normalizeSearchText(filters.area);
 
   return events.filter((event) => {
-    const searchable = [
-      event.name,
-      event.description ?? '',
-      event.organization.name,
-      event.venue.name,
-      event.venue.address ?? '',
-    ]
-      .join(' ')
-      .toLocaleLowerCase('th');
+    const searchable = normalizeSearchText(
+      [event.name, event.venue.name].join(' '),
+    );
+    const areaSearchable = normalizeSearchText(
+      [
+        provinceFromAddress(event.venue.address ?? ''),
+        event.venue.name,
+        event.venue.address ?? '',
+      ].join(' '),
+    );
 
     return (
       (!keyword || searchable.includes(keyword)) &&
-      (!filters.area ||
-        provinceFromAddress(event.venue.address ?? '') === filters.area) &&
+      (!areaKeyword || areaSearchable.includes(areaKeyword)) &&
       (!filters.categoryId ||
         event.categories.some(
           (category) => category.id === filters.categoryId,
@@ -63,4 +64,8 @@ export function filterHomeEvents(
           hasEventEndCalendarDayPassed(event.endDate, now)))
     );
   });
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLocaleLowerCase('th-TH');
 }

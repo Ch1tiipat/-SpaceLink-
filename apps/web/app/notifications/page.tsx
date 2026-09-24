@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Bell,
@@ -35,6 +35,12 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { refundNotificationHref } from '@/lib/refund-notification-route';
 import { useAuthState } from '@/lib/use-auth-state';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
+import {
+  createWebPushPreviewNotification,
+  isWebPushPreviewNotificationId,
+  prependWebPushPreview,
+  type WebPushPreviewNotification,
+} from '@/lib/web-push-preview';
 
 type NotificationKind =
   | 'news'
@@ -348,12 +354,31 @@ export default function NotificationsPage() {
   );
   const [savingPreference, setSavingPreference] = useState(false);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [webPushPreview, setWebPushPreview] =
+    useState<WebPushPreviewNotification | null>(null);
+  const [webPushDetails, setWebPushDetails] =
+    useState<WebPushPreviewNotification | null>(null);
+  const webPushSequenceRef = useRef(0);
 
   useEffect(() => {
     if (!toastMessage) return;
     const timeout = window.setTimeout(() => setToastMessage(null), 3_500);
     return () => window.clearTimeout(timeout);
   }, [toastMessage]);
+
+  useEffect(() => {
+    if (!webPushPreview && !webPushDetails) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      if (webPushDetails) setWebPushDetails(null);
+      else setWebPushPreview(null);
+    }
+
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [webPushDetails, webPushPreview]);
 
   useEffect(() => {
     if (auth.status === 'loading') {
@@ -540,7 +565,12 @@ export default function NotificationsPage() {
       ),
     );
 
-    if (access.token === UX_PREVIEW_TOKEN) return;
+    if (
+      access.token === UX_PREVIEW_TOKEN ||
+      isWebPushPreviewNotificationId(id)
+    ) {
+      return;
+    }
 
     try {
       await markNotificationRead(id, access.token);
@@ -604,6 +634,26 @@ export default function NotificationsPage() {
     }
   }
 
+  function simulateWebPush() {
+    webPushSequenceRef.current += 1;
+    const preview = createWebPushPreviewNotification(
+      webPushSequenceRef.current,
+    );
+    const notification: UserNotification = {
+      ...preview,
+      kind: 'news',
+      unread: true,
+      actionLabel: 'ดูรายละเอียด',
+    };
+
+    setNotifications((current) =>
+      prependWebPushPreview(current, notification),
+    );
+    setWebPushDetails(null);
+    setWebPushPreview(preview);
+    setToastMessage('เพิ่ม Web Push ใหม่ใน Notification Center แล้ว');
+  }
+
   return (
     <main className="sl-page pb-16">
       <div className="sl-page-shell">
@@ -621,6 +671,16 @@ export default function NotificationsPage() {
 
           {access.status === 'ready' ? (
             <div className="flex flex-wrap items-center gap-2">
+              {access.token === UX_PREVIEW_TOKEN ? (
+                <button
+                  type="button"
+                  onClick={simulateWebPush}
+                  className="sl-action-secondary"
+                >
+                  <Megaphone className="h-4 w-4" aria-hidden />
+                  จำลอง Web Push
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setSettingsOpen((current) => !current)}
@@ -770,7 +830,145 @@ export default function NotificationsPage() {
           </div>
         ) : null}
       </div>
+      {webPushPreview ? (
+        <WebPushFloatingCard
+          notification={webPushPreview}
+          onClose={() => setWebPushPreview(null)}
+          onOpenDetails={() => {
+            setWebPushDetails(webPushPreview);
+            setWebPushPreview(null);
+          }}
+        />
+      ) : null}
+      {webPushDetails ? (
+        <WebPushDetailsDialog
+          notification={webPushDetails}
+          onClose={() => setWebPushDetails(null)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function WebPushFloatingCard({
+  notification,
+  onClose,
+  onOpenDetails,
+}: {
+  notification: WebPushPreviewNotification;
+  onClose: () => void;
+  onOpenDetails: () => void;
+}) {
+  return (
+    <aside
+      role="status"
+      aria-label="Web Push จาก SpaceLink"
+      className="fixed right-3 top-[75px] z-[70] w-[calc(100vw-24px)] max-w-[410px] rounded-[24px] border border-[#ded2f3] bg-white p-5 shadow-[0_24px_70px_rgba(44,25,77,.24)] sm:right-6 sm:top-[84px] sm:p-6"
+    >
+      <div className="flex items-start gap-3.5">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#eee5ff] text-violet">
+          <Megaphone className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1 pr-7">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#f2ebff] px-2.5 py-1 text-[11px] font-extrabold text-violet">
+              ประกาศสำคัญ
+            </span>
+            <time
+              dateTime={notification.createdAt}
+              className="text-xs font-semibold text-muted"
+            >
+              เมื่อสักครู่
+            </time>
+          </div>
+          <h2 className="mt-3 text-lg font-black text-ink">
+            {notification.title}
+          </h2>
+          <p className="mt-1 line-clamp-3 text-sm leading-6 text-muted">
+            {notification.description}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="ปิด Web Push"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-muted transition hover:bg-violet-tint hover:text-violet"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+      <div className="mt-5 grid gap-2 min-[390px]:grid-cols-2">
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          className="sl-action-primary w-full"
+        >
+          ดูรายละเอียด
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="sl-action-secondary w-full"
+        >
+          ปิด
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function WebPushDetailsDialog({
+  notification,
+  onClose,
+}: {
+  notification: WebPushPreviewNotification;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center bg-[#1b1030]/60 p-4 backdrop-blur-[2px]"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="web-push-details-title"
+        className="w-full max-w-[560px] rounded-[26px] border border-[#ded2f3] bg-white p-6 shadow-[0_30px_100px_rgba(28,15,58,.28)] sm:p-8"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <span className="rounded-full bg-violet-tint px-3 py-1 text-xs font-bold text-violet">
+            ประกาศสำคัญ
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดรายละเอียดประกาศ"
+            className="grid h-9 w-9 place-items-center rounded-full border border-line text-muted transition hover:text-violet"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+        <h2
+          id="web-push-details-title"
+          className="mt-5 text-2xl font-black leading-snug text-ink"
+        >
+          {notification.title}
+        </h2>
+        <p className="mt-2 text-sm font-semibold text-muted">เมื่อสักครู่</p>
+        <p className="mt-6 text-sm leading-7 text-[#514664]">
+          {notification.description}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="sl-action-primary mt-7 w-full sm:w-auto"
+        >
+          รับทราบ
+        </button>
+      </section>
+    </div>
   );
 }
 

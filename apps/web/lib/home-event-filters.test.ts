@@ -107,6 +107,39 @@ homeFilterTest('filters by event or venue text, area, and category', () => {
 });
 
 homeFilterTest(
+  'accepts free text with trimmed case-insensitive event and area matching',
+  () => {
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        { ...EMPTY_HOME_EVENT_FILTERS, query: '  spacelink FAIR  ' },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['future'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        { ...EMPTY_HOME_EVENT_FILTERS, area: '  นครราชสีมา  ' },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['future', 'ended'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        { ...EMPTY_HOME_EVENT_FILTERS, area: 'ศูนย์สร้างสรรค์' },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ongoing'],
+    );
+  },
+);
+
+homeFilterTest(
   'filters bookable, ongoing, and ended events independently',
   () => {
     homeFilterAssert.deepEqual(
