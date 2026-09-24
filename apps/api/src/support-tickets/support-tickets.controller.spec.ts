@@ -30,6 +30,7 @@ const CURRENT_USER: User = {
   email: 'vendor@example.com',
   fullName: 'Vendor One',
   phone: null,
+  province: null,
   role: UserRole.VENDOR,
   trustScore: 100,
   isBlacklisted: false,

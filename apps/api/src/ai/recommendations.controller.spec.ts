@@ -38,6 +38,7 @@ const vendor = {
   email: 'vendor@example.com',
   fullName: 'Vendor Demo',
   phone: null,
+  province: null,
   role: UserRole.VENDOR,
   trustScore: 100,
   isBlacklisted: false,

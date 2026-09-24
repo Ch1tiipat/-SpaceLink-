@@ -26,6 +26,7 @@ describe('AuthController', () => {
     email: 'vendor@example.com',
     fullName: 'Vendor One',
     phone: null,
+    province: 'เชียงใหม่',
     role: 'VENDOR',
     trustScore: 100,
     isBlacklisted: false,
@@ -95,6 +96,7 @@ describe('AuthController', () => {
       },
     ]);
     expect(result).not.toHaveProperty('blacklistReason');
+    expect(result.province).toBe('เชียงใหม่');
   });
 
   it('returns only organizations linked to the authenticated user', async () => {

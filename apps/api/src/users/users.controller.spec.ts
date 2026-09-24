@@ -24,6 +24,7 @@ const CURRENT_USER: User = {
   email: 'vendor@example.com',
   fullName: 'Vendor One',
   phone: null,
+  province: null,
   role: UserRole.VENDOR,
   trustScore: 100,
   isBlacklisted: false,
@@ -173,11 +174,14 @@ describe('UsersController', () => {
   });
 
   it('updates the authenticated user, never a client-supplied id', async () => {
-    await controller.updateMe({ phone: '0812345678' }, CURRENT_USER);
+    await controller.updateMe(
+      { phone: '0812345678', province: 'นครราชสีมา' },
+      CURRENT_USER,
+    );
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: USER_ID },
-      data: { phone: '0812345678' },
+      data: { phone: '0812345678', province: 'นครราชสีมา' },
     });
   });
 
@@ -288,5 +292,6 @@ describe('UsersController', () => {
 
     expect(result).not.toHaveProperty('blacklistReason');
     expect(result).not.toHaveProperty('shops');
+    expect(result).toHaveProperty('province');
   });
 });

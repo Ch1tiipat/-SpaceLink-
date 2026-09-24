@@ -28,6 +28,7 @@ const userDetailSelect = {
   email: true,
   fullName: true,
   phone: true,
+  province: true,
   role: true,
   trustScore: true,
   isBlacklisted: true,
