@@ -26,6 +26,7 @@ const USER: User = {
   email: EMAIL,
   fullName: 'Vendor Name',
   phone: null,
+  province: null,
   role: 'VENDOR',
   trustScore: 100,
   isBlacklisted: false,

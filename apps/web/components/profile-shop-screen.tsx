@@ -43,6 +43,11 @@ import {
   type ProductCategory,
   type VendorShop,
 } from '@/lib/api';
+import {
+  MAX_PROVINCE_LENGTH,
+  normalizeProvince,
+  provinceValidationError,
+} from '@/lib/profile-province';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 
 /**
@@ -111,9 +116,9 @@ export function ProfileShopScreen() {
   // Lives here rather than in ShopForm because the form is gone by the time it
   // has to be read: a save that succeeds unmounts the create form and closes
   // the edit form, taking the form's own `notice` with it. A shop that saved
-  // while its phone number did not is exactly the case the vendor must still
+  // while its shared profile fields did not is exactly the case the vendor must still
   // see afterwards, so it is held one level up and rendered next to the card.
-  const [phoneSaveWarning, setPhoneSaveWarning] = useState<string | null>(null);
+  const [profileSaveWarning, setProfileSaveWarning] = useState<string | null>(null);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [ratingState, setRatingState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
@@ -261,7 +266,7 @@ export function ProfileShopScreen() {
                 shop={null}
                 token={ready.token}
                 refresh={refresh}
-                setPhoneSaveWarning={setPhoneSaveWarning}
+                setProfileSaveWarning={setProfileSaveWarning}
                 options={categoryOptions}
                 optionsLoading={categoriesLoading}
                 optionsError={categoriesError}
@@ -290,12 +295,12 @@ export function ProfileShopScreen() {
               </div>
             )}
 
-            {phoneSaveWarning && (
+            {profileSaveWarning && (
               <p
                 role="alert"
                 className="mt-8 rounded-2xl bg-[#fff0ee] px-5 py-4 text-[#b42318]"
               >
-                {phoneSaveWarning}
+                {profileSaveWarning}
               </p>
             )}
 
@@ -449,7 +454,7 @@ export function ProfileShopScreen() {
                 <InfoLine
                   icon={MapPin}
                   label="จังหวัด"
-                  value="ยังไม่ระบุ"
+                  value={ready.profile.province ?? 'ยังไม่ระบุ'}
                 />
               </dl>
             </section>
@@ -460,7 +465,7 @@ export function ProfileShopScreen() {
                 shop={ready.shop}
                 token={ready.token}
                 refresh={refresh}
-                setPhoneSaveWarning={setPhoneSaveWarning}
+                setProfileSaveWarning={setProfileSaveWarning}
                 options={categoryOptions}
                 optionsLoading={categoriesLoading}
                 optionsError={categoriesError}
@@ -923,7 +928,7 @@ function ProfileEditorDialog({
   shop,
   token,
   refresh,
-  setPhoneSaveWarning,
+  setProfileSaveWarning,
   options,
   optionsLoading,
   optionsError,
@@ -934,7 +939,7 @@ function ProfileEditorDialog({
   shop: VendorShop;
   token: string;
   refresh: () => void;
-  setPhoneSaveWarning: (message: string | null) => void;
+  setProfileSaveWarning: (message: string | null) => void;
   options: SelectMenuOption[];
   optionsLoading: boolean;
   optionsError: string | null;
@@ -948,7 +953,9 @@ function ProfileEditorDialog({
   const isSavingProfileRef = useRef(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'shop'>('profile');
   const [phone, setPhone] = useState(profile.phone ?? '');
+  const [province, setProvince] = useState(profile.province ?? '');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [provinceError, setProvinceError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
@@ -1037,17 +1044,29 @@ function ProfileEditorDialog({
     if (isSavingProfile) return;
 
     const normalizedPhone = phone.replace(/[\s-]/g, '');
-    if (!/^0\d{9}$/.test(normalizedPhone)) {
-      setPhoneError('กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0');
+    const normalizedProvince = normalizeProvince(province);
+    const nextPhoneError = !/^0\d{9}$/.test(normalizedPhone)
+      ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0'
+      : null;
+    const nextProvinceError = provinceValidationError(province);
+    setPhoneError(nextPhoneError);
+    setProvinceError(nextProvinceError);
+
+    if (nextPhoneError || nextProvinceError) {
       setNotice(null);
       return;
     }
 
     setIsSavingProfile(true);
-    setPhoneError(null);
     setNotice(null);
     try {
-      await updateMe({ phone: normalizedPhone }, token);
+      await updateMe(
+        {
+          phone: normalizedPhone,
+          province: normalizedProvince || undefined,
+        },
+        token,
+      );
       refresh();
       onSaved('บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว');
     } catch (cause) {
@@ -1209,10 +1228,38 @@ function ProfileEditorDialog({
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-bold">จังหวัด</span>
-                  <input value="ยังไม่ระบุ" readOnly className={readOnlyClass} />
-                  <span className="mt-1.5 block text-xs text-muted">
-                    ระบบปัจจุบันยังไม่มีข้อมูลจังหวัดในโปรไฟล์
-                  </span>
+                  <input
+                    value={province}
+                    onChange={(event) => {
+                      setProvince(event.target.value);
+                      setProvinceError(null);
+                    }}
+                    maxLength={MAX_PROVINCE_LENGTH}
+                    aria-invalid={provinceError ? true : undefined}
+                    aria-describedby={
+                      provinceError
+                        ? 'profile-province-error'
+                        : 'profile-province-help'
+                    }
+                    placeholder="เช่น กรุงเทพมหานคร"
+                    className={`${fieldClass} ${provinceError ? 'border-danger' : ''}`}
+                  />
+                  {provinceError ? (
+                    <span
+                      id="profile-province-error"
+                      role="alert"
+                      className="mt-1.5 block text-sm text-danger"
+                    >
+                      {provinceError}
+                    </span>
+                  ) : (
+                    <span
+                      id="profile-province-help"
+                      className="mt-1.5 block text-xs text-muted"
+                    >
+                      ระบุจังหวัดที่ใช้ติดต่อและแสดงในข้อมูลร้านค้า
+                    </span>
+                  )}
                 </label>
               </div>
 
@@ -1255,7 +1302,7 @@ function ProfileEditorDialog({
               shop={shop}
               token={token}
               refresh={refresh}
-              setPhoneSaveWarning={setPhoneSaveWarning}
+              setProfileSaveWarning={setProfileSaveWarning}
               options={options}
               optionsLoading={optionsLoading}
               optionsError={optionsError}
@@ -1561,7 +1608,7 @@ function ShopForm({
   shop,
   token,
   refresh,
-  setPhoneSaveWarning,
+  setProfileSaveWarning,
   options,
   optionsLoading,
   optionsError,
@@ -1575,10 +1622,10 @@ function ShopForm({
   /** `refresh()` from `useVendorProfile()` — called once the shop write wins. */
   refresh: () => void;
   /**
-   * Owned by `ProfileShopScreen` on purpose: a shop that saved while its phone
-   * number did not has to stay on screen after this form is gone.
+   * Owned by `ProfileShopScreen` on purpose: a shop that saved while its shared
+   * profile fields did not has to stay on screen after this form is gone.
    */
-  setPhoneSaveWarning: (message: string | null) => void;
+  setProfileSaveWarning: (message: string | null) => void;
   options: SelectMenuOption[];
   optionsLoading: boolean;
   optionsError: string | null;
@@ -1591,9 +1638,11 @@ function ShopForm({
     shop?.categories.map((category) => category.id) ?? [],
   );
   const [phone, setPhone] = useState(profile.phone ?? '');
+  const [province, setProvince] = useState(profile.province ?? '');
   const [nameError, setNameError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [provinceError, setProvinceError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1603,12 +1652,14 @@ function ShopForm({
     if (isSubmitting) return;
 
     const normalizedPhone = phone.replace(/[\s-]/g, '');
+    const normalizedProvince = normalizeProvince(province);
     const nextNameError = name.trim() ? null : 'กรุณากรอกชื่อร้าน';
     const nextCategoryError =
       categoryIds.length > 0 ? null : 'กรุณาเลือกหมวดสินค้าอย่างน้อย 1 หมวด';
     const nextPhoneError = !/^0\d{9}$/.test(normalizedPhone)
       ? 'กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0'
       : null;
+    const nextProvinceError = provinceValidationError(province);
     const nextDescriptionError =
       description.length <= 500
         ? null
@@ -1617,12 +1668,14 @@ function ShopForm({
     setNameError(nextNameError);
     setCategoryError(nextCategoryError);
     setPhoneError(nextPhoneError);
+    setProvinceError(nextProvinceError);
     setDescriptionError(nextDescriptionError);
 
     if (
       nextNameError ||
       nextCategoryError ||
       nextPhoneError ||
+      nextProvinceError ||
       nextDescriptionError
     ) {
       setNotice(null);
@@ -1631,22 +1684,22 @@ function ShopForm({
 
     setIsSubmitting(true);
     setNotice(null);
-    setPhoneSaveWarning(null);
+    setProfileSaveWarning(null);
 
     // Two endpoints, because the fields belong to two rows: the shop is
-    // POST /shops or PATCH /shops/me, and the phone is PATCH /users/me on
+    // POST /shops or PATCH /shops/me, and the shared profile fields are PATCH /users/me on
     // `app_user`. They get a try/catch each rather than sharing one, because
     // only the first of them decides whether anything was saved. Under a shared
-    // try, a phone write that failed after the shop had already been created
+    // try, a profile write that failed after the shop had already been created
     // skipped `refresh()` and left the page on the create form — and the retry
     // it invited answered 409 for a shop that in fact existed, which reads as
     // "your save failed" when the save had won.
     //
     // `description` is sent as the trimmed string even when it is empty: the
     // DTO reads `''` as "clear it" and an omitted key as "leave it alone", so
-    // `|| undefined` made the textarea impossible to empty once filled. `phone`
-    // is the opposite case and is skipped entirely when blank — its DTO answers
-    // 400 to an explicit null, and there is no "clear it" value to send.
+    // `|| undefined` made the textarea impossible to empty once filled. Profile
+    // fields are skipped entirely when blank — their DTO answers 400 to an
+    // explicit null, and there is no "clear it" value to send.
     const payload = {
       name: name.trim(),
       description: description.trim(),
@@ -1669,14 +1722,20 @@ function ShopForm({
       return;
     }
 
-    // The shop is saved from here on. Everything below runs whatever the phone
+    // The shop is saved from here on. Everything below runs whatever the profile
     // write does — a failure there is reported, it does not undo the save.
-    if (normalizedPhone) {
+    if (normalizedPhone || normalizedProvince) {
       try {
-        await updateMe({ phone: normalizedPhone }, token);
+        await updateMe(
+          {
+            phone: normalizedPhone || undefined,
+            province: normalizedProvince || undefined,
+          },
+          token,
+        );
       } catch {
-        setPhoneSaveWarning(
-          'บันทึกข้อมูลร้านค้าแล้ว แต่บันทึกเบอร์โทรศัพท์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+        setProfileSaveWarning(
+          'บันทึกข้อมูลร้านค้าแล้ว แต่บันทึกข้อมูลติดต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
         );
       }
     }
@@ -1839,13 +1898,37 @@ function ShopForm({
       <label className="block">
         <span className="mb-2 block text-sm font-bold">จังหวัด</span>
         <input
-          value="ยังไม่ระบุ"
-          readOnly
-          className="w-full cursor-not-allowed rounded-xl border border-line bg-[#F7F5FA] px-4 py-3 text-base text-muted outline-none"
+          value={province}
+          onChange={(event) => {
+            setProvince(event.target.value);
+            setProvinceError(null);
+          }}
+          maxLength={MAX_PROVINCE_LENGTH}
+          aria-invalid={provinceError ? true : undefined}
+          aria-describedby={
+            provinceError ? 'shop-province-error' : 'shop-province-help'
+          }
+          placeholder="เช่น กรุงเทพมหานคร"
+          className={`w-full rounded-xl border bg-white px-4 py-3 text-base outline-none ${
+            provinceError ? 'border-danger' : 'border-line'
+          }`}
         />
-        <span className="mt-2 block text-xs text-muted">
-          ระบบปัจจุบันยังไม่มีข้อมูลจังหวัดในร้านค้า
-        </span>
+        {provinceError ? (
+          <span
+            id="shop-province-error"
+            role="alert"
+            className="mt-2 block text-sm text-danger"
+          >
+            {provinceError}
+          </span>
+        ) : (
+          <span
+            id="shop-province-help"
+            className="mt-2 block text-xs text-muted"
+          >
+            ใช้ข้อมูลจังหวัดร่วมกับโปรไฟล์ผู้ใช้
+          </span>
+        )}
       </label>
 
       {notice && (

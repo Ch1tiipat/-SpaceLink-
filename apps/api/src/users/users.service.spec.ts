@@ -13,6 +13,7 @@ const USER_ROW: User = {
   email: 'vendor@example.com',
   fullName: 'Vendor One',
   phone: '0812345678',
+  province: 'เชียงใหม่',
   role: UserRole.VENDOR,
   trustScore: 100,
   isBlacklisted: false,
@@ -38,6 +39,7 @@ const DETAIL_USER = {
   email: 'vendor@example.com',
   fullName: 'Vendor One',
   phone: '0812345678',
+  province: 'เชียงใหม่',
   role: UserRole.VENDOR,
   trustScore: 65,
   isBlacklisted: true,
@@ -179,6 +181,7 @@ describe('UsersService', () => {
           email: true,
           fullName: true,
           phone: true,
+          province: true,
           role: true,
           trustScore: true,
           isBlacklisted: true,
@@ -389,12 +392,15 @@ describe('UsersService', () => {
   });
 
   describe('updateMe', () => {
-    it('scopes the update to the authenticated user id', async () => {
-      await service.updateMe({ phone: '0812345678' }, USER_ID);
+    it('scopes the profile update to the authenticated user id', async () => {
+      await service.updateMe(
+        { phone: '0812345678', province: 'นครราชสีมา' },
+        USER_ID,
+      );
 
       expect(userUpdate).toHaveBeenCalledWith({
         where: { id: USER_ID },
-        data: { phone: '0812345678' },
+        data: { phone: '0812345678', province: 'นครราชสีมา' },
       });
     });
 
@@ -407,6 +413,7 @@ describe('UsersService', () => {
         email: 'vendor@example.com',
         fullName: 'Vendor One',
         phone: '0812345678',
+        province: 'เชียงใหม่',
         role: UserRole.VENDOR,
         isBlacklisted: false,
         createdAt: new Date('2026-08-01T00:00:00.000Z'),

@@ -146,6 +146,7 @@ export type ProductCategory = {
 
 export type UpdateMeInput = {
   phone?: string;
+  province?: string;
 };
 
 /** What PATCH /users/me returns — CurrentUser without the `shops` field. */
@@ -564,6 +565,7 @@ export type CurrentUser = {
   email: string;
   fullName: string;
   phone: string | null;
+  province: string | null;
   role: UserRole;
   isBlacklisted: boolean;
   createdAt: string;

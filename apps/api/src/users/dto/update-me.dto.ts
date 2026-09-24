@@ -1,4 +1,11 @@
-import { IsString, Matches, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsNotEmpty,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 /**
  * Thai numbers, digits only: a leading zero then 8 or 9 more, covering both
@@ -21,4 +28,13 @@ export class UpdateMeDto {
   @IsString()
   @Matches(THAI_PHONE_PATTERN)
   phone?: string;
+
+  @ValidateIf((dto: UpdateMeDto) => dto.province !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  province?: string;
 }
