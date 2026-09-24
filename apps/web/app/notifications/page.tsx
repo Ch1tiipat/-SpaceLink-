@@ -1276,7 +1276,7 @@ function NotificationSettings({
       </div>
 
       <div className="flex items-center justify-between gap-4 border-b border-line bg-[#fbf9ff] px-5 py-4 sm:px-7">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold text-ink">
             เปิดการแจ้งเตือนทั้งหมด
           </p>
@@ -1300,7 +1300,7 @@ function NotificationSettings({
         {options.map(({ key, title, description, icon: Icon }, index) => (
           <div
             key={key}
-            className={`flex items-center gap-4 py-4 ${
+            className={`flex min-w-0 items-center gap-4 py-4 ${
               index % 2 === 0 ? 'lg:pr-7' : 'lg:pl-7'
             }`}
           >
@@ -1353,15 +1353,22 @@ function ToggleSwitch({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`relative shrink-0 rounded-full transition ${
-        compact ? 'h-7 w-12' : 'h-9 w-[58px]'
-      } ${checked ? 'bg-violet' : 'bg-[#d9d4df]'} disabled:cursor-not-allowed disabled:opacity-60`}
+      className={`group relative inline-grid h-11 shrink-0 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 ${
+        compact ? 'w-14' : 'w-[66px]'
+      } disabled:cursor-not-allowed disabled:opacity-60`}
     >
       <span
-        className={`absolute top-1 rounded-full bg-white shadow transition-transform ${
-          compact ? 'h-5 w-5' : 'h-7 w-7'
-        } ${checked ? (compact ? 'translate-x-6' : 'translate-x-7') : 'translate-x-1'}`}
-      />
+        aria-hidden
+        className={`relative block rounded-full transition-colors ${
+          compact ? 'h-7 w-12' : 'h-9 w-[58px]'
+        } ${checked ? 'bg-violet' : 'bg-[#d9d4df]'}`}
+      >
+        <span
+          className={`absolute left-1 top-1 rounded-full bg-white shadow transition-transform ${
+            compact ? 'h-5 w-5' : 'h-7 w-7'
+          } ${checked ? (compact ? 'translate-x-5' : 'translate-x-[22px]') : 'translate-x-0'}`}
+        />
+      </span>
     </button>
   );
 }
