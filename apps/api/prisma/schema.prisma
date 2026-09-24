@@ -197,6 +197,7 @@ model User {
   email           String   @unique
   fullName        String   @map("full_name")
   phone           String?
+  province        String?  @map("province")
   role            UserRole @default(VENDOR)
   trustScore      Int      @default(100) @map("trust_score")
   isBlacklisted   Boolean  @default(false) @map("is_blacklisted")

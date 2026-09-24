@@ -6,6 +6,7 @@ export interface UserResponse {
   email: string;
   fullName: string;
   phone: string | null;
+  province: string | null;
   role: UserRole;
   isBlacklisted: boolean;
   createdAt: Date;
@@ -30,6 +31,7 @@ export function toUserResponse(user: User): UserResponse {
     email: user.email,
     fullName: user.fullName,
     phone: user.phone,
+    province: user.province,
     role: user.role,
     isBlacklisted: user.isBlacklisted,
     createdAt: user.createdAt,

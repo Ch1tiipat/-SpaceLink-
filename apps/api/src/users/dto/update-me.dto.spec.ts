@@ -23,6 +23,11 @@ const ACCEPTED: [string, Record<string, unknown>][] = [
   ['an omitted phone, meaning leave it unchanged', {}],
   ['a 10-digit mobile number', { phone: '0812345678' }],
   ['a 9-digit landline number', { phone: '021234567' }],
+  ['a province without changing the phone', { province: 'เชียงใหม่' }],
+  [
+    'phone and province in the same patch',
+    { phone: '0812345678', province: 'นครราชสีมา' },
+  ],
 ];
 
 const REJECTED: [string, Record<string, unknown>][] = [
@@ -32,6 +37,10 @@ const REJECTED: [string, Record<string, unknown>][] = [
   ['a too-short number', { phone: '08123456' }],
   ['a too-long number', { phone: '08123456789' }],
   ['a numeric type', { phone: 812345678 }],
+  ['an explicit null province', { province: null }],
+  ['an empty province', { province: '' }],
+  ['a whitespace-only province', { province: '   ' }],
+  ['a province longer than 100 characters', { province: 'ก'.repeat(101) }],
 ];
 
 describe('UpdateMeDto', () => {
@@ -47,6 +56,15 @@ describe('UpdateMeDto', () => {
     expect(constraintsFor({ phone: null })).toEqual(
       expect.arrayContaining(['isString']),
     );
+  });
+
+  it('normalizes surrounding and repeated province whitespace', () => {
+    const dto = plainToInstance(UpdateMeDto, {
+      province: '  นครราชสีมา   เขตเมือง  ',
+    });
+
+    expect(dto.province).toBe('นครราชสีมา เขตเมือง');
+    expect(validateSync(dto)).toEqual([]);
   });
 
   it('declares no fullName field', () => {

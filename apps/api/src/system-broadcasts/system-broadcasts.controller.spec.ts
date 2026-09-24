@@ -24,6 +24,7 @@ const CURRENT_USER: User = {
   email: 'admin@example.com',
   fullName: 'Super Admin',
   phone: null,
+  province: null,
   role: UserRole.SUPER_ADMIN,
   trustScore: 100,
   isBlacklisted: false,

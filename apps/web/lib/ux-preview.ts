@@ -18,6 +18,7 @@ export const UX_PREVIEW_PROFILE: CurrentUser = {
   email: 'review@spacelink.local',
   fullName: 'อรุณ คาเฟ่',
   phone: '081-234-5678',
+  province: 'กรุงเทพมหานคร',
   role: 'VENDOR',
   isBlacklisted: false,
   createdAt: '2026-08-01T03:00:00.000Z',

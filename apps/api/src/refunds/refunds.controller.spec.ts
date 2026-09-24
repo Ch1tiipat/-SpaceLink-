@@ -43,6 +43,7 @@ const baseUser = {
   email: 'user@example.com',
   fullName: 'User',
   phone: null,
+  province: null,
   trustScore: 100,
   isBlacklisted: false,
   blacklistReason: null,
