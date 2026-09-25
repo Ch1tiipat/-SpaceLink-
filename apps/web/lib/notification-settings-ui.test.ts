@@ -51,7 +51,7 @@ notificationSettingsTest(
 );
 
 notificationSettingsTest(
-  'toggle switch classes expose clear on and off states with a 44px tap target',
+  'all toggle switches share the reference size and clear on and off states',
   () => {
     const regularOn = getToggleSwitchClasses({ checked: true, compact: false });
     const regularOff = getToggleSwitchClasses({
@@ -63,19 +63,26 @@ notificationSettingsTest(
 
     for (const classes of [regularOn, regularOff, compactOn, compactOff]) {
       notificationSettingsAssert.match(classes.button, /\bh-11\b/);
+      notificationSettingsAssert.match(classes.button, /\bw-16\b/);
+      notificationSettingsAssert.match(classes.track, /\bh-9\b/);
+      notificationSettingsAssert.match(classes.track, /\bw-16\b/);
+      notificationSettingsAssert.match(classes.thumb, /\bh-7\b/);
+      notificationSettingsAssert.match(classes.thumb, /\bw-7\b/);
     }
     notificationSettingsAssert.match(regularOn.track, /\bbg-violet\b/);
+    notificationSettingsAssert.match(regularOn.thumb, /\bright-1\b/);
     notificationSettingsAssert.equal(
-      regularOn.thumb.includes('translate-x-[22px]'),
+      regularOff.track.includes('bg-[#d8d2df]'),
       true,
     );
+    notificationSettingsAssert.match(regularOff.thumb, /\bleft-1\b/);
+    notificationSettingsAssert.match(compactOn.track, /\bbg-violet\b/);
+    notificationSettingsAssert.match(compactOn.thumb, /\bright-1\b/);
     notificationSettingsAssert.equal(
-      regularOff.track.includes('bg-[#d9d4df]'),
+      compactOff.track.includes('bg-[#d8d2df]'),
       true,
     );
-    notificationSettingsAssert.match(regularOff.thumb, /\btranslate-x-0\b/);
-    notificationSettingsAssert.match(compactOn.thumb, /\btranslate-x-5\b/);
-    notificationSettingsAssert.match(compactOff.thumb, /\btranslate-x-0\b/);
+    notificationSettingsAssert.match(compactOff.thumb, /\bleft-1\b/);
   },
 );
 
