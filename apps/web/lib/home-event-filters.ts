@@ -10,6 +10,12 @@ export type HomeEventFilters = {
   eventStatus: EventStatusFilter;
 };
 
+export type HomeFilterOption = {
+  value: string;
+  label: string;
+  hint?: string;
+};
+
 export const EMPTY_HOME_EVENT_FILTERS: HomeEventFilters = {
   query: '',
   area: '',
@@ -22,6 +28,38 @@ export function provinceFromAddress(address: string): string {
   if (prefixed) return prefixed[1];
   if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
   return address;
+}
+
+export function buildHomeEventFilterOptions(
+  events: DiscoveryEvent[],
+): HomeFilterOption[] {
+  return uniqueHomeFilterOptions([
+    ...events.map((event) => ({
+      value: event.name,
+      label: event.name,
+      hint: `Event · ${event.venue.name}`,
+    })),
+    ...events.map((event) => ({
+      value: event.venue.name,
+      label: event.venue.name,
+      hint: 'สถานที่จัดงาน',
+    })),
+  ]);
+}
+
+export function buildHomeAreaFilterOptions(
+  events: DiscoveryEvent[],
+): HomeFilterOption[] {
+  return uniqueHomeFilterOptions(
+    events.flatMap((event) => {
+      const address = event.venue.address?.trim() ?? '';
+      const province = provinceFromAddress(address);
+      return [province, event.venue.name, address].map((area) => ({
+        value: area,
+        label: area,
+      }));
+    }),
+  );
 }
 
 export function filterHomeEvents(
@@ -68,4 +106,20 @@ export function filterHomeEvents(
 
 function normalizeSearchText(value: string): string {
   return value.trim().toLocaleLowerCase('th-TH');
+}
+
+function uniqueHomeFilterOptions(
+  options: HomeFilterOption[],
+): HomeFilterOption[] {
+  const seen = new Set<string>();
+
+  return options.flatMap((option) => {
+    const value = option.value.trim();
+    const label = option.label.trim();
+    const normalizedValue = normalizeSearchText(value);
+    if (!value || !label || seen.has(normalizedValue)) return [];
+
+    seen.add(normalizedValue);
+    return [{ ...option, value, label }];
+  });
 }

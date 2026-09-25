@@ -34,29 +34,31 @@ export function AuthLayout({
     <div className="flex min-h-[calc(100vh-63px)] flex-col bg-[#f8f6ff] lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(500px,0.96fr)_minmax(500px,1.04fr)]">
       <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-8 lg:items-center lg:bg-[radial-gradient(circle_at_15%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_85%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
         <span className="pointer-events-none absolute -bottom-40 -left-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
-        <Link
-          href="/"
-          className="absolute left-8 top-7 hidden rounded-full border border-[#e8e2f1] bg-white/85 px-4 py-2 text-sm font-bold text-[#655d70] shadow-sm transition hover:border-[#d3c6e8] hover:text-violet lg:inline-flex"
-        >
-          ← กลับหน้าแรก
-        </Link>
-        <div className="relative w-full max-w-[460px] rounded-[26px] border border-[#e9def8] bg-white p-5 shadow-[0_18px_50px_rgba(67,34,139,0.1)] sm:rounded-[28px] sm:p-8 lg:max-w-[480px] lg:rounded-[32px] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
-          <div aria-label="ขั้นตอนการเข้าสู่ระบบ" className="mb-7 flex items-center gap-3 border-b border-line pb-6">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet text-sm font-extrabold text-white">1</span>
-            <span className="text-xs font-bold text-ink sm:text-sm">กรอกข้อมูล</span>
-            <span aria-hidden className="h-px min-w-4 flex-1 bg-line" />
-            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${step === 'verify' ? 'bg-violet text-white' : 'bg-violet-tint text-violet'}`}>2</span>
-            <span className={`text-xs font-bold sm:text-sm ${step === 'verify' ? 'text-ink' : 'text-muted'}`}>ยืนยันรหัส</span>
-          </div>
-          {children}
-          <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
-              <ShieldCheck className="h-4 w-4" aria-hidden />
-            </span>
-            <p>
-              เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink
-              ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
-            </p>
+        <div className="relative flex w-full max-w-[460px] flex-col gap-4 lg:max-w-[480px]">
+          <Link
+            href="/"
+            className="inline-flex min-h-11 w-fit items-center rounded-full border border-[#e8e2f1] bg-white/90 px-4 py-2 text-sm font-bold text-[#655d70] shadow-sm transition hover:border-[#d3c6e8] hover:text-violet focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet/20"
+          >
+            ← กลับหน้าแรก
+          </Link>
+          <div className="w-full rounded-[26px] border border-[#e9def8] bg-white p-5 shadow-[0_18px_50px_rgba(67,34,139,0.1)] sm:rounded-[28px] sm:p-8 lg:rounded-[32px] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
+            <div aria-label="ขั้นตอนการเข้าสู่ระบบ" className="mb-7 flex items-center gap-3 border-b border-line pb-6">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet text-sm font-extrabold text-white">1</span>
+              <span className="text-xs font-bold text-ink sm:text-sm">กรอกข้อมูล</span>
+              <span aria-hidden className="h-px min-w-4 flex-1 bg-line" />
+              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${step === 'verify' ? 'bg-violet text-white' : 'bg-violet-tint text-violet'}`}>2</span>
+              <span className={`text-xs font-bold sm:text-sm ${step === 'verify' ? 'text-ink' : 'text-muted'}`}>ยืนยันรหัส</span>
+            </div>
+            {children}
+            <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
+                <ShieldCheck className="h-4 w-4" aria-hidden />
+              </span>
+              <p>
+                เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink
+                ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
+              </p>
+            </div>
           </div>
         </div>
       </main>

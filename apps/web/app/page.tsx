@@ -10,9 +10,7 @@ import {
   ChevronRight,
   CreditCard,
   Headphones,
-  MapPin,
   MapPinned,
-  Search,
   ShieldCheck,
   Store,
   type LucideIcon,
@@ -29,6 +27,8 @@ import {
 import { getEventCoverUrl } from '@/lib/event-cover';
 import { hasEventEndCalendarDayPassed } from '@/lib/event-time';
 import {
+  buildHomeAreaFilterOptions,
+  buildHomeEventFilterOptions,
   EMPTY_HOME_EVENT_FILTERS,
   filterHomeEvents,
   provinceFromAddress,
@@ -130,27 +130,8 @@ export default function DiscoveryPage() {
 
   const filters = useMemo(
     () => ({
-      events: uniqueOptions([
-        ...events.map((event) => ({
-          value: event.name,
-          label: event.name,
-          hint: `Event · ${event.venue.name}`,
-        })),
-        ...events.map((event) => ({
-          value: event.venue.name,
-          label: event.venue.name,
-          hint: 'สถานที่จัดงาน',
-        })),
-      ]),
-      areas: uniqueOptions(
-        events.flatMap((event) => {
-          const address = event.venue.address?.trim() ?? '';
-          const province = provinceFromAddress(address);
-          return [province, event.venue.name, address]
-            .filter(Boolean)
-            .map((area) => ({ value: area, label: area }));
-        }),
-      ),
+      events: buildHomeEventFilterOptions(events),
+      areas: buildHomeAreaFilterOptions(events),
       categories: uniqueOptions(
         events.flatMap((event) =>
           event.categories.map((category) => ({
@@ -162,6 +143,25 @@ export default function DiscoveryPage() {
     }),
     [events],
   );
+
+  const eventFilterOptions = loading
+    ? [{ value: '', label: 'กำลังโหลดงานและสถานที่…' }]
+    : error
+      ? [{ value: '', label: 'โหลดงานหรือสถานที่ไม่สำเร็จ' }]
+      : withAllOption(
+          filters.events,
+          filters.events.length > 0
+            ? 'ทุกงานหรือสถานที่'
+            : 'ยังไม่มีงานหรือสถานที่',
+        );
+  const areaFilterOptions = loading
+    ? [{ value: '', label: 'กำลังโหลดพื้นที่…' }]
+    : error
+      ? [{ value: '', label: 'โหลดพื้นที่ไม่สำเร็จ' }]
+      : withAllOption(
+          filters.areas,
+          filters.areas.length > 0 ? 'ทุกพื้นที่' : 'ยังไม่มีข้อมูลพื้นที่',
+        );
 
   const visibleEvents = useMemo(
     () =>
@@ -265,27 +265,25 @@ export default function DiscoveryPage() {
             runSearch();
           }}
         >
-          <SearchableFilterInput
-            id="home-event-query"
+          <SelectMenu
             label="งานหรือสถานที่"
-            placeholder="พิมพ์ชื่องานหรือสถานที่"
+            placeholder="ทุกงานหรือสถานที่"
+            className="[&_button]:min-h-[66px]"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
             }
-            suggestions={filters.events.map((option) => option.label)}
-            icon={Search}
+            options={eventFilterOptions}
           />
-          <SearchableFilterInput
-            id="home-area-query"
+          <SelectMenu
             label="พื้นที่"
-            placeholder="พิมพ์จังหวัดหรือพื้นที่"
+            placeholder="ทุกพื้นที่"
+            className="[&_button]:min-h-[66px]"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))
             }
-            suggestions={filters.areas.map((option) => option.label)}
-            icon={MapPin}
+            options={areaFilterOptions}
           />
           <SelectMenu
             label="หมวดสินค้า"
@@ -940,51 +938,4 @@ function withAllOption(
   allLabel: string,
 ): SelectMenuOption[] {
   return [{ value: '', label: allLabel }, ...options];
-}
-
-function SearchableFilterInput({
-  id,
-  label,
-  placeholder,
-  value,
-  suggestions,
-  icon: Icon,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  placeholder: string;
-  value: string;
-  suggestions: string[];
-  icon: LucideIcon;
-  onChange: (value: string) => void;
-}) {
-  const listId = `${id}-suggestions`;
-
-  return (
-    <label htmlFor={id} className="grid gap-1.5">
-      <span className="text-xs font-extrabold text-[#62576d]">{label}</span>
-      <span className="relative block">
-        <Icon
-          aria-hidden
-          className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-violet"
-        />
-        <input
-          id={id}
-          type="search"
-          list={listId}
-          autoComplete="off"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          className="min-h-[66px] w-full rounded-2xl border border-[#ded5e9] bg-white py-3 pl-11 pr-4 text-base font-semibold text-ink outline-none transition placeholder:font-medium placeholder:text-[#9a91a3] hover:border-[#cab9e5] focus:border-violet focus:ring-4 focus:ring-violet/10"
-        />
-        <datalist id={listId}>
-          {suggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-      </span>
-    </label>
-  );
 }
