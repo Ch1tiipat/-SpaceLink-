@@ -20,10 +20,13 @@ import {
   getEventMap,
   getEvents,
   getPublicAnnouncements,
+  getSavedEventIds,
+  unsaveEvent,
   type AdminAnnouncement,
   type DiscoveryEvent,
   type EventZone,
 } from '@/lib/api';
+import { SavedEventsSection } from '@/components/saved-events-section';
 import { getEventCoverUrl } from '@/lib/event-cover';
 import { hasEventEndCalendarDayPassed } from '@/lib/event-time';
 import {
@@ -36,8 +39,15 @@ import {
   type HomeEventFilters,
 } from '@/lib/home-event-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
+type SavedEventsAccess =
+  | { status: 'loading' }
+  | { status: 'signed-out' }
+  | { status: 'ready'; token: string; eventIds: string[] }
+  | { status: 'error'; message: string };
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -65,6 +75,17 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
+    status: 'loading',
+  });
+  const [savedLoadAttempt, setSavedLoadAttempt] = useState(0);
+  const [pendingSavedEventId, setPendingSavedEventId] = useState<string | null>(
+    null,
+  );
+  const [savedNotice, setSavedNotice] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const announcementsScrollerRef = useRef<HTMLDivElement>(null);
   const announcementDialogRef = useRef<HTMLDialogElement>(null);
   const announcementOpenerRef = useRef<HTMLButtonElement | null>(null);
@@ -128,6 +149,60 @@ export default function DiscoveryPage() {
     return () => controller.abort();
   }, [events]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+
+    setSavedEvents({ status: 'loading' });
+    try {
+      supabase = getSupabaseBrowserClient();
+    } catch {
+      setSavedEvents({ status: 'signed-out' });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data, error: sessionError } =
+          await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const token = data.session?.access_token;
+        if (!token) {
+          if (active) setSavedEvents({ status: 'signed-out' });
+          return;
+        }
+
+        const eventIds = await getSavedEventIds(token, controller.signal);
+        if (active) setSavedEvents({ status: 'ready', token, eventIds });
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          return;
+        }
+        if (active) {
+          setSavedEvents({
+            status: 'error',
+            message:
+              cause instanceof Error
+                ? cause.message
+                : 'โหลดรายการโปรดไม่สำเร็จ',
+          });
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [savedLoadAttempt]);
+
+  useEffect(() => {
+    if (!savedNotice) return;
+    const timeout = window.setTimeout(() => setSavedNotice(null), 3_500);
+    return () => window.clearTimeout(timeout);
+  }, [savedNotice]);
+
   const filters = useMemo(
     () => ({
       events: buildHomeEventFilterOptions(events),
@@ -177,6 +252,13 @@ export default function DiscoveryPage() {
     [appliedFilters, draftFilters.area, draftFilters.query, events],
   );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
+  const favoriteEvents = useMemo(
+    () =>
+      savedEvents.status === 'ready'
+        ? resolveSavedEvents(events, savedEvents.eventIds)
+        : [],
+    [events, savedEvents],
+  );
 
   useEffect(() => {
     const dialog = announcementDialogRef.current;
@@ -199,6 +281,39 @@ export default function DiscoveryPage() {
         .getElementById('events')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }
+
+  async function removeSavedEvent(event: DiscoveryEvent) {
+    if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
+
+    const previousEventIds = savedEvents.eventIds;
+    const { token } = savedEvents;
+    setPendingSavedEventId(event.id);
+    setSavedNotice(null);
+    setSavedEvents({
+      status: 'ready',
+      token,
+      eventIds: withoutSavedEvent(previousEventIds, event.id),
+    });
+
+    try {
+      await unsaveEvent(event.id, token);
+      setSavedNotice({
+        kind: 'success',
+        message: `นำ ${event.name} ออกจากรายการโปรดแล้ว`,
+      });
+    } catch (cause) {
+      setSavedEvents({ status: 'ready', token, eventIds: previousEventIds });
+      setSavedNotice({
+        kind: 'error',
+        message:
+          cause instanceof Error
+            ? cause.message
+            : 'นำ Event ออกจากรายการโปรดไม่สำเร็จ',
+      });
+    } finally {
+      setPendingSavedEventId(null);
+    }
   }
 
   function openAnnouncement(
@@ -399,6 +514,19 @@ export default function DiscoveryPage() {
         )}
       </section>
 
+      {savedEvents.status !== 'signed-out' ? (
+        <SavedEventsSection
+          status={savedEvents.status}
+          events={favoriteEvents}
+          pendingEventId={pendingSavedEventId}
+          errorMessage={
+            savedEvents.status === 'error' ? savedEvents.message : undefined
+          }
+          onRetry={() => setSavedLoadAttempt((attempt) => attempt + 1)}
+          onUnsave={(event) => void removeSavedEvent(event)}
+        />
+      ) : null}
+
       <section
         id="events"
         className="shell !mt-[56px] scroll-mt-24 max-sm:!mt-[42px]"
@@ -461,6 +589,16 @@ export default function DiscoveryPage() {
       <BookingJourney event={featuredEvent} />
       <PlatformBenefits />
       <HomepageCallToAction />
+      {savedNotice ? (
+        <div
+          role={savedNotice.kind === 'error' ? 'alert' : 'status'}
+          className={`fixed bottom-5 right-5 z-50 max-w-[min(360px,calc(100%-40px))] rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-[0_18px_50px_rgba(27,16,48,.28)] ${
+            savedNotice.kind === 'error' ? 'bg-[#9f1239]' : 'bg-[#241438]'
+          }`}
+        >
+          {savedNotice.message}
+        </div>
+      ) : null}
       <dialog
         ref={announcementDialogRef}
         aria-modal="true"
