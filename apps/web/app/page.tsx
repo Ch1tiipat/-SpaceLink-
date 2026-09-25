@@ -283,6 +283,11 @@ export default function DiscoveryPage() {
     });
   }
 
+  function applyEventStatus(eventStatus: EventStatusFilter) {
+    setDraftFilters((current) => ({ ...current, eventStatus }));
+    setAppliedFilters((current) => ({ ...current, eventStatus }));
+  }
+
   async function removeSavedEvent(event: DiscoveryEvent) {
     if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
 
@@ -415,12 +420,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกสถานะ"
             className="[&_button]:min-h-[66px]"
             value={draftFilters.eventStatus}
-            onChange={(value) =>
-              setDraftFilters((current) => ({
-                ...current,
-                eventStatus: value as EventStatusFilter,
-              }))
-            }
+            onChange={(value) => applyEventStatus(value as EventStatusFilter)}
             options={[
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
@@ -532,13 +532,47 @@ export default function DiscoveryPage() {
         className="shell !mt-[56px] scroll-mt-24 max-sm:!mt-[42px]"
         aria-labelledby="events-heading"
       >
-        <span className="sl-kicker">ค้นหา Event</span>
-        <h2
-          id="events-heading"
-          className="mb-[18px] mt-[7px] text-[26px] font-black tracking-[-0.025em]"
-        >
-          งานที่เหมาะกับร้านของคุณ
-        </h2>
+        <div className="mb-[18px] flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
+          <div>
+            <span className="sl-kicker">ค้นหา Event</span>
+            <h2
+              id="events-heading"
+              className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+            >
+              งานที่เหมาะกับร้านของคุณ
+            </h2>
+          </div>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="กรองงานที่เหมาะกับร้านของคุณตามสถานะ"
+          >
+            {(
+              [
+                { value: 'all', label: 'ทั้งหมด' },
+                { value: 'ongoing', label: 'กำลังจัดงาน' },
+                { value: 'ended', label: 'สิ้นสุดแล้ว' },
+              ] as const
+            ).map((option) => {
+              const active = appliedFilters.eventStatus === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => applyEventStatus(option.value)}
+                  className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+                    active
+                      ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]'
+                      : 'border-[#d8c7f6] bg-[#f6f1ff] text-violet hover:border-violet hover:bg-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (

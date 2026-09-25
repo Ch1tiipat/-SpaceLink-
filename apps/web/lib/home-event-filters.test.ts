@@ -252,6 +252,49 @@ homeFilterTest(
 );
 
 homeFilterTest(
+  'keeps status chips compatible with the other home discovery filters',
+  () => {
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        {
+          ...EMPTY_HOME_EVENT_FILTERS,
+          area: 'กรุงเทพมหานคร',
+          categoryId: 'fashion',
+          eventStatus: 'ongoing',
+        },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ongoing'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        {
+          ...EMPTY_HOME_EVENT_FILTERS,
+          area: 'นครราชสีมา',
+          categoryId: 'food',
+          eventStatus: 'ended',
+        },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ended'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        EMPTY_HOME_EVENT_FILTERS,
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['future', 'ongoing', 'ended'],
+    );
+  },
+);
+
+homeFilterTest(
   'keeps an event ongoing through its final Bangkok calendar day',
   () => {
     const sameDayEnd = '2026-09-21T00:00:00.000Z';
