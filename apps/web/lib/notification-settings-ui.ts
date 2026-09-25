@@ -34,26 +34,18 @@ export function getNotificationSettingRowClass(index: number): string {
 
 export function getToggleSwitchClasses({
   checked,
-  compact,
 }: {
   checked: boolean;
   compact: boolean;
 }): { button: string; track: string; thumb: string } {
   return {
-    button: `group relative inline-grid h-11 shrink-0 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 ${
-      compact ? 'w-14' : 'w-[66px]'
-    } disabled:cursor-not-allowed disabled:opacity-60`,
-    track: `relative block rounded-full transition-colors ${
-      compact ? 'h-7 w-12' : 'h-9 w-[58px]'
-    } ${checked ? 'bg-violet' : 'bg-[#d9d4df]'}`,
-    thumb: `absolute left-1 top-1 rounded-full bg-white shadow transition-transform ${
-      compact ? 'h-5 w-5' : 'h-7 w-7'
-    } ${
-      checked
-        ? compact
-          ? 'translate-x-5'
-          : 'translate-x-[22px]'
-        : 'translate-x-0'
+    button:
+      'group relative inline-grid h-11 w-16 shrink-0 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+    track: `relative block h-9 w-16 rounded-full transition ${
+      checked ? 'bg-violet' : 'bg-[#d8d2df]'
+    }`,
+    thumb: `absolute top-1 h-7 w-7 rounded-full bg-white shadow transition ${
+      checked ? 'right-1' : 'left-1'
     }`,
   };
 }
