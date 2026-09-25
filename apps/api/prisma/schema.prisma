@@ -7,6 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator markdown {
+  provider = "prisma-markdown"
+  output   = "./ERD.md"
+  title    = "SpaceLink Database"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -162,6 +168,7 @@ enum RecommendationSource {
 
 // ------------------------------ MODELS --------------------------------------
 
+/// @namespace Identity_Organization
 model Organization {
   id           String    @id @default(uuid()) @map("organization_id") @db.Uuid
   name         String
@@ -191,6 +198,7 @@ model Organization {
   @@map("organization")
 }
 
+/// @namespace Identity_Organization
 model User {
   id              String   @id @default(uuid()) @map("user_id") @db.Uuid
   authUserId      String   @unique @map("auth_user_id") @db.Uuid
@@ -229,6 +237,7 @@ model User {
   @@map("app_user")
 }
 
+/// @namespace Engagement_Notification
 model SavedEvent {
   id        String   @id @default(uuid()) @map("saved_event_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
@@ -243,6 +252,7 @@ model SavedEvent {
   @@map("saved_event")
 }
 
+/// @namespace Engagement_Notification
 model PushSubscription {
   id         String    @id @default(uuid()) @map("push_subscription_id") @db.Uuid
   userId     String    @map("user_id") @db.Uuid
@@ -259,6 +269,7 @@ model PushSubscription {
   @@map("push_subscription")
 }
 
+/// @namespace Platform_Admin
 model SystemBroadcast {
   id        String    @id @default(uuid()) @map("system_broadcast_id") @db.Uuid
   title     String
@@ -272,6 +283,7 @@ model SystemBroadcast {
   @@map("system_broadcast")
 }
 
+/// @namespace Platform_Admin
 model AuditLog {
   id          String   @id @default(uuid()) @map("audit_log_id") @db.Uuid
   actorUserId String   @map("actor_user_id") @db.Uuid
@@ -288,6 +300,7 @@ model AuditLog {
   @@map("audit_log")
 }
 
+/// @namespace Identity_Organization
 model OrgMembership {
   id             String         @id @default(uuid()) @map("membership_id") @db.Uuid
   organizationId String         @map("organization_id") @db.Uuid
@@ -306,6 +319,7 @@ model OrgMembership {
   @@map("org_membership")
 }
 
+/// @namespace Venue_Space
 model Venue {
   id             String      @id @default(uuid()) @map("venue_id") @db.Uuid
   organizationId String      @map("organization_id") @db.Uuid
@@ -329,6 +343,7 @@ model Venue {
   @@map("venue")
 }
 
+/// @namespace Venue_Space
 model VenuePoint {
   id        String         @id @default(uuid()) @map("venue_point_id") @db.Uuid
   venueId   String         @map("venue_id") @db.Uuid
@@ -343,6 +358,7 @@ model VenuePoint {
   @@map("venue_point")
 }
 
+/// @namespace Venue_Space
 model Zone {
   id                String   @id @default(uuid()) @map("zone_id") @db.Uuid
   venueId           String   @map("venue_id") @db.Uuid
@@ -364,6 +380,7 @@ model Zone {
   @@map("zone")
 }
 
+/// @namespace Venue_Space
 model ZoneCategory {
   zoneId     String @map("zone_id") @db.Uuid
   categoryId String @map("category_id") @db.Uuid
@@ -375,6 +392,7 @@ model ZoneCategory {
   @@map("zone_category")
 }
 
+/// @namespace Venue_Space
 model Booth {
   id         String      @id @default(uuid()) @map("booth_id") @db.Uuid
   zoneId     String      @map("zone_id") @db.Uuid
@@ -397,6 +415,7 @@ model Booth {
   @@map("booth")
 }
 
+/// @namespace Event
 model Event {
   id             String      @id @default(uuid()) @map("event_id") @db.Uuid
   organizationId String      @map("organization_id") @db.Uuid
@@ -435,6 +454,7 @@ model Event {
   @@map("event")
 }
 
+/// @namespace Event
 model EventJoinInformation {
   id        String @id @default(uuid()) @map("event_join_information_id") @db.Uuid
   eventId   String @map("event_id") @db.Uuid
@@ -448,6 +468,7 @@ model EventJoinInformation {
   @@map("event_join_information")
 }
 
+/// @namespace Event
 model EventInformation {
   id          String               @id @default(uuid()) @map("event_information_id") @db.Uuid
   eventId     String               @map("event_id") @db.Uuid
@@ -462,6 +483,7 @@ model EventInformation {
   @@map("event_information")
 }
 
+/// @namespace Event
 model EventPolicy {
   id                     String   @id @default(uuid()) @map("event_policy_id") @db.Uuid
   eventId                String   @unique @map("event_id") @db.Uuid
@@ -477,6 +499,7 @@ model EventPolicy {
   @@map("event_policy")
 }
 
+/// @namespace Event
 model Subscription {
   id              String             @id @default(uuid()) @map("subscription_id") @db.Uuid
   organizationId  String             @map("organization_id") @db.Uuid
@@ -502,6 +525,7 @@ model Subscription {
   @@map("subscription")
 }
 
+/// @namespace Shop_Category
 model Shop {
   id            String    @id @default(uuid()) @map("shop_id") @db.Uuid
   ownerUserId   String    @map("owner_user_id") @db.Uuid
@@ -521,6 +545,7 @@ model Shop {
   @@map("shop")
 }
 
+/// @namespace Shop_Category
 model ShopCategory {
   shopId     String @map("shop_id") @db.Uuid
   categoryId String @map("category_id") @db.Uuid
@@ -532,6 +557,7 @@ model ShopCategory {
   @@map("shop_category")
 }
 
+/// @namespace Booking_Payment
 model BookingPaymentGroup {
   id             String             @id @default(uuid()) @map("payment_group_id") @db.Uuid
   paymentCode    String             @unique @map("payment_code")
@@ -562,6 +588,7 @@ model BookingPaymentGroup {
   @@map("booking_payment_group")
 }
 
+/// @namespace Booking_Payment
 model Booking {
   id                  String           @id @default(uuid()) @map("booking_id") @db.Uuid
   bookingCode         String           @unique @map("booking_code")
@@ -606,6 +633,7 @@ model Booking {
   @@map("booking")
 }
 
+/// @namespace Booking_Payment
 model VerifiedSlip {
   id           String     @id @default(uuid()) @map("slip_id") @db.Uuid
   bookingId    String     @map("booking_id") @db.Uuid
@@ -629,6 +657,7 @@ model VerifiedSlip {
   @@map("verified_slip")
 }
 
+/// @namespace Refund_Support
 model RefundRequest {
   id                String       @id @default(uuid()) @map("refund_request_id") @db.Uuid
   bookingId         String       @map("booking_id") @db.Uuid
@@ -657,6 +686,7 @@ model RefundRequest {
   @@map("refund_request")
 }
 
+/// @namespace Refund_Support
 model SupportTicket {
   id             String       @id @default(uuid()) @map("support_ticket_id") @db.Uuid
   userId         String       @map("user_id") @db.Uuid
@@ -679,6 +709,7 @@ model SupportTicket {
   @@map("support_ticket")
 }
 
+/// @namespace Refund_Support
 model TicketMessage {
   id             String   @id @default(uuid()) @map("ticket_message_id") @db.Uuid
   ticketId       String   @map("ticket_id") @db.Uuid
@@ -701,6 +732,7 @@ model TicketMessage {
 /// unique, which is what makes spending a grant atomic — two concurrent bookings
 /// cannot both claim it. There is deliberately no `expiresAt`: a grant dies with
 /// its event, because every booking path already refuses a closed event.
+/// @namespace Refund_Support
 model BoothQuotaGrant {
   id                String    @id @default(uuid()) @map("quota_grant_id") @db.Uuid
   vendorUserId      String    @map("vendor_user_id") @db.Uuid
@@ -723,6 +755,7 @@ model BoothQuotaGrant {
   @@map("booth_quota_grant")
 }
 
+/// @namespace Engagement_Notification
 model Review {
   id                  String           @id @default(uuid()) @map("review_id") @db.Uuid
   reviewerUserId      String?          @map("reviewer_user_id") @db.Uuid
@@ -748,6 +781,7 @@ model Review {
   @@map("review")
 }
 
+/// @namespace Engagement_Notification
 model Notification {
   id                String           @id @default(uuid()) @map("notification_id") @db.Uuid
   userId            String           @map("user_id") @db.Uuid
@@ -765,6 +799,7 @@ model Notification {
   @@map("notification")
 }
 
+/// @namespace Engagement_Notification
 model Announcement {
   id             String    @id @default(uuid()) @map("announcement_id") @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -781,6 +816,7 @@ model Announcement {
   @@map("announcement")
 }
 
+/// @namespace Engagement_Notification
 model Penalty {
   id             String        @id @default(uuid()) @map("penalty_id") @db.Uuid
   organizationId String        @map("organization_id") @db.Uuid
@@ -800,6 +836,7 @@ model Penalty {
   @@map("penalty")
 }
 
+/// @namespace Platform_Admin
 model OrgConfig {
   id                    String   @id @default(uuid()) @map("org_config_id") @db.Uuid
   organizationId        String   @unique @map("organization_id") @db.Uuid
@@ -814,6 +851,7 @@ model OrgConfig {
   @@map("org_config")
 }
 
+/// @namespace Platform_Admin
 model PlatformConfig {
   id                  String   @id @default(uuid()) @map("platform_config_id") @db.Uuid
   baseFee             Decimal  @default(500) @map("base_fee") @db.Decimal(10, 2)
@@ -829,6 +867,7 @@ model PlatformConfig {
   @@map("platform_config")
 }
 
+/// @namespace Platform_Admin
 model RecommendationLog {
   id                 String               @id @default(uuid()) @map("recommendation_log_id") @db.Uuid
   vendorUserId       String               @map("vendor_user_id") @db.Uuid
@@ -849,6 +888,7 @@ model RecommendationLog {
   @@map("recommendation_log")
 }
 
+/// @namespace Shop_Category
 model ProductCategory {
   id          String   @id @default(uuid()) @map("category_id") @db.Uuid
   name        String   @unique
