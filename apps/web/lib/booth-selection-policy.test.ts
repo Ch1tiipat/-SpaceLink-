@@ -72,41 +72,117 @@ boothSelectionTest('continues only for a signed-in vendor with a shop', () => {
   );
 });
 
-boothSelectionTest('opens the correct quota dialog when the limit is reached', () => {
-  boothSelectionAssert.equal(
-    decideBoothQuota({
-      selectedCount: 0,
-      effectiveSelectionLimit: 0,
-      remainingQuota: 0,
-    }),
-    'open-quota-full-dialog',
-  );
-  boothSelectionAssert.equal(
-    decideBoothQuota({
-      selectedCount: 2,
-      effectiveSelectionLimit: 2,
-      remainingQuota: 4,
-    }),
-    'open-selection-limit-dialog',
-  );
-});
+boothSelectionTest(
+  'covers quota 2 when selecting the first, second, and third booths',
+  () => {
+    const cases = [
+      { selectedCount: 0, expected: 'continue' },
+      { selectedCount: 1, expected: 'continue' },
+      { selectedCount: 2, expected: 'open-selection-limit-dialog' },
+    ] as const;
+
+    for (const { selectedCount, expected } of cases) {
+      boothSelectionAssert.equal(
+        decideBoothQuota({
+          selectedCount,
+          effectiveSelectionLimit: 2,
+          remainingQuota: 2,
+        }),
+        expected,
+      );
+    }
+  },
+);
 
 boothSelectionTest(
-  'continues while the effective selection limit has room',
+  'accounts for zero, one, and two existing bookings before selection',
   () => {
+    const cases = [
+      {
+        activeBookingCount: 0,
+        selectedCount: 0,
+        effectiveSelectionLimit: 2,
+        remainingQuota: 2,
+        expected: 'continue',
+      },
+      {
+        activeBookingCount: 1,
+        selectedCount: 0,
+        effectiveSelectionLimit: 1,
+        remainingQuota: 1,
+        expected: 'continue',
+      },
+      {
+        activeBookingCount: 1,
+        selectedCount: 1,
+        effectiveSelectionLimit: 1,
+        remainingQuota: 1,
+        expected: 'open-selection-limit-dialog',
+      },
+      {
+        activeBookingCount: 2,
+        selectedCount: 0,
+        effectiveSelectionLimit: 0,
+        remainingQuota: 0,
+        expected: 'open-quota-full-dialog',
+      },
+    ] as const;
+
+    for (const {
+      activeBookingCount,
+      selectedCount,
+      effectiveSelectionLimit,
+      remainingQuota,
+      expected,
+    } of cases) {
+      boothSelectionAssert.equal(
+        decideBoothQuota({
+          selectedCount,
+          effectiveSelectionLimit,
+          remainingQuota,
+        }),
+        expected,
+        `active bookings: ${activeBookingCount}`,
+      );
+    }
+  },
+);
+
+boothSelectionTest(
+  'allows an approved extra quota before opening the selection limit dialog',
+  () => {
+    const approvedGrantContext = {
+      configuredQuota: 2,
+      activeBookingCount: 2,
+      approvedGrantCount: 1,
+      remainingQuota: 1,
+      effectiveSelectionLimit: 1,
+    };
+
+    boothSelectionAssert.equal(approvedGrantContext.approvedGrantCount, 1);
+    boothSelectionAssert.equal(
+      decideBoothQuota({
+        selectedCount: 0,
+        effectiveSelectionLimit:
+          approvedGrantContext.effectiveSelectionLimit,
+        remainingQuota: approvedGrantContext.remainingQuota,
+      }),
+      'continue',
+    );
     boothSelectionAssert.equal(
       decideBoothQuota({
         selectedCount: 1,
-        effectiveSelectionLimit: 2,
-        remainingQuota: 2,
+        effectiveSelectionLimit:
+          approvedGrantContext.effectiveSelectionLimit,
+        remainingQuota: approvedGrantContext.remainingQuota,
       }),
-      'continue',
+      'open-selection-limit-dialog',
     );
   },
 );
 
 boothSelectionTest(
-  'never sends unavailable booth states into the quota flow',
+  'never sends held, booked, or unavailable booths into the quota flow',
   () => {
     boothSelectionAssert.equal(canAttemptBoothSelection('AVAILABLE'), true);
     for (const availability of ['HELD', 'BOOKED', 'UNAVAILABLE'] as const) {
