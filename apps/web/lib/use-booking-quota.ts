@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBookingQuotaContext, type BookingQuotaContext } from '@/lib/api';
+import {
+  BookingQuotaTimeoutError,
+  requestBookingQuotaWithTimeout,
+} from '@/lib/booking-quota-request';
 
 export type BookingQuotaState =
   | { status: 'idle' }
@@ -53,7 +57,11 @@ export function useBookingQuota(
 
       setStored({ key: requestKey, state: { status: 'loading' } });
       try {
-        const value = await getBookingQuotaContext(eventId, token, signal);
+        const value = await requestBookingQuotaWithTimeout(
+          (requestSignal) =>
+            getBookingQuotaContext(eventId, token, requestSignal),
+          { signal },
+        );
         const next: BookingQuotaState = { status: 'ready', value };
         if (requestIdRef.current === requestId && !signal?.aborted) {
           setStored({ key: requestKey, state: next });
@@ -66,7 +74,9 @@ export function useBookingQuota(
         const next: BookingQuotaState = {
           status: 'error',
           message:
-            cause instanceof Error
+            cause instanceof BookingQuotaTimeoutError
+              ? cause.message
+              : cause instanceof Error
               ? cause.message
               : 'ตรวจสอบโควตาการจองไม่สำเร็จ',
         };

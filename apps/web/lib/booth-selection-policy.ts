@@ -11,8 +11,8 @@ export type BoothSelectionAccessDecision =
   | 'continue';
 
 export type BoothQuotaDecision =
-  | 'open-quota-request'
-  | 'show-selection-limit'
+  | 'open-quota-full-dialog'
+  | 'open-selection-limit-dialog'
   | 'continue';
 
 export type SelectableBoothAvailability =
@@ -51,7 +51,9 @@ export function decideBoothQuota({
   remainingQuota: number;
 }): BoothQuotaDecision {
   if (selectedCount < effectiveSelectionLimit) return 'continue';
-  return remainingQuota === 0 ? 'open-quota-request' : 'show-selection-limit';
+  return remainingQuota === 0
+    ? 'open-quota-full-dialog'
+    : 'open-selection-limit-dialog';
 }
 
 export function canAttemptBoothSelection(

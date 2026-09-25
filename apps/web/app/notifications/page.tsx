@@ -33,6 +33,12 @@ import {
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { refundNotificationHref } from '@/lib/refund-notification-route';
+import {
+  getNotificationPreferenceSummary,
+  getNotificationSettingRowClass,
+  getToggleSwitchClasses,
+  NOTIFICATION_SETTINGS_GRID_CLASS,
+} from '@/lib/notification-settings-ui';
 import { useAuthState } from '@/lib/use-auth-state';
 import { canUseUxPreview, UX_PREVIEW_TOKEN } from '@/lib/ux-preview';
 import {
@@ -1240,11 +1246,8 @@ function NotificationSettings({
       icon: Sparkles,
     },
   ];
-  const allEnabled = NOTIFICATION_PREFERENCE_TYPES.every(
-    (type) => preferences[type],
-  );
-  const someEnabled = NOTIFICATION_PREFERENCE_TYPES.some(
-    (type) => preferences[type],
+  const preferenceSummary = getNotificationPreferenceSummary(
+    NOTIFICATION_PREFERENCE_TYPES.map((type) => preferences[type]),
   );
 
   return (
@@ -1276,33 +1279,27 @@ function NotificationSettings({
       </div>
 
       <div className="flex items-center justify-between gap-4 border-b border-line bg-[#fbf9ff] px-5 py-4 sm:px-7">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold text-ink">
             เปิดการแจ้งเตือนทั้งหมด
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            {allEnabled
-              ? 'เปิดครบทั้ง 7 หมวด'
-              : someEnabled
-                ? 'เปิดบางหมวด'
-                : 'ปิดทุกหมวด'}
+            {preferenceSummary.description}
           </p>
         </div>
         <ToggleSwitch
-          checked={allEnabled}
+          checked={preferenceSummary.allEnabled}
           onClick={() => void onToggle('all')}
           label="เปิดการแจ้งเตือนทั้งหมด"
           disabled={saving}
         />
       </div>
 
-      <div className="grid divide-y divide-line px-5 sm:px-7 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+      <div className={NOTIFICATION_SETTINGS_GRID_CLASS}>
         {options.map(({ key, title, description, icon: Icon }, index) => (
           <div
             key={key}
-            className={`flex items-center gap-4 py-4 ${
-              index % 2 === 0 ? 'lg:pr-7' : 'lg:pl-7'
-            }`}
+            className={getNotificationSettingRowClass(index)}
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-tint text-violet">
               <Icon className="h-4.5 w-4.5" aria-hidden />
@@ -1345,6 +1342,8 @@ function ToggleSwitch({
   compact?: boolean;
   disabled?: boolean;
 }) {
+  const classes = getToggleSwitchClasses({ checked, compact });
+
   return (
     <button
       type="button"
@@ -1353,15 +1352,16 @@ function ToggleSwitch({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`relative shrink-0 rounded-full transition ${
-        compact ? 'h-7 w-12' : 'h-9 w-[58px]'
-      } ${checked ? 'bg-violet' : 'bg-[#d9d4df]'} disabled:cursor-not-allowed disabled:opacity-60`}
+      className={classes.button}
     >
       <span
-        className={`absolute top-1 rounded-full bg-white shadow transition-transform ${
-          compact ? 'h-5 w-5' : 'h-7 w-7'
-        } ${checked ? (compact ? 'translate-x-6' : 'translate-x-7') : 'translate-x-1'}`}
-      />
+        aria-hidden
+        className={classes.track}
+      >
+        <span
+          className={classes.thumb}
+        />
+      </span>
     </button>
   );
 }
