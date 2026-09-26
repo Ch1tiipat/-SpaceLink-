@@ -68,6 +68,7 @@ const bookingListInclude = {
       bannerUrl: true,
       endDate: true,
       endTime: true,
+      venue: { select: { name: true, address: true } },
       organization: { select: { promptpayId: true } },
     },
   },
@@ -116,6 +117,7 @@ type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
     bannerUrl: string | null;
     endDate: Date;
     endTime: string | null;
+    venue: { name: string; address: string | null };
   };
   paymentQrDataUri: string | null;
 };
@@ -1532,6 +1534,7 @@ export class BookingsService {
         bannerUrl: event.bannerUrl,
         endDate: event.endDate,
         endTime: event.endTime,
+        venue: event.venue,
       },
       paymentQrDataUri,
     };

@@ -16,3 +16,10 @@ export function getEventCoverUrl(value: string | null | undefined): string {
     return EVENT_COVER_FALLBACK;
   }
 }
+
+export function resolveEventCoverUrl(
+  value: string | null | undefined,
+  hasLoadFailed: boolean,
+): string {
+  return hasLoadFailed ? EVENT_COVER_FALLBACK : getEventCoverUrl(value);
+}

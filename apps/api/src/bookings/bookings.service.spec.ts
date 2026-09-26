@@ -1860,6 +1860,10 @@ describe('BookingsService', () => {
         bannerUrl: 'https://cdn.example.com/events/creative-market.jpg',
         endDate: EVENT_END,
         endTime: '18:00',
+        venue: {
+          name: 'ลานกิจกรรมกลางเมือง',
+          address: 'จังหวัดนครราชสีมา',
+        },
         organization: { promptpayId: '0812345678' },
       },
       booth: {
@@ -1887,6 +1891,10 @@ describe('BookingsService', () => {
         bannerUrl: 'https://cdn.example.com/events/creative-market.jpg',
         endDate: EVENT_END,
         endTime: '18:00',
+        venue: {
+          name: 'ลานกิจกรรมกลางเมือง',
+          address: 'จังหวัดนครราชสีมา',
+        },
       },
       boothPrice: '1500',
       paymentQrDataUri: 'data:image/png;base64,cXI=',
@@ -1902,6 +1910,7 @@ describe('BookingsService', () => {
             bannerUrl: true,
             endDate: true,
             endTime: true,
+            venue: { select: { name: true, address: true } },
             organization: { select: { promptpayId: true } },
           },
         },
