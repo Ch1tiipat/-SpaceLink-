@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -59,6 +59,11 @@ export class AnnouncementsService {
     organizationId: string,
     createAnnouncementDto: CreateAnnouncementDto,
   ) {
+    await this.assertEventBelongsToOrganization(
+      createAnnouncementDto.eventId,
+      organizationId,
+    );
+
     const announcement = await this.prisma.announcement.create({
       data: { ...createAnnouncementDto, organizationId },
     });
@@ -75,6 +80,11 @@ export class AnnouncementsService {
     updateAnnouncementDto: UpdateAnnouncementDto,
     organizationId: string,
   ) {
+    await this.assertEventBelongsToOrganization(
+      updateAnnouncementDto.eventId,
+      organizationId,
+    );
+
     const existing = await this.prisma.announcement.findUnique({
       where: { id, organizationId },
       select: { isActive: true },
@@ -115,6 +125,22 @@ export class AnnouncementsService {
       relatedEntityType: 'ANNOUNCEMENT',
       relatedEntityId: announcement.id,
     });
+  }
+
+  private async assertEventBelongsToOrganization(
+    eventId: string | null | undefined,
+    organizationId: string,
+  ): Promise<void> {
+    if (!eventId) return;
+
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, organizationId },
+      select: { id: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
   }
 
   private excerpt(body: string): string {

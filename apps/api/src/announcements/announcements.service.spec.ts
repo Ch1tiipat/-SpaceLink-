@@ -11,6 +11,7 @@ const findUnique = jest.fn();
 const create = jest.fn();
 const update = jest.fn();
 const deleteAnnouncement = jest.fn();
+const findEvent = jest.fn();
 const fanOutToOrganizationBookers = jest.fn();
 const deleteByRelatedEntity = jest.fn();
 const prismaTransaction = jest.fn();
@@ -25,6 +26,7 @@ const mockPrismaService = {
     update,
     delete: deleteAnnouncement,
   },
+  event: { findFirst: findEvent },
   $transaction: prismaTransaction,
 };
 const mockNotificationsService = {
@@ -34,6 +36,7 @@ const mockNotificationsService = {
 
 const organizationId = '00000000-0000-4000-8000-000000000001';
 const announcementId = '00000000-0000-4000-8000-000000000002';
+const eventId = '00000000-0000-4000-8000-000000000003';
 
 describe('AnnouncementsService', () => {
   let service: AnnouncementsService;
@@ -163,6 +166,46 @@ describe('AnnouncementsService', () => {
     expect(fanOutToOrganizationBookers).not.toHaveBeenCalled();
   });
 
+  it('links an announcement only to an event in the same organization', async () => {
+    const dto: CreateAnnouncementDto = {
+      title: 'แจ้งกำหนดการ Event',
+      body: 'พบกันวันเสาร์นี้',
+      type: 'EVENT',
+      eventId,
+    };
+    findEvent.mockResolvedValue({ id: eventId });
+    create.mockResolvedValue({
+      id: announcementId,
+      ...dto,
+      organizationId,
+      isActive: false,
+    });
+
+    await service.create(organizationId, dto);
+
+    expect(findEvent).toHaveBeenCalledWith({
+      where: { id: eventId, organizationId },
+      select: { id: true },
+    });
+    expect(create).toHaveBeenCalledWith({
+      data: { ...dto, organizationId },
+    });
+  });
+
+  it('returns not found instead of linking an event from another organization', async () => {
+    findEvent.mockResolvedValue(null);
+
+    await expect(
+      service.create(organizationId, {
+        title: 'ประกาศข้ามองค์กร',
+        body: 'ต้องไม่ถูกสร้าง',
+        type: 'EVENT',
+        eventId,
+      }),
+    ).rejects.toThrow('Event not found');
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('limits the notification body to two hundred characters', async () => {
     const body = 'x'.repeat(250);
     create.mockResolvedValue({
@@ -203,6 +246,36 @@ describe('AnnouncementsService', () => {
       data: dto,
     });
     expect(fanOutToOrganizationBookers).not.toHaveBeenCalled();
+  });
+
+  it('allows an update to unlink an announcement from its event', async () => {
+    const dto: UpdateAnnouncementDto = { eventId: null };
+    findUnique.mockResolvedValue({ isActive: true });
+    update.mockResolvedValue({
+      id: announcementId,
+      title: 'ประกาศทั่วไป',
+      body: 'รายละเอียด',
+      isActive: true,
+      eventId: null,
+    });
+
+    await service.update(announcementId, dto, organizationId);
+
+    expect(findEvent).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith({
+      where: { id: announcementId, organizationId },
+      data: dto,
+    });
+  });
+
+  it('rejects an update that links an event from another organization', async () => {
+    findEvent.mockResolvedValue(null);
+
+    await expect(
+      service.update(announcementId, { eventId }, organizationId),
+    ).rejects.toThrow('Event not found');
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('notifies only when an update activates an inactive announcement', async () => {

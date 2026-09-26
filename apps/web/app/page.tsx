@@ -38,6 +38,10 @@ import {
   type EventStatusFilter,
   type HomeEventFilters,
 } from '@/lib/home-event-filters';
+import {
+  filterHomeAnnouncements,
+  type AnnouncementFilter,
+} from '@/lib/home-announcement-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -64,6 +68,8 @@ function formatDateRange(event: DiscoveryEvent) {
 export default function DiscoveryPage() {
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
+  const [announcementFilter, setAnnouncementFilter] =
+    useState<AnnouncementFilter>('all');
   const [draftFilters, setDraftFilters] = useState<HomeEventFilters>(
     EMPTY_HOME_EVENT_FILTERS,
   );
@@ -258,6 +264,10 @@ export default function DiscoveryPage() {
         ? resolveSavedEvents(events, savedEvents.eventIds)
         : [],
     [events, savedEvents],
+  );
+  const visibleAnnouncements = useMemo(
+    () => filterHomeAnnouncements(announcements, announcementFilter),
+    [announcementFilter, announcements],
   );
 
   useEffect(() => {
@@ -458,7 +468,7 @@ export default function DiscoveryPage() {
               อัปเดตจากองค์กรที่มี Event บน SpaceLink
             </p>
           </div>
-          {announcements.length > 1 ? (
+          {visibleAnnouncements.length > 1 ? (
             <div
               className="flex gap-1"
               role="group"
@@ -483,6 +493,37 @@ export default function DiscoveryPage() {
             </div>
           ) : null}
         </div>
+        <div
+          className="mb-5 flex flex-wrap gap-2"
+          role="group"
+          aria-label="กรองประกาศตามประเภท"
+        >
+          {(
+            [
+              { value: 'all', label: 'ทั้งหมด' },
+              { value: 'EVENT', label: 'Event' },
+              { value: 'ANNOUNCEMENT', label: 'ประกาศ' },
+            ] as const
+          ).map((option) => {
+            const active = announcementFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setAnnouncementFilter(option.value)}
+                className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+                  active
+                    ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]'
+                    : 'border-[#d8c7f6] bg-[#f6f1ff] text-violet hover:border-violet hover:bg-white'
+                }`}
+              >
+                <span aria-hidden>{active ? '✓ ' : ''}</span>
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         {announcementsLoading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
@@ -492,9 +533,13 @@ export default function DiscoveryPage() {
               />
             ))}
           </div>
-        ) : announcements.length === 0 ? (
+        ) : visibleAnnouncements.length === 0 ? (
           <div className="sl-surface p-8 text-center text-sm text-muted">
-            ยังไม่มีประกาศใหม่ในขณะนี้
+            {announcementFilter === 'EVENT'
+              ? 'ยังไม่มีข่าว Event ในขณะนี้'
+              : announcementFilter === 'ANNOUNCEMENT'
+                ? 'ยังไม่มีประกาศทั่วไปในขณะนี้'
+                : 'ยังไม่มีประกาศใหม่ในขณะนี้'}
           </div>
         ) : (
           <div
@@ -502,7 +547,7 @@ export default function DiscoveryPage() {
             className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
             aria-label="ประกาศล่าสุด เลื่อนซ้ายหรือขวาเพื่อดูเพิ่มเติม"
           >
-            {announcements.map((announcement, index) => (
+            {visibleAnnouncements.map((announcement, index) => (
               <div
                 key={announcement.id}
                 className="min-w-[86%] snap-start sm:min-w-[calc(50%-8px)] lg:min-w-[calc((100%-32px)/3)]"

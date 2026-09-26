@@ -1,9 +1,12 @@
+import { AnnouncementType } from '@prisma/client';
 import {
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
 } from 'class-validator';
 
 /**
@@ -27,4 +30,12 @@ export class CreateAnnouncementDto {
   @IsOptional()
   @IsDateString()
   publishedAt?: string;
+
+  @IsOptional()
+  @IsEnum(AnnouncementType)
+  type?: AnnouncementType;
+
+  @IsOptional()
+  @IsUUID()
+  eventId?: string | null;
 }

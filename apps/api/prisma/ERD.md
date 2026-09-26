@@ -154,6 +154,8 @@ erDiagram
 "announcement" {
   String announcement_id PK
   String organization_id FK
+  String event_id FK "nullable"
+  AnnouncementType type
   String title
   String body
   Boolean is_active
@@ -233,6 +235,8 @@ Properties as follows:
 
 - `announcement_id`:
 - `organization_id`:
+- `event_id`:
+- `type`:
 - `title`:
 - `body`:
 - `is_active`:
