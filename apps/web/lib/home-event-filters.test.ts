@@ -6,6 +6,8 @@ const { test: homeFilterTest }: typeof import('node:test') =
   require('node:test');
 type DiscoveryEvent = import('./api').DiscoveryEvent;
 const {
+  buildHomeAreaFilterOptions,
+  buildHomeEventFilterOptions,
   EMPTY_HOME_EVENT_FILTERS,
   filterHomeEvents,
   provinceFromAddress,
@@ -80,6 +82,79 @@ homeFilterTest('extracts Thai provinces for filter options', () => {
     'กรุงเทพมหานคร',
   );
 });
+
+homeFilterTest(
+  'builds trimmed dropdown options without blanks or duplicates',
+  () => {
+    const duplicateAndBlankEvents = [
+      ...events,
+      makeHomeEvent({
+        id: 'duplicate',
+        name: '  SpaceLink Fair 2026  ',
+        venue: {
+          id: 'venue-duplicate',
+          name: ' ลานกิจกรรมกลางเมือง ',
+          address: ' อำเภอเมือง จังหวัดนครราชสีมา ',
+        },
+      }),
+      makeHomeEvent({
+        id: 'blank',
+        name: '   ',
+        venue: { id: 'venue-blank', name: '   ', address: '   ' },
+      }),
+    ];
+
+    const eventOptions = buildHomeEventFilterOptions(duplicateAndBlankEvents);
+    const areaOptions = buildHomeAreaFilterOptions(duplicateAndBlankEvents);
+
+    homeFilterAssert.equal(
+      eventOptions.filter(({ value }) => value === 'SpaceLink Fair 2026').length,
+      1,
+    );
+    homeFilterAssert.equal(
+      eventOptions.filter(({ value }) => value === 'ลานกิจกรรมกลางเมือง')
+        .length,
+      1,
+    );
+    homeFilterAssert.ok(eventOptions.every(({ value }) => value.length > 0));
+    homeFilterAssert.equal(
+      areaOptions.filter(({ value }) => value === 'นครราชสีมา').length,
+      1,
+    );
+    homeFilterAssert.ok(areaOptions.every(({ value }) => value.length > 0));
+  },
+);
+
+homeFilterTest(
+  'applies all four dropdown values together and clears one filter at a time',
+  () => {
+    const selected = {
+      query: 'Bangkok Creator Market',
+      area: 'กรุงเทพมหานคร',
+      categoryId: 'fashion',
+      eventStatus: 'ongoing' as const,
+    };
+
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(events, selected, isBookableForTest, NOW).map(
+        ({ id }) => id,
+      ),
+      ['ongoing'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        { ...selected, query: '' },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ongoing'],
+    );
+    homeFilterAssert.equal(selected.area, 'กรุงเทพมหานคร');
+    homeFilterAssert.equal(selected.categoryId, 'fashion');
+    homeFilterAssert.equal(selected.eventStatus, 'ongoing');
+  },
+);
 
 homeFilterTest('filters by event or venue text, area, and category', () => {
   homeFilterAssert.deepEqual(
