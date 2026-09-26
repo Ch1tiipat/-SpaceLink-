@@ -40,7 +40,9 @@ import {
 } from '@/lib/home-event-filters';
 import {
   filterHomeAnnouncements,
+  resolveAnnouncementLoad,
   type AnnouncementFilter,
+  type AnnouncementLoadStatus,
 } from '@/lib/home-announcement-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
@@ -70,6 +72,8 @@ export default function DiscoveryPage() {
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [announcementFilter, setAnnouncementFilter] =
     useState<AnnouncementFilter>('all');
+  const [announcementLoadStatus, setAnnouncementLoadStatus] =
+    useState<AnnouncementLoadStatus>('success');
   const [draftFilters, setDraftFilters] = useState<HomeEventFilters>(
     EMPTY_HOME_EVENT_FILTERS,
   );
@@ -116,11 +120,13 @@ export default function DiscoveryPage() {
     const organizations = uniqueOrganizations(events);
     if (organizations.length === 0) {
       setAnnouncements([]);
+      setAnnouncementLoadStatus('success');
       setAnnouncementsLoading(false);
       return () => controller.abort();
     }
 
     setAnnouncementsLoading(true);
+    setAnnouncementLoadStatus('success');
 
     Promise.allSettled(
       organizations.map(async (organization) => {
@@ -136,11 +142,10 @@ export default function DiscoveryPage() {
     )
       .then((results) => {
         if (controller.signal.aborted) return;
+        const resolved = resolveAnnouncementLoad(results);
+        setAnnouncementLoadStatus(resolved.status);
         setAnnouncements(
-          results
-            .flatMap((result) =>
-              result.status === 'fulfilled' ? result.value : [],
-            )
+          resolved.items
             .filter((announcement) => announcement.isActive)
             .sort(
               (left, right) =>
@@ -524,6 +529,14 @@ export default function DiscoveryPage() {
             );
           })}
         </div>
+        {!announcementsLoading && announcementLoadStatus === 'partial-error' ? (
+          <div
+            className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900"
+            role="alert"
+          >
+            โหลดประกาศจากบางองค์กรไม่สำเร็จ ขณะนี้กำลังแสดงเฉพาะข้อมูลที่โหลดได้
+          </div>
+        ) : null}
         {announcementsLoading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
@@ -533,13 +546,22 @@ export default function DiscoveryPage() {
               />
             ))}
           </div>
+        ) : announcementLoadStatus === 'error' ? (
+          <div
+            className="sl-surface p-8 text-center text-sm text-red-700"
+            role="alert"
+          >
+            โหลดประกาศไม่สำเร็จ กรุณาลองใหม่อีกครั้ง
+          </div>
         ) : visibleAnnouncements.length === 0 ? (
           <div className="sl-surface p-8 text-center text-sm text-muted">
-            {announcementFilter === 'EVENT'
-              ? 'ยังไม่มีข่าว Event ในขณะนี้'
-              : announcementFilter === 'ANNOUNCEMENT'
-                ? 'ยังไม่มีประกาศทั่วไปในขณะนี้'
-                : 'ยังไม่มีประกาศใหม่ในขณะนี้'}
+            {announcementLoadStatus === 'partial-error'
+              ? 'ไม่พบรายการประเภทนี้ในข้อมูลที่โหลดสำเร็จ'
+              : announcementFilter === 'EVENT'
+                ? 'ยังไม่มีข่าว Event ในขณะนี้'
+                : announcementFilter === 'ANNOUNCEMENT'
+                  ? 'ยังไม่มีประกาศทั่วไปในขณะนี้'
+                  : 'ยังไม่มีประกาศใหม่ในขณะนี้'}
           </div>
         ) : (
           <div

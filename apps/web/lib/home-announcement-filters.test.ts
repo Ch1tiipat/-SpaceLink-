@@ -4,7 +4,7 @@ const {
   test: announcementFilterTest,
 }: typeof import('node:test') = require('node:test');
 type AdminAnnouncement = import('./api').AdminAnnouncement;
-const { filterHomeAnnouncements } =
+const { filterHomeAnnouncements, resolveAnnouncementLoad } =
   require('./home-announcement-filters.ts') as typeof import('./home-announcement-filters');
 
 function makeAnnouncement(
@@ -56,6 +56,35 @@ announcementFilterTest(
       filterHomeAnnouncements(announcements, 'EVENT').map(({ id }) => id),
       ['event-announcement'],
     );
+  },
+);
+
+announcementFilterTest(
+  'preserves fulfilled announcements on a partial load failure',
+  () => {
+    const result = resolveAnnouncementLoad([
+      { status: 'fulfilled', value: [announcements[0]] },
+      { status: 'rejected', reason: new Error('network down') },
+    ]);
+
+    announcementFilterAssert.equal(result.status, 'partial-error');
+    announcementFilterAssert.deepEqual(
+      result.items.map(({ id }) => id),
+      ['event-announcement'],
+    );
+  },
+);
+
+announcementFilterTest(
+  'reports an error when every announcement request fails',
+  () => {
+    const result = resolveAnnouncementLoad([
+      { status: 'rejected', reason: new Error('first organization failed') },
+      { status: 'rejected', reason: new Error('second organization failed') },
+    ]);
+
+    announcementFilterAssert.equal(result.status, 'error');
+    announcementFilterAssert.deepEqual(result.items, []);
   },
 );
 
