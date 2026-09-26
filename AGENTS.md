@@ -66,10 +66,10 @@ The Prisma schema remains frozen except for these nineteen additive changes:
   a 100-to-0 trust score and reaching zero triggers the existing blacklist state.
 - SCRUM-144: add `RefundRequest.payoutMethod`, `payoutPromptPayId`, `payoutBankName`,
   `payoutAccountNumber`, and `payoutAccountName` as nullable `String?` fields with corresponding
-  snake_case `@map` names. Nullability preserves legacy refund requests. New requests currently
-  require a valid `PROMPTPAY` id; `payoutAccountName` is optional and a missing name must remain
-  visible to organization admins through a dedicated warning flag rather than being treated as a
-  successful name match. No new enum or changes to existing cancellation/refund rules are authorized.
+  snake_case `@map` names. Nullability preserves legacy refund requests. New requests require a
+  valid `PROMPTPAY` id. SCRUM-234 later authorizes the service to derive `payoutAccountName` from
+  the verified incoming payment slip and require it for new requests; the nullable schema and
+  admin warnings remain unchanged for legacy rows. No new enum or schema change is authorized.
 - SCRUM-159: add the `Organization.facebookUrl` and `Organization.lineUrl` fields (both nullable
   `String?` with `@map("facebook_url")` / `@map("line_url")`) to the existing `Organization` model,
   following the same pattern as `contactEmail`/`contactPhone`/`logoUrl`, so each organization's
@@ -263,6 +263,15 @@ Prisma and foreign keys cannot express these. Every one must be enforced in a se
    **Compare `Prisma.Decimal` with `.equals()`, never `==` or `===`.** Those compare object identity and are therefore always false, which fails silently in the safe-looking direction: the check appears to run and never matches.
 8. **Hold expiry** — a `PENDING_PAYMENT` booking past `hold_expires_at` is auto-cancelled by a scheduled job with `cancelled_by_role = SYSTEM`
 9. **Refund** — `refund_request.approved_amount` ≤ `booking.booth_price`
+10. **Refund payout name (SCRUM-234)** — every new refund request derives
+    `payout_account_name` from the authenticated vendor's `VERIFIED` payment
+    slip (`VerifiedSlip.senderName`). A grouped booking uses its verified group
+    slip; an ungrouped booking uses its own verified slip. Normalize Unicode,
+    surrounding whitespace, repeated whitespace, letter case and common Thai or
+    English honorifics before comparing a legacy client-supplied name. Reject a
+    mismatch or a verified slip without `senderName`; never fall back to the
+    user's profile and never return or log `slipok_raw`. Existing refund rows,
+    including rows with a null payout name, remain readable without migration.
 
 **Derived, never stored as authoritative:** booth tier (S/A/B/C), shop badges, average rating.
 

@@ -511,7 +511,6 @@ function RefundRequestDialog({
     ),
   );
   const [reason, setReason] = useState('');
-  const [payoutAccountName, setPayoutAccountName] = useState('');
   const [payoutPromptPayId, setPayoutPromptPayId] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -520,6 +519,9 @@ function RefundRequestDialog({
   );
   const totalAmount = sumRefundAmounts(
     selectedBookings.map((booking) => amounts[booking.id] ?? ''),
+  );
+  const missingPayerNameBooking = selectedBookings.find(
+    (booking) => !booking.refundPayoutAccountName?.trim(),
   );
   const allSelected =
     bookings.length > 0 && selectedBookingIds.size === bookings.length;
@@ -537,11 +539,16 @@ function RefundRequestDialog({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedReason = reason.trim();
-    const trimmedAccountName = payoutAccountName.trim();
     const normalizedPromptPayId = payoutPromptPayId.trim();
 
     if (selectedBookings.length === 0) {
       setSubmitError('กรุณาเลือกอย่างน้อย 1 บูธที่ต้องการขอคืนเงิน');
+      return;
+    }
+    if (missingPayerNameBooking) {
+      setSubmitError(
+        `ไม่พบชื่อผู้โอนสำหรับ Booth ${missingPayerNameBooking.booth.code} กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน`,
+      );
       return;
     }
     const invalidBooking = selectedBookings.find((booking) =>
@@ -580,9 +587,6 @@ function RefundRequestDialog({
           requestedAmount: (amounts[booking.id] ?? '').trim(),
         })),
         payoutMethod: 'PROMPTPAY',
-        ...(trimmedAccountName
-          ? { payoutAccountName: trimmedAccountName }
-          : {}),
         payoutPromptPayId: normalizedPromptPayId,
         reason: trimmedReason,
       };
@@ -728,16 +732,39 @@ function RefundRequestDialog({
             <div className="rounded-xl border border-violet/20 bg-violet/5 px-4 py-3 text-sm">
               ช่องทางรับเงิน: <strong>PromptPay เท่านั้น</strong>
             </div>
-            <label className="grid gap-1.5 text-sm font-bold">
-              ชื่อบัญชีผู้รับเงิน (ไม่บังคับ)
-              <input
-                value={payoutAccountName}
-                onChange={(event) => setPayoutAccountName(event.target.value)}
-                maxLength={200}
-                placeholder="กรอกเพื่อช่วยตรวจสอบชื่อผู้รับ"
-                className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
-              />
-            </label>
+            <div className="grid gap-2 text-sm">
+              <strong>ชื่อผู้รับเงินจากสลิป</strong>
+              {selectedBookings.length > 0 ? (
+                <div className="grid gap-2 rounded-xl border border-line bg-[#f7f5f9] p-3">
+                  {selectedBookings.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="flex flex-wrap justify-between gap-2"
+                    >
+                      <span className="text-muted">
+                        Booth {booking.booth.code}
+                      </span>
+                      <strong>
+                        {booking.refundPayoutAccountName?.trim() || 'ไม่พบชื่อผู้โอน'}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-line bg-[#f7f5f9] px-4 py-3 text-muted">
+                  เลือกบูธเพื่อดูชื่อผู้รับเงิน
+                </p>
+              )}
+              <p className="text-xs leading-5 text-muted">
+                ระบบกำหนดชื่อแต่ละรายการจากสลิปชำระเงินและไม่อนุญาตให้แก้ไข
+              </p>
+            </div>
+            {missingPayerNameBooking ? (
+              <p role="alert" className="text-sm font-semibold text-danger">
+                ไม่พบชื่อผู้โอนสำหรับ Booth{' '}
+                {missingPayerNameBooking.booth.code} กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน
+              </p>
+            ) : null}
             <label className="grid gap-1.5 text-sm font-bold">
               หมายเลข PromptPay
               <input
@@ -756,7 +783,11 @@ function RefundRequestDialog({
             ) : null}
             <button
               type="submit"
-              disabled={isSubmitting || selectedBookings.length === 0}
+              disabled={
+                isSubmitting ||
+                selectedBookings.length === 0 ||
+                Boolean(missingPayerNameBooking)
+              }
               className="sl-action-primary w-full disabled:opacity-50"
             >
               {isSubmitting
