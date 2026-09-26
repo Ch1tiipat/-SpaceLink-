@@ -220,7 +220,7 @@ export class RefundsService {
     dto: CreateBatchRefundRequestsDto,
   ): Promise<RefundResponse[]> {
     const uniqueBookingIds = new Set(
-      dto.items.map(({ bookingId }) => bookingId),
+      dto.items.map(({ bookingId }) => bookingId.toLowerCase()),
     );
     if (uniqueBookingIds.size !== dto.items.length) {
       throw new BadRequestException('เลือกรายการจองซ้ำในคำร้องคืนเงิน');

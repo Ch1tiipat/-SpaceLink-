@@ -507,6 +507,22 @@ describe('RefundsService', () => {
       expect(prismaTransaction).not.toHaveBeenCalled();
     });
 
+    it('rejects duplicate booking ids that differ only by UUID casing', async () => {
+      await expect(
+        service.createBatch(VENDOR_ID, {
+          ...BATCH_DTO,
+          items: [
+            BATCH_DTO.items[1],
+            {
+              ...BATCH_DTO.items[1],
+              bookingId: SECOND_BOOKING_ID.toUpperCase(),
+            },
+          ],
+        }),
+      ).rejects.toThrow('เลือกรายการจองซ้ำในคำร้องคืนเงิน');
+      expect(prismaTransaction).not.toHaveBeenCalled();
+    });
+
     it('accepts multiple booths paid by the same confirmed payment group', async () => {
       bookingFindFirst.mockResolvedValue({
         ...eligibleBooking(),
