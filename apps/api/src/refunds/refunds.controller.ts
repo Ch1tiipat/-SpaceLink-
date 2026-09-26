@@ -25,6 +25,7 @@ import {
   type UploadedSlipFile,
 } from '../bookings/booking-slip-storage.service';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
+import { CreateBatchRefundRequestsDto } from './dto/create-batch-refund-requests.dto';
 import { CreateRefundRequestDto } from './dto/create-refund-request.dto';
 import { RefundsService } from './refunds.service';
 
@@ -52,6 +53,18 @@ export class RefundsController {
       bookingId,
       currentUser.id,
       createRefundRequestDto,
+    );
+  }
+
+  @Post('refunds/batch')
+  @Roles(UserRole.VENDOR)
+  createBatch(
+    @Body() createBatchRefundRequestsDto: CreateBatchRefundRequestsDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.refundsService.createBatch(
+      currentUser.id,
+      createBatchRefundRequestsDto,
     );
   }
 

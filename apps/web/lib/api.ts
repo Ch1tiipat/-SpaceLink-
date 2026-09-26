@@ -267,6 +267,16 @@ export type CreateRefundRequestInput = {
   requestedAmount: string;
 };
 
+export type CreateBatchRefundRequestsInput = Omit<
+  CreateRefundRequestInput,
+  'requestedAmount'
+> & {
+  items: Array<{
+    bookingId: string;
+    requestedAmount: string;
+  }>;
+};
+
 export type CreateBookingInput = {
   eventId: string;
   boothId: string;
@@ -2997,6 +3007,19 @@ export function createRefundRequest(
 ): Promise<RefundRequest> {
   return postJson<RefundRequest>(
     `/bookings/${encodeURIComponent(bookingId)}/refunds`,
+    input,
+    { signal, token },
+    'ส่งคำร้องคืนเงินไม่สำเร็จ',
+  );
+}
+
+export function createBatchRefundRequests(
+  input: CreateBatchRefundRequestsInput,
+  token: string,
+  signal?: AbortSignal,
+): Promise<RefundRequest[]> {
+  return postJson<RefundRequest[]>(
+    '/refunds/batch',
     input,
     { signal, token },
     'ส่งคำร้องคืนเงินไม่สำเร็จ',
