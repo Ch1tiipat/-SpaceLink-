@@ -1,7 +1,7 @@
 import type { DiscoveryEvent } from './api';
 import { hasEventEndCalendarDayPassed } from './event-time.ts';
 
-export type EventStatusFilter = 'all' | 'bookable' | 'ongoing' | 'ended';
+export type EventStatusFilter = 'all' | 'bookable' | 'closed';
 
 export type HomeEventFilters = {
   query: string;
@@ -74,7 +74,7 @@ export function filterHomeEvents(
   const keyword = normalizeSearchText(filters.query);
   const areaKeyword = normalizeSearchText(filters.area);
 
-  return events.filter((event) => {
+  const filtered = events.filter((event) => {
     const searchable = normalizeSearchText(
       [event.name, event.venue.name].join(' '),
     );
@@ -95,11 +95,27 @@ export function filterHomeEvents(
         )) &&
       (filters.eventStatus === 'all' ||
         (filters.eventStatus === 'bookable' && isBookable(event, now)) ||
-        (filters.eventStatus === 'ongoing' && isBookable(event, now)) ||
-        (filters.eventStatus === 'ended' &&
-          hasEventEndCalendarDayPassed(event.endDate, now)))
+        (filters.eventStatus === 'closed' && !isBookable(event, now)))
     );
   });
+
+  if (filters.eventStatus !== 'all') return filtered;
+
+  return filtered
+    .map((event, sourceIndex) => ({
+      event,
+      sourceIndex,
+      priority: isBookable(event, now)
+        ? 0
+        : hasEventEndCalendarDayPassed(event.endDate, now)
+          ? 2
+          : 1,
+    }))
+    .sort(
+      (left, right) =>
+        left.priority - right.priority || left.sourceIndex - right.sourceIndex,
+    )
+    .map(({ event }) => event);
 }
 
 function normalizeSearchText(value: string): string {
