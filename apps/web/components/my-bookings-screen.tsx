@@ -25,8 +25,16 @@ import {
   isBookingCancellationOpen,
   isBookingReviewEligible,
 } from '@/components/booking-detail-screen';
-import { getMyBookings, type BookingStatus, type MyBooking } from '@/lib/api';
-import { getEventCoverUrl } from '@/lib/event-cover';
+import {
+  getMyBookings,
+  getMyRefunds,
+  type BookingStatus,
+  type MyBooking,
+  type RefundRequest,
+} from '@/lib/api';
+import { downloadBookingSummaryPng } from '@/lib/booking-summary-image';
+import { resolveEventCoverUrl } from '@/lib/event-cover';
+import { canRequestRefund } from '@/lib/refund-request-policy';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import {
   getUxPreviewMode,
@@ -193,9 +201,35 @@ function isNearCancelDeadline(booking: MyBooking): boolean {
   );
 }
 
+function BookingEventCover({
+  bannerUrl,
+  alt,
+  sizes,
+}: {
+  bannerUrl: string | null | undefined;
+  alt: string;
+  sizes: string;
+}) {
+  const [hasLoadFailed, setHasLoadFailed] = useState(false);
+
+  useEffect(() => setHasLoadFailed(false), [bannerUrl]);
+
+  return (
+    <Image
+      src={resolveEventCoverUrl(bannerUrl, hasLoadFailed)}
+      alt={alt}
+      fill
+      sizes={sizes}
+      className="object-cover"
+      onError={() => setHasLoadFailed(true)}
+    />
+  );
+}
+
 export function MyBookingsScreen() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
   const [bookings, setBookings] = useState<MyBooking[]>([]);
+  const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<Set<string>>(new Set());
@@ -207,8 +241,12 @@ export function MyBookingsScreen() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const items = await getMyBookings(token, signal);
+      const [items, refundItems] = await Promise.all([
+        getMyBookings(token, signal),
+        getMyRefunds(token, signal),
+      ]);
       setBookings(items);
+      setRefunds(refundItems);
       setExpiredIds(
         new Set(
           items.filter((booking) => isExpired(booking)).map(({ id }) => id),
@@ -234,6 +272,7 @@ export function MyBookingsScreen() {
             : { status: 'signed-out' },
         );
         setBookings(mode === 'signed-in' ? getPreviewBookings() : []);
+        setRefunds([]);
         setLoadError(null);
         setIsLoading(false);
       };
@@ -264,6 +303,7 @@ export function MyBookingsScreen() {
         if (active) {
           setAccess({ status: 'signed-out' });
           setBookings([]);
+          setRefunds([]);
           setIsLoading(false);
         }
         return;
@@ -602,12 +642,10 @@ export function MyBookingsScreen() {
                     >
                       <div className="grid gap-4 md:grid-cols-[104px_minmax(0,1fr)_170px_178px] md:items-center">
                         <div className="relative h-28 overflow-hidden rounded-2xl md:h-[104px]">
-                          <Image
-                            src={getEventCoverUrl(booking.event.bannerUrl)}
+                          <BookingEventCover
+                            bannerUrl={booking.event.bannerUrl}
                             alt={booking.event.name}
-                            fill
                             sizes="(max-width: 767px) 100vw, 104px"
-                            className="object-cover"
                           />
                         </div>
 
@@ -746,6 +784,7 @@ export function MyBookingsScreen() {
       {selectedGroup ? (
         <BookingDetailDialog
           group={selectedGroup}
+          refunds={refunds}
           holdExpired={selectedGroup.bookings.some(
             (item) => expiredIds.has(item.id) || isExpired(item),
           )}
@@ -851,10 +890,12 @@ function BookingKeyValue({
 
 function BookingDetailDialog({
   group,
+  refunds,
   holdExpired,
   onClose,
 }: {
   group: BookingGroup;
+  refunds: RefundRequest[];
   holdExpired: boolean;
   onClose: () => void;
 }) {
@@ -895,6 +936,7 @@ function BookingDetailDialog({
     },
   ];
   const [actionMessage, setActionMessage] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -936,6 +978,46 @@ function BookingDetailDialog({
   const paymentHref = booking.paymentGroupId
     ? `/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`
     : `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`;
+  const refundEligibleBooking = group.bookings.find((item) =>
+    canRequestRefund(item, refunds),
+  );
+  const existingRefund = refunds.find((refund) =>
+    group.bookings.some((item) => item.id === refund.bookingId),
+  );
+  const cancellableBooking = group.bookings.find(
+    (item) =>
+      item.status === 'CONFIRMED' &&
+      isBookingCancellationOpen(item.bookingEndDate),
+  );
+  const reviewBooking = group.bookings.find((item) =>
+    isBookingReviewEligible(item),
+  );
+  const statusAction = refundEligibleBooking
+    ? {
+        href: '/refunds',
+        label: 'ขอคืนเงิน',
+      }
+    : existingRefund
+      ? {
+          href: `/refunds?refundId=${encodeURIComponent(existingRefund.id)}`,
+          label: 'ติดตามคำขอคืนเงิน',
+        }
+      : cancellableBooking
+        ? {
+            href: `/bookings/${encodeURIComponent(cancellableBooking.bookingCode)}`,
+            label: 'ยกเลิกการจอง',
+          }
+        : reviewBooking
+          ? {
+              href: `/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`,
+              label: 'เขียนรีวิว',
+            }
+          : !hasMixedStatuses
+            ? {
+                href: `/bookings/${encodeURIComponent(booking.bookingCode)}`,
+                label: 'ดูรายละเอียด',
+              }
+            : null;
 
   async function handleCopy() {
     const summary = [
@@ -953,34 +1035,39 @@ function BookingDetailDialog({
     }
   }
 
-  function handleDownloadSummary() {
-    const content = [
-      'SpaceLink · สรุปการจอง',
-      `Booking: ${booking.bookingCode}`,
-      `Event: ${booking.event.name}`,
-      `Booth: ${boothCodes}`,
-      `Zone: ${booking.booth.zone.name ?? booking.booth.zone.code}`,
-      `ยอดรวม: ${formatMoney(group.totalAmount)} บาท`,
-      `สถานะรวม: ${groupStatusLabel[group.status]}`,
-      ...(hasMixedStatuses
-        ? [
-            'สถานะแยกรายบูธ:',
-            ...group.bookings.map(
-              (item) =>
-                `- ${item.bookingCode} · Booth ${item.booth.code} · ${statusLabel[item.status]}`,
-            ),
-          ]
-        : []),
-    ].join('\n');
-    const url = URL.createObjectURL(
-      new Blob([content], { type: 'text/plain;charset=utf-8' }),
-    );
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `SpaceLink_Booking_Summary_${booking.bookingCode}.txt`;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-    setActionMessage('ดาวน์โหลดสรุปการจองแล้ว');
+  async function handleDownloadSummary() {
+    setIsDownloading(true);
+    setActionMessage('กำลังสร้างภาพสรุปการจอง…');
+    try {
+      const filename = await downloadBookingSummaryPng({
+        eventName: booking.event.name,
+        eventDate: formatBookingDateRange(
+          booking.bookingStartDate,
+          booking.bookingEndDate,
+        ),
+        venueName: booking.event.venue?.name ?? 'ไม่ระบุสถานที่',
+        venueAddress: booking.event.venue?.address,
+        shopName: booking.shop.name,
+        totalAmount: formatMoney(group.totalAmount),
+        overallStatus: groupStatusLabel[group.status],
+        items: group.bookings.map((item) => ({
+          bookingCode: item.bookingCode,
+          boothCode: item.booth.code,
+          zoneName: item.booth.zone.name ?? item.booth.zone.code,
+          statusLabel: statusLabel[item.status],
+        })),
+        generatedAt: new Date(),
+      });
+      setActionMessage(`ดาวน์โหลด ${filename} แล้ว`);
+    } catch (cause) {
+      setActionMessage(
+        cause instanceof Error
+          ? cause.message
+          : 'ไม่สามารถสร้างภาพสรุปการจองได้',
+      );
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   return (
@@ -1019,12 +1106,10 @@ function BookingDetailDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-7 sm:pb-6">
           <div className="relative h-28 overflow-hidden rounded-2xl sm:h-36">
-            <Image
-              src={getEventCoverUrl(booking.event.bannerUrl)}
+            <BookingEventCover
+              bannerUrl={booking.event.bannerUrl}
               alt={`บรรยากาศ ${booking.event.name}`}
-              fill
               sizes="(max-width: 896px) 100vw, 840px"
-              className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[#24123f]/75 via-[#4b2488]/40 to-transparent" />
             <strong className="absolute bottom-4 left-4 text-lg text-white sm:left-5 sm:text-xl">
@@ -1071,6 +1156,10 @@ function BookingDetailDialog({
               )}
             />
             <BookingFact label="ร้านค้า" value={booking.shop.name} />
+            <BookingFact
+              label="สถานที่"
+              value={booking.event.venue?.name ?? 'ไม่ระบุสถานที่'}
+            />
             <BookingFact
               label="ยอดชำระ"
               value={`${formatMoney(group.totalAmount)} บาท`}
@@ -1231,18 +1320,19 @@ function BookingDetailDialog({
             ) : (
               <button
                 type="button"
-                onClick={handleDownloadSummary}
+                onClick={() => void handleDownloadSummary()}
+                disabled={isDownloading}
                 className="sl-action-primary"
               >
-                ดาวน์โหลดสรุปการจอง
+                {isDownloading ? 'กำลังสร้าง PNG…' : 'ดาวน์โหลดสรุป PNG'}
               </button>
             )}
-            {!hasMixedStatuses ? (
+            {statusAction ? (
               <Link
-                href={`/bookings/${encodeURIComponent(booking.bookingCode)}`}
+                href={statusAction.href}
                 className="sl-action-secondary text-violet"
               >
-                เปิดหน้ารายละเอียดเต็ม
+                {statusAction.label}
               </Link>
             ) : null}
           </footer>

@@ -226,6 +226,8 @@ export type MyBooking = BookingRecord & {
     bannerUrl?: string | null;
     endDate: string;
     endTime: string | null;
+    /** Optional only for legacy UX-preview fixtures; the live API always sends it. */
+    venue?: { name: string; address: string | null };
   };
   booth: {
     id: string;
