@@ -20,10 +20,13 @@ import {
   getEventMap,
   getEvents,
   getPublicAnnouncements,
+  getSavedEventIds,
+  unsaveEvent,
   type AdminAnnouncement,
   type DiscoveryEvent,
   type EventZone,
 } from '@/lib/api';
+import { SavedEventsSection } from '@/components/saved-events-section';
 import { getEventCoverUrl } from '@/lib/event-cover';
 import { hasEventEndCalendarDayPassed } from '@/lib/event-time';
 import {
@@ -36,8 +39,15 @@ import {
   type HomeEventFilters,
 } from '@/lib/home-event-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
+import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
+type SavedEventsAccess =
+  | { status: 'loading' }
+  | { status: 'signed-out' }
+  | { status: 'ready'; token: string; eventIds: string[] }
+  | { status: 'error'; message: string };
 
 const dateFormatter = new Intl.DateTimeFormat('th-TH', {
   day: 'numeric',
@@ -65,6 +75,17 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
+    status: 'loading',
+  });
+  const [savedLoadAttempt, setSavedLoadAttempt] = useState(0);
+  const [pendingSavedEventId, setPendingSavedEventId] = useState<string | null>(
+    null,
+  );
+  const [savedNotice, setSavedNotice] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const announcementsScrollerRef = useRef<HTMLDivElement>(null);
   const announcementDialogRef = useRef<HTMLDialogElement>(null);
   const announcementOpenerRef = useRef<HTMLButtonElement | null>(null);
@@ -128,6 +149,60 @@ export default function DiscoveryPage() {
     return () => controller.abort();
   }, [events]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+
+    setSavedEvents({ status: 'loading' });
+    try {
+      supabase = getSupabaseBrowserClient();
+    } catch {
+      setSavedEvents({ status: 'signed-out' });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data, error: sessionError } =
+          await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const token = data.session?.access_token;
+        if (!token) {
+          if (active) setSavedEvents({ status: 'signed-out' });
+          return;
+        }
+
+        const eventIds = await getSavedEventIds(token, controller.signal);
+        if (active) setSavedEvents({ status: 'ready', token, eventIds });
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          return;
+        }
+        if (active) {
+          setSavedEvents({
+            status: 'error',
+            message:
+              cause instanceof Error
+                ? cause.message
+                : 'โหลดรายการโปรดไม่สำเร็จ',
+          });
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [savedLoadAttempt]);
+
+  useEffect(() => {
+    if (!savedNotice) return;
+    const timeout = window.setTimeout(() => setSavedNotice(null), 3_500);
+    return () => window.clearTimeout(timeout);
+  }, [savedNotice]);
+
   const filters = useMemo(
     () => ({
       events: buildHomeEventFilterOptions(events),
@@ -177,6 +252,13 @@ export default function DiscoveryPage() {
     [appliedFilters, draftFilters.area, draftFilters.query, events],
   );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
+  const favoriteEvents = useMemo(
+    () =>
+      savedEvents.status === 'ready'
+        ? resolveSavedEvents(events, savedEvents.eventIds)
+        : [],
+    [events, savedEvents],
+  );
 
   useEffect(() => {
     const dialog = announcementDialogRef.current;
@@ -199,6 +281,44 @@ export default function DiscoveryPage() {
         .getElementById('events')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }
+
+  function applyEventStatus(eventStatus: EventStatusFilter) {
+    setDraftFilters((current) => ({ ...current, eventStatus }));
+    setAppliedFilters((current) => ({ ...current, eventStatus }));
+  }
+
+  async function removeSavedEvent(event: DiscoveryEvent) {
+    if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
+
+    const previousEventIds = savedEvents.eventIds;
+    const { token } = savedEvents;
+    setPendingSavedEventId(event.id);
+    setSavedNotice(null);
+    setSavedEvents({
+      status: 'ready',
+      token,
+      eventIds: withoutSavedEvent(previousEventIds, event.id),
+    });
+
+    try {
+      await unsaveEvent(event.id, token);
+      setSavedNotice({
+        kind: 'success',
+        message: `นำ ${event.name} ออกจากรายการโปรดแล้ว`,
+      });
+    } catch (cause) {
+      setSavedEvents({ status: 'ready', token, eventIds: previousEventIds });
+      setSavedNotice({
+        kind: 'error',
+        message:
+          cause instanceof Error
+            ? cause.message
+            : 'นำ Event ออกจากรายการโปรดไม่สำเร็จ',
+      });
+    } finally {
+      setPendingSavedEventId(null);
+    }
   }
 
   function openAnnouncement(
@@ -268,7 +388,9 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="งานหรือสถานที่"
             placeholder="ทุกงานหรือสถานที่"
-            className="[&_button]:min-h-[66px]"
+            searchable
+            searchPlaceholder="พิมพ์ชื่องานหรือสถานที่"
+            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
@@ -278,7 +400,9 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="พื้นที่"
             placeholder="ทุกพื้นที่"
-            className="[&_button]:min-h-[66px]"
+            searchable
+            searchPlaceholder="พิมพ์จังหวัดหรือสถานที่"
+            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))
@@ -300,12 +424,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกสถานะ"
             className="[&_button]:min-h-[66px]"
             value={draftFilters.eventStatus}
-            onChange={(value) =>
-              setDraftFilters((current) => ({
-                ...current,
-                eventStatus: value as EventStatusFilter,
-              }))
-            }
+            onChange={(value) => applyEventStatus(value as EventStatusFilter)}
             options={[
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
@@ -399,18 +518,65 @@ export default function DiscoveryPage() {
         )}
       </section>
 
+      {savedEvents.status !== 'signed-out' ? (
+        <SavedEventsSection
+          status={savedEvents.status}
+          events={favoriteEvents}
+          pendingEventId={pendingSavedEventId}
+          errorMessage={
+            savedEvents.status === 'error' ? savedEvents.message : undefined
+          }
+          onRetry={() => setSavedLoadAttempt((attempt) => attempt + 1)}
+          onUnsave={(event) => void removeSavedEvent(event)}
+        />
+      ) : null}
+
       <section
         id="events"
         className="shell !mt-[56px] scroll-mt-24 max-sm:!mt-[42px]"
         aria-labelledby="events-heading"
       >
-        <span className="sl-kicker">ค้นหา Event</span>
-        <h2
-          id="events-heading"
-          className="mb-[18px] mt-[7px] text-[26px] font-black tracking-[-0.025em]"
-        >
-          งานที่เหมาะกับร้านของคุณ
-        </h2>
+        <div className="mb-[18px] flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
+          <div>
+            <span className="sl-kicker">ค้นหา Event</span>
+            <h2
+              id="events-heading"
+              className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+            >
+              งานที่เหมาะกับร้านของคุณ
+            </h2>
+          </div>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="กรองงานที่เหมาะกับร้านของคุณตามสถานะ"
+          >
+            {(
+              [
+                { value: 'all', label: 'ทั้งหมด' },
+                { value: 'ongoing', label: 'กำลังจัดงาน' },
+                { value: 'ended', label: 'สิ้นสุดแล้ว' },
+              ] as const
+            ).map((option) => {
+              const active = appliedFilters.eventStatus === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => applyEventStatus(option.value)}
+                  className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+                    active
+                      ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]'
+                      : 'border-[#d8c7f6] bg-[#f6f1ff] text-violet hover:border-violet hover:bg-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
@@ -461,6 +627,16 @@ export default function DiscoveryPage() {
       <BookingJourney event={featuredEvent} />
       <PlatformBenefits />
       <HomepageCallToAction />
+      {savedNotice ? (
+        <div
+          role={savedNotice.kind === 'error' ? 'alert' : 'status'}
+          className={`fixed bottom-5 right-5 z-50 max-w-[min(360px,calc(100%-40px))] rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-[0_18px_50px_rgba(27,16,48,.28)] ${
+            savedNotice.kind === 'error' ? 'bg-[#9f1239]' : 'bg-[#241438]'
+          }`}
+        >
+          {savedNotice.message}
+        </div>
+      ) : null}
       <dialog
         ref={announcementDialogRef}
         aria-modal="true"

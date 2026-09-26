@@ -233,7 +233,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ongoing'],
+      ['future', 'ongoing'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
@@ -247,6 +247,49 @@ homeFilterTest(
     homeFilterAssert.equal(
       hasEventEndCalendarDayPassed(events[2].endDate, NOW),
       true,
+    );
+  },
+);
+
+homeFilterTest(
+  'keeps status chips compatible with the other home discovery filters',
+  () => {
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        {
+          ...EMPTY_HOME_EVENT_FILTERS,
+          area: 'กรุงเทพมหานคร',
+          categoryId: 'fashion',
+          eventStatus: 'ongoing',
+        },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ongoing'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        {
+          ...EMPTY_HOME_EVENT_FILTERS,
+          area: 'นครราชสีมา',
+          categoryId: 'food',
+          eventStatus: 'ended',
+        },
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ended'],
+    );
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        events,
+        EMPTY_HOME_EVENT_FILTERS,
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['future', 'ongoing', 'ended'],
     );
   },
 );
