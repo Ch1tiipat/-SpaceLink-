@@ -22,7 +22,9 @@ import { RefundsService } from './refunds.service';
 const VENDOR_ID = '11111111-1111-4111-8111-111111111111';
 const ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const BOOKING_ID = '44444444-4444-4444-8444-444444444444';
+const SECOND_BOOKING_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const REFUND_ID = '55555555-5555-4555-8555-555555555555';
+const SECOND_REFUND_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ORGANIZATION_ID = '66666666-6666-4666-8666-666666666666';
 const PAYMENT_GROUP_ID = '99999999-9999-4999-8999-999999999999';
 const NOW = new Date('2026-08-23T08:00:00.000Z');
@@ -35,6 +37,16 @@ const CREATE_DTO = {
   payoutAccountName: 'Vendor One',
   payoutPromptPayId: '0123456789',
 } as const;
+const BATCH_DTO = {
+  items: [
+    { bookingId: BOOKING_ID, requestedAmount: '1200' },
+    { bookingId: SECOND_BOOKING_ID, requestedAmount: '900' },
+  ],
+  reason: CREATE_DTO.reason,
+  payoutMethod: CREATE_DTO.payoutMethod,
+  payoutAccountName: CREATE_DTO.payoutAccountName,
+  payoutPromptPayId: CREATE_DTO.payoutPromptPayId,
+};
 const APPROVE_DTO = { approvedAmount: '1000' };
 const PAYOUT_EVIDENCE = {
   kind: 'REFUND_PAYOUT_SLIP',
@@ -431,6 +443,97 @@ describe('RefundsService', () => {
       await expect(
         service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO),
       ).resolves.toMatchObject({ id: REFUND_ID });
+      expect(prismaTransaction).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('createBatch', () => {
+    beforeEach(() => {
+      refundRequestCreate.mockImplementation(
+        ({
+          data,
+        }: {
+          data: { bookingId: string; requestedAmount: Prisma.Decimal };
+        }) =>
+          Promise.resolve({
+            ...REFUND,
+            id: data.bookingId === BOOKING_ID ? REFUND_ID : SECOND_REFUND_ID,
+            bookingId: data.bookingId,
+            requestedAmount: data.requestedAmount,
+          }),
+      );
+    });
+
+    it.each([
+      ['A01 only', [BATCH_DTO.items[0]]],
+      ['A02 only', [BATCH_DTO.items[1]]],
+      ['all selected booths', BATCH_DTO.items],
+    ])(
+      'creates separate per-booking requests for %s',
+      async (_label, items) => {
+        const result = await service.createBatch(VENDOR_ID, {
+          ...BATCH_DTO,
+          items: [...items],
+        });
+
+        expect(result).toHaveLength(items.length);
+        expect(refundRequestCreate).toHaveBeenCalledTimes(items.length);
+        expect(
+          refundRequestCreate.mock.calls.map(
+            ([call]: [{ data: { bookingId: string } }]) => call.data.bookingId,
+          ),
+        ).toEqual(items.map(({ bookingId }) => bookingId));
+      },
+    );
+
+    it('preflights every booking before writing so one invalid item rolls back the batch', async () => {
+      bookingFindFirst
+        .mockResolvedValueOnce(eligibleBooking())
+        .mockResolvedValueOnce(null);
+
+      await expect(service.createBatch(VENDOR_ID, BATCH_DTO)).rejects.toEqual(
+        new NotFoundException('ไม่พบการจอง'),
+      );
+      expect(refundRequestCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects duplicate booking ids before opening a transaction', async () => {
+      await expect(
+        service.createBatch(VENDOR_ID, {
+          ...BATCH_DTO,
+          items: [BATCH_DTO.items[0], BATCH_DTO.items[0]],
+        }),
+      ).rejects.toThrow('เลือกรายการจองซ้ำในคำร้องคืนเงิน');
+      expect(prismaTransaction).not.toHaveBeenCalled();
+    });
+
+    it('accepts multiple booths paid by the same confirmed payment group', async () => {
+      bookingFindFirst.mockResolvedValue({
+        ...eligibleBooking(),
+        slips: [],
+        paymentGroup: {
+          status: PaymentGroupStatus.CONFIRMED,
+          totalAmount: new Prisma.Decimal('3000'),
+          slips: [{ amount: new Prisma.Decimal('3000') }],
+        },
+      });
+
+      await expect(
+        service.createBatch(VENDOR_ID, BATCH_DTO),
+      ).resolves.toHaveLength(2);
+    });
+
+    it('retries the complete serializable batch after a write conflict', async () => {
+      prismaTransaction.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('write conflict', {
+          code: 'P2034',
+          clientVersion: 'test',
+        }),
+      );
+
+      await expect(
+        service.createBatch(VENDOR_ID, BATCH_DTO),
+      ).resolves.toHaveLength(2);
       expect(prismaTransaction).toHaveBeenCalledTimes(2);
     });
   });
