@@ -6,6 +6,7 @@ const { test: refundTest }: typeof import('node:test') = require('node:test');
 const {
   canRequestRefund,
   isValidRefundAmount,
+  sumRefundAmounts,
 } = require('./refund-request-policy.ts') as typeof import('./refund-request-policy');
 
 const booking = {
@@ -48,3 +49,10 @@ refundTest(
     refundAssert.equal(isValidRefundAmount('1.001', '1500.00'), false);
   },
 );
+
+refundTest('sums selected booth amounts without floating-point money math', () => {
+  refundAssert.equal(sumRefundAmounts(['1500', '900.25']), '2400.25');
+  refundAssert.equal(sumRefundAmounts(['0.01', '0.02']), '0.03');
+  refundAssert.equal(sumRefundAmounts([]), null);
+  refundAssert.equal(sumRefundAmounts(['1500', 'invalid']), null);
+});

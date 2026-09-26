@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -21,18 +22,21 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import { getPreviewBookings } from '@/components/booking-detail-screen';
 import {
-  getPreviewBookings,
-} from '@/components/booking-detail-screen';
-import { RefundRequestPanel } from '@/components/refund-request-panel';
-import {
+  createBatchRefundRequests,
   getMyBookings,
   getMyRefunds,
   getRefundPayoutSlipAccess,
+  type CreateBatchRefundRequestsInput,
   type MyBooking,
   type RefundRequest,
 } from '@/lib/api';
-import { canRequestRefund } from '@/lib/refund-request-policy';
+import {
+  canRequestRefund,
+  isValidRefundAmount,
+  sumRefundAmounts,
+} from '@/lib/refund-request-policy';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
@@ -78,7 +82,9 @@ export function MyRefundsScreen() {
   const [openingRefundId, setOpeningRefundId] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [createdRefund, setCreatedRefund] = useState<RefundRequest | null>(null);
+  const [createdRefunds, setCreatedRefunds] = useState<RefundRequest[] | null>(
+    null,
+  );
   const summary = useMemo(
     () => ({
       all: refunds.length,
@@ -422,13 +428,14 @@ export function MyRefundsScreen() {
           token={state.token}
           isPreview={canUseUxPreview()}
           onClose={() => setRequestOpen(false)}
-          onCreated={(refund) => {
+          onCreated={(created) => {
+            const createdIds = new Set(created.map(({ id }) => id));
             setRefunds((current) => [
-              refund,
-              ...current.filter((item) => item.id !== refund.id),
+              ...created,
+              ...current.filter((item) => !createdIds.has(item.id)),
             ]);
             setRequestOpen(false);
-            setCreatedRefund(refund);
+            setCreatedRefunds(created);
           }}
         />
       ) : null}
@@ -437,10 +444,10 @@ export function MyRefundsScreen() {
         <RefundTermsDialog onClose={() => setTermsOpen(false)} />
       ) : null}
 
-      {createdRefund ? (
+      {createdRefunds ? (
         <RefundSuccessDialog
-          refund={createdRefund}
-          onClose={() => setCreatedRefund(null)}
+          refunds={createdRefunds}
+          onClose={() => setCreatedRefunds(null)}
         />
       ) : null}
     </main>
@@ -493,17 +500,105 @@ function RefundRequestDialog({
   token: string;
   isPreview: boolean;
   onClose: () => void;
-  onCreated: (refund: RefundRequest) => void;
+  onCreated: (refunds: RefundRequest[]) => void;
 }) {
-  const [selectedBookingId, setSelectedBookingId] = useState(
-    bookings[0]?.id ?? '',
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(
+    () => new Set(),
   );
-  const booking =
-    bookings.find((item) => item.id === selectedBookingId) ?? bookings[0];
+  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      bookings.map((booking) => [booking.id, booking.boothPrice]),
+    ),
+  );
+  const [reason, setReason] = useState('');
+  const [payoutAccountName, setPayoutAccountName] = useState('');
+  const [payoutPromptPayId, setPayoutPromptPayId] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedBookings = bookings.filter((booking) =>
+    selectedBookingIds.has(booking.id),
+  );
+  const totalAmount = sumRefundAmounts(
+    selectedBookings.map((booking) => amounts[booking.id] ?? ''),
+  );
+  const allSelected =
+    bookings.length > 0 && selectedBookingIds.size === bookings.length;
+
+  function toggleBooking(bookingId: string) {
+    setSelectedBookingIds((current) => {
+      const next = new Set(current);
+      if (next.has(bookingId)) next.delete(bookingId);
+      else next.add(bookingId);
+      return next;
+    });
+    setSubmitError('');
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedReason = reason.trim();
+    const trimmedAccountName = payoutAccountName.trim();
+    const normalizedPromptPayId = payoutPromptPayId.trim();
+
+    if (selectedBookings.length === 0) {
+      setSubmitError('กรุณาเลือกอย่างน้อย 1 บูธที่ต้องการขอคืนเงิน');
+      return;
+    }
+    const invalidBooking = selectedBookings.find((booking) =>
+      !isValidRefundAmount(
+        (amounts[booking.id] ?? '').trim(),
+        booking.boothPrice,
+      ),
+    );
+    if (invalidBooking) {
+      setSubmitError(
+        `ยอดคืน Booth ${invalidBooking.booth.code} ต้องมากกว่า 0 และไม่เกินราคาบูธ`,
+      );
+      return;
+    }
+    if (!trimmedReason) {
+      setSubmitError('กรุณาระบุเหตุผลที่ขอคืนเงิน');
+      return;
+    }
+    if (!/^(\d{10}|\d{13}|\d{15})$/.test(normalizedPromptPayId)) {
+      setSubmitError(
+        'PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัว 13/15 หลัก',
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      if (isPreview) {
+        setSubmitError('โหมดตัวอย่างไม่ส่งคำร้องเข้าสู่ระบบจริง');
+        return;
+      }
+      const input: CreateBatchRefundRequestsInput = {
+        items: selectedBookings.map((booking) => ({
+          bookingId: booking.id,
+          requestedAmount: (amounts[booking.id] ?? '').trim(),
+        })),
+        payoutMethod: 'PROMPTPAY',
+        ...(trimmedAccountName
+          ? { payoutAccountName: trimmedAccountName }
+          : {}),
+        payoutPromptPayId: normalizedPromptPayId,
+        reason: trimmedReason,
+      };
+      onCreated(await createBatchRefundRequests(input, token));
+    } catch (cause) {
+      setSubmitError(
+        cause instanceof Error ? cause.message : 'ส่งคำร้องคืนเงินไม่สำเร็จ',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <RefundDialogFrame title="ขอคืนเงิน" onClose={onClose}>
-      {!booking ? (
+      {bookings.length === 0 ? (
         <div className="py-8 text-center">
           <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-violet-tint text-violet">
             <RotateCcw className="h-9 w-9" aria-hidden />
@@ -532,47 +627,144 @@ function RefundRequestDialog({
           </div>
         </div>
       ) : (
-        <div>
-          {bookings.length > 1 ? (
-            <label className="grid gap-2 text-sm font-bold">
-              เลือกรายการที่ต้องการขอคืนเงิน
-              <select
-                value={booking.id}
-                onChange={(event) => setSelectedBookingId(event.target.value)}
-                className="min-h-12 rounded-xl border border-line bg-white px-4 font-normal outline-none focus:border-violet focus:ring-2 focus:ring-violet/15"
-              >
-                {bookings.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.event.name} · {item.bookingCode} · Booth{' '}
-                    {item.booth.code}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-black">เลือกบูธที่ต้องการขอคืนเงิน</h3>
+              <p className="mt-1 text-sm text-muted">
+                แต่ละบูธจะสร้างคำร้องแยกกันและติดตามสถานะได้รายบูธ
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedBookingIds(
+                  allSelected
+                    ? new Set()
+                    : new Set(bookings.map(({ id }) => id)),
+                )
+              }
+              className="sl-action-secondary text-violet"
+            >
+              {allSelected ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+            </button>
+          </div>
 
-          <p className="text-sm leading-6 text-muted">
-            {booking.event.name} · Booking {booking.bookingCode} · Booth{' '}
-            {booking.booth.code}
-          </p>
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-2xl bg-[#f8f3ff] px-4 py-4 text-sm text-muted">
-            คืนเงินได้ไม่เกิน
+          <div className="mt-4 grid max-h-[310px] gap-3 overflow-y-auto pr-1">
+            {bookings.map((booking) => {
+              const selected = selectedBookingIds.has(booking.id);
+              return (
+                <div
+                  key={booking.id}
+                  className={`rounded-2xl border p-4 transition ${
+                    selected
+                      ? 'border-violet bg-violet/5'
+                      : 'border-line bg-white'
+                  }`}
+                >
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleBooking(booking.id)}
+                      className="mt-1 h-5 w-5 accent-violet"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-black">
+                        Booth {booking.booth.code} · Zone{' '}
+                        {booking.booth.zone.name ?? booking.booth.zone.code}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted">
+                        {booking.event.name} · {booking.bookingCode}
+                      </span>
+                    </span>
+                    <strong className="shrink-0 text-violet">
+                      {formatMoney(booking.boothPrice)} บาท
+                    </strong>
+                  </label>
+                  {selected ? (
+                    <label className="mt-3 grid gap-1.5 border-t border-line pt-3 text-sm font-bold">
+                      ยอดที่ขอคืนสำหรับ Booth {booking.booth.code}
+                      <input
+                        value={amounts[booking.id] ?? ''}
+                        onChange={(event) =>
+                          setAmounts((current) => ({
+                            ...current,
+                            [booking.id]: event.target.value,
+                          }))
+                        }
+                        inputMode="decimal"
+                        required
+                        className="rounded-xl border border-line bg-white px-4 py-3 font-normal outline-none focus:border-violet"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f8f3ff] px-4 py-4">
+            <span className="text-sm text-muted">
+              เลือกแล้ว <strong>{selectedBookings.length}</strong> บูธ
+            </span>
             <strong className="text-xl font-black text-violet">
-              {formatMoney(booking.boothPrice)} บาท
+              รวม {totalAmount ? formatMoney(totalAmount) : '—'} บาท
             </strong>
-            <span>ตามยอดราคาบูธที่ชำระ</span>
           </div>
-          <div className="mt-4">
-            <RefundRequestPanel
-              key={booking.id}
-              booking={booking}
-              token={token}
-              isPreview={isPreview}
-              onCreated={onCreated}
-              embedded
-            />
+
+          <div className="mt-4 grid gap-4">
+            <label className="grid gap-1.5 text-sm font-bold">
+              เหตุผล
+              <textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                rows={3}
+                maxLength={1000}
+                required
+                className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
+              />
+            </label>
+            <div className="rounded-xl border border-violet/20 bg-violet/5 px-4 py-3 text-sm">
+              ช่องทางรับเงิน: <strong>PromptPay เท่านั้น</strong>
+            </div>
+            <label className="grid gap-1.5 text-sm font-bold">
+              ชื่อบัญชีผู้รับเงิน (ไม่บังคับ)
+              <input
+                value={payoutAccountName}
+                onChange={(event) => setPayoutAccountName(event.target.value)}
+                maxLength={200}
+                placeholder="กรอกเพื่อช่วยตรวจสอบชื่อผู้รับ"
+                className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              หมายเลข PromptPay
+              <input
+                value={payoutPromptPayId}
+                onChange={(event) => setPayoutPromptPayId(event.target.value)}
+                inputMode="numeric"
+                placeholder="เบอร์โทร หรือเลขประจำตัว"
+                required
+                className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
+              />
+            </label>
+            {submitError ? (
+              <p role="alert" className="text-sm font-semibold text-danger">
+                {submitError}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={isSubmitting || selectedBookings.length === 0}
+              className="sl-action-primary w-full disabled:opacity-50"
+            >
+              {isSubmitting
+                ? 'กำลังส่งคำร้อง…'
+                : `ส่งคำร้องคืนเงิน ${selectedBookings.length} บูธ`}
+            </button>
           </div>
-        </div>
+        </form>
       )}
     </RefundDialogFrame>
   );
@@ -607,12 +799,15 @@ function RefundTermsDialog({ onClose }: { onClose: () => void }) {
 }
 
 function RefundSuccessDialog({
-  refund,
+  refunds,
   onClose,
 }: {
-  refund: RefundRequest;
+  refunds: RefundRequest[];
   onClose: () => void;
 }) {
+  const total = sumRefundAmounts(
+    refunds.map(({ requestedAmount }) => requestedAmount),
+  );
   return (
     <RefundDialogFrame title="ส่งคำขอคืนเงินสำเร็จ" onClose={onClose}>
       <div className="py-5 text-center">
@@ -620,10 +815,19 @@ function RefundSuccessDialog({
           <Check className="h-10 w-10" aria-hidden />
         </span>
         <h3 className="mt-5 text-2xl font-black">รับคำขอของคุณแล้ว</h3>
-        <p className="mt-2 text-sm text-muted">หมายเลข {refund.id}</p>
+        <p className="mt-2 text-sm text-muted">
+          สร้างคำร้องแยกรายบูธแล้ว {refunds.length} รายการ
+        </p>
+        <ul className="mx-auto mt-3 max-w-md text-left text-sm text-muted">
+          {refunds.map((refund) => (
+            <li key={refund.id} className="mt-1 truncate">
+              • หมายเลข {refund.id}
+            </li>
+          ))}
+        </ul>
         <p className="mt-3 font-bold">
-          ยอดที่ขอคืน {formatMoney(refund.requestedAmount)} บาท ·{' '}
-          {statusLabels[refund.status]}
+          ยอดที่ขอคืนรวม {total ? formatMoney(total) : '—'} บาท ·{' '}
+          {statusLabels[refunds[0]?.status ?? 'PENDING']}
         </p>
         <button
           type="button"
