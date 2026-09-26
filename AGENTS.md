@@ -46,9 +46,9 @@ Violating any of these breaks work that has already been reviewed and signed off
 - The approved exceptions are adding `directUrl` to the datasource block (see §6.2) and the
   ticket-specific additive changes in §2.1.1. Nothing else.
 
-### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10; SCRUM-175 added 2026-09-11; SCRUM-177 added 2026-09-11; SCRUM-178 added 2026-09-11; SCRUM-182 added 2026-09-11; SCRUM-183 added 2026-09-12; SCRUM-194 added 2026-09-13; SCRUM-193 added 2026-09-13; SCRUM-222 added 2026-09-24)
+### 2.1.1 Schema exceptions (2026-08-28, approved by PO; SCRUM-130 added 2026-08-31; SCRUM-137 added 2026-08-31; SCRUM-149 added 2026-09-03; SCRUM-142 added 2026-09-03; SCRUM-144 added 2026-09-04; SCRUM-159 added 2026-09-08; SCRUM-166 added 2026-09-09; SCRUM-165 added 2026-09-10; SCRUM-175 added 2026-09-11; SCRUM-177 added 2026-09-11; SCRUM-178 added 2026-09-11; SCRUM-182 added 2026-09-11; SCRUM-183 added 2026-09-12; SCRUM-194 added 2026-09-13; SCRUM-193 added 2026-09-13; SCRUM-222 added 2026-09-24; SCRUM-228 added 2026-09-26)
 
-The Prisma schema remains frozen except for these eighteen additive changes:
+The Prisma schema remains frozen except for these nineteen additive changes:
 
 - SCRUM-27: add the `PushSubscription` model and the corresponding `User.pushSubscriptions` relation.
 - SCRUM-82: add the `SystemBroadcast` model and the corresponding `User.systemBroadcastsCreated` relation.
@@ -124,11 +124,18 @@ The Prisma schema remains frozen except for these eighteen additive changes:
   (`Json? @map("notification_preferences")`) so authenticated users can persist per-category
   notification preferences. Missing values and missing keys remain enabled by default.
 - SCRUM-222: add the nullable `User.province` field (`String? @map("province")`) to the existing `User` model, so a user's profile can record their province once they set it through the Profile Editor. Additive only; no default and no backfill for existing users are authorized, so existing rows remain `null` until a user sets a value. `Shop` is not touched — the Shop tab in the Profile Editor continues to read and write the same `User` fields it already shares for phone and email.
+- SCRUM-228: add the `AnnouncementType` enum (`EVENT | ANNOUNCEMENT`) and extend the existing
+  `Announcement` model with a required `type` field defaulting to `ANNOUNCEMENT` plus nullable
+  `eventId` (`String? @map("event_id") @db.Uuid`) and an optional `event` relation using
+  `onDelete: SetNull`. Add the matching `Event.announcements` back-relation and an
+  `@@index([eventId])`. Existing announcement rows remain `ANNOUNCEMENT`; no inference from
+  title/body is authorized. Additive only — do not change announcement visibility rules or any
+  existing field/relation semantics.
 
 These exceptions are additive only. Do not rename, remove, or modify any existing model, field,
 enum, relation, `@map`, or `@@map`.
 
-Before implementing any of the seventeen tickets, generate and submit a `prisma migrate diff` for
+Before implementing any of the nineteen tickets, generate and submit a `prisma migrate diff` for
 review. Do not run `prisma migrate dev`, `prisma migrate deploy`, `prisma db push`, or apply the
 generated SQL.
 
