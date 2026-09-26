@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -12,7 +13,6 @@ import {
   LayoutGrid,
   MapPin,
   Navigation,
-  ParkingCircle,
   Star,
   Store,
 } from 'lucide-react';
@@ -30,7 +30,17 @@ import {
   type VenueLocation,
 } from '@/lib/api';
 import { isEventBookable } from '@/lib/event-booking-rules';
-import { getEventCoverUrl } from '@/lib/event-cover';
+import { resolveEventCoverUrl } from '@/lib/event-cover';
+import {
+  getEventBookingStatusLabel,
+  getEventDetailPrimaryAction,
+  googleMapsDirectionsUrl,
+  googleMapsEmbedUrl,
+  parseVenueCoordinates,
+  safePublicHttpUrl,
+  safePublicHttpsUrl,
+  summarizeEventZones,
+} from '@/lib/event-detail-view-model';
 import {
   getFacebookEmbeddedPost,
   type FacebookEmbeddedPost,
@@ -56,11 +66,6 @@ const EVENT_INFORMATION_TYPE_LABELS: Record<EventInformationType, string> = {
   FACILITY: 'สิ่งอำนวยความสะดวก',
 };
 
-function bookingStatusLabel(event: EventMap['event']): string {
-  if (isEventBookable(event)) return 'กำลังเปิดให้สำรองพื้นที่';
-  return event.status === 'DRAFT' ? 'ยังไม่เปิดรับจอง' : 'ปิดรับจอง';
-}
-
 type SavedEventsAccess =
   | { status: 'loading' }
   | { status: 'signed-out' }
@@ -73,28 +78,6 @@ function formatMoney(value: number): string {
   );
 }
 
-function safeHttpUrl(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:'
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function safeHttpsUrl(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 export function EventDetailScreen({ eventId }: { eventId: string }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -104,6 +87,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   } | null>(null);
   const event = resolvedEvent?.eventId === eventId ? resolvedEvent.event : null;
   const eventBookable = event ? isEventBookable(event) : false;
+  const footerAction = event ? getEventDetailPrimaryAction(event) : null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -132,7 +116,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             type="button"
             onClick={close}
             aria-label="ปิดรายละเอียด Event"
-            className="grid h-9 w-9 place-items-center rounded-full border border-line text-xl text-muted hover:text-violet"
+            className="grid h-11 w-11 place-items-center rounded-full border border-line text-xl text-muted hover:text-violet"
           >
             ×
           </button>
@@ -147,7 +131,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line bg-white px-5 py-4 max-sm:gap-2 sm:px-8">
           {event && !eventBookable ? (
             <p className="mr-auto text-sm font-semibold text-muted">
-              {bookingStatusLabel(event)} — ไม่สามารถเลือกบูธได้
+              {getEventBookingStatusLabel(event)} — ยังดูข้อมูลพื้นที่ได้
             </p>
           ) : null}
           <button
@@ -157,25 +141,43 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
           >
             ปิด
           </button>
-          {eventBookable && event ? (
+          {event && footerAction ? (
             <Link
               href={`/events/${encodeURIComponent(event.slug)}/map`}
               className="sl-action-primary min-w-[140px] max-sm:flex-1"
             >
-              เลือกบูธ
+              {footerAction.label}
             </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="sl-action-primary min-w-[140px] cursor-not-allowed opacity-50 max-sm:flex-1"
-            >
-              เลือกบูธ
-            </button>
-          )}
+          ) : null}
         </footer>
       </div>
     </dialog>
+  );
+}
+
+function EventHeroCover({
+  bannerUrl,
+  eventName,
+}: {
+  bannerUrl: string | null;
+  eventName: string;
+}) {
+  const [hasLoadFailed, setHasLoadFailed] = useState(false);
+
+  useEffect(() => setHasLoadFailed(false), [bannerUrl]);
+
+  return (
+    <Image
+      src={resolveEventCoverUrl(bannerUrl, hasLoadFailed)}
+      alt=""
+      fill
+      priority
+      unoptimized
+      sizes="(max-width: 1100px) 100vw, 1100px"
+      className="object-cover"
+      onError={() => setHasLoadFailed(true)}
+      title={`ภาพประกอบ ${eventName}`}
+    />
   );
 }
 
@@ -361,26 +363,15 @@ export function EventDetailContent({
 
   const { event, zones } = data;
   const eventBookable = isEventBookable(event);
-  const booths = zones.flatMap((zone) => zone.booths);
-  const availableBooths = booths.filter(
-    (booth) => booth.availability === 'AVAILABLE',
-  ).length;
-  const boothPrices = booths
-    .map((booth) => Number(booth.boothPrice))
-    .filter(Number.isFinite);
-  const startingPrice = boothPrices.length ? Math.min(...boothPrices) : null;
-  const categories = [
-    ...new Set(
-      zones.flatMap((zone) => zone.categories.map((category) => category.name)),
-    ),
-  ];
+  const { totalBooths, availableBooths, startingPrice, categories } =
+    summarizeEventZones(zones);
   const contactPhone = event.contactPhone ?? event.organization.contactPhone;
   const contactEmail = event.contactEmail ?? event.organization.contactEmail;
-  const facebookUrl = safeHttpUrl(event.organization.facebookUrl);
+  const facebookUrl = safePublicHttpUrl(event.organization.facebookUrl);
   const facebookPost = getFacebookEmbeddedPost(event.organization.facebookUrl);
-  const lineUrl = safeHttpUrl(event.organization.lineUrl);
+  const lineUrl = safePublicHttpUrl(event.organization.lineUrl);
   const galleryUrls = event.galleryUrls
-    .map(safeHttpsUrl)
+    .map(safePublicHttpsUrl)
     .filter((url): url is string => Boolean(url));
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
@@ -456,20 +447,36 @@ export function EventDetailContent({
       ) : null}
       <div className="shell max-w-[1100px] py-8">
         <section
-          className="relative flex min-h-[280px] items-center overflow-hidden rounded-[26px] bg-[linear-gradient(105deg,#24103e_0%,#4e1e96_53%,#386568_100%)] px-8 py-9 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[260px] max-sm:px-6"
-          style={{
-            backgroundImage: `linear-gradient(100deg,rgba(36,16,62,.93),rgba(78,30,150,.74),rgba(56,101,104,.58)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
-            backgroundPosition: 'center',
-            backgroundSize: 'cover',
-          }}
+          className="relative flex min-h-[320px] items-end overflow-hidden rounded-[26px] bg-[#351160] px-8 py-9 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[360px] max-sm:px-6"
         >
-          <div className="relative z-10 max-w-[720px]">
+          <EventHeroCover
+            bannerUrl={event.bannerUrl}
+            eventName={event.name}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(31,11,55,.95)_0%,rgba(66,25,122,.78)_52%,rgba(32,63,68,.42)_100%)]" />
+          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/25 to-transparent" />
+          <div className="relative z-10 max-w-[780px]">
             <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">
-              {bookingStatusLabel(event)}
+              {getEventBookingStatusLabel(event)}
             </span>
             <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
               {event.name}
             </h1>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-white/90">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" aria-hidden />
+                {compactDateFormatter.format(new Date(event.startDate))} –{' '}
+                {compactDateFormatter.format(new Date(event.endDate))}
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <MapPin className="h-4 w-4" aria-hidden />
+                {event.venue.name}
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" aria-hidden />
+                {availableBooths} บูธว่าง
+              </span>
+            </div>
             <p className="mt-4 max-w-3xl text-[15px] leading-7 text-white/88">
               {event.description ??
                 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
@@ -665,9 +672,9 @@ export function EventDetailContent({
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <NumberCard label="Zone" value={`${zones.length}`} />
-            <NumberCard label="บูธทั้งหมด" value={`${booths.length}`} />
+            <NumberCard label="บูธทั้งหมด" value={`${totalBooths}`} />
             <NumberCard label="บูธว่าง" value={`${availableBooths}`} />
-            <NumberCard label="จองได้สูงสุด" value="ยังไม่ระบุ" />
+            <NumberCard label="หมวดสินค้า" value={`${categories.length}`} />
           </div>
           <div className="mt-5 border-t border-line pt-5">
             <h3 className="font-extrabold">หมวดสินค้าในพื้นที่</h3>
@@ -702,11 +709,6 @@ export function EventDetailContent({
               icon={<CircleDollarSign className="h-5 w-5" />}
               title="การคืนเงิน"
               value={event.policy?.refundPolicy}
-            />
-            <PolicyCard
-              icon={<Clock3 className="h-5 w-5" />}
-              title="เวลาเข้าติดตั้ง"
-              value={null}
             />
           </div>
         </DetailSection>
@@ -885,7 +887,7 @@ export function EventDetailContent({
                 <a
                   href={facebookUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="sl-action-secondary text-violet"
                 >
                   {facebookPost
@@ -897,7 +899,7 @@ export function EventDetailContent({
                 <a
                   href={lineUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="sl-action-secondary text-violet"
                 >
                   เปิด LINE ผู้จัดงาน
@@ -939,7 +941,7 @@ function FacebookPostEmbed({
           <a
             href={post.sourceUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="font-extrabold text-violet underline decoration-violet/30 underline-offset-4"
           >
             เปิดโพสต์ต้นฉบับ →
@@ -989,10 +991,12 @@ function VenueLocationMap({
 
   const coordinates =
     state.status === 'ready'
-      ? parseCoordinates(state.venue.latitude, state.venue.longitude)
+      ? parseVenueCoordinates(state.venue.latitude, state.venue.longitude)
       : null;
   const googleMapsUrl =
-    state.status === 'ready' ? safeHttpsUrl(state.venue.googleMapsUrl) : null;
+    state.status === 'ready'
+      ? safePublicHttpsUrl(state.venue.googleMapsUrl)
+      : null;
   const address = venue.address ?? venue.name;
 
   return (
@@ -1005,19 +1009,14 @@ function VenueLocationMap({
         />
         <TravelRow
           icon={<Navigation className="h-5 w-5" />}
-          label="คำแนะนำการเดินทาง"
-          value="ผู้จัดงานยังไม่ได้ระบุคำแนะนำการเดินทาง"
-        />
-        <TravelRow
-          icon={<ParkingCircle className="h-5 w-5" />}
-          label="ที่จอดรถ"
-          value="ผู้จัดงานยังไม่ได้ระบุข้อมูลที่จอดรถ"
+          label="ที่อยู่"
+          value={address}
         />
         {coordinates ? (
           <a
-            href={googleDirectionsUrl(coordinates)}
+            href={googleMapsDirectionsUrl(coordinates)}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="sl-action-primary mt-3 w-full"
           >
             เปิดเส้นทางใน Google Maps →
@@ -1076,7 +1075,7 @@ function VenueLocationMap({
         {coordinates && !mapProviderFailed ? (
           <iframe
             title={`แผนที่ ${venue.name}`}
-            src={googleEmbedUrl(coordinates)}
+            src={googleMapsEmbedUrl(coordinates)}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             className="pointer-events-none absolute inset-0 h-full w-full border-0 sm:pointer-events-auto"
@@ -1131,37 +1130,6 @@ function MapFallback({
       </div>
     </div>
   );
-}
-
-type Coordinates = { latitude: number; longitude: number };
-
-function parseCoordinates(
-  latitude: string | null,
-  longitude: string | null,
-): Coordinates | null {
-  if (latitude === null || longitude === null) return null;
-  const parsed = { latitude: Number(latitude), longitude: Number(longitude) };
-  if (
-    !Number.isFinite(parsed.latitude) ||
-    !Number.isFinite(parsed.longitude) ||
-    parsed.latitude < -90 ||
-    parsed.latitude > 90 ||
-    parsed.longitude < -180 ||
-    parsed.longitude > 180
-  ) {
-    return null;
-  }
-  return parsed;
-}
-
-function googleEmbedUrl({ latitude, longitude }: Coordinates): string {
-  const destination = encodeURIComponent(`${latitude},${longitude}`);
-  return `https://www.google.com/maps?q=${destination}&z=16&output=embed`;
-}
-
-function googleDirectionsUrl({ latitude, longitude }: Coordinates): string {
-  const destination = encodeURIComponent(`${latitude},${longitude}`);
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
 }
 
 function DetailSection({
