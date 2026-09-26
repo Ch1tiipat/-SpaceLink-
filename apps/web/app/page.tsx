@@ -443,8 +443,7 @@ export default function DiscoveryPage() {
             options={[
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
-              { value: 'ongoing', label: 'กำลังจัดงาน' },
-              { value: 'ended', label: 'สิ้นสุดแล้ว' },
+              { value: 'closed', label: 'ปิดจอง' },
             ]}
           />
           <button
@@ -621,8 +620,8 @@ export default function DiscoveryPage() {
             {(
               [
                 { value: 'all', label: 'ทั้งหมด' },
-                { value: 'ongoing', label: 'กำลังจัดงาน' },
-                { value: 'ended', label: 'สิ้นสุดแล้ว' },
+                { value: 'bookable', label: 'เปิดจอง' },
+                { value: 'closed', label: 'ปิดจอง' },
               ] as const
             ).map((option) => {
               const active = appliedFilters.eventStatus === option.value;
@@ -842,7 +841,7 @@ function EventCard({ event }: { event: DiscoveryEvent }) {
           {event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}
         </p>
         <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">
-          ดูรายละเอียด →
+          ดูเพิ่มเติม →
         </span>
       </div>
     </Link>

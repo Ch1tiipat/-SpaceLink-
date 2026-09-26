@@ -132,7 +132,7 @@ homeFilterTest(
       query: 'Bangkok Creator Market',
       area: 'กรุงเทพมหานคร',
       categoryId: 'fashion',
-      eventStatus: 'ongoing' as const,
+      eventStatus: 'bookable' as const,
     };
 
     homeFilterAssert.deepEqual(
@@ -152,7 +152,7 @@ homeFilterTest(
     );
     homeFilterAssert.equal(selected.area, 'กรุงเทพมหานคร');
     homeFilterAssert.equal(selected.categoryId, 'fashion');
-    homeFilterAssert.equal(selected.eventStatus, 'ongoing');
+    homeFilterAssert.equal(selected.eventStatus, 'bookable');
   },
 );
 
@@ -214,42 +214,37 @@ homeFilterTest(
   },
 );
 
-homeFilterTest(
-  'filters bookable, ongoing, and ended events independently',
-  () => {
-    homeFilterAssert.deepEqual(
-      filterHomeEvents(
-        events,
-        { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'bookable' },
-        isBookableForTest,
-        NOW,
-      ).map(({ id }) => id),
-      ['future', 'ongoing'],
-    );
-    homeFilterAssert.deepEqual(
-      filterHomeEvents(
-        events,
-        { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'ongoing' },
-        isBookableForTest,
-        NOW,
-      ).map(({ id }) => id),
-      ['future', 'ongoing'],
-    );
-    homeFilterAssert.deepEqual(
-      filterHomeEvents(
-        events,
-        { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'ended' },
-        isBookableForTest,
-        NOW,
-      ).map(({ id }) => id),
-      ['ended'],
-    );
-    homeFilterAssert.equal(
-      hasEventEndCalendarDayPassed(events[2].endDate, NOW),
-      true,
-    );
-  },
-);
+homeFilterTest('filters bookable and closed events independently', () => {
+  const registrationClosed = makeHomeEvent({
+    id: 'closed',
+    name: 'Registration Closed',
+    status: 'DRAFT',
+  });
+  const statusEvents = [...events, registrationClosed];
+
+  homeFilterAssert.deepEqual(
+    filterHomeEvents(
+      statusEvents,
+      { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'bookable' },
+      isBookableForTest,
+      NOW,
+    ).map(({ id }) => id),
+    ['future', 'ongoing'],
+  );
+  homeFilterAssert.deepEqual(
+    filterHomeEvents(
+      statusEvents,
+      { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'closed' },
+      isBookableForTest,
+      NOW,
+    ).map(({ id }) => id),
+    ['ended', 'closed'],
+  );
+  homeFilterAssert.equal(
+    hasEventEndCalendarDayPassed(events[2].endDate, NOW),
+    true,
+  );
+});
 
 homeFilterTest(
   'keeps status chips compatible with the other home discovery filters',
@@ -261,7 +256,7 @@ homeFilterTest(
           ...EMPTY_HOME_EVENT_FILTERS,
           area: 'กรุงเทพมหานคร',
           categoryId: 'fashion',
-          eventStatus: 'ongoing',
+          eventStatus: 'bookable',
         },
         isBookableForTest,
         NOW,
@@ -275,7 +270,7 @@ homeFilterTest(
           ...EMPTY_HOME_EVENT_FILTERS,
           area: 'นครราชสีมา',
           categoryId: 'food',
-          eventStatus: 'ended',
+          eventStatus: 'closed',
         },
         isBookableForTest,
         NOW,
@@ -290,6 +285,33 @@ homeFilterTest(
         NOW,
       ).map(({ id }) => id),
       ['future', 'ongoing', 'ended'],
+    );
+  },
+);
+
+homeFilterTest(
+  'stably ranks bookable events before closed and ended events in all',
+  () => {
+    const closed = makeHomeEvent({
+      id: 'closed',
+      name: 'Registration Closed',
+      status: 'DRAFT',
+    });
+    const secondBookable = makeHomeEvent({
+      id: 'second-bookable',
+      name: 'Second Bookable Event',
+      status: 'ONGOING',
+    });
+    const source = [events[2], closed, events[1], events[0], secondBookable];
+
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        source,
+        EMPTY_HOME_EVENT_FILTERS,
+        isBookableForTest,
+        NOW,
+      ).map(({ id }) => id),
+      ['ongoing', 'future', 'second-bookable', 'closed', 'ended'],
     );
   },
 );
