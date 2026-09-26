@@ -15,30 +15,31 @@
 spacelink/
 ├─ apps/api/                    NestJS + Prisma → Render
 │  ├─ prisma/
-│  │  ├─ schema.prisma          v4 — freeze แล้ว 29 โมเดล 18 enum ห้ามแก้โดยไม่ผ่านทีม
-│  │  ├─ seed.ts                typed stub ประกาศลำดับ insert ที่ปลอดภัยกับ FK ยังไม่ใส่ข้อมูล
-│  │  ├─ migrations/            8 migrations
-│  │  └─ sql/                   2 ไฟล์ที่ Prisma ไม่รันให้ ต้อง apply เองด้วย psql (§4)
-│  └─ src/                      27 โฟลเดอร์
-│     ├─ auth/                  guard + JIT provisioning + decorator `@OrgScoped`
-│     ├─ users/                 ผู้ใช้ทั้งระบบ (SUPER_ADMIN) + แก้โปรไฟล์ตัวเอง
-│     ├─ organizations/         องค์กร · สิทธิ์ ORG_ADMIN · โควตา · PromptPay
-│     ├─ venues/                อ่านผังสถานที่ + สร้างโซนใต้ venue
+│  │  ├─ schema.prisma          v4 + ข้อยกเว้นที่ PO อนุมัติ (AGENTS.md §2.1.1) — 34 โมเดล 22 enum ห้ามแก้โดยไม่ผ่านทีม
+│  │  ├─ seed.ts                ข้อมูลเดโมหลายองค์กร เรียงตามลำดับ FK — รันในเครื่องตัวเองเท่านั้น
+│  │  ├─ migrations/            20 migrations
+│  │  └─ sql/                   4 ไฟล์ที่ Prisma ไม่รันให้ ต้อง apply เองด้วย psql (§4)
+│  └─ src/                      28 โฟลเดอร์
+│     ├─ auth/                  guard + JIT provisioning + decorator `@OrgScoped` + `OrgPermissionGuard`
+│     ├─ users/                 ผู้ใช้ทั้งระบบ (SUPER_ADMIN) + แก้โปรไฟล์ตัวเอง + ตั้งค่าการแจ้งเตือน
+│     ├─ organizations/         องค์กร · OWNER/ADMIN · สิทธิ์ย่อย · โควตา · PromptPay · สร้าง venue
+│     ├─ venues/                ผังสถานที่ — อ่าน / แก้ / ลบ + สร้างโซนใต้ venue
 │     ├─ zones/                 โซนในผัง
 │     ├─ booths/                บูธในโซน
-│     ├─ events/                อีเวนต์ · lifecycle · ใบเสนอราคาค่าบริการ · slug
+│     ├─ events/                อีเวนต์ · lifecycle · ใบเสนอราคา · slug · แบนเนอร์/แกลเลอรี · ข้อมูลอีเวนต์ · บันทึกอีเวนต์
 │     ├─ categories/            หมวดสินค้า อ่านอย่างเดียว
-│     ├─ bookings/              จอง · สลิป · ยกเลิก · ยกเว้นค่าเช่า · cron หมดเวลา
+│     ├─ bookings/              จอง (เดี่ยว / หลายบูธ) · กลุ่มชำระเงิน · สลิป · ยกเลิก · ยกเว้นค่าเช่า · cron หมดเวลา
+│     ├─ transactions/          ธุรกรรมขององค์กร + timeline รายการจอง
 │     ├─ slips/                 seam ตรวจสลิป — mock / manual / slipok (มี README เอง)
-│     ├─ refunds/               คำร้องคืนเงิน
-│     ├─ reviews/               รีวิวโซนและร้านค้า
+│     ├─ refunds/               คำร้องคืนเงิน + ช่องทางรับเงินคืน PromptPay + สลิปโอนคืน
+│     ├─ reviews/               รีวิวผูกกับการจอง + ซ่อน / คืน / ลบ โดยแอดมิน
 │     ├─ shops/                 ร้านค้าของผู้ขาย + โลโก้
-│     ├─ notifications/         แจ้งเตือนในแอป + ส่ง web push
+│     ├─ notifications/         แจ้งเตือนในแอป + ส่ง web push ตามการตั้งค่าของผู้ใช้
 │     ├─ push-subscriptions/    ลงทะเบียน/ถอน subscription ของเบราว์เซอร์
 │     ├─ announcements/         ประกาศระดับองค์กร
 │     ├─ system-broadcasts/     ประกาศกลางถึงผู้ใช้ทุกคน
 │     ├─ penalties/             แต้มโทษ + trust score + แบล็กลิสต์
-│     ├─ support-tickets/       คำร้องช่วยเหลือ + ขอยกเว้นโควตา
+│     ├─ support-tickets/       คำร้องช่วยเหลือ + คำขอเกินโควตา (อนุมัติ = ออก `BoothQuotaGrant`)
 │     ├─ audit-logs/            บันทึกการกระทำของผู้ดูแล
 │     ├─ platform-config/       สูตรราคาค่าบริการอีเวนต์ของแพลตฟอร์ม
 │     ├─ ai/                    seam แนะนำโซน + แชตช่วยเหลือ (มี README เอง)
@@ -56,26 +57,35 @@ spacelink/
 │  │  │  ├─ map/                ผังโซนและบูธ
 │  │  │  └─ book/               ฟอร์มจองบูธ
 │  │  ├─ bookings/              การจองของฉัน
-│  │  │  └─ [bookingId]/        รายละเอียด · `payment/` สลิป+QR · `review/` รีวิว
-│  │  ├─ notifications/         แจ้งเตือน + ตัวกรอง
-│  │  ├─ profile/               โปรไฟล์ + ร้านค้า
-│  │  ├─ help/                  FAQ + ส่งคำร้อง
-│  │  ├─ admin/                 ORG_ADMIN — 11 หน้า
+│  │  │  ├─ [bookingId]/        รายละเอียด · `payment/` สลิป+QR · `review/` รีวิว
+│  │  │  └─ payment-groups/     `[paymentGroupId]/payment/` จ่ายรวมหลายบูธด้วยสลิปเดียว
+│  │  ├─ refunds/               คำขอคืนเงินของฉัน
+│  │  ├─ reviews/               รีวิวของฉัน
+│  │  ├─ notifications/         แจ้งเตือน + ตัวกรอง + ตั้งค่ารายหมวด
+│  │  ├─ profile/               โปรไฟล์ (จังหวัด) + ร้านค้า
+│  │  ├─ help/                  FAQ + ค้นหา
+│  │  ├─ support/               ส่งคำร้อง + ดูเธรด
+│  │  ├─ privacy/ · terms/ · accessibility/   หน้าข้อกำหนดและนโยบาย
+│  │  ├─ offline/               หน้าสำรองของ PWA ตอนไม่มีเน็ต
+│  │  ├─ admin/                 ORG_ADMIN — 13 หน้า
 │  │  │  ├─ dashboard/          ตัวเลขภาพรวมองค์กร
-│  │  │  ├─ events/             สร้าง / เผยแพร่ / ปิด / ลบ + ใบเสนอราคา
+│  │  │  ├─ events/             สร้าง / แก้ / เผยแพร่ / ปิด / ลบ + ใบเสนอราคา + ข้อมูลอีเวนต์
 │  │  │  ├─ bookings/           รายการจองขององค์กร
 │  │  │  ├─ booking-rescue/     ค้นจากรหัสจอง → ยืนยันยกเว้นค่าเช่า / ออกแต้มโทษ
+│  │  │  ├─ transactions/       ธุรกรรม + `bookings/[bookingId]/` timeline รายการจอง
+│  │  │  ├─ quota-requests/     คำขอจองเกินโควตา — อนุมัติ / ปฏิเสธ
 │  │  │  ├─ zones/              จัดการโซนและบูธ
 │  │  │  ├─ map-designer/       ออกแบบผังสถานที่
 │  │  │  ├─ vendors/            ผู้ขายในองค์กร + ประวัติรายคน
 │  │  │  ├─ payments/           การชำระเงิน / คืนเงิน + ดูสลิป
-│  │  │  ├─ reviews/            สรุปคะแนนรีวิว
+│  │  │  ├─ reviews/            รีวิว + ซ่อน / คืน / ลบ
 │  │  │  ├─ announcements/      ประกาศถึงผู้ขาย
-│  │  │  └─ organization/       โควตา + PromptPay ขององค์กร
-│  │  └─ super-admin/           SUPER_ADMIN — 9 หน้า · shell แยกทั้งชุด
+│  │  │  └─ organization/       โควตา · PromptPay · ทีมแอดมินและสิทธิ์ย่อย
+│  │  └─ super-admin/           SUPER_ADMIN — 10 หน้า · shell แยกทั้งชุด
 │  │     ├─ layout.tsx          ครอบด้วย `SuperAdminShell` + guard ของตัวเอง
 │  │     ├─ page.tsx            ภาพรวมข้ามองค์กร + ส่งประกาศกลาง
-│  │     ├─ organizations/      องค์กรทั้งหมด · สถานะ · PromptPay
+│  │     ├─ notifications/      แจ้งเตือนของ Super Admin
+│  │     ├─ organizations/      องค์กรทั้งหมด · สถานะ · PromptPay · แต่งตั้ง OWNER
 │  │     ├─ admins/             แอดมินองค์กร + มอบสิทธิ์แก้โควตา
 │  │     ├─ users/              ผู้ใช้ทั้งหมด + รายละเอียด + last-login
 │  │     ├─ events-bookings/    การจอง / การเงิน (`?tab=bookings|payments`)
@@ -83,9 +93,9 @@ spacelink/
 │  │     ├─ announcements/      ประกาศข้ามองค์กร + ลบ
 │  │     ├─ audit-logs/         audit log + ตัวกรอง
 │  │     └─ settings/           สูตรราคาค่าบริการของแพลตฟอร์ม
-│  ├─ components/               30 ไฟล์ + `super-admin/` อีก 10 (§6)
-│  ├─ lib/                      8 ไฟล์ (§6)
-│  └─ public/                   icon.svg · manifest.webmanifest · push-sw.js · รูปอ้างอิง 4 ไฟล์
+│  ├─ components/               41 ไฟล์ + `super-admin/` อีก 10 (§6)
+│  ├─ lib/                      32 ไฟล์ + เทสต์ `*.test.ts` คู่กัน (§6)
+│  └─ public/                   icon.svg · manifest.webmanifest · push-sw.js · `brand/` · รูปหน้าแรกและอีเวนต์
 ├─ prototype/                   prototype เดิม ใช้อ้างอิงเท่านั้น ห้ามแก้ ห้าม import
 ├─ .github/                     ci.yml · keep-alive.yml · CODEOWNERS · PR template
 └─ AGENTS.md · CLAUDE.md · README.md
@@ -101,36 +111,52 @@ spacelink/
 
 ทุก path มี prefix `/api` · role คือขั้นต่ำที่เรียกได้ · **ORG_ADMIN+** = ORG_ADMIN ขององค์กรนั้น หรือ SUPER_ADMIN · **ล็อกอิน** = role ไหนก็ได้ที่มี token
 
+**สิทธิ์ย่อย** (`OrgPermissionGuard`) — **`[P]`** = ต้องมี `canManagePayments` · **`[Z]`** = ต้องมี `canManageZones` · OWNER และ SUPER_ADMIN ผ่านเสมอ · องค์กรที่ยังไม่มี OWNER ให้ ADMIN ผ่านไปก่อนจนกว่าจะแต่งตั้ง
+
 | โมดูล | endpoint | สิทธิ์ |
 |---|---|---|
 | `auth` | `GET /auth/me` — โปรไฟล์ + ร้าน + องค์กรที่สังกัด | ล็อกอิน |
 | `users` | `GET /users` · `/:id` · `/:id/last-login` · `/:id/audit-logs` | SUPER_ADMIN |
-| | `PATCH /users/me` — แก้ `phone` อย่างเดียว ไม่มี `:id` | ล็อกอิน |
+| | `PATCH /users/me` — แก้ `phone` · `province` ไม่มี `:id` | ล็อกอิน |
+| | `GET`/`PATCH /users/me/notification-preferences` — เปิด/ปิดรายหมวด | ล็อกอิน |
 | `organizations` | `GET /organizations` · `/:id` | public |
-| | `POST /organizations` · `PATCH /:id/status` · `GET`/`POST`/`DELETE /:id/admins` | SUPER_ADMIN |
-| | `PATCH /:organizationId` · `PATCH /:organizationId/quota` | ORG_ADMIN+ · quota ต้องมี `canEditQuota` |
+| | `POST /organizations` · `GET /export` · `PATCH /:id/status` · `PATCH /:id/owner` | SUPER_ADMIN |
+| | `GET /:organizationId/admins` | ORG_ADMIN+ |
+| | `POST`/`DELETE /:organizationId/admins` · `PATCH .../admins/:membershipId/permissions` | ORG_ADMIN (OWNER มอบสิทธิ์ย่อย) |
+| | `PATCH /:organizationId` `[P]` · `PATCH /:organizationId/quota` | ORG_ADMIN+ · quota ต้องมี `canEditQuota` |
+| | `POST /organizations/:organizationId/venues` `[Z]` | ORG_ADMIN+ |
 | | `GET /admins` · `PATCH /admins/:membershipId/quota-permission` | SUPER_ADMIN |
 | `venues` | `GET /venues` · `/venues/:id` | public |
-| | `POST /venues/:venueId/zones` | ORG_ADMIN+ |
+| | `PATCH`/`DELETE /venues/:venueId` · `POST /venues/:venueId/zones` `[Z]` | ORG_ADMIN+ |
 | `zones` | `GET /zones` · `/zones/:id` | public |
-| | `PATCH`/`DELETE /zones/:zoneId` · `POST /zones/:zoneId/booths` | ORG_ADMIN+ |
+| | `PATCH`/`DELETE /zones/:zoneId` · `POST /zones/:zoneId/booths` `[Z]` | ORG_ADMIN+ |
 | `booths` | `GET /booths` · `/booths/:id` | public |
-| | `PATCH`/`DELETE /booths/:boothId` | ORG_ADMIN+ |
+| | `PATCH`/`DELETE /booths/:boothId` `[Z]` | ORG_ADMIN+ |
 | `events` | `GET /events` · `/events/discovery` · `/events/:id/map` · `/events/by-slug/:slug/map` | public |
-| | `POST /organizations/:organizationId/events` · `POST .../events/quote` · `GET` | ORG_ADMIN+ |
+| | `GET /events/saved` · `POST`/`DELETE /events/:id/save` | ล็อกอิน |
+| | `POST /organizations/:organizationId/events` · `POST .../events/quote` · `GET` · `PATCH :eventId` | ORG_ADMIN+ |
 | | `PATCH :eventId/publish` · `/open` · `/close` · `DELETE :eventId` | ORG_ADMIN+ |
+| | `POST :eventId/gallery` · `POST`/`DELETE :eventId/banner` | ORG_ADMIN+ |
+| | `POST`/`PATCH`/`DELETE :eventId/join-information` · `:eventId/information` + `/reorder` | ORG_ADMIN |
+| | `PATCH :eventId/subscription/activate` | SUPER_ADMIN |
 | `categories` | `GET /categories` | public |
-| `bookings` | `POST /bookings` · `POST /:id/slip` · `PATCH /:id/cancel` · `GET /bookings` | VENDOR |
-| | `GET /:bookingId` · `/:bookingId/slip` · `/by-code/:bookingCode` | ORG_ADMIN+ |
-| | `PATCH /:bookingId/confirm-exempt` · `GET /organizations/:id/bookings` | ORG_ADMIN+ |
+| `bookings` | `POST /bookings` · `POST /bookings/batch` · `GET /quota/:eventId` · `GET /bookings` | VENDOR |
+| | `POST /:id/slip` · `PATCH /:id/cancel` | VENDOR |
+| | `GET /payment-groups/:paymentGroupId` · `POST .../slip` — จ่ายรวมหลายบูธ | VENDOR |
+| | `GET /by-code/:bookingCode` | ORG_ADMIN+ |
+| | `GET /:bookingId` · `/:bookingId/slip` · `PATCH /:bookingId/confirm-exempt` · `/status` `[P]` | ORG_ADMIN+ |
+| | `GET /organizations/:id/bookings` `[P]` | ORG_ADMIN+ |
 | | `GET /bookings/all` | SUPER_ADMIN |
-| `refunds` | `POST /bookings/:bookingId/refunds` · `GET /refunds/mine` | VENDOR |
-| | `PATCH .../approve` · `/reject` · `/process` · `GET /organizations/:id/refunds` | ORG_ADMIN+ |
+| `transactions` | `GET /organizations/:id/transactions` · `/bookings/:bookingId` `[P]` | ORG_ADMIN+ |
+| `refunds` | `POST /bookings/:bookingId/refunds` · `POST /refunds/batch` · `GET /refunds/mine` · `GET /refunds/:refundId/payout-slip-url` | VENDOR |
+| | `PATCH .../approve` · `/reject` · `/process` · `POST .../payout-slip` · `GET /organizations/:id/refunds` `[P]` | ORG_ADMIN+ |
 | | `GET /refunds/all` | SUPER_ADMIN |
-| `reviews` | `GET /reviews/average` | public |
-| | `POST /reviews` | VENDOR |
+| `reviews` | `GET /reviews/average` · `GET /reviews/events/:eventId` | public |
+| | `POST /reviews` · `GET /reviews/me` | VENDOR |
+| | `GET /reviews/organizations/:id` · `PATCH /:reviewId/hide` · `/restore` · `DELETE /:reviewId` | ORG_ADMIN+ |
 | `shops` | `POST /shops` · `PATCH /shops/me` · `POST /shops/me/logo` (multipart) | VENDOR |
 | `notifications` | `GET /notifications` · `/unread-count` · `PATCH /mark-all-read` · `/:id/read` | ล็อกอิน |
+| | `DELETE /notifications/:notificationId` | SUPER_ADMIN |
 | `push-subscriptions` | `POST` · `DELETE /push-subscriptions` | ล็อกอิน |
 | `announcements` | `GET /organizations/:id/announcements` | public |
 | | `GET /:id/announcements/admin` · `POST` · `PATCH` · `DELETE` | ORG_ADMIN+ |
@@ -139,9 +165,10 @@ spacelink/
 | | `POST /system-broadcasts` — ถึงผู้ใช้ทุกคน | SUPER_ADMIN |
 | `penalties` | `POST` · `GET /bookings/:bookingId/penalties` | ORG_ADMIN+ |
 | | `POST /penalties` (ออกให้ผู้ขายตรง) · `GET /penalties/all` | SUPER_ADMIN |
-| `support-tickets` | `POST /support-tickets` | VENDOR |
+| `support-tickets` | `POST /support-tickets` · `GET /my` · `GET /my/:ticketId` | VENDOR |
 | | `POST /support-tickets/organizations/:id` — คำร้องถึง Super Admin | ORG_ADMIN |
-| | `PATCH /:ticketId/approve-quota-exception` | ORG_ADMIN+ |
+| | `GET /organizations/:id` · `/organizations/:id/:ticketId` | ORG_ADMIN+ |
+| | `PATCH /:ticketId/approve-quota-exception` · `/reject-quota-exception` | ORG_ADMIN+ |
 | | `GET /all` · `GET /:ticketId` · `PATCH /:ticketId/status` | SUPER_ADMIN |
 | `audit-logs` | `GET /audit-logs?action=&actorUserId=` | SUPER_ADMIN |
 | `platform-config` | `GET` · `PATCH /platform-config` | SUPER_ADMIN |
@@ -159,22 +186,27 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 |---|---|
 | บูธต้องอยู่ใน venue เดียวกับอีเวนต์ | `bookings.service` ในทรานแซกชันสร้าง booking |
 | วันที่จองต้องอยู่ในช่วงอีเวนต์ | เดียวกัน |
-| 1 บูธ 1 อีเวนต์ มี booking ที่ยัง active ได้ใบเดียว | service + **partial unique index ที่ยังไม่ apply** |
+| 1 บูธ 1 อีเวนต์ มี booking ที่ยัง active ได้ใบเดียว | service + partial unique index `booking_active_event_booth_key` (apply บนฐานข้อมูลทีมแล้ว) |
 | องค์กรเจ้าของอีเวนต์ต้อง `ACTIVE` | สร้าง booking · หน้า discovery · หน้าผัง · `OrgScopeGuard` |
 | ไม่เกินโควตาต่อผู้ขายต่ออีเวนต์ | `org_config` ก่อน ตกไป `platform_config` (default 2) |
+| จองเกินโควตาได้ 1 booking ต่อ 1 `BoothQuotaGrant` · อนุมัติคำขอ = ออกสิทธิ์ **ไม่สร้าง booking ให้** · grant หมดอายุไปพร้อมอีเวนต์ | `support-tickets.service` + `bookings.service` (`consumedBookingId` unique กันใช้ซ้ำ) |
+| จองหลายบูธพร้อมกันได้เฉพาะผู้ขาย ร้าน และอีเวนต์เดียวกัน · จ่ายรวมด้วยสลิปเดียว · สลิปผ่าน = ยืนยันทุกบูธในกลุ่มพร้อมกัน | `bookings.service` (`BookingPaymentGroup`) |
 | ผู้ใช้ที่ติดแบล็กลิสต์จองไม่ได้ | สร้าง booking + เด้งตั้งแต่หน้า login |
 | trust score เริ่ม 100 แต้มโทษ**หัก**ออก clamp ที่ 0 แตะ 0 = แบล็กลิสต์ | `penalties.service` serializable transaction retry 3 |
 | ยอดสลิปต้องตรงราคาบูธ **และ** สถานะต้องเป็น `VERIFIED` ก่อนถึงเทียบยอด | `bookings.service` เทียบ Decimal ด้วย `.equals()` |
 | `trans_ref` ห้ามซ้ำ (กันสลิปซ้ำ) | unique ใน schema |
 | hold 5 นาที หมดแล้วยกเลิกด้วย `cancelledByRole = SYSTEM` | cron ทุกนาทีใน `bookings/` |
-| ยอดคืนเงินที่อนุมัติ ≤ ราคาบูธ และ ≤ ยอดที่ขอ | `refunds.service` |
+| ยอดคืนเงินที่อนุมัติ ≤ ราคาบูธ และ ≤ ยอดที่ขอ · ถ้าจ่ายแบบกลุ่ม ยอดคืนรวมทั้งกลุ่ม ≤ `totalAmount` ของกลุ่ม | `refunds.service` |
 | คืนเงินได้เฉพาะ booking ที่ยกเลิกแล้ว ไม่ใช่ exempt และมีสลิป verified ยอดตรง | `refunds.service` |
-| รีวิวได้เมื่ออีเวนต์จบแล้ว **17 ชั่วโมง** และ 1 รีวิวต่อ 1 target ต่อ 1 คน | `reviews.service` |
+| คำขอคืนเงินใหม่ต้องมี PromptPay ID ที่ถูกต้อง · ไม่ใส่ชื่อบัญชี = ขึ้นคำเตือนให้แอดมิน ไม่ถือว่าชื่อตรง · สลิปโอนคืนต้องตรงยอดที่อนุมัติ | `refunds.service` |
+| รีวิวได้เมื่ออีเวนต์จบแล้ว (เวลาไทย ไม่ระบุเวลาจบ = 23:59) · 1 รีวิวต่อ 1 booking · รีวิวที่ถูกลบส่งใหม่ไม่ได้ | `reviews.service` |
+| ซ่อน / คืน / ลบรีวิว เดินตามสถานะ `PUBLISHED` ↔ `HIDDEN` → `DELETED` + บันทึก audit log | `reviews.service` |
 | เปลี่ยนโลโก้ร้านได้ **1 ครั้งต่อ 168 ชั่วโมง** | `shops.service` ล็อกแถวด้วย `SELECT … FOR UPDATE` |
 | ลบโซน/บูธไม่ได้ถ้าเคยมี booking ผูกอยู่ (แม้ถูกยกเลิกแล้ว) | FK restrict แล้วแปล error เป็นไทย |
 | ลบอีเวนต์ได้เฉพาะที่ยังไม่เคยมี booking | `events.service` |
 | สถานะคำร้องเดินหน้าอย่างเดียว OPEN → IN_PROGRESS → CLOSED | `support-tickets.service` |
 | `platform_config` เขียนได้เฉพาะ SUPER_ADMIN · `org_config` เฉพาะแอดมินองค์กรนั้น | guard + service |
+| SUPER_ADMIN แต่งตั้ง/เปลี่ยน OWNER ได้ แต่มอบสิทธิ์ `canManagePayments` / `canManageZones` ไม่ได้ — เป็นของ OWNER เท่านั้น | `organizations.service` + `OrgPermissionGuard` |
 
 **คำนวณสด ไม่เก็บเป็นค่าจริง** — tier บูธ (S/A/B/C) จากราคา · badge ร้าน · คะแนนเฉลี่ย
 
@@ -206,6 +238,248 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 |---|---|
 | `booking_active_event_booth_unique.sql` | partial unique index กัน double-booking (`@@unique` เงื่อนไขตามสถานะไม่ได้) |
 | `remove_authenticated_slips_upload_policy.sql` | ถอน policy ที่ยอมให้ client ที่ล็อกอินอัปโหลดเข้าบัคเก็ต `slips` ตรงๆ |
+| `enable_rls_saved_event.sql` | เปิด RLS แบบ deny-by-default ให้ `saved_event` เหมือนตารางใหม่อื่นๆ |
+| `scrum-144-refund-payout-review.sql` | **ไว้รีวิวเท่านั้น** — SQL ของ SCRUM-144 ที่ gen จาก `migrate diff` ห้ามรันรวมกับไฟล์อื่น (Book เป็นคน apply) |
+
+ทั้งสามไฟล์แรก apply บนฐานข้อมูลทีมแล้ว (ตรวจจาก `pg_indexes` / `pg_class` เมื่อ 27 ก.ย. 2569) — ฐานข้อมูลใหม่ของใครก็ตามยังต้อง apply เองหลัง migrate
+
+### ERD
+
+34 ตาราง · 63 ความสัมพันธ์ · สร้างจากฐานข้อมูลจริงของทีม (Supabase `database.types.ts`) ด้วย [`supabase-markdown`](https://github.com/idevbrandon/supabase-markdown) เมื่อ 27 ก.ย. 2569 แล้วตัดให้เหลือเฉพาะคีย์
+
+- แสดงเฉพาะ PK / FK — คอลัมน์ครบ ชนิดข้อมูล และ enum ดูที่ `apps/api/prisma/schema.prisma` (แหล่งความจริงเดียวของโครงสร้าง)
+- เส้นทึบ = FK บังคับ (`NOT NULL`) · เส้นประ = FK ที่เป็น null ได้ · `||--o|` = 1 ต่อ 1 (FK เป็น unique)
+- ไม่มีตาราง `auth.users` ของ Supabase — `app_user.auth_user_id` อ้างถึงมันโดยไม่มี FK จริง
+
+```mermaid
+erDiagram
+    announcement {
+        uuid announcement_id PK
+        uuid event_id FK
+        uuid organization_id FK
+    }
+    app_user {
+        uuid user_id PK
+    }
+    audit_log {
+        uuid audit_log_id PK
+        uuid actor_user_id FK
+    }
+    booking {
+        uuid booking_id PK
+        uuid booth_id FK
+        uuid cancelled_by_user_id FK
+        uuid event_id FK
+        uuid payment_group_id FK
+        uuid shop_id FK
+        uuid vendor_user_id FK
+    }
+    booking_payment_group {
+        uuid payment_group_id PK
+        uuid event_id FK
+        uuid organization_id FK
+        uuid shop_id FK
+        uuid vendor_user_id FK
+    }
+    booth {
+        uuid booth_id PK
+        uuid zone_id FK
+    }
+    booth_quota_grant {
+        uuid quota_grant_id PK
+        uuid consumed_booking_id FK
+        uuid event_id FK
+        uuid granted_by_user_id FK
+        uuid organization_id FK
+        uuid source_ticket_id FK
+        uuid vendor_user_id FK
+    }
+    event {
+        uuid event_id PK
+        uuid organization_id FK
+        uuid venue_id FK
+    }
+    event_information {
+        uuid event_information_id PK
+        uuid event_id FK
+    }
+    event_join_information {
+        uuid event_join_information_id PK
+        uuid event_id FK
+    }
+    event_policy {
+        uuid event_policy_id PK
+        uuid event_id FK
+    }
+    notification {
+        uuid notification_id PK
+        uuid user_id FK
+    }
+    org_config {
+        uuid org_config_id PK
+        uuid organization_id FK
+    }
+    org_membership {
+        uuid membership_id PK
+        uuid organization_id FK
+        uuid user_id FK
+    }
+    organization {
+        uuid organization_id PK
+    }
+    penalty {
+        uuid penalty_id PK
+        uuid booking_id FK
+        uuid organization_id FK
+        uuid user_id FK
+    }
+    platform_config {
+        uuid platform_config_id PK
+    }
+    product_category {
+        uuid category_id PK
+    }
+    push_subscription {
+        uuid push_subscription_id PK
+        uuid user_id FK
+    }
+    recommendation_log {
+        uuid recommendation_log_id PK
+        uuid event_id FK
+        uuid recommended_booth_id FK
+        uuid vendor_user_id FK
+    }
+    refund_request {
+        uuid refund_request_id PK
+        uuid booking_id FK
+        uuid requested_by_user_id FK
+        uuid reviewed_by_user_id FK
+    }
+    review {
+        uuid review_id PK
+        uuid booking_id FK
+        uuid event_id FK
+        uuid organization_id FK
+        uuid reviewer_user_id FK
+    }
+    saved_event {
+        uuid saved_event_id PK
+        uuid event_id FK
+        uuid user_id FK
+    }
+    shop {
+        uuid shop_id PK
+        uuid owner_user_id FK
+    }
+    shop_category {
+        uuid category_id PK, FK
+        uuid shop_id PK, FK
+    }
+    subscription {
+        uuid subscription_id PK
+        uuid event_id FK
+        uuid organization_id FK
+    }
+    support_ticket {
+        uuid support_ticket_id PK
+        uuid booking_id FK
+        uuid organization_id FK
+        uuid user_id FK
+    }
+    system_broadcast {
+        uuid system_broadcast_id PK
+        uuid created_by_user_id FK
+    }
+    ticket_message {
+        uuid ticket_message_id PK
+        uuid sender_user_id FK
+        uuid ticket_id FK
+    }
+    venue {
+        uuid venue_id PK
+        uuid organization_id FK
+    }
+    venue_point {
+        uuid venue_point_id PK
+        uuid venue_id FK
+    }
+    verified_slip {
+        uuid slip_id PK
+        uuid booking_id FK
+        uuid payment_group_id FK
+    }
+    zone {
+        uuid zone_id PK
+        uuid venue_id FK
+    }
+    zone_category {
+        uuid category_id PK, FK
+        uuid zone_id PK, FK
+    }
+    app_user ||--o{ audit_log : actor_user_id
+    app_user ||--o{ booking : vendor_user_id
+    app_user ||--o{ booking_payment_group : vendor_user_id
+    app_user ||--o{ booth_quota_grant : granted_by_user_id
+    app_user ||--o{ booth_quota_grant : vendor_user_id
+    app_user ||--o{ notification : user_id
+    app_user ||--o{ org_membership : user_id
+    app_user ||--o{ penalty : user_id
+    app_user ||--o{ push_subscription : user_id
+    app_user ||--o{ recommendation_log : vendor_user_id
+    app_user ||--o{ refund_request : requested_by_user_id
+    app_user ||--o{ saved_event : user_id
+    app_user ||--o{ shop : owner_user_id
+    app_user ||--o{ support_ticket : user_id
+    app_user ||--o{ system_broadcast : created_by_user_id
+    app_user ||--o{ ticket_message : sender_user_id
+    app_user ||..o{ booking : cancelled_by_user_id
+    app_user ||..o{ refund_request : reviewed_by_user_id
+    app_user ||..o{ review : reviewer_user_id
+    booking ||--o{ refund_request : booking_id
+    booking ||--o{ verified_slip : booking_id
+    booking ||..o{ penalty : booking_id
+    booking ||..o{ support_ticket : booking_id
+    booking ||..o| booth_quota_grant : consumed_booking_id
+    booking ||..o| review : booking_id
+    booking_payment_group ||..o{ booking : payment_group_id
+    booking_payment_group ||..o{ verified_slip : payment_group_id
+    booth ||--o{ booking : booth_id
+    booth ||--o{ recommendation_log : recommended_booth_id
+    event ||--o{ booking : event_id
+    event ||--o{ booking_payment_group : event_id
+    event ||--o{ booth_quota_grant : event_id
+    event ||--o{ event_information : event_id
+    event ||--o{ event_join_information : event_id
+    event ||--o{ recommendation_log : event_id
+    event ||--o{ saved_event : event_id
+    event ||--o| event_policy : event_id
+    event ||--o| subscription : event_id
+    event ||..o{ announcement : event_id
+    event ||..o{ review : event_id
+    organization ||--o{ announcement : organization_id
+    organization ||--o{ booking_payment_group : organization_id
+    organization ||--o{ booth_quota_grant : organization_id
+    organization ||--o{ event : organization_id
+    organization ||--o{ org_membership : organization_id
+    organization ||--o{ penalty : organization_id
+    organization ||--o{ subscription : organization_id
+    organization ||--o{ venue : organization_id
+    organization ||--o| org_config : organization_id
+    organization ||..o{ review : organization_id
+    organization ||..o{ support_ticket : organization_id
+    product_category ||--o{ shop_category : category_id
+    product_category ||--o{ zone_category : category_id
+    shop ||--o{ booking : shop_id
+    shop ||--o{ booking_payment_group : shop_id
+    shop ||--o{ shop_category : shop_id
+    support_ticket ||--o{ ticket_message : ticket_id
+    support_ticket ||--o| booth_quota_grant : source_ticket_id
+    venue ||--o{ event : venue_id
+    venue ||--o{ venue_point : venue_id
+    venue ||--o{ zone : venue_id
+    zone ||--o{ booth : zone_id
+    zone ||--o{ zone_category : zone_id
+```
 
 ---
 
@@ -240,6 +514,26 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `auth-errors.ts` | ข้อความ error ของหน้า login/register เก็บที่เดียวกันสองหน้าไม่ให้เพี้ยน |
 | `event-booking-rules.ts` | อีเวนต์นี้ยังจองได้ไหม — เช็คสถานะ + วันที่ตามเวลาไทย |
 | `ux-preview.ts` | โหมดพรีวิว UI **เฉพาะ dev บน localhost** ไม่เคยสร้าง token ที่ API รับ |
+| `event-time.ts` | อีเวนต์จบแล้วหรือยัง ตามเวลาไทย — ใช้ตัดสินสิทธิ์รีวิว |
+| `event-cover.ts` · `facebook-embed.ts` | รูปปกอีเวนต์ + fallback · แยกประเภทลิงก์ Facebook ของผู้จัด |
+| `home-event-filters.ts` · `home-announcement-filters.ts` | ตัวกรองหน้าแรก — จังหวัด / พื้นที่ / ประกาศ |
+| `saved-events.ts` | รายการอีเวนต์ที่บันทึกไว้ |
+| `booth-selection-policy.ts` | ใครเลือกบูธได้ + เช็คโควตาก่อนเลือก แยกจากการ render |
+| `use-booking-quota.ts` · `booking-quota-request.ts` | อ่านโควตาจาก server + timeout กัน API ค้าง |
+| `quota-request-context.ts` | บริบทของคำขอจองเกินโควตาจาก query string |
+| `booking-summary-image.ts` | สร้างรูป PNG สรุปการจองให้ดาวน์โหลด |
+| `refund-request-policy.ts` · `refund-notification-route.ts` | ขอคืนเงินได้ไหม + ยอดที่ถูกต้อง · ลิงก์จากแจ้งเตือนคืนเงิน |
+| `review-eligibility.ts` | booking นี้รีวิวได้หรือยัง |
+| `notification-settings-ui.ts` | สรุปและสไตล์สวิตช์ตั้งค่าแจ้งเตือนรายหมวด |
+| `push-registration.ts` · `web-push-preview.ts` | สถานะการลงทะเบียน push · แจ้งเตือนตัวอย่างในแอป |
+| `profile-province.ts` | normalize + ตรวจจังหวัดในโปรไฟล์ |
+| `help-center.ts` | ค้นหา FAQ ในหน้าช่วยเหลือ |
+| `admin-organization-access.ts` | รายการองค์กรที่แอดมินเลือกได้ + องค์กรที่เลือกอยู่ |
+| `admin-transaction-filters.ts` · `admin-booking-timeline.ts` | ตัวกรองหน้าธุรกรรม (sync กับ URL) · ข้อความ timeline รายการจอง |
+| `super-admin-notifications.ts` | ลิงก์ปลายทางของแจ้งเตือน Super Admin |
+| `route-identifier.ts` | เช็คว่า path param เป็น UUID ไหม |
+
+ไฟล์ตรรกะส่วนใหญ่มี `*.test.ts` คู่กัน (21 ไฟล์)
 
 ### `components/` — ส่วนกลาง
 
@@ -248,12 +542,13 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `app-shell.tsx` | shell ของผู้ขาย/ORG_ADMIN — sidebar · bottom nav · แบนเนอร์ประกาศกลาง · วิดเจ็ต AI |
 | `admin-ui.tsx` | ชิ้นส่วนร่วมของหน้า admin + `useAdminPageAccess` (เลือกองค์กร + เช็คสิทธิ์) |
 | `auth-layout.tsx` | เลย์เอาต์เต็มจอของหน้า login / register |
-| `otp-input.tsx` | ช่องกรอกรหัส 6 หลัก |
+| `otp-input.tsx` · `otp-input-logic.ts` | ช่องกรอกรหัส 6 หลัก + ตรรกะ normalize / โฟกัส |
 | `select-menu.tsx` · `multi-select-menu.tsx` | dropdown เดี่ยว / หลายค่า ใช้ร่วมทั้งแอป |
 | `zone-map.tsx` | ผังโซนและบูธเป็น inline SVG — โซนต่างกันด้วยน้ำหนักสีม่วง ไม่ใช่คนละสี |
 | `booking-countdown.tsx` | นับถอยหลัง hold 5 นาที |
 | `slip-upload-panel.tsx` | แผงเลือกไฟล์ + อัปโหลดสลิป |
 | `admin-slip-actions.tsx` | ปุ่มดู/ดาวน์โหลดสลิป — ขอ signed URL ตอนกดเท่านั้น |
+| `service-worker-registrar.tsx` | ลงทะเบียน service worker ของ next-pwa |
 
 ### `components/` — จอผู้ขาย
 
@@ -265,6 +560,10 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `my-bookings-screen.tsx` | รายการจองของฉัน + PromptPay QR |
 | `booking-detail-screen.tsx` | รายละเอียดการจอง + ยกเลิก |
 | `booking-payment-screen.tsx` | หน้าอัปโหลดสลิปและผลตรวจ |
+| `booking-payment-group-screen.tsx` | จ่ายรวมหลายบูธด้วยสลิปเดียว |
+| `refund-request-panel.tsx` · `my-refunds-screen.tsx` | ขอคืนเงิน + PromptPay รับเงินคืน · รายการคำขอคืนเงินของฉัน |
+| `my-reviews-screen.tsx` | รีวิวของฉัน |
+| `saved-events-section.tsx` | อีเวนต์ที่บันทึกไว้บนหน้าแรก |
 | `booking-review-screen.tsx` | ให้คะแนนโซนและร้าน |
 | `profile-shop-screen.tsx` | โปรไฟล์ + ร้าน + โลโก้ (ส่วนร้านแสดงเฉพาะ VENDOR) |
 | `support-ticket-screen.tsx` | ส่งคำร้อง + ดูเธรดข้อความ |
@@ -276,14 +575,17 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `admin-dashboard.tsx` | ตัวเลขภาพรวมองค์กร |
 | `admin-events-screen.tsx` | สร้าง/เผยแพร่/ปิด/ลบอีเวนต์ + ใบเสนอราคาค่าบริการ |
 | `admin-bookings-screen.tsx` | รายการจองขององค์กร |
+| `admin-transactions-screen.tsx` · `admin-booking-detail-screen.tsx` | ธุรกรรมขององค์กร · timeline รายการจอง |
+| `admin-quota-requests-screen.tsx` | คำขอจองเกินโควตา — อนุมัติ / ปฏิเสธ |
 | `admin-booking-rescue-screen.tsx` | ค้นจากรหัสจอง → ยืนยันยกเว้นค่าเช่า / ออกแต้มโทษ / ดูประวัติโทษ |
 | `admin-zone-booth-screen.tsx` | จัดการโซนและบูธ |
 | `admin-map-designer.tsx` | วางผังสถานที่ |
 | `admin-vendors-screen.tsx` | ผู้ขายในองค์กร + ประวัติการจองรายคน |
 | `admin-payments-screen.tsx` | การชำระเงิน + คืนเงิน + ดูสลิป |
-| `admin-reviews-screen.tsx` | สรุปคะแนนรีวิวของโซนและร้าน |
+| `admin-reviews-screen.tsx` | สรุปคะแนนรีวิว + ซ่อน / คืน / ลบ |
 | `admin-announcements-screen.tsx` | ประกาศถึงผู้ขาย |
 | `admin-organization-settings.tsx` | โควตาการจอง + PromptPay ขององค์กร |
+| `admin-team-management.tsx` | ทีมแอดมิน — เพิ่ม / ถอด + OWNER มอบสิทธิ์การเงิน / โซน |
 
 ### `components/super-admin/`
 
@@ -291,7 +593,7 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 |---|---|
 | `super-admin-shell.tsx` | shell + sidebar + guard + กระดิ่งแจ้งเตือน |
 | `super-admin-dashboard.tsx` | ภาพรวมข้ามองค์กร + ส่งประกาศกลาง |
-| `super-admin-organizations-screen.tsx` | องค์กรทั้งหมด · สร้าง · สถานะ · PromptPay |
+| `super-admin-organizations-screen.tsx` | องค์กรทั้งหมด · สร้าง · สถานะ · PromptPay · แต่งตั้ง OWNER |
 | `super-admin-admins-screen.tsx` | แอดมินองค์กรทั้งระบบ + มอบสิทธิ์แก้โควตา |
 | `super-admin-users-screen.tsx` | ผู้ใช้ทั้งหมด + รายละเอียด + last-login |
 | `super-admin-events-bookings-screen.tsx` | การจองและการเงินข้ามองค์กร |
@@ -385,21 +687,24 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 ## 11. สถานะระบบ
 
 - **จอง** ครบวงจร — เลือกบูธ → `PENDING_PAYMENT` + PromptPay QR → แนบสลิป → SlipOK จริง → ยืนยันอัตโนมัติ · **ไม่มีขั้นตอนอนุมัติด้วยคน** · มีเส้นทางยกเว้นค่าเช่าให้ ORG_ADMIN
-- **อีเวนต์** DRAFT พร้อมใบเสนอราคาที่คิดจาก `platform_config` → เผยแพร่ / ปิด / เปิดใหม่ / ลบ · มี slug สาธารณะสำหรับแชร์ผัง
-- **Admin** 11 หน้า · **Super admin** 9 หน้าที่ต่อ API จริงครบ · เมนู placeholder เหลือ 3 อัน (Package และ Billing · สถานะระบบ · บทบาทและสิทธิ์)
-- **แจ้งเตือน** in-app + **web push จริง** ผ่าน `web-push` + VAPID ทั้งฝั่ง backend และ service worker · SUPER_ADMIN ส่งประกาศกลางถึงทุกคนได้
+- **จองหลายบูธ** ในครั้งเดียว จ่ายรวมด้วยสลิปเดียวผ่าน `BookingPaymentGroup` · ดาวน์โหลดรูปสรุปการจองได้
+- **โควตา** ผู้ขายขอจองเกินโควตาได้ → ORG_ADMIN อนุมัติเป็น `BoothQuotaGrant` ใช้ได้ 1 ครั้ง
+- **คืนเงิน** ผู้ขายกรอก PromptPay รับเงินคืน → แอดมินอนุมัติ / ปฏิเสธ → แนบสลิปโอนคืน → ผู้ขายดูสลิปได้
+- **อีเวนต์** DRAFT พร้อมใบเสนอราคาที่คิดจาก `platform_config` → แก้ / เผยแพร่ / ปิด / เปิดใหม่ / ลบ · มี slug สาธารณะสำหรับแชร์ผัง · แบนเนอร์ + แกลเลอรี · ข้อมูลก่อนเข้าร่วมและรายละเอียดเรียงลำดับเองได้ · ผู้ใช้บันทึกอีเวนต์ไว้ดูทีหลังได้
+- **Admin** 13 หน้า · **Super admin** 10 หน้า ต่อ API จริงครบ ไม่มีเมนู placeholder เหลือแล้ว
+- **ทีมแอดมินองค์กร** OWNER / ADMIN · OWNER มอบสิทธิ์การเงินและโซนให้ ADMIN รายคน · SUPER_ADMIN แต่งตั้ง OWNER
+- **รีวิว** ผูกกับการจอง · แอดมินซ่อน / คืน / ลบได้ พร้อม audit log
+- **แจ้งเตือน** in-app + **web push จริง** ผ่าน `web-push` + VAPID ทั้งฝั่ง backend และ service worker · ผู้ใช้เปิด/ปิดได้รายหมวด (บันทึกใน `app_user.notification_preferences`) · SUPER_ADMIN ส่งประกาศกลางถึงทุกคนได้
 - **PWA** — request ที่มี `Authorization` ถูกบังคับ `NetworkOnly` กันข้อมูลข้ามบัญชีบนเครื่องเดียวกัน · precache ตัด chunk ของ admin ออก
 - **AI** สองผิว — แนะนำโซน/บูธ และแชตช่วยเหลือ ทั้งคู่ fallback เป็น rule-based · แชตเห็นเฉพาะข้อมูลของผู้ถามเอง
-- **Audit log** บันทึก 7 action จาก `organizations.service.ts` (6) และ `platform-config.service.ts` (1)
+- **Audit log** บันทึกจาก 6 service — `organizations` (องค์กร · สถานะ · OWNER · แอดมิน · สิทธิ์ · โควตา) · `platform-config` · `bookings` (เปลี่ยนสถานะ) · `events` (เปิด subscription เอง) · `support-tickets` (อนุมัติ / ปฏิเสธโควตา) · `reviews` (moderation)
 
 ## 12. ข้อจำกัดที่รู้อยู่
 
-- ไฟล์ใน `prisma/sql/` ยังไม่ถูก apply — partial unique index กัน double-booking บังคับด้วย service code อย่างเดียว
-- ไม่มี endpoint สร้าง/แก้/ลบ venue และไม่มี endpoint แก้ไขรายละเอียดอีเวนต์ (เมธอดในเซอร์วิสมี แต่ไม่มี route เรียก)
-- fan-out ของประกาศระดับองค์กรส่งแค่ in-app ไม่ส่ง push
-- สวิตช์ตั้งค่าการแจ้งเตือนในหน้า `/notifications` ยังเป็น UI อย่างเดียว ไม่ได้บันทึกไว้ที่ไหน
-- โมดูลอื่นนอกจาก 2 ไฟล์ข้างบนยังไม่เขียน audit log เลย
-- `prisma/seed.ts` ยังเป็น stub (SCRUM-22) · เทสต์ที่ต้องใช้ token จริงหรือข้อมูล seed ถูกเลื่อนไว้
+- ไฟล์ใน `prisma/sql/` ไม่มีอะไรรันให้ — ฐานข้อมูลทีม apply แล้ว แต่ฐานข้อมูลใหม่ต้อง apply เองทุกครั้ง ไม่งั้น double-booking ถูกกันด้วย service code อย่างเดียว
+- fan-out ของประกาศระดับองค์กร (`fanOutToOrganizationBookers`) ส่งแค่ in-app ไม่ส่ง push
+- ยังไม่เขียน audit log: การจองยกเว้นค่าเช่า · แต้มโทษ · คืนเงิน · ประกาศ
+- เทสต์ที่ต้องใช้ token จริงหรือข้อมูล seed ถูกเลื่อนไว้
 - AI ทั้งสองผิวยังไม่ได้ทดสอบ end-to-end กับข้อมูลจริงจาก production
 
 ## 13. ทีม
@@ -412,4 +717,4 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 
 `.github/CODEOWNERS` คือรายการที่บอกว่าไฟล์ไหนต้องมีคนรีวิว — schema, auth, config ตอน boot และไฟล์กติกาเอง
 
-เอกสารออกแบบ (Master Spec, ERD, Design System Brief) เก็บนอก repo — ขอได้จาก Product Owner (บุ๊ค)
+เอกสารออกแบบ (Master Spec, Design System Brief) เก็บนอก repo — ขอได้จาก Product Owner (บุ๊ค) · ERD ฉบับย่ออยู่ใน §4
