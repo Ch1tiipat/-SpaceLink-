@@ -37,3 +37,16 @@ export function isValidRefundAmount(
     (requested.length === maximum.length && requested <= maximum)
   );
 }
+
+export function sumRefundAmounts(amounts: string[]): string | null {
+  if (amounts.length === 0 || amounts.some((amount) => !AMOUNT_PATTERN.test(amount))) {
+    return null;
+  }
+
+  const totalSatang = amounts.reduce(
+    (total, amount) => total + BigInt(toSatangDigits(amount)),
+    BigInt(0),
+  );
+  const digits = totalSatang.toString().padStart(3, '0');
+  return `${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}

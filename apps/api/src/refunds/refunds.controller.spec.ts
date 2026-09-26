@@ -17,6 +17,7 @@ import { RefundsService } from './refunds.service';
 
 type HandlerName =
   | 'create'
+  | 'createBatch'
   | 'findAllAcrossOrganizations'
   | 'findMine'
   | 'getPayoutSlipUrl'
@@ -64,6 +65,7 @@ const admin = {
 
 describe('RefundsController', () => {
   const create = jest.fn();
+  const createBatch = jest.fn();
   const findMine = jest.fn();
   const findAllAcrossOrganizations = jest.fn();
   const findForOrganization = jest.fn();
@@ -74,6 +76,7 @@ describe('RefundsController', () => {
   const createVendorPayoutSlipAccess = jest.fn();
   const service = {
     create,
+    createBatch,
     findAllAcrossOrganizations,
     findMine,
     findForOrganization,
@@ -97,7 +100,7 @@ describe('RefundsController', () => {
     ]);
   });
 
-  it.each(['create', 'findMine', 'getPayoutSlipUrl'] as const)(
+  it.each(['create', 'createBatch', 'findMine', 'getPayoutSlipUrl'] as const)(
     'keeps %s vendor-only and derives ownership from the user',
     (handlerName) => {
       const handler = handlerOf(handlerName);
@@ -167,6 +170,26 @@ describe('RefundsController', () => {
       REFUND_ID,
       VENDOR_ID,
     );
+  });
+
+  it('passes the authenticated vendor and all selected bookings to batch creation', async () => {
+    const dto = {
+      items: [
+        { bookingId: BOOKING_ID, requestedAmount: '1500' },
+        {
+          bookingId: '77777777-7777-4777-8777-777777777777',
+          requestedAmount: '900',
+        },
+      ],
+      reason: 'ยกเลิกก่อนวันงาน',
+      payoutMethod: 'PROMPTPAY' as const,
+      payoutAccountName: 'Vendor',
+      payoutPromptPayId: '0123456789',
+    };
+
+    await controller.createBatch(dto, vendor);
+
+    expect(createBatch).toHaveBeenCalledWith(VENDOR_ID, dto);
   });
 
   it('passes only the guard-resolved organization to the admin queue', async () => {

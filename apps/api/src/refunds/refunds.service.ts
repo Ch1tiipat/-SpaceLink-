@@ -26,6 +26,7 @@ import {
   type RefundPayoutVerificationResponse,
 } from '../slips/refund-slip-verification.service';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
+import { CreateBatchRefundRequestsDto } from './dto/create-batch-refund-requests.dto';
 import { CreateRefundRequestDto } from './dto/create-refund-request.dto';
 
 const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
@@ -139,6 +140,18 @@ type AdminRefundRecord = Prisma.RefundRequestGetPayload<{
   select: typeof adminRefundSelect;
 }>;
 
+type RefundPayoutDetails = Pick<
+  CreateRefundRequestDto,
+  'reason' | 'payoutMethod' | 'payoutAccountName' | 'payoutPromptPayId'
+>;
+
+type ValidatedRefundCandidate = {
+  bookingId: string;
+  bookingCode: string;
+  organizationId: string;
+  requestedAmount: Prisma.Decimal;
+};
+
 @Injectable()
 export class RefundsService {
   constructor(
@@ -202,12 +215,113 @@ export class RefundsService {
     );
   }
 
+  async createBatch(
+    vendorUserId: string,
+    dto: CreateBatchRefundRequestsDto,
+  ): Promise<RefundResponse[]> {
+    const uniqueBookingIds = new Set(
+      dto.items.map(({ bookingId }) => bookingId.toLowerCase()),
+    );
+    if (uniqueBookingIds.size !== dto.items.length) {
+      throw new BadRequestException('เลือกรายการจองซ้ำในคำร้องคืนเงิน');
+    }
+
+    for (
+      let attempt = 1;
+      attempt <= SERIALIZABLE_TRANSACTION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        const results = await this.prisma.$transaction(
+          async (transaction) => {
+            const candidates: ValidatedRefundCandidate[] = [];
+            for (const item of dto.items) {
+              candidates.push(
+                await this.validateRefundCandidate(
+                  transaction,
+                  item.bookingId,
+                  vendorUserId,
+                  item.requestedAmount,
+                ),
+              );
+            }
+
+            const created = [];
+            for (const candidate of candidates) {
+              created.push(
+                await this.createValidatedRefund(
+                  transaction,
+                  vendorUserId,
+                  dto,
+                  candidate,
+                ),
+              );
+            }
+            return created;
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+
+        for (const result of results) {
+          await this.notifyOrganizationAdmins(
+            result.organizationId,
+            result.bookingCode,
+            result.refund,
+          );
+          await this.notifications.createForRole(UserRole.SUPER_ADMIN, {
+            type: NotificationType.REFUND,
+            title: 'มีคำร้องขอคืนเงินใหม่',
+            body: `การจอง ${result.bookingCode} ขอคืนเงิน ${result.refund.requestedAmount.toString()} บาท`,
+            relatedEntityType: 'REFUND_REQUEST',
+            relatedEntityId: result.refund.id,
+          });
+        }
+        return results.map(({ refund }) => this.toResponse(refund));
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS) continue;
+          throw new ConflictException(
+            'มีการส่งคำร้องคืนเงินพร้อมกัน กรุณาลองใหม่อีกครั้ง',
+          );
+        }
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'มีการส่งคำร้องคืนเงินพร้อมกัน กรุณาลองใหม่อีกครั้ง',
+    );
+  }
+
   private async createWithinTransaction(
     transaction: Prisma.TransactionClient,
     bookingId: string,
     vendorUserId: string,
     dto: CreateRefundRequestDto,
   ) {
+    const candidate = await this.validateRefundCandidate(
+      transaction,
+      bookingId,
+      vendorUserId,
+      dto.requestedAmount,
+    );
+    return this.createValidatedRefund(
+      transaction,
+      vendorUserId,
+      dto,
+      candidate,
+    );
+  }
+
+  private async validateRefundCandidate(
+    transaction: Prisma.TransactionClient,
+    bookingId: string,
+    vendorUserId: string,
+    requestedAmountValue: string,
+  ): Promise<ValidatedRefundCandidate> {
     const booking = await transaction.booking.findFirst({
       where: { id: bookingId, vendorUserId },
       select: {
@@ -258,7 +372,7 @@ export class RefundsService {
       );
     }
 
-    const requestedAmount = new Prisma.Decimal(dto.requestedAmount);
+    const requestedAmount = new Prisma.Decimal(requestedAmountValue);
     if (requestedAmount.lessThanOrEqualTo(0)) {
       throw new BadRequestException('จำนวนเงินที่ขอคืนต้องมากกว่า 0');
     }
@@ -274,12 +388,26 @@ export class RefundsService {
       throw new ConflictException('การจองนี้มีคำร้องคืนเงินแล้ว');
     }
 
+    return {
+      bookingId,
+      bookingCode: booking.bookingCode,
+      organizationId: booking.event.organizationId,
+      requestedAmount,
+    };
+  }
+
+  private async createValidatedRefund(
+    transaction: Prisma.TransactionClient,
+    vendorUserId: string,
+    dto: RefundPayoutDetails,
+    candidate: ValidatedRefundCandidate,
+  ) {
     const refund = await transaction.refundRequest.create({
       data: {
-        bookingId,
+        bookingId: candidate.bookingId,
         requestedByUserId: vendorUserId,
         reason: dto.reason,
-        requestedAmount,
+        requestedAmount: candidate.requestedAmount,
         status: RefundStatus.PENDING,
         payoutMethod: dto.payoutMethod,
         payoutAccountName: dto.payoutAccountName?.trim() || null,
@@ -292,8 +420,8 @@ export class RefundsService {
 
     return {
       refund,
-      organizationId: booking.event.organizationId,
-      bookingCode: booking.bookingCode,
+      organizationId: candidate.organizationId,
+      bookingCode: candidate.bookingCode,
     };
   }
 
