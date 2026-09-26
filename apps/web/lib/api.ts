@@ -1240,9 +1240,13 @@ export type UpdateBoothInput = Partial<SaveBoothInput> & {
   status?: AdminBoothStatus;
 };
 
+export type AnnouncementType = 'EVENT' | 'ANNOUNCEMENT';
+
 export type AdminAnnouncement = {
   id: string;
   organizationId: string;
+  eventId: string | null;
+  type: AnnouncementType;
   title: string;
   body: string;
   isActive: boolean;
@@ -1260,6 +1264,8 @@ export type SaveAnnouncementInput = {
   body: string;
   isActive?: boolean;
   publishedAt?: string;
+  type?: AnnouncementType;
+  eventId?: string | null;
 };
 
 export type NotificationType =

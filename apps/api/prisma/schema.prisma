@@ -140,6 +140,11 @@ enum NotificationType {
   SYSTEM
 }
 
+enum AnnouncementType {
+  EVENT
+  ANNOUNCEMENT
+}
+
 enum RefundStatus {
   PENDING
   APPROVED
@@ -448,6 +453,7 @@ model Event {
   quotaGrants        BoothQuotaGrant[]
   reviews            Review[]
   savedByUsers       SavedEvent[]
+  announcements      Announcement[]
 
   @@index([organizationId])
   @@index([venueId])
@@ -803,6 +809,8 @@ model Notification {
 model Announcement {
   id             String    @id @default(uuid()) @map("announcement_id") @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
+  eventId        String?   @map("event_id") @db.Uuid
+  type           AnnouncementType @default(ANNOUNCEMENT)
   title          String
   body           String
   isActive       Boolean   @default(true) @map("is_active")
@@ -811,8 +819,10 @@ model Announcement {
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([eventId])
   @@map("announcement")
 }
 
