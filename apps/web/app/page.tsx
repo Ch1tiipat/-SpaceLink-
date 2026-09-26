@@ -388,7 +388,9 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="งานหรือสถานที่"
             placeholder="ทุกงานหรือสถานที่"
-            className="[&_button]:min-h-[66px]"
+            searchable
+            searchPlaceholder="พิมพ์ชื่องานหรือสถานที่"
+            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
@@ -398,7 +400,9 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="พื้นที่"
             placeholder="ทุกพื้นที่"
-            className="[&_button]:min-h-[66px]"
+            searchable
+            searchPlaceholder="พิมพ์จังหวัดหรือสถานที่"
+            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))

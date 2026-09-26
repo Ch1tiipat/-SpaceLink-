@@ -27,6 +27,9 @@ type SelectMenuProps = {
   placeholder: string;
   /** Renders the caption for screen readers only. */
   hideLabel?: boolean;
+  /** Lets users narrow a long option list by typing in the trigger. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
   className?: string;
 };
 
@@ -52,13 +55,17 @@ export function SelectMenu({
   options,
   placeholder,
   hideLabel = false,
+  searchable = false,
+  searchPlaceholder = 'พิมพ์เพื่อค้นหา',
   className = '',
 }: SelectMenuProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [searchText, setSearchText] = useState('');
 
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
   const baseId = useId();
@@ -70,15 +77,31 @@ export function SelectMenu({
     [options, value],
   );
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const filteredOptions = useMemo(() => {
+    const keyword = searchText.trim().toLocaleLowerCase('th-TH');
+    if (!searchable || !keyword) return options;
+
+    return options.filter((option) =>
+      [option.label, option.hint ?? '', option.value]
+        .join(' ')
+        .toLocaleLowerCase('th-TH')
+        .includes(keyword),
+    );
+  }, [options, searchText, searchable]);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
     setActiveIndex(-1);
-    if (returnFocus) triggerRef.current?.focus();
-  }, []);
+    setSearchText('');
+    if (returnFocus) {
+      if (searchable) searchInputRef.current?.focus();
+      else triggerRef.current?.focus();
+    }
+  }, [searchable]);
 
   const openMenu = useCallback(
     (startAt?: number) => {
+      setSearchText('');
       setOpen(true);
       // Opening lands on the current selection, as a native select does.
       setActiveIndex(startAt ?? (selectedIndex >= 0 ? selectedIndex : 0));
@@ -88,12 +111,12 @@ export function SelectMenu({
 
   const commit = useCallback(
     (index: number) => {
-      const option = options[index];
+      const option = filteredOptions[index];
       if (!option) return;
       onChange(option.value);
       close(true);
     },
-    [close, onChange, options],
+    [close, filteredOptions, onChange],
   );
 
   // A click outside is a dismissal, but it must not steal the focus the user
@@ -124,14 +147,25 @@ export function SelectMenu({
       ?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex, open]);
 
-  function onKeyDown(event: React.KeyboardEvent) {
-    if (options.length === 0) return;
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex((index) => {
+      if (filteredOptions.length === 0) return -1;
+      return Math.min(Math.max(index, 0), filteredOptions.length - 1);
+    });
+  }, [filteredOptions.length, open]);
+
+  function onKeyDown(event: React.KeyboardEvent, allowTextInput = false) {
+    if (filteredOptions.length === 0 && event.key !== 'Escape') return;
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
         if (!open) openMenu();
-        else setActiveIndex((index) => Math.min(index + 1, options.length - 1));
+        else
+          setActiveIndex((index) =>
+            Math.min(index + 1, filteredOptions.length - 1),
+          );
         break;
       case 'ArrowUp':
         event.preventDefault();
@@ -147,14 +181,20 @@ export function SelectMenu({
       case 'End':
         if (open) {
           event.preventDefault();
-          setActiveIndex(options.length - 1);
+          setActiveIndex(filteredOptions.length - 1);
         }
         break;
       case 'Enter':
-      case ' ':
         event.preventDefault();
         if (!open) openMenu();
         else if (activeIndex >= 0) commit(activeIndex);
+        break;
+      case ' ':
+        if (!allowTextInput) {
+          event.preventDefault();
+          if (!open) openMenu();
+          else if (activeIndex >= 0) commit(activeIndex);
+        }
         break;
       case 'Escape':
         if (open) {
@@ -184,33 +224,73 @@ export function SelectMenu({
         {label}
       </span>
 
-      <button
-        ref={triggerRef}
-        type="button"
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        aria-haspopup="listbox"
-        aria-labelledby={`${labelId} ${baseId}-value`}
-        onClick={() => (open ? close(false) : openMenu())}
-        onKeyDown={onKeyDown}
-        className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-white px-4 py-3 text-left transition hover:border-violet/40"
-      >
-        <span id={`${baseId}-value`} className="min-w-0 flex-1 truncate">
-          <span className="block truncate text-sm font-bold text-ink">
-            {selected ? selected.label : placeholder}
-          </span>
-          {selected?.hint && (
-            <span className="block truncate text-sm font-medium text-muted">
-              {selected.hint}
+      {searchable ? (
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            role="combobox"
+            autoComplete="off"
+            aria-autocomplete="list"
+            aria-expanded={open}
+            aria-controls={open ? listId : undefined}
+            aria-haspopup="listbox"
+            aria-labelledby={labelId}
+            aria-activedescendant={
+              open && activeIndex >= 0
+                ? `${baseId}-option-${activeIndex}`
+                : undefined
+            }
+            value={open ? searchText : selected?.label ?? ''}
+            placeholder={open ? searchPlaceholder : placeholder}
+            onFocus={() => {
+              if (!open) openMenu();
+            }}
+            onClick={() => {
+              if (!open) openMenu();
+            }}
+            onChange={(event) => {
+              setSearchText(event.target.value);
+              setActiveIndex(0);
+              if (!open) setOpen(true);
+            }}
+            onKeyDown={(event) => onKeyDown(event, true)}
+            className="w-full rounded-xl border border-line bg-white px-4 py-3 pr-11 text-sm font-bold text-ink outline-none transition placeholder:text-muted hover:border-violet/40 focus:border-violet focus:ring-2 focus:ring-violet/15"
+          />
+          <ChevronDown
+            aria-hidden
+            className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted transition ${open ? 'rotate-180' : ''}`}
+          />
+        </div>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-haspopup="listbox"
+          aria-labelledby={`${labelId} ${baseId}-value`}
+          onClick={() => (open ? close(false) : openMenu())}
+          onKeyDown={onKeyDown}
+          className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-white px-4 py-3 text-left transition hover:border-violet/40"
+        >
+          <span id={`${baseId}-value`} className="min-w-0 flex-1 truncate">
+            <span className="block truncate text-sm font-bold text-ink">
+              {selected ? selected.label : placeholder}
             </span>
-          )}
-        </span>
-        <ChevronDown
-          aria-hidden
-          className={`h-4 w-4 shrink-0 text-muted transition ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+            {selected?.hint && (
+              <span className="block truncate text-sm font-medium text-muted">
+                {selected.hint}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            aria-hidden
+            className={`h-4 w-4 shrink-0 text-muted transition ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+      )}
 
       {open && (
         <ul
@@ -224,7 +304,15 @@ export function SelectMenu({
           tabIndex={-1}
           className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[310px] overflow-auto rounded-2xl border border-[#e3daf4] bg-white p-1.5 shadow-[0_20px_55px_rgba(42,24,74,.18)]"
         >
-          {options.map((option, index) => {
+          {filteredOptions.length === 0 ? (
+            <li
+              role="presentation"
+              className="px-3 py-5 text-center text-sm text-muted"
+            >
+              ไม่พบตัวเลือกที่ค้นหา
+            </li>
+          ) : null}
+          {filteredOptions.map((option, index) => {
             const isSelected = option.value === value;
             const isActive = index === activeIndex;
 
