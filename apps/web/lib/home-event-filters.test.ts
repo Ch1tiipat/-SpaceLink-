@@ -233,7 +233,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ongoing'],
+      ['future', 'ongoing'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(

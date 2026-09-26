@@ -95,9 +95,7 @@ export function filterHomeEvents(
         )) &&
       (filters.eventStatus === 'all' ||
         (filters.eventStatus === 'bookable' && isBookable(event, now)) ||
-        (filters.eventStatus === 'ongoing' &&
-          event.status === 'ONGOING' &&
-          !hasEventEndCalendarDayPassed(event.endDate, now)) ||
+        (filters.eventStatus === 'ongoing' && isBookable(event, now)) ||
         (filters.eventStatus === 'ended' &&
           hasEventEndCalendarDayPassed(event.endDate, now)))
     );
