@@ -3,7 +3,16 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { QrCode, ShieldCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Lightbulb,
+  QrCode,
+  ShieldCheck,
+  Store,
+  WalletCards,
+} from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { PreviewSlipUploadPanel } from '@/components/booking-screen';
 import {
@@ -99,101 +108,72 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
           </span>
         </div>
 
-        <header className="mt-4 flex items-end justify-between gap-5 max-sm:flex-col max-sm:items-start">
-          <div>
-            <span className="sl-kicker">PAYMENT</span>
-            <h1 className="mt-1 text-[30px] font-black tracking-[-0.045em] max-sm:text-2xl">
-              ชำระค่าจอง Booth
-            </h1>
-            <p className="mt-1 text-sm text-muted">
-              ตรวจสอบยอด โอนเงิน และแนบสลิปเพื่อให้ระบบตรวจสอบ
-            </p>
-          </div>
-          <div
-            className={`min-w-[132px] rounded-[14px] border px-4 py-3 text-center ${expired ? 'border-[#fac5bf] bg-[#fff0ee] text-[#b42318]' : 'border-[#d8caeb] bg-white text-violet'}`}
-          >
-            <span className="block text-xs font-bold text-muted">
-              เวลาที่เหลือ
-            </span>
-            <strong className="mt-1 block text-lg font-black">
-              <BookingCountdown
-                expiresAt={booking.holdExpiresAt}
-                active
-                onExpired={() => setHoldExpired(true)}
-              />
-            </strong>
-            <small className="mt-0.5 block text-xs opacity-70">
-              Hold Booth
-            </small>
-          </div>
+        <header className="mt-4">
+          <span className="sl-kicker">PAYMENT</span>
+          <h1 className="mt-1 text-[30px] font-black tracking-[-0.045em] max-sm:text-2xl">
+            ชำระค่าจอง Booth
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            กรุณาชำระเงินและอัปโหลดสลิปเพื่อยืนยันการจองของคุณ
+          </p>
         </header>
 
         <section
           className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4"
           aria-label="สรุปสถานะการชำระเงิน"
         >
-          {[
-            ['Booking ID', booking.bookingCode, 'REFERENCE'],
-            ['Booth', booking.booth.code, 'RESERVATION'],
-            [
-              'ยอดชำระ',
-              `${formatBookingMoney(booking.boothPrice)} บาท`,
-              'TOTAL',
-            ],
-            ['สถานะ', 'รอชำระเงิน', 'PAYMENT'],
-          ].map(([label, value, caption]) => (
-            <article
-              key={label}
-              className="rounded-[14px] border border-line bg-white p-3"
-            >
-              <span className="text-xs text-muted">{label}</span>
-              <strong
-                className={`mt-1 block truncate text-base font-black ${label === 'ยอดชำระ' ? 'text-violet' : ''}`}
-                title={value}
-              >
-                {value}
+          <article className="flex min-h-[78px] items-center gap-3 rounded-[14px] border border-line bg-white p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-violet-tint text-violet">
+              <FileText className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <span className="text-xs text-muted">Booking ID</span>
+              <strong className="block truncate text-base font-black" title={booking.bookingCode}>
+                {booking.bookingCode}
               </strong>
-              <small className="mt-0.5 block text-xs tracking-[.08em] text-[#aaa0ad]">
-                {caption}
-              </small>
-            </article>
-          ))}
+            </div>
+          </article>
+          <article className="flex min-h-[78px] items-center gap-3 rounded-[14px] border border-line bg-white p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-violet-tint text-violet">
+              <Store className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <span className="text-xs text-muted">Booth</span>
+              <strong className="block text-base font-black">{booking.booth.code}</strong>
+            </div>
+          </article>
+          <article className="flex min-h-[78px] items-center gap-3 rounded-[14px] border border-line bg-white p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-[#fff5df] text-[#d18400]">
+              <WalletCards className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <span className="text-xs text-muted">ยอดชำระ</span>
+              <strong className="block text-base font-black text-violet">
+                {formatBookingMoney(booking.boothPrice)} บาท
+              </strong>
+            </div>
+          </article>
+          <article
+            className={`flex min-h-[78px] items-center gap-3 rounded-[14px] border p-3 ${expired ? 'border-[#fac5bf] bg-[#fff0ee] text-[#b42318]' : 'border-line bg-white'}`}
+          >
+            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[11px] ${expired ? 'bg-white/70' : 'bg-[#fff0f4] text-[#df365e]'}`}>
+              <Clock3 className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <span className="text-xs text-muted">เวลาที่เหลือ</span>
+              <strong className="block text-base font-black text-[#df365e]">
+                <BookingCountdown
+                  expiresAt={booking.holdExpiresAt}
+                  active
+                  onExpired={() => setHoldExpired(true)}
+                />
+              </strong>
+            </div>
+          </article>
         </section>
 
         <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
           <section className="grid gap-3">
-            <article className="sl-surface p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <span className="sl-kicker">BOOKING SUMMARY</span>
-                  <h2 className="mt-1 text-lg font-black">
-                    {booking.event.name}
-                  </h2>
-                </div>
-                <span className="rounded-full bg-[#edf6ff] px-3 py-1.5 text-xs font-extrabold text-[#1d67a8]">
-                  PENDING PAYMENT
-                </span>
-              </div>
-              <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[
-                  ['Zone', booking.booth.zone.name ?? booking.booth.zone.code],
-                  ['Booth', booking.booth.code],
-                  ['ร้านค้า', booking.shop.name],
-                  ['ยอดชำระ', `${formatBookingMoney(booking.boothPrice)} บาท`],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-[11px] bg-[#faf8fc] p-3">
-                    <dt className="text-xs text-muted">{label}</dt>
-                    <dd
-                      className={`mt-1 truncate text-sm font-black ${label === 'ยอดชำระ' ? 'text-violet' : ''}`}
-                      title={value}
-                    >
-                      {value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </article>
-
             <article className="sl-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -307,20 +287,38 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
           </section>
 
           <aside className="grid gap-3 lg:sticky lg:top-[92px]">
-            <article className="sl-surface p-4">
-              <span className="sl-kicker">ORGANIZER</span>
-              <div className="mt-3 flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-[linear-gradient(135deg,#8b5cf6,#6831d0)] text-sm font-black text-white">
-                  EV
+            <article className="sl-surface overflow-hidden p-4">
+              <div className="flex items-center gap-2 border-b border-line pb-3">
+                <span className="grid h-9 w-9 place-items-center rounded-[11px] bg-violet-tint text-violet">
+                  <FileText className="h-4.5 w-4.5" aria-hidden />
                 </span>
-                <div>
-                  <strong className="block text-sm">
-                    ผู้จัด {booking.event.name}
-                  </strong>
-                  <small className="mt-1 block text-xs text-muted">
-                    รับชำระผ่านข้อมูลที่แนบกับ Booking
-                  </small>
+                <h2 className="text-base font-black">สรุปรายการ</h2>
+              </div>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted">ชื่องาน</dt>
+                  <dd className="max-w-[180px] text-right font-bold">{booking.event.name}</dd>
                 </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted">โซน</dt>
+                  <dd className="text-right font-bold">
+                    {booking.booth.zone.name ?? booking.booth.zone.code}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted">Booth</dt>
+                  <dd className="font-bold">{booking.booth.code}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted">ร้านค้า</dt>
+                  <dd className="font-bold">{booking.shop.name}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                <strong className="text-sm">ยอดรวมทั้งสิ้น</strong>
+                <strong className="text-xl font-black text-violet">
+                  {formatBookingMoney(booking.boothPrice)} บาท
+                </strong>
               </div>
             </article>
 
@@ -355,30 +353,33 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
               </ol>
             </article>
 
-            <article className="sl-surface border-[#f0d9a4] bg-[#fffaf0] p-4">
-              <span className="text-xs font-extrabold tracking-[.1em] text-[#9d620c]">
-                IMPORTANT
-              </span>
-              <strong className="mt-1 block text-sm">ตรวจสอบยอดก่อนโอน</strong>
-              <p className="mt-2 text-xs leading-5 text-[#7a5700]">
-                ยอดในสลิปควรตรงกับราคา Booth และรหัส Booking นี้
-                เพื่อให้ตรวจสอบได้ถูกต้อง
-              </p>
+            <article className="sl-surface p-4">
+              <div className="flex items-center gap-2 border-b border-line pb-3">
+                <Lightbulb className="h-5 w-5 text-violet" aria-hidden />
+                <h2 className="text-base font-black">คำแนะนำ</h2>
+              </div>
+              <ul className="mt-3 space-y-2 text-xs leading-5 text-muted">
+                <li className="flex gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-violet" aria-hidden />
+                  ชำระเงินภายในเวลาที่กำหนด
+                </li>
+                <li className="flex gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-violet" aria-hidden />
+                  อัปโหลดสลิป JPEG หรือ PNG ขนาดไม่เกิน 5 MB
+                </li>
+                <li className="flex gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-violet" aria-hidden />
+                  ตรวจสอบยอดและรหัส Booking ก่อนโอนทุกครั้ง
+                </li>
+              </ul>
             </article>
 
-            <article className="sl-surface p-4">
+            <article className="sl-surface border-[#d9e6dc] bg-[#f8fcf9] p-4">
               <div className="flex gap-3">
-                <ShieldCheck
-                  className="h-5 w-5 shrink-0 text-emerald"
-                  aria-hidden
-                />
-                <div>
-                  <h2 className="text-sm font-black">ชำระเงินอย่างปลอดภัย</h2>
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    รองรับสลิป JPEG/PNG ไม่เกิน 5 MB
-                    และไม่ควรส่งข้อมูลการชำระเงินผ่านช่องทางอื่น
-                  </p>
-                </div>
+                <ShieldCheck className="h-5 w-5 shrink-0 text-emerald" aria-hidden />
+                <p className="text-xs leading-5 text-[#4e694f]">
+                  ใช้ QR ที่ระบบแสดงเท่านั้น และไม่ส่งข้อมูลการชำระเงินผ่านช่องทางอื่น
+                </p>
               </div>
             </article>
           </aside>
