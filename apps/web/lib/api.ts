@@ -217,6 +217,8 @@ export type BookingRecord = {
 
 export type MyBooking = BookingRecord & {
   paymentQrDataUri: string | null;
+  /** Derived from this booking's verified payment slip; null blocks refunds. */
+  refundPayoutAccountName?: string | null;
   event: {
     id: string;
     /** Optional only for legacy UX-preview fixtures; the live API always sends it. */

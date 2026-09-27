@@ -1876,14 +1876,20 @@ describe('BookingsService', () => {
         },
       },
       shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+      slips: [{ senderName: 'Vendor One' }],
+      paymentGroup: null,
     };
     bookingFindMany.mockResolvedValue([listedBooking]);
+    const { slips, paymentGroup, ...listedBookingWithoutPaymentEvidence } =
+      listedBooking;
 
     const result = await service.findAll(VENDOR_ID);
+    expect(slips).toHaveLength(1);
+    expect(paymentGroup).toBeNull();
     expect(result).toHaveLength(1);
     expect(result[0]?.paymentQrDataUri).toMatch(/^data:image\/png;base64,/);
     expect(result[0]).toEqual({
-      ...listedBooking,
+      ...listedBookingWithoutPaymentEvidence,
       event: {
         id: EVENT_ID,
         slug: 'creative-market-abc123',
@@ -1898,6 +1904,7 @@ describe('BookingsService', () => {
       },
       boothPrice: '1500',
       paymentQrDataUri: 'data:image/png;base64,cXI=',
+      refundPayoutAccountName: 'Vendor One',
     });
     expect(bookingFindMany).toHaveBeenCalledWith({
       where: { vendorUserId: VENDOR_ID },
@@ -1922,6 +1929,22 @@ describe('BookingsService', () => {
           },
         },
         shop: { select: { id: true, name: true } },
+        slips: {
+          where: { slipokStatus: SlipStatus.VERIFIED },
+          select: { senderName: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        paymentGroup: {
+          select: {
+            slips: {
+              where: { slipokStatus: SlipStatus.VERIFIED },
+              select: { senderName: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -1954,6 +1977,8 @@ describe('BookingsService', () => {
           },
         },
         shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+        slips: [],
+        paymentGroup: null,
       },
     ]);
 
@@ -1979,12 +2004,15 @@ describe('BookingsService', () => {
           zone: { id: VENUE_ID, code: 'A', name: 'อาหารและเครื่องดื่ม' },
         },
         shop: { id: SHOP_ID, name: 'ร้านของปอนด์' },
+        slips: [],
+        paymentGroup: { slips: [{ senderName: 'Group Payer' }] },
       },
     ]);
 
     const [result] = await service.findAll(VENDOR_ID);
 
     expect(result.paymentQrDataUri).toBeNull();
+    expect(result.refundPayoutAccountName).toBe('Group Payer');
     expect(generatePromptPayPayload).not.toHaveBeenCalled();
   });
 

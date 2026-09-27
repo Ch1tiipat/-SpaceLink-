@@ -41,8 +41,8 @@ export function RefundRequestPanel({
   const [submitError, setSubmitError] = useState('');
   const [reason, setReason] = useState('');
   const [requestedAmount, setRequestedAmount] = useState(booking.boothPrice);
-  const [payoutAccountName, setPayoutAccountName] = useState('');
   const [payoutPromptPayId, setPayoutPromptPayId] = useState('');
+  const payoutAccountName = booking.refundPayoutAccountName?.trim() ?? '';
 
   useEffect(() => {
     if (isPreview) {
@@ -75,9 +75,14 @@ export function RefundRequestPanel({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedReason = reason.trim();
-    const trimmedAccountName = payoutAccountName.trim();
     const trimmedAmount = requestedAmount.trim();
 
+    if (!payoutAccountName) {
+      setSubmitError(
+        'ไม่พบชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน',
+      );
+      return;
+    }
     if (!trimmedReason) {
       setSubmitError('กรุณาระบุเหตุผลที่ขอคืนเงิน');
       return;
@@ -101,9 +106,6 @@ export function RefundRequestPanel({
       }
       const input: CreateRefundRequestInput = {
         payoutMethod: 'PROMPTPAY',
-        ...(trimmedAccountName
-          ? { payoutAccountName: trimmedAccountName }
-          : {}),
         payoutPromptPayId,
         reason: trimmedReason,
         requestedAmount: trimmedAmount,
@@ -174,15 +176,26 @@ export function RefundRequestPanel({
             ช่องทางรับเงิน: <strong>PromptPay เท่านั้น</strong>
           </div>
           <label className="grid gap-1.5 text-sm font-bold">
-            ชื่อบัญชีผู้รับเงิน (ไม่บังคับ)
+            ชื่อผู้รับเงินจากสลิป
             <input
               value={payoutAccountName}
-              onChange={(event) => setPayoutAccountName(event.target.value)}
-              maxLength={200}
-              placeholder="กรอกเพื่อช่วยตรวจสอบชื่อผู้รับ"
-              className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
+              readOnly
+              aria-describedby="refund-payout-name-help"
+              placeholder="ไม่พบชื่อผู้โอนจากสลิป"
+              className="rounded-xl border border-line bg-[#f7f5f9] px-4 py-3 font-normal text-muted outline-none"
             />
+            <span
+              id="refund-payout-name-help"
+              className="text-xs font-normal leading-5 text-muted"
+            >
+              ระบบกำหนดชื่อนี้จากสลิปชำระเงินและไม่อนุญาตให้แก้ไข
+            </span>
           </label>
+          {!payoutAccountName ? (
+            <p role="alert" className="text-sm font-semibold text-danger">
+              ไม่พบชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน
+            </p>
+          ) : null}
           <label className="grid gap-1.5 text-sm font-bold">
             หมายเลข PromptPay
             <input
@@ -201,7 +214,7 @@ export function RefundRequestPanel({
           ) : null}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !payoutAccountName}
             className="sl-action-primary w-full disabled:opacity-50"
           >
             {isSubmitting ? 'กำลังส่งคำร้อง…' : 'ส่งคำร้องคืนเงิน'}
