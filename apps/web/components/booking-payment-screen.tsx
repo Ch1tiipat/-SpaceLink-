@@ -2,14 +2,16 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
   FileText,
+  LayoutGrid,
   Lightbulb,
   QrCode,
   ShieldCheck,
+  Sparkles,
   Store,
   WalletCards,
 } from 'lucide-react';
@@ -21,15 +23,11 @@ import {
   formatBookingMoney,
   useBookingDetail,
 } from '@/components/booking-detail-screen';
-import {
-  PaymentSuccessDialog,
-  SlipUploadPanel,
-} from '@/components/slip-upload-panel';
+import { SlipUploadPanel } from '@/components/slip-upload-panel';
 
 export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
   const state = useBookingDetail(bookingId);
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [holdExpired, setHoldExpired] = useState(false);
 
   if (state.status === 'loading') return <BookingPageLoading />;
@@ -62,20 +60,22 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
     );
   }
   if (paymentSucceeded || booking.status === 'CONFIRMED') {
+    const eventMapHref = `/events/${encodeURIComponent(booking.event.slug ?? booking.event.id)}/map`;
+
     return (
       <>
-        <BookingPageMessage
-          title="ยืนยันการจองเรียบร้อยแล้ว"
-          detail={`ระบบบันทึกการชำระเงินของ ${booking.bookingCode} แล้ว`}
-          href="/bookings"
-          action="ไปการจองของฉัน"
+        <main
+          className="sl-page min-h-[calc(100vh-72px)]"
+          aria-hidden="true"
+        >
+          <div className="shell max-w-[1180px] py-6">
+            <div className="h-56 rounded-[24px] border border-line bg-[radial-gradient(circle_at_top,#f0e8ff,white_68%)]" />
+          </div>
+        </main>
+        <BookingPaymentSuccessDialog
+          bookingCode={booking.bookingCode}
+          eventMapHref={eventMapHref}
         />
-        {showSuccess ? (
-          <PaymentSuccessDialog
-            detail={`ระบบตรวจสอบสลิปและยืนยัน Booking ${booking.bookingCode} แล้ว`}
-            onDismiss={() => setShowSuccess(false)}
-          />
-        ) : null}
       </>
     );
   }
@@ -270,7 +270,6 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
                 disabled={false}
                 onConfirmed={() => {
                   setPaymentSucceeded(true);
-                  setShowSuccess(true);
                 }}
               />
             ) : canUpload ? (
@@ -280,7 +279,6 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
                 disabled={false}
                 onConfirmed={() => {
                   setPaymentSucceeded(true);
-                  setShowSuccess(true);
                 }}
               />
             ) : null}
@@ -386,5 +384,117 @@ export function BookingPaymentScreen({ bookingId }: { bookingId: string }) {
         </div>
       </div>
     </main>
+  );
+}
+
+function BookingPaymentSuccessDialog({
+  bookingCode,
+  eventMapHref,
+}: {
+  bookingCode: string;
+  eventMapHref: string;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const primaryActionRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    primaryActionRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        window.location.assign('/bookings');
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])',
+      );
+      if (!focusable?.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-[#1d1230]/55 p-4 backdrop-blur-[5px]"
+      role="presentation"
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="booking-payment-success-title"
+        aria-describedby="booking-payment-success-detail"
+        className="relative w-full max-w-[480px] overflow-hidden rounded-[26px] border border-white/70 bg-white p-6 text-center shadow-[0_28px_90px_rgba(35,18,56,.32)] sm:p-8"
+      >
+        <div className="pointer-events-none absolute -left-12 -top-14 h-36 w-36 rounded-full bg-violet/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-16 -right-10 h-40 w-40 rounded-full bg-emerald/10 blur-2xl" />
+
+        <div className="relative mx-auto grid h-24 w-24 place-items-center">
+          <span className="absolute inset-2 rounded-full bg-[#dff7e9] motion-safe:animate-ping" />
+          <span className="relative grid h-20 w-20 place-items-center rounded-full bg-[linear-gradient(145deg,#25a768,#138653)] text-white shadow-[0_12px_30px_rgba(21,139,86,.28)]">
+            <CheckCircle2 className="h-11 w-11" strokeWidth={2.4} aria-hidden />
+          </span>
+          <Sparkles className="absolute -right-1 top-1 h-6 w-6 text-violet motion-safe:animate-pulse" aria-hidden />
+        </div>
+
+        <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#eaf8f0] px-3 py-1 text-xs font-extrabold tracking-[.08em] text-[#15794a]">
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> PAYMENT VERIFIED
+        </span>
+        <h1
+          id="booking-payment-success-title"
+          className="mt-3 text-2xl font-black tracking-[-.035em] text-ink sm:text-[28px]"
+        >
+          ยืนยันการชำระเงินสำเร็จ
+        </h1>
+        <p
+          id="booking-payment-success-detail"
+          className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted"
+        >
+          ระบบตรวจสอบสลิปและยืนยันการจองเรียบร้อยแล้ว คุณสามารถดูรายการเดิมหรือเลือกพื้นที่เพิ่มได้ทันที
+        </p>
+
+        <div className="mt-5 rounded-[14px] border border-[#dfd2f1] bg-[#faf8ff] px-4 py-3 text-left">
+          <span className="block text-xs font-bold text-muted">รหัสอ้างอิง Booking</span>
+          <strong className="mt-1 block break-all text-base font-black text-violet">
+            {bookingCode}
+          </strong>
+        </div>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Link
+            ref={primaryActionRef}
+            href="/bookings"
+            className="sl-action-primary min-h-12 w-full text-sm"
+          >
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            ไปการจองของฉัน
+          </Link>
+          <Link
+            href={eventMapHref}
+            className="sl-action-secondary min-h-12 w-full text-sm"
+          >
+            <LayoutGrid className="h-4 w-4" aria-hidden />
+            เลือกบูธเพิ่ม
+          </Link>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-muted">
+          หน้านี้จะไม่ย้อนกลับไปยังหน้าสำเร็จแบบเดิม กด Esc เพื่อไปหน้าการจองของฉัน
+        </p>
+      </div>
+    </div>
   );
 }
