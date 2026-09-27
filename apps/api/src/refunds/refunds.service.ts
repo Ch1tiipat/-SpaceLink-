@@ -23,6 +23,7 @@ import {
 import {
   RefundSlipVerificationService,
   parseRefundPayoutEvidence,
+  refundPayoutNamesMatch,
   type RefundPayoutVerificationResponse,
 } from '../slips/refund-slip-verification.service';
 import { ApproveRefundRequestDto } from './dto/approve-refund-request.dto';
@@ -150,6 +151,7 @@ type ValidatedRefundCandidate = {
   bookingCode: string;
   organizationId: string;
   requestedAmount: Prisma.Decimal;
+  payoutAccountName: string;
 };
 
 @Injectable()
@@ -242,6 +244,7 @@ export class RefundsService {
                   item.bookingId,
                   vendorUserId,
                   item.requestedAmount,
+                  dto.payoutAccountName,
                 ),
               );
             }
@@ -307,6 +310,7 @@ export class RefundsService {
       bookingId,
       vendorUserId,
       dto.requestedAmount,
+      dto.payoutAccountName,
     );
     return this.createValidatedRefund(
       transaction,
@@ -321,6 +325,7 @@ export class RefundsService {
     bookingId: string,
     vendorUserId: string,
     requestedAmountValue: string,
+    submittedPayoutAccountName?: string,
   ): Promise<ValidatedRefundCandidate> {
     const booking = await transaction.booking.findFirst({
       where: { id: bookingId, vendorUserId },
@@ -336,13 +341,17 @@ export class RefundsService {
             totalAmount: true,
             slips: {
               where: { slipokStatus: SlipStatus.VERIFIED },
-              select: { amount: true },
+              select: { amount: true, senderName: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
             },
           },
         },
         slips: {
           where: { slipokStatus: SlipStatus.VERIFIED },
-          select: { amount: true },
+          select: { amount: true, senderName: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -372,6 +381,24 @@ export class RefundsService {
       );
     }
 
+    const verifiedPaymentSlip = paymentGroup
+      ? paymentGroup.slips[0]
+      : booking.slips[0];
+    const payoutAccountName = verifiedPaymentSlip?.senderName?.trim();
+    if (!payoutAccountName) {
+      throw new ConflictException(
+        'ไม่พบชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน',
+      );
+    }
+    if (
+      submittedPayoutAccountName &&
+      !refundPayoutNamesMatch(payoutAccountName, submittedPayoutAccountName)
+    ) {
+      throw new BadRequestException(
+        'ชื่อผู้รับเงินไม่ตรงกับชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว',
+      );
+    }
+
     const requestedAmount = new Prisma.Decimal(requestedAmountValue);
     if (requestedAmount.lessThanOrEqualTo(0)) {
       throw new BadRequestException('จำนวนเงินที่ขอคืนต้องมากกว่า 0');
@@ -393,6 +420,7 @@ export class RefundsService {
       bookingCode: booking.bookingCode,
       organizationId: booking.event.organizationId,
       requestedAmount,
+      payoutAccountName,
     };
   }
 
@@ -410,7 +438,7 @@ export class RefundsService {
         requestedAmount: candidate.requestedAmount,
         status: RefundStatus.PENDING,
         payoutMethod: dto.payoutMethod,
-        payoutAccountName: dto.payoutAccountName?.trim() || null,
+        payoutAccountName: candidate.payoutAccountName,
         payoutPromptPayId: dto.payoutPromptPayId,
         payoutBankName: null,
         payoutAccountNumber: null,

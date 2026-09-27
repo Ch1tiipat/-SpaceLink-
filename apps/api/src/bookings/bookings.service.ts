@@ -80,6 +80,22 @@ const bookingListInclude = {
     },
   },
   shop: { select: { id: true, name: true } },
+  slips: {
+    where: { slipokStatus: SlipStatus.VERIFIED },
+    select: { senderName: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+  },
+  paymentGroup: {
+    select: {
+      slips: {
+        where: { slipokStatus: SlipStatus.VERIFIED },
+        select: { senderName: true },
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
+      },
+    },
+  },
 } satisfies Prisma.BookingInclude;
 
 const adminBookingInclude = {
@@ -108,7 +124,10 @@ export type BookingResponse = Omit<Booking, 'boothPrice'> & {
 type BookingListRecord = Prisma.BookingGetPayload<{
   include: typeof bookingListInclude;
 }>;
-type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
+type BookingListResponse = Omit<
+  BookingListRecord,
+  'boothPrice' | 'event' | 'slips' | 'paymentGroup'
+> & {
   boothPrice: string;
   event: {
     id: string;
@@ -120,6 +139,7 @@ type BookingListResponse = Omit<BookingListRecord, 'boothPrice' | 'event'> & {
     venue: { name: string; address: string | null };
   };
   paymentQrDataUri: string | null;
+  refundPayoutAccountName: string | null;
 };
 type AdminBookingRecord = Prisma.BookingGetPayload<{
   include: typeof adminBookingInclude;
@@ -1506,8 +1526,11 @@ export class BookingsService {
   private async toListResponse(
     booking: BookingListRecord,
   ): Promise<BookingListResponse> {
-    const { boothPrice, event, ...rest } = booking;
+    const { boothPrice, event, slips, paymentGroup, ...rest } = booking;
     const promptpayId = event.organization.promptpayId;
+    const refundPayoutAccountName = rest.paymentGroupId
+      ? (paymentGroup?.slips[0]?.senderName ?? null)
+      : (slips[0]?.senderName ?? null);
 
     let paymentQrDataUri: string | null = null;
     if (promptpayId && !rest.paymentGroupId) {
@@ -1537,6 +1560,7 @@ export class BookingsService {
         venue: event.venue,
       },
       paymentQrDataUri,
+      refundPayoutAccountName,
     };
   }
 

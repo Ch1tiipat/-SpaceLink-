@@ -169,7 +169,7 @@ function eligibleBooking() {
     status: BookingStatus.CANCELLED,
     event: { organizationId: ORGANIZATION_ID },
     paymentGroup: null,
-    slips: [{ amount: new Prisma.Decimal('1500') }],
+    slips: [{ amount: new Prisma.Decimal('1500'), senderName: 'Vendor One' }],
   };
 }
 
@@ -272,13 +272,17 @@ describe('RefundsService', () => {
               totalAmount: true,
               slips: {
                 where: { slipokStatus: SlipStatus.VERIFIED },
-                select: { amount: true },
+                select: { amount: true, senderName: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
               },
             },
           },
           slips: {
             where: { slipokStatus: SlipStatus.VERIFIED },
-            select: { amount: true },
+            select: { amount: true, senderName: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
           },
         },
       });
@@ -331,13 +335,22 @@ describe('RefundsService', () => {
         paymentGroup: {
           status: PaymentGroupStatus.CONFIRMED,
           totalAmount: new Prisma.Decimal('3000'),
-          slips: [{ amount: new Prisma.Decimal('3000') }],
+          slips: [
+            { amount: new Prisma.Decimal('3000'), senderName: 'Vendor One' },
+          ],
         },
       });
 
       await expect(
         service.create(BOOKING_ID, VENDOR_ID, CREATE_DTO),
       ).resolves.toMatchObject({ id: REFUND_ID });
+      expect(refundRequestCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            payoutAccountName: 'Vendor One',
+          }) as object,
+        }),
+      );
     });
 
     it('notifies organization admins and super admins after the request commits', async () => {
@@ -530,7 +543,9 @@ describe('RefundsService', () => {
         paymentGroup: {
           status: PaymentGroupStatus.CONFIRMED,
           totalAmount: new Prisma.Decimal('3000'),
-          slips: [{ amount: new Prisma.Decimal('3000') }],
+          slips: [
+            { amount: new Prisma.Decimal('3000'), senderName: 'Vendor One' },
+          ],
         },
       });
 
@@ -554,7 +569,7 @@ describe('RefundsService', () => {
     });
   });
 
-  it('lists only caller-owned requests and stringifies money', async () => {
+  it('lists only caller-owned requests and preserves a legacy null payout name', async () => {
     await expect(service.findMine(VENDOR_ID)).resolves.toEqual([
       refundResponse(REFUND),
     ]);
@@ -579,7 +594,7 @@ describe('RefundsService', () => {
     );
   });
 
-  it('stores an omitted payout account name as null', async () => {
+  it('derives an omitted payout account name from the verified payment slip', async () => {
     await service.create(BOOKING_ID, VENDOR_ID, {
       reason: CREATE_DTO.reason,
       requestedAmount: CREATE_DTO.requestedAmount,
@@ -590,11 +605,63 @@ describe('RefundsService', () => {
     expect(refundRequestCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          payoutAccountName: null,
+          payoutAccountName: 'Vendor One',
           payoutPromptPayId: CREATE_DTO.payoutPromptPayId,
         }) as object,
       }),
     );
+  });
+
+  it('accepts a normalized legacy client name and stores the verified slip name', async () => {
+    bookingFindFirst.mockResolvedValue({
+      ...eligibleBooking(),
+      slips: [
+        {
+          amount: new Prisma.Decimal('1500'),
+          senderName: 'นาย สมชาย   ใจดี',
+        },
+      ],
+    });
+
+    await service.create(BOOKING_ID, VENDOR_ID, {
+      ...CREATE_DTO,
+      payoutAccountName: 'สมชาย ใจดี',
+    });
+
+    expect(refundRequestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payoutAccountName: 'นาย สมชาย   ใจดี',
+        }) as object,
+      }),
+    );
+  });
+
+  it('rejects a legacy client name that differs from the verified payer', async () => {
+    await expect(
+      service.create(BOOKING_ID, VENDOR_ID, {
+        ...CREATE_DTO,
+        payoutAccountName: 'Another Person',
+      }),
+    ).rejects.toThrow('ชื่อผู้รับเงินไม่ตรงกับชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว');
+    expect(refundRequestCreate).not.toHaveBeenCalled();
+  });
+
+  it('stops the refund flow when the verified payment has no sender name', async () => {
+    bookingFindFirst.mockResolvedValue({
+      ...eligibleBooking(),
+      slips: [{ amount: new Prisma.Decimal('1500'), senderName: null }],
+    });
+
+    await expect(
+      service.create(BOOKING_ID, VENDOR_ID, {
+        ...CREATE_DTO,
+        payoutAccountName: undefined,
+      }),
+    ).rejects.toThrow(
+      'ไม่พบชื่อผู้โอนจากสลิปที่ตรวจสอบแล้ว กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน',
+    );
+    expect(refundRequestCreate).not.toHaveBeenCalled();
   });
 
   it.each([
