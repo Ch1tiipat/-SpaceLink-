@@ -160,7 +160,7 @@ export function AdminRefundsScreen({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
             <thead className="bg-[#faf8fc] text-[11px] text-muted">
               <tr>
                 <th className="px-5 py-3">รหัสจอง</th>
@@ -170,6 +170,7 @@ export function AdminRefundsScreen({
                 <th className="px-4 py-3">สถานะ</th>
                 <th className="px-4 py-3">บัญชีรับเงิน</th>
                 <th className="px-4 py-3">สร้างเมื่อ</th>
+                <th className="px-4 py-3">ดำเนินการ</th>
               </tr>
             </thead>
             <tbody>
@@ -231,6 +232,14 @@ export function AdminRefundsScreen({
                   <td className="px-4 py-4 text-xs text-muted">
                     {formatAdminDateTime(item.createdAt)}
                   </td>
+                  <td className="px-4 py-4">
+                    <Link
+                      href={`/admin/transactions/bookings/${item.booking.id}`}
+                      className="inline-flex min-h-10 items-center justify-center rounded-xl bg-violet px-4 text-xs font-extrabold text-white shadow-[0_8px_20px_rgba(124,58,237,0.18)] transition hover:-translate-y-0.5 hover:bg-[#6930d9]"
+                    >
+                      {refundActionLabel(item)}
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -239,6 +248,15 @@ export function AdminRefundsScreen({
       )}
     </AdminPanel>
   );
+}
+
+function refundActionLabel(item: AdminTransactionRefund) {
+  if (item.status === 'PENDING') return 'ตรวจสอบคำขอ';
+  if (item.status === 'APPROVED' && !item.hasPayoutSlip) {
+    return 'แนบสลิปคืนเงิน';
+  }
+  if (item.status === 'APPROVED') return 'ยืนยันคืนเงิน';
+  return 'ดูรายละเอียด';
 }
 
 function LoadingRows() {

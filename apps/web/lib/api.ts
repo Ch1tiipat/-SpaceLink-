@@ -1158,6 +1158,12 @@ export type AdminDashboardSummary = {
     published: number;
     upcoming: number;
   };
+  analytics: {
+    bookingTrend: Record<
+      'day' | 'week' | 'month' | 'year',
+      Array<{ label: string; value: number }>
+    >;
+  };
 };
 
 export type AdminVenue = {

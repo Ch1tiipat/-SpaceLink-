@@ -150,13 +150,6 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         kind: 'link',
-        label: 'คำขอคืนเงิน',
-        href: '/refunds',
-        icon: RotateCcw,
-        matches: (pathname) => pathname.startsWith('/refunds'),
-      },
-      {
-        kind: 'link',
         label: 'รีวิว',
         href: '/reviews',
         icon: Star,
@@ -291,8 +284,8 @@ const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
   NAV_GROUPS[1].items[0],
+  NAV_GROUPS[1].items[1],
   NAV_GROUPS[1].items[2],
-  NAV_GROUPS[1].items[3],
 ];
 
 /**

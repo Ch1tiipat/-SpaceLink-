@@ -91,14 +91,14 @@ export function AdminSlipActions({
           role="dialog"
           aria-modal="true"
           aria-label="ดูสลิปการชำระเงิน"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#17121fcc]/75 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#17121fcc]/75 p-3 sm:p-5"
           onClick={closePreview}
         >
           <div
-            className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl bg-white p-4 shadow-2xl"
+            className="relative flex h-[calc(100dvh-24px)] max-h-[860px] w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-2xl sm:h-[calc(100dvh-40px)] sm:w-[min(520px,calc(100vw-40px))] sm:p-4"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black text-[#242032]">
                   สลิปการชำระเงิน
@@ -116,15 +116,17 @@ export function AdminSlipActions({
                 <X className="h-5 w-5" aria-hidden />
               </button>
             </div>
-            {/* The URL is an ephemeral private Supabase URL, so it cannot be
-                declared as a stable Next Image remote host. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="หลักฐานการชำระเงิน"
-              className="min-h-0 w-full flex-1 rounded-xl bg-[#f7f3fa] object-contain"
-              referrerPolicy="no-referrer"
-            />
+            <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-[#f7f3fa] p-2">
+              {/* The URL is an ephemeral private Supabase URL, so it cannot be
+                  declared as a stable Next Image remote host. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="หลักฐานการชำระเงิน"
+                className="h-full w-full object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           </div>
         </div>
       ) : null}
