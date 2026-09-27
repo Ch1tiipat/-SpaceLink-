@@ -105,18 +105,18 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="w-[min(1100px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[26px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65"
+      className="w-[min(900px,calc(100%-16px))] max-h-[calc(100dvh-16px)] overflow-hidden rounded-[22px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65 sm:w-[min(900px,calc(100%-48px))] sm:max-h-[min(760px,calc(100dvh-64px))]"
     >
-      <div className="flex max-h-[calc(100dvh-24px)] flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-line bg-white px-5 py-4 sm:px-8">
-          <h2 id="event-dialog-title" className="text-lg font-black">
+      <div className="flex max-h-[calc(100dvh-16px)] flex-col sm:max-h-[min(760px,calc(100dvh-64px))]">
+        <header className="flex shrink-0 items-center justify-between border-b border-line bg-white px-4 py-3 sm:px-6">
+          <h2 id="event-dialog-title" className="text-base font-black sm:text-lg">
             รายละเอียด Event
           </h2>
           <button
             type="button"
             onClick={close}
             aria-label="ปิดรายละเอียด Event"
-            className="grid h-11 w-11 place-items-center rounded-full border border-line text-xl text-muted hover:text-violet"
+            className="grid h-10 w-10 place-items-center rounded-full border border-line text-xl text-muted transition hover:border-violet/30 hover:text-violet"
           >
             ×
           </button>
@@ -128,7 +128,7 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
             onEventResolved={setResolvedEvent}
           />
         </div>
-        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line bg-white px-5 py-4 max-sm:gap-2 sm:px-8">
+        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line bg-white px-4 py-3 max-sm:gap-2 sm:px-6">
           {event && !eventBookable ? (
             <p className="mr-auto text-sm font-semibold text-muted">
               {getEventBookingStatusLabel(event)} — ยังดูข้อมูลพื้นที่ได้
@@ -445,9 +445,9 @@ export function EventDetailContent({
           {saveNotice.message}
         </div>
       ) : null}
-      <div className="shell max-w-[1100px] py-8">
+      <div className="shell max-w-[900px] py-4 sm:py-5">
         <section
-          className="relative flex min-h-[320px] items-end overflow-hidden rounded-[26px] bg-[#351160] px-8 py-9 text-white shadow-[0_28px_70px_rgba(62,37,99,0.16)] max-sm:min-h-[360px] max-sm:px-6"
+          className="relative flex min-h-[240px] items-end overflow-hidden rounded-[20px] bg-[#351160] px-5 py-5 text-white shadow-[0_20px_55px_rgba(62,37,99,0.16)] max-sm:min-h-[310px] sm:px-6 sm:py-6"
         >
           <EventHeroCover
             bannerUrl={event.bannerUrl}
@@ -459,10 +459,10 @@ export function EventDetailContent({
             <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">
               {getEventBookingStatusLabel(event)}
             </span>
-            <h1 className="mt-5 max-w-[18ch] text-[clamp(38px,5vw,58px)] font-black leading-[1.15] tracking-[-0.05em]">
+            <h1 className="mt-3 max-w-[20ch] text-[clamp(30px,4.5vw,44px)] font-black leading-[1.12] tracking-[-0.045em]">
               {event.name}
             </h1>
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-white/90">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-semibold text-white/90 sm:text-sm">
               <span className="inline-flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" aria-hidden />
                 {compactDateFormatter.format(new Date(event.startDate))} –{' '}
@@ -477,14 +477,14 @@ export function EventDetailContent({
                 {availableBooths} บูธว่าง
               </span>
             </div>
-            <p className="mt-4 max-w-3xl text-[15px] leading-7 text-white/88">
+            <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-6 text-white/88">
               {event.description ??
                 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
-            <div className="mt-7 flex flex-wrap gap-3 max-sm:flex-col">
+            <div className="mt-4 flex flex-wrap gap-2.5 max-sm:flex-col">
               <Link
                 href={`/events/${encodeURIComponent(event.slug)}/map`}
-                className="inline-flex min-h-[46px] items-center justify-center rounded-[13px] bg-white px-5 font-bold text-violet shadow-lg transition hover:-translate-y-0.5"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-violet shadow-lg transition hover:-translate-y-0.5"
               >
                 ดู Zone Map →
               </Link>
@@ -503,7 +503,7 @@ export function EventDetailContent({
                     ? 'โหลดสถานะการบันทึก Event ไม่สำเร็จ'
                     : undefined
                 }
-                className={`inline-flex min-h-[46px] items-center justify-center gap-2 rounded-[13px] border px-5 font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSaved
                     ? 'border-white bg-white text-violet'
                     : 'border-white/35 bg-white/10 text-white hover:bg-white/20'
@@ -529,7 +529,7 @@ export function EventDetailContent({
         </section>
 
         <section
-          className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4"
           aria-label="ข้อมูลสำคัญของ Event"
         >
           <EventStat
@@ -1148,20 +1148,20 @@ function DetailSection({
   children: ReactNode;
 }) {
   return (
-    <section className="sl-surface mt-5 p-7 sm:p-8">
+    <section className="sl-surface mt-3 p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <span className="sl-kicker">{kicker}</span>
-          <h2 className="mt-2 text-[26px] font-black tracking-[-0.03em]">
+          <h2 className="mt-1.5 text-[22px] font-black tracking-[-0.03em]">
             {title}
           </h2>
         </div>
         {action ?? (count ? <span className="sl-chip">{count}</span> : null)}
       </div>
       {description && (
-        <p className="mt-3 text-sm leading-7 text-muted">{description}</p>
+        <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
       )}
-      <div className="mt-5">{children}</div>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -1184,8 +1184,8 @@ function EventStat({
   value: string;
 }) {
   return (
-    <article className="flex min-w-0 items-center gap-3 rounded-[22px] border border-line bg-white p-4 shadow-[0_12px_28px_rgba(54,36,91,0.08)]">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eee6ff] text-violet">
+    <article className="flex min-w-0 items-center gap-2.5 rounded-[16px] border border-line bg-white p-3 shadow-[0_10px_24px_rgba(54,36,91,0.07)]">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eee6ff] text-violet">
         <Icon className="h-5 w-5" />
       </span>
       <span className="min-w-0">
