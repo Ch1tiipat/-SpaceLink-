@@ -4,7 +4,19 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, MapPin, QrCode, ShieldCheck } from 'lucide-react';
+import {
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  Layers3,
+  MapPin,
+  Maximize2,
+  QrCode,
+  ShieldCheck,
+  Store,
+  Tag,
+  WalletCards,
+} from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
@@ -44,6 +56,15 @@ function formatMoney(value: string): string {
   return fraction && !/^0+$/.test(fraction)
     ? `${grouped}.${fraction}`
     : grouped;
+}
+
+function formatThaiDateRange(startDate: string, endDate: string): string {
+  const formatter = new Intl.DateTimeFormat('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  return `${formatter.format(new Date(startDate))} – ${formatter.format(new Date(endDate))}`;
 }
 
 export function BookingScreen({ eventId }: { eventId: string }) {
@@ -474,6 +495,35 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   }
 
   const eventBookable = isEventBookable(data.event);
+  const bookingMetricCards = [
+    {
+      icon: Layers3,
+      label: 'Zone',
+      value: bookingMetrics.zoneCount,
+      caption: 'โซนทั้งหมด',
+    },
+    {
+      icon: Store,
+      label: 'Booth ทั้งหมด',
+      value: bookingMetrics.boothCount,
+      caption: 'บูธทั้งหมด',
+    },
+    {
+      icon: CheckCircle2,
+      label: 'Booth ว่าง',
+      value: bookingMetrics.availableCount,
+      caption: 'บูธที่ว่างอยู่',
+    },
+    {
+      icon: Tag,
+      label: 'ราคาเริ่มต้น',
+      value:
+        bookingMetrics.startingPrice === null
+          ? '–'
+          : `${formatMoney(String(bookingMetrics.startingPrice))} ฿`,
+      caption: 'ต่อพื้นที่',
+    },
+  ];
 
   return (
     <main className="sl-page pb-16">
@@ -587,29 +637,21 @@ export function BookingScreen({ eventId }: { eventId: string }) {
               className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
               aria-label="สรุปพื้นที่ที่เปิดให้จอง"
             >
-              {[
-                ['Zone', bookingMetrics.zoneCount, 'AVAILABLE ZONES'],
-                ['Booth ทั้งหมด', bookingMetrics.boothCount, 'ALL BOOTHS'],
-                ['Booth ว่าง', bookingMetrics.availableCount, 'AVAILABLE'],
-                [
-                  'ราคาเริ่มต้น',
-                  bookingMetrics.startingPrice === null
-                    ? '–'
-                    : `${formatMoney(String(bookingMetrics.startingPrice))} ฿`,
-                  'STARTING PRICE',
-                ],
-              ].map(([label, value, caption]) => (
+              {bookingMetricCards.map(({ icon: Icon, label, value, caption }) => (
                 <article
                   key={label}
-                  className="rounded-[14px] border border-line bg-white p-3"
+                  className="flex min-h-[86px] items-center gap-3 rounded-[16px] border border-line bg-white p-3.5 shadow-[0_8px_24px_rgba(78,43,126,.04)]"
                 >
-                  <p className="text-xs font-bold text-muted">{label}</p>
-                  <strong className="mt-1 block text-xl font-black text-ink">
-                    {value}
-                  </strong>
-                  <p className="mt-0.5 text-xs font-extrabold tracking-[.08em] text-[#aaa0ad]">
-                    {caption}
-                  </p>
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-violet-tint text-violet">
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-muted">{label}</p>
+                    <strong className="mt-0.5 block text-xl font-black text-ink">
+                      {value}
+                    </strong>
+                    <p className="text-xs text-[#918698]">{caption}</p>
+                  </div>
                 </article>
               ))}
             </section>
@@ -679,6 +721,107 @@ export function BookingScreen({ eventId }: { eventId: string }) {
         ) : (
           <div className="mt-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_350px]">
             <section className="sl-surface min-w-0 p-4">
+              {selectedBooths.length > 0 ? (
+                <div className="grid gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                    <div>
+                      <span className="sl-kicker">SELECTED BOOTH</span>
+                      <h2 className="mt-1 text-lg font-black">Booth ที่เลือก</h2>
+                    </div>
+                    <Link
+                      href={`/events/${encodeURIComponent(data.event.slug)}/map${requestedZoneCode ? `?zone=${encodeURIComponent(requestedZoneCode)}` : ''}`}
+                      className="sl-chip min-h-9 px-3 text-sm text-violet"
+                    >
+                      ← กลับไปเลือกบูธ
+                    </Link>
+                  </div>
+
+                  {selectedBoothDetails.map(({ booth, zone }) => (
+                    <article
+                      key={booth.id}
+                      className="grid gap-4 rounded-[16px] border border-[#ddd3ee] bg-[linear-gradient(135deg,#fbf9ff,#ffffff)] p-4 sm:grid-cols-[150px_minmax(0,1fr)]"
+                    >
+                      <div className="grid min-h-[132px] place-items-center rounded-[14px] bg-violet-tint text-center">
+                        <div>
+                          <strong className="block text-5xl font-black tracking-[-.06em] text-violet">
+                            {booth.code}
+                          </strong>
+                          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#e5f7ed] px-3 py-1 text-xs font-bold text-[#15794a]">
+                            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                            ว่าง พร้อมจอง
+                          </span>
+                        </div>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                        <div className="border-b border-line pb-2">
+                          <dt className="flex items-center gap-1.5 text-xs text-muted">
+                            <Layers3 className="h-4 w-4 text-violet" aria-hidden /> Zone
+                          </dt>
+                          <dd className="mt-1 font-black">{zone?.code ?? '-'}</dd>
+                        </div>
+                        <div className="border-b border-line pb-2">
+                          <dt className="flex items-center gap-1.5 text-xs text-muted">
+                            <Store className="h-4 w-4 text-violet" aria-hidden /> ประเภทโซน
+                          </dt>
+                          <dd className="mt-1 font-black">
+                            {zone?.name ?? 'ยังไม่ระบุชื่อโซน'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="flex items-center gap-1.5 text-xs text-muted">
+                            <Maximize2 className="h-4 w-4 text-violet" aria-hidden /> ขนาดพื้นที่
+                          </dt>
+                          <dd className="mt-1 font-black">
+                            {booth.widthM ?? '-'} × {booth.heightM ?? '-'} เมตร
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="flex items-center gap-1.5 text-xs text-muted">
+                            <Tag className="h-4 w-4 text-violet" aria-hidden /> ราคา
+                          </dt>
+                          <dd className="mt-1 font-black text-violet">
+                            {formatMoney(booth.boothPrice)} บาท
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+
+                  <article className="rounded-[16px] border border-line bg-white p-4">
+                    <div className="flex items-center gap-2 border-b border-line pb-3">
+                      <CalendarDays className="h-5 w-5 text-violet" aria-hidden />
+                      <h2 className="text-base font-black">ข้อมูล Event</h2>
+                    </div>
+                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                      <div className="rounded-[12px] bg-[#faf8ff] p-3">
+                        <dt className="text-xs text-muted">วันที่จัดงาน</dt>
+                        <dd className="mt-1 font-black">
+                          {formatThaiDateRange(data.event.startDate, data.event.endDate)}
+                        </dd>
+                      </div>
+                      <div className="rounded-[12px] bg-[#faf8ff] p-3">
+                        <dt className="text-xs text-muted">สถานที่จัดงาน</dt>
+                        <dd className="mt-1 font-black">{data.event.venue.name}</dd>
+                      </div>
+                      <div className="rounded-[12px] bg-[#faf8ff] p-3">
+                        <dt className="text-xs text-muted">หมวดหมู่ที่เลือก</dt>
+                        <dd className="mt-1 font-black">
+                          {selectedBoothDetails
+                            .flatMap(({ zone }) => zone?.categories ?? [])
+                            .map((category) => category.name)
+                            .filter((name, index, names) => names.indexOf(name) === index)
+                            .join(', ') || 'ตามเงื่อนไขของผู้จัดงาน'}
+                        </dd>
+                      </div>
+                      <div className="rounded-[12px] bg-[#faf8ff] p-3">
+                        <dt className="text-xs text-muted">จำนวนบูธที่เลือก</dt>
+                        <dd className="mt-1 font-black">{selectedBooths.length} บูธ</dd>
+                      </div>
+                    </dl>
+                  </article>
+                </div>
+              ) : (
+                <>
               <div className="flex min-h-[58px] flex-wrap items-center justify-between gap-3 rounded-[14px] bg-[linear-gradient(105deg,#176c50,#238866)] px-4 py-3 text-white">
                 <div>
                   <span className="text-xs font-extrabold tracking-[.1em] text-white/70">
@@ -837,100 +980,84 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </section>
 
-            <aside className="sl-surface sticky top-[92px] p-4">
-              <span className="text-xs font-bold uppercase tracking-[.13em] text-violet">
-                Booking summary
-              </span>
-              <h2 className="mt-1 text-lg font-black">
-                {selectedBooths.length > 1
-                  ? selectedBooths.map((booth) => booth.code).join(' + ')
-                  : selectedBooth
-                    ? `Booth ${selectedBooth.code}`
-                    : 'ยังไม่ได้เลือก Booth'}
-              </h2>
-              {selectedBooths.length > 1 ? (
+            <aside className="sl-surface overflow-hidden p-4 xl:sticky xl:top-[92px]">
+              <div className="flex items-center gap-2 border-b border-line pb-3">
+                <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-violet-tint text-violet">
+                  <WalletCards className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-[.13em] text-violet">
+                    Booking summary
+                  </span>
+                  <h2 className="text-lg font-black">สรุปการจอง</h2>
+                </div>
+              </div>
+
+              {selectedBooths.length > 0 ? (
                 <div className="mt-3 grid gap-2">
                   {selectedBoothDetails.map(({ booth, zone }) => (
                     <div
                       key={booth.id}
-                      className="flex items-center justify-between gap-3 rounded-[11px] border border-[#dfd2f1] bg-[#faf8ff] px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-[12px] bg-violet-tint px-3 py-3"
                     >
-                      <div>
-                        <strong className="block text-sm">
-                          Zone {zone?.code ?? '-'} · Booth {booth.code}
+                      <div className="min-w-0">
+                        <span className="text-xs text-muted">Booth</span>
+                        <strong className="block truncate text-xl font-black text-violet">
+                          {booth.code}
                         </strong>
-                        <span className="text-xs text-muted">
-                          {booth.widthM ?? '-'} × {booth.heightM ?? '-'} เมตร ·{' '}
-                          {formatMoney(booth.boothPrice)} บาท
-                        </span>
+                        <small className="block truncate text-xs text-muted">
+                          Zone {zone?.code ?? '-'} · {formatMoney(booth.boothPrice)} บาท
+                        </small>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => selectBooth(booth)}
-                        className="sl-chip min-h-8 px-2 text-xs text-violet"
-                        aria-label={`นำ Booth ${booth.code} ออกจากรายการ`}
-                      >
-                        นำออก
-                      </button>
+                      <div className="text-right">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#e5f7ed] px-2 py-1 text-[11px] font-bold text-[#15794a]">
+                          <CheckCircle2 className="h-3 w-3" aria-hidden /> พร้อมจอง
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => selectBooth(booth)}
+                          className="mt-2 block text-xs font-bold text-violet underline"
+                          aria-label={`นำ Booth ${booth.code} ออกจากรายการ`}
+                        >
+                          นำออก
+                        </button>
+                      </div>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between border-t border-line pt-3">
-                    <strong className="text-sm">ยอดประมาณการ</strong>
-                    <strong className="text-lg text-violet">
-                      {formatMoney(String(selectedTotal))} บาท
-                    </strong>
-                  </div>
-                  <p className="text-xs leading-5 text-muted">
-                    ระบบสร้าง Booking แยกตาม Booth แต่รวมยอดเป็น QR
-                    เดียวและแนบสลิปครั้งเดียว ยอดจริงจะยืนยันจาก backend
-                    ก่อนสร้างรายการ
-                  </p>
+                  {selectedBooths.length === 1 ? (
+                    <p className="rounded-[10px] border border-line px-3 py-2 text-xs text-muted">
+                      คะแนนพื้นที่: <b className="text-ink">{ratingLabel}</b>
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted">
+                      ระบบสร้าง Booking แยกตาม Booth และรวมยอดชำระด้วย QR เดียว
+                    </p>
+                  )}
                 </div>
-              ) : selectedBooth ? (
-                <>
-                  <dl className="mt-3 divide-y divide-line rounded-[12px] bg-[#faf8ff] px-3 text-sm">
-                    <SummaryRow
-                      label="Zone"
-                      value={
-                        selectedZone?.name ?? `โซน ${selectedZone?.code ?? '-'}`
-                      }
-                    />
-                    <SummaryRow
-                      label="ขนาดพื้นที่"
-                      value={`${selectedBooth.widthM ?? '-'} × ${selectedBooth.heightM ?? '-'} เมตร`}
-                    />
-                    <SummaryRow
-                      label="ระดับบูธ"
-                      value={selectedBooth.tier ?? 'มาตรฐาน'}
-                    />
-                    <SummaryRow
-                      label="สถานะ"
-                      value={
-                        selectedBooth.availability === 'AVAILABLE'
-                          ? 'ว่าง พร้อมจอง'
-                          : selectedBooth.availability
-                      }
-                    />
-                    <SummaryRow label="คะแนนพื้นที่" value={ratingLabel} />
-                    <SummaryRow
-                      label="ราคา"
-                      value={`${formatMoney(selectedBooth.boothPrice)} บาท`}
-                    />
-                  </dl>
-                  <div className="mt-2 rounded-[11px] border border-[#dfd2f1] bg-[#f8f4ff] p-3 text-sm leading-5 text-[#603594]">
-                    <b className="block text-ink">เหมาะกับร้านในหมวด</b>
-                    {selectedZone?.categories
-                      .map((category) => category.name)
-                      .join(', ') || 'ตามประเภทสินค้าที่ผู้จัดงานกำหนด'}
-                  </div>
-                </>
               ) : (
                 <div className="mt-3 rounded-[12px] bg-[#f8f6f9] px-3 py-5 text-center text-sm leading-5 text-muted">
                   เลือก Booth ทางด้านซ้ายเพื่อดูรายละเอียดก่อนสร้าง Booking
                 </div>
               )}
+
+              <section className="mt-3 rounded-[12px] border border-line p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <strong className="text-sm">ค่าเช่าพื้นที่</strong>
+                  <span className="text-sm font-black">
+                    {formatMoney(String(selectedTotal))} บาท
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
+                  <strong className="text-sm text-violet">รวมทั้งหมด</strong>
+                  <strong className="text-xl font-black text-violet">
+                    {formatMoney(String(selectedTotal))} บาท
+                  </strong>
+                </div>
+              </section>
 
               <section className="mt-3 border-t border-line pt-3">
                 <span className="block text-xs font-extrabold tracking-[.1em] text-muted">
