@@ -245,7 +245,7 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 
 ### ERD
 
-34 ตาราง · 63 ความสัมพันธ์ · สร้างจากฐานข้อมูลจริงของทีม (Supabase `database.types.ts`) ด้วย [`supabase-markdown`](https://github.com/idevbrandon/supabase-markdown) เมื่อ 27 ก.ย. 2569 แล้วตัดให้เหลือเฉพาะคีย์
+34 ตาราง · 63 ความสัมพันธ์ · สร้างจากฐานข้อมูลจริงของทีม (Supabase `database.types.ts`) เมื่อ 27 ก.ย. 2569 แล้วตัดให้เหลือเฉพาะคีย์
 
 - แสดงเฉพาะ PK / FK — คอลัมน์ครบ ชนิดข้อมูล และ enum ดูที่ `apps/api/prisma/schema.prisma` (แหล่งความจริงเดียวของโครงสร้าง)
 - เส้นทึบ = FK บังคับ (`NOT NULL`) · เส้นประ = FK ที่เป็น null ได้ · `||--o|` = 1 ต่อ 1 (FK เป็น unique)
