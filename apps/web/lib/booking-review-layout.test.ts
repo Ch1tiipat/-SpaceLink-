@@ -1,0 +1,40 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node runs this TypeScript test directly. */
+const bookingReviewAssert: typeof import('node:assert/strict') = require(
+  'node:assert/strict',
+);
+const { readFileSync: readBookingReviewSource }: typeof import('node:fs') =
+  require('node:fs');
+const { join: joinBookingReviewPath }: typeof import('node:path') =
+  require('node:path');
+const { test: bookingReviewTest }: typeof import('node:test') =
+  require('node:test');
+
+const bookingReviewSource = readBookingReviewSource(
+  joinBookingReviewPath(process.cwd(), 'components', 'booking-screen.tsx'),
+  'utf8',
+);
+
+bookingReviewTest('booking review keeps the three-step checkout flow', () => {
+  bookingReviewAssert.match(bookingReviewSource, /เลือกบูธ/);
+  bookingReviewAssert.match(bookingReviewSource, /ตรวจสอบข้อมูล/);
+  bookingReviewAssert.match(bookingReviewSource, /ชำระเงิน/);
+});
+
+bookingReviewTest('selected booth review exposes the prototype information hierarchy', () => {
+  bookingReviewAssert.match(bookingReviewSource, /SELECTED BOOTH/);
+  bookingReviewAssert.match(bookingReviewSource, /Booth ที่เลือก/);
+  bookingReviewAssert.match(bookingReviewSource, /ข้อมูล Event/);
+  bookingReviewAssert.match(bookingReviewSource, /สรุปการจอง/);
+  bookingReviewAssert.match(bookingReviewSource, /รวมทั้งหมด/);
+});
+
+bookingReviewTest('booking review preserves responsive layout and existing actions', () => {
+  bookingReviewAssert.match(
+    bookingReviewSource,
+    /xl:grid-cols-\[minmax\(0,1fr\)_350px\]/,
+  );
+  bookingReviewAssert.match(bookingReviewSource, /sm:grid-cols-2/);
+  bookingReviewAssert.match(bookingReviewSource, /สร้าง Booking และไปชำระเงิน/);
+  bookingReviewAssert.match(bookingReviewSource, /ส่งคำร้องขอเพิ่มโควตา/);
+  bookingReviewAssert.match(bookingReviewSource, /นำ Booth .* ออกจากรายการ/);
+});
