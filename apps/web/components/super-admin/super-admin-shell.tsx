@@ -249,7 +249,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
 
   if (auth.status !== 'signed-in' || auth.role !== 'SUPER_ADMIN') {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#fbfaff] px-6">
+      <main className="sl-app-background grid min-h-screen place-items-center px-6">
         <div className="text-center">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#e9ddfa] border-t-[#7c3aed]" />
           <p className="text-sm font-semibold text-[#82788b]">
@@ -339,7 +339,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[#fbfaff]">
+    <div className="sl-app-background min-h-screen">
       <header className="sticky top-0 z-30 flex h-[63px] items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(61,43,88,.045)] backdrop-blur-xl lg:h-[72px] lg:px-[30px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -689,7 +689,7 @@ function notificationErrorMessage(cause: unknown) {
 
 function ShellFallback() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#fbfaff] px-6">
+    <main className="sl-app-background grid min-h-screen place-items-center px-6">
       <div className="text-center">
         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#e9ddfa] border-t-[#7c3aed]" />
         <p className="text-sm font-semibold text-[#82788b]">
