@@ -13,8 +13,10 @@
 - `manual` คืน `ERROR` เพื่อเข้าสู่กระบวนการสำรอง
 - `slipok` เรียก SlipOK API จริงด้วย `SLIPOK_BRANCH_ID` และ `SLIPOK_API_KEY`
 
-SlipOK adapter ส่ง signed URL อายุสั้นพร้อมยอดที่ต้องตรวจและ `log: true`
-เพื่อเช็กบัญชีผู้รับและสลิปซ้ำ การแปลงยอดเงินจาก JSON number เป็น
+SlipOK adapter ส่ง signed URL อายุสั้นพร้อมยอดที่ต้องตรวจ สลิปชำระเงินใช้
+`log: true` เพื่อเช็กบัญชีผู้รับกับบัญชีร้านและตรวจสลิปซ้ำ ส่วนสลิปคืนเงินใช้
+`log: false` เพราะบัญชีผู้รับเป็นของ Vendor ไม่ใช่บัญชีร้าน โดยระบบยังตรวจยอด
+และเลขอ้างอิงซ้ำจากข้อมูลที่เก็บไว้เอง การแปลงยอดเงินจาก JSON number เป็น
 `Prisma.Decimal` เกิดภายใน adapter เท่านั้น
 
 `SlipVerificationService` ส่ง signed URL ให้ provider เท่านั้น แต่บันทึก private
