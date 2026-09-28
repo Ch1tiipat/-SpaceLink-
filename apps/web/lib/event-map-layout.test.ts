@@ -16,17 +16,23 @@ const eventMapSource = readEventMapSource(
 
 eventMapLayoutTest('event map follows the prototype information hierarchy', () => {
   eventMapLayoutAssert.match(eventMapSource, /EVENT FLOOR PLAN/);
-  eventMapLayoutAssert.match(eventMapSource, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
+  eventMapLayoutAssert.match(eventMapSource, /เลือก Booth และตรวจสอบการจอง/);
+  eventMapLayoutAssert.match(
+    eventMapSource,
+    /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/,
+  );
+  eventMapLayoutAssert.match(eventMapSource, /ขั้นตอนการจอง/);
   eventMapLayoutAssert.match(eventMapSource, /แนะนำ Zone ด้วย AI/);
   eventMapLayoutAssert.match(eventMapSource, /เลือก Zone อย่างรวดเร็ว/);
   eventMapLayoutAssert.match(eventMapSource, /ตัวกรองบูธ/);
   eventMapLayoutAssert.match(eventMapSource, /BOOKING SUMMARY/);
+  eventMapLayoutAssert.match(eventMapSource, /นโยบายการจอง/);
 });
 
 eventMapLayoutTest('event map preserves booth selection and quota actions', () => {
   eventMapLayoutAssert.match(eventMapSource, /decideBoothQuota\(/);
   eventMapLayoutAssert.match(eventMapSource, /นำ Booth .* ออกจากรายการ/);
-  eventMapLayoutAssert.match(eventMapSource, /ดำเนินการต่อ →/);
+  eventMapLayoutAssert.match(eventMapSource, /สร้าง Booking และไปชำระเงิน →/);
   eventMapLayoutAssert.match(eventMapSource, /ขอเพิ่มโควตา \/ ติดต่อผู้จัดงาน/);
   eventMapLayoutAssert.match(
     eventMapSource,
@@ -35,6 +41,17 @@ eventMapLayoutTest('event map preserves booth selection and quota actions', () =
   eventMapLayoutAssert.doesNotMatch(
     eventMapSource,
     /href=\{`\/help\?type=QUOTA_INCREASE/,
+  );
+});
+
+eventMapLayoutTest('event map keeps missing booth prices unknown', () => {
+  eventMapLayoutAssert.match(
+    eventMapSource,
+    /startingPrice: prices\.length > 0 \? Math\.min\(\.\.\.prices\) : null/,
+  );
+  eventMapLayoutAssert.match(
+    eventMapSource,
+    /metrics\.startingPrice === null[\s\S]*\? '—'/,
   );
 });
 

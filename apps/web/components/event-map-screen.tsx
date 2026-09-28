@@ -176,11 +176,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     if (requestedZone) setSelectedZoneId(requestedZone.id);
   }, [data, requestedZoneCode]);
 
-  const selectedZone = useMemo(
-    () => data?.zones.find((zone) => zone.id === selectedZoneId) ?? null,
-    [data, selectedZoneId],
-  );
-
   const sizeOptions = useMemo(() => {
     const sizes = new Set(
       data?.zones.flatMap((zone) => zone.booths.map(boothSize)) ?? [],
@@ -277,11 +272,15 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   const metrics = useMemo(() => {
     const zones = data?.zones ?? [];
     const booths = zones.flatMap((zone) => zone.booths);
+    const prices = booths
+      .map((booth) => Number(booth.boothPrice))
+      .filter((price) => Number.isFinite(price));
     return {
       zones: zones.length,
       booths: booths.length,
       available: booths.filter((booth) => booth.availability === 'AVAILABLE')
         .length,
+      startingPrice: prices.length > 0 ? Math.min(...prices) : null,
     };
   }, [data]);
 
@@ -463,22 +462,20 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   return (
     <main className="sl-page pb-12">
       <div className="shell max-w-[1280px] py-5">
-        <header className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div>
+        <header className="mb-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
             <Link
               href={`/events/${encodeURIComponent(data.event.slug)}`}
-              className="sl-chip mb-4 min-h-9 w-fit gap-2 bg-white"
+              className="sl-chip mb-3 min-h-9 w-fit gap-2 bg-white"
             >
               <ArrowLeft aria-hidden size={15} />
-              กลับไปหน้า Event
+              กลับ
             </Link>
-            <span className="sl-kicker">EVENT FLOOR PLAN</span>
             <h1 className="mt-1 text-3xl font-black tracking-[-0.045em] max-sm:text-2xl">
-              แผนผังพื้นที่จัดงาน
+              เลือก Booth และตรวจสอบการจอง
             </h1>
-            <p className="mt-1 text-base font-bold text-ink">
-              {data.event.name}
-            </p>
+            <p className="mt-1 font-bold text-ink">{data.event.name}</p>
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
               <span className="inline-flex items-center gap-2">
                 <CalendarDays aria-hidden size={16} className="text-violet" />
@@ -489,29 +486,47 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                 {data.event.venue.name}
               </span>
             </div>
+            </div>
+            <span className={`sl-chip mt-12 ${eventBookable ? 'border-[#bfead3] bg-[#eaf9f1] text-[#118454]' : 'bg-[#f1eef2] text-muted'}`}>
+              {eventBookable ? 'เปิดให้จอง' : 'ปิดรับจอง'}
+            </span>
           </div>
-          <div
-            className="grid grid-cols-3 gap-3 max-sm:gap-2"
-            aria-label="สรุปแผนผัง Event"
-          >
+
+          <div className="sl-surface mt-4 grid gap-2 p-2 sm:grid-cols-3" aria-label="ขั้นตอนการจอง">
+            <BookingStep number="1" label="เลือกบูธ" detail="เลือกพื้นที่จาก Event Map" active />
+            <BookingStep number="2" label="ตรวจสอบข้อมูล" detail="ตรวจร้าน ราคา และสถานะ" active={selectedBooths.length > 0} />
+            <BookingStep number="3" label="ชำระเงิน" detail="Hold Booth ตามเวลาที่กำหนด" />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="สรุปแผนผัง Event">
             <MapMetric
               icon={<LayoutGrid aria-hidden size={19} />}
-              label="โซนทั้งหมด"
+              label="Zone"
               value={`${metrics.zones}`}
-              detail="โซน"
+              detail="โซนทั้งหมด"
             />
             <MapMetric
               icon={<Store aria-hidden size={19} />}
-              label="บูธทั้งหมด"
+              label="Booth ทั้งหมด"
               value={`${metrics.booths}`}
-              detail="บูธ"
+              detail="บูธทั้งหมด"
             />
             <MapMetric
               icon={<CheckCircle2 aria-hidden size={19} />}
-              label="บูธว่าง"
+              label="Booth ว่าง"
               value={`${metrics.available}`}
-              detail="พร้อมจอง"
+              detail="บูธที่ว่างอยู่"
               green
+            />
+            <MapMetric
+              icon={<Gauge aria-hidden size={19} />}
+              label="ราคาเริ่มต้น"
+              value={
+                metrics.startingPrice === null
+                  ? '—'
+                  : `${moneyFormatter.format(metrics.startingPrice)} ฿`
+              }
+              detail="ต่อพื้นที่"
             />
           </div>
         </header>
@@ -615,8 +630,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           )}
         </section>
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="sl-surface min-w-0 overflow-hidden lg:col-start-1 lg:row-span-2">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="sl-surface min-w-0 overflow-hidden lg:col-start-1">
           <div className="flex min-h-[48px] items-center justify-between gap-4 border-b border-line px-4 py-2">
             <div>
               <span className="block text-xs font-extrabold text-[#a095a5]">
@@ -810,98 +825,38 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               </div>
             </div>
           )}
-        </section>
-
-        <section className="grid gap-3 lg:col-start-2 lg:row-start-1">
-          <article className="sl-surface order-2 p-5">
-            <span className="sl-kicker">SELECTED ZONE</span>
-            {selectedZone ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-black">
-                    Zone {selectedZone.code} ·{' '}
-                    {selectedZone.name ?? 'ยังไม่ระบุชื่อโซน'}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {availableCount(selectedZone)} จาก{' '}
-                    {selectedZone.booths.length} Booth ยังว่าง ·
-                    ดูราคาและรายละเอียดในหน้าเลือก Booth
-                  </p>
-                </div>
-                {eventBookable ? (
-                  <Link
-                    href={`/events/${encodeURIComponent(data.event.slug)}/book?zone=${encodeURIComponent(selectedZone.code)}`}
-                    className="sl-action-primary"
-                  >
-                    เลือกบูธใน Zone นี้
-                  </Link>
-                ) : (
-                  <span className="sl-chip cursor-not-allowed bg-[#f1eef2] text-muted">
-                    Event นี้ปิดรับจองแล้ว
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="mt-3">
-                <h2 className="text-lg font-black">เลือกได้จากแผนผังทันที</h2>
-                <p className="mt-1 text-sm text-muted">
-                  {eventBookable
-                    ? 'กด Zone เพื่อดูข้อมูล หรือกด Booth สีขาวเพื่อไปหน้าจองโดยตรง'
-                    : 'ดูข้อมูล Zone และ Booth ได้ แต่ Event นี้ปิดรับจองแล้ว'}
-                </p>
-              </div>
-            )}
-          </article>
-
-          <article className="sl-surface order-1 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="sl-kicker">QUICK ZONES</span>
-                <h2 className="mt-1 text-base font-black">
-                  เลือก Zone อย่างรวดเร็ว
-                </h2>
-              </div>
-              <span className="sl-chip">{data.zones.length} Zone</span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {data.zones.map((zone, index) => (
-                <button
-                  key={zone.id}
-                  type="button"
-                  aria-pressed={selectedZoneId === zone.id}
-                  onClick={() => {
-                    setSelectedZoneId(zone.id);
-                    setPositionFilter(zone.id);
-                  }}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-sm font-bold transition ${selectedZoneId === zone.id ? 'border-violet bg-violet text-white' : 'border-line bg-white hover:border-violet'}`}
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{
-                      backgroundColor: zoneColors[index % zoneColors.length],
+          <div className="grid gap-3 border-t border-line bg-white p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <strong className="mr-1 text-sm">เลือก Zone อย่างรวดเร็ว</strong>
+                {data.zones.map((zone, index) => (
+                  <button
+                    key={zone.id}
+                    type="button"
+                    aria-pressed={selectedZoneId === zone.id}
+                    onClick={() => {
+                      setSelectedZoneId(zone.id);
+                      setPositionFilter(zone.id);
                     }}
-                  />
-                  {zone.code} · {availableCount(zone)} ว่าง
-                </button>
-              ))}
+                    className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-3 text-xs font-bold transition ${selectedZoneId === zone.id ? 'border-violet bg-violet text-white' : 'border-line bg-white hover:border-violet'}`}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: zoneColors[index % zoneColors.length] }} />
+                    {zone.code} · {availableCount(zone)} ว่าง
+                  </button>
+                ))}
+              </div>
             </div>
-          </article>
-
-          <article className="sl-surface order-3 p-5">
-            <span className="sl-kicker">BOOTH STATUS</span>
-            <h2 className="mt-1 text-base font-black">สถานะ Booth</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-x-3 gap-y-2">
               <Legend color="#fff" border="#7c3aed" label="ว่าง" />
               <Legend color="#201b2e" label="เลือกแล้ว" />
               <Legend color="#2c8b61" label="จองแล้ว" />
               <Legend color="#e7a339" label="กำลังจอง" />
-              <Legend color="#cfc8d1" label="ปิดใช้งาน" />
             </div>
-          </article>
+          </div>
         </section>
 
         {eventBookable ? (
-          <section className="sl-surface border-[#cdb9ec] p-5 shadow-[0_18px_50px_rgba(54,36,91,.14)] lg:sticky lg:top-4 lg:col-start-2 lg:row-start-2">
+          <section className="sl-surface border-[#cdb9ec] p-5 shadow-[0_18px_50px_rgba(54,36,91,.14)] lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-violet-tint text-violet">
                 <ClipboardCheck aria-hidden size={21} />
@@ -914,27 +869,36 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
             {selectedBooths.length > 0 ? (
               <>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 rounded-[16px] border border-[#e5daf6] bg-[#f8f5ff] p-4">
                   {selectedBooths.map(({ booth, zone }) => (
                     <button
                       key={booth.id}
                       type="button"
                       onClick={() => toggleBooth(booth)}
-                      className="sl-chip min-h-9 gap-2 bg-[#f3edff] text-violet"
+                      className="mb-2 flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-left last:mb-0"
                       aria-label={`นำ Booth ${booth.code} ออกจากรายการ`}
                     >
-                      Zone {zone.code} · {booth.code}
-                      <span aria-hidden>×</span>
+                      <span>
+                        <span className="block text-[11px] font-bold text-muted">Booth · Zone {zone.code}</span>
+                        <strong className="text-xl font-black text-violet">{booth.code}</strong>
+                      </span>
+                      <span className="rounded-full bg-[#e8f8ef] px-2 py-1 text-[11px] font-bold text-[#118454]">พร้อมจอง</span>
                     </button>
                   ))}
                 </div>
+                <dl className="mt-4 space-y-2 border-b border-line pb-4 text-xs">
+                  <div className="flex justify-between gap-3"><dt className="text-muted">ชื่อร้าน / ธุรกิจ</dt><dd className="text-right font-bold">{shop?.name ?? 'ยังไม่มีข้อมูลร้าน'}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">ผู้จัดงาน</dt><dd className="text-right font-bold">{data.event.organization.name}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">Booking ID</dt><dd className="text-right font-bold text-muted">สร้างหลังยืนยัน</dd></div>
+                </dl>
                 <div className="mt-4 rounded-[16px] border border-[#e5daf6] bg-[#faf7ff] p-4">
+                  <strong className="mb-3 block text-sm">ค่าใช้จ่าย</strong>
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-muted">เลือกแล้ว</span>
-                    <strong>{selectedBooths.length} บูธ</strong>
+                    <span className="text-muted">ค่าเช่าพื้นที่ ({selectedBooths.length} บูธ)</span>
+                    <strong>{moneyFormatter.format(selectedTotal)} บาท</strong>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#e8dff3] pt-3">
-                    <span className="text-sm font-bold">ยอดรวม</span>
+                    <span className="text-sm font-black text-violet">รวมทั้งหมด</span>
                     <strong className="text-xl font-black text-violet">
                       {moneyFormatter.format(selectedTotal)} บาท
                     </strong>
@@ -959,7 +923,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
 
             {quota.status === 'ready' ? (
               <div className="mt-4 flex items-center justify-between rounded-[13px] bg-[#f3edff] px-3 py-2 text-xs">
-                <span className="text-muted">โควตาคงเหลือ</span>
+                <span className="text-muted">จำนวนบูธที่เหลือ</span>
                 <strong className="text-violet">
                   {quota.value.remainingQuota} จาก {quota.value.configuredQuota}{' '}
                   บูธ
@@ -971,14 +935,32 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               </span>
             ) : null}
 
+            <div className="mt-4 rounded-[16px] border border-[#ccebd9] bg-[#effbf4] p-4">
+              <div className="flex items-center gap-2 text-sm font-black text-[#118454]">
+                <ShieldCheck aria-hidden size={18} />
+                นโยบายการจอง
+              </div>
+              <ul className="mt-2 space-y-1 text-xs leading-5 text-[#47705b]">
+                <li>✓ ระบบตรวจสอบสถานะ Booth อีกครั้งก่อนสร้าง Booking</li>
+                <li>✓ การชำระเงินสมบูรณ์เมื่อส่งหลักฐานสำเร็จ</li>
+              </ul>
+            </div>
+
             <button
               type="button"
               onClick={() => void continueToBooking()}
               disabled={selectedBooths.length === 0 || quota.status !== 'ready'}
               className="sl-action-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ดำเนินการต่อ →
+              สร้าง Booking และไปชำระเงิน →
             </button>
+            <Link
+              href={`/events/${encodeURIComponent(data.event.slug)}`}
+              className="sl-action-secondary mt-3 w-full justify-center"
+            >
+              <ArrowLeft aria-hidden size={15} />
+              กลับไปหน้า Event
+            </Link>
             {selectionError ? (
               <p role="alert" className="mt-3 text-sm font-bold text-[#9d620c]">
                 {selectionError}
@@ -1272,21 +1254,41 @@ function MapMetric({
   green?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-[18px] border border-[#e7dff0] bg-white p-3 shadow-[0_10px_28px_rgba(54,36,91,.06)] sm:min-w-[116px]">
+    <div className="flex min-w-0 items-center gap-3 rounded-[18px] border border-[#e7dff0] bg-white p-3 shadow-[0_10px_28px_rgba(54,36,91,.06)]">
       <span
-        className={`grid h-9 w-9 place-items-center rounded-[12px] ${green ? 'bg-[#eaf9f1] text-[#118454]' : 'bg-violet-tint text-violet'}`}
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-[13px] ${green ? 'bg-[#eaf9f1] text-[#118454]' : 'bg-violet-tint text-violet'}`}
       >
         {icon}
       </span>
-      <span className="mt-2 block truncate text-[11px] font-bold text-muted">
-        {label}
-      </span>
-      <div className="mt-0.5 flex items-baseline gap-1">
-        <strong className={`text-xl font-black ${green ? 'text-[#118454]' : ''}`}>
-          {value}
-        </strong>
-        <span className="text-[10px] text-muted">{detail}</span>
+      <div className="min-w-0">
+        <span className="block truncate text-[11px] font-bold text-muted">{label}</span>
+        <strong className={`block text-xl font-black leading-tight ${green ? 'text-[#118454]' : ''}`}>{value}</strong>
+        <span className="block truncate text-[10px] text-muted">{detail}</span>
       </div>
+    </div>
+  );
+}
+
+function BookingStep({
+  number,
+  label,
+  detail,
+  active = false,
+}: {
+  number: string;
+  label: string;
+  detail: string;
+  active?: boolean;
+}) {
+  return (
+    <div className={`flex items-center gap-3 rounded-[14px] px-4 py-3 ${active ? 'bg-[#f1ebff]' : 'bg-white'}`}>
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-black ${active ? 'bg-violet text-white' : 'bg-[#f3f0f5] text-muted'}`}>
+        {number}
+      </span>
+      <span className="min-w-0">
+        <strong className={`block text-sm ${active ? 'text-violet' : 'text-muted'}`}>{label}</strong>
+        <span className="block truncate text-xs text-muted">{detail}</span>
+      </span>
     </div>
   );
 }
