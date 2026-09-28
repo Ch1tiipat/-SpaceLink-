@@ -223,7 +223,7 @@ export function AdminAnnouncementsScreen() {
 
   if (access === 'denied') {
     return (
-      <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
+      <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5">
         <section className="max-w-lg rounded-[28px] border border-[#eadff7] bg-white p-8 text-center shadow-sm">
           <AlertCircle
             className="mx-auto h-11 w-11 text-[#dc2626]"
@@ -244,7 +244,7 @@ export function AdminAnnouncementsScreen() {
     return <PageState label="ไม่พบองค์กรที่คุณดูแล" />;
 
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-8 sm:px-7 lg:px-10">
+    <main className="sl-app-background min-h-[calc(100vh-72px)] px-4 py-8 sm:px-7 lg:px-10">
       <div className="mx-auto max-w-6xl">
         <header>
           <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-violet">
@@ -542,7 +542,7 @@ function Feedback({
 
 function PageState({ label }: { label: string }) {
   return (
-    <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
+    <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5">
       <p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-muted shadow-sm">
         {label}
       </p>
