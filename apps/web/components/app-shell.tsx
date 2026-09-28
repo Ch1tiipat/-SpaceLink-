@@ -125,6 +125,22 @@ const NOTIFICATIONS_NAV_ITEM: Extract<NavItem, { kind: 'link' }> = {
   matches: (pathname) => pathname.startsWith('/notifications'),
 };
 
+const REFUNDS_NAV_ITEM: Extract<NavItem, { kind: 'link' }> = {
+  kind: 'link',
+  label: 'คำขอคืนเงิน',
+  href: '/refunds',
+  icon: RotateCcw,
+  matches: (pathname) => pathname.startsWith('/refunds'),
+};
+
+const REVIEWS_NAV_ITEM: Extract<NavItem, { kind: 'link' }> = {
+  kind: 'link',
+  label: 'รีวิว',
+  href: '/reviews',
+  icon: Star,
+  matches: (pathname) => pathname.startsWith('/reviews'),
+};
+
 /**
  * The prototype lists หน้าหลัก and ค้นหา Event separately. Discovery is a
  * single page here, so they are one item; its sibling Event ที่แนะนำ is
@@ -156,13 +172,8 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Ticket,
         matches: (pathname) => pathname.startsWith('/bookings'),
       },
-      {
-        kind: 'link',
-        label: 'รีวิว',
-        href: '/reviews',
-        icon: Star,
-        matches: (pathname) => pathname.startsWith('/reviews'),
-      },
+      REFUNDS_NAV_ITEM,
+      REVIEWS_NAV_ITEM,
       NOTIFICATIONS_NAV_ITEM,
       {
         kind: 'link',
@@ -273,7 +284,7 @@ const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
     .filter(
       (item) =>
         item.kind !== 'link' ||
-        (item.href !== '/bookings' && item.href !== '/reviews'),
+        !['/bookings', '/refunds', '/reviews'].includes(item.href),
     )
     .map((item) =>
       item.kind === 'link' && item.href === '/help'
@@ -286,7 +297,8 @@ const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
   NAV_GROUPS[1].items[0],
-  NAV_GROUPS[1].items[1],
+  REFUNDS_NAV_ITEM,
+  REVIEWS_NAV_ITEM,
   NOTIFICATIONS_NAV_ITEM,
 ];
 

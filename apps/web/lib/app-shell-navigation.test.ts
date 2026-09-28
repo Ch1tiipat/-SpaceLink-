@@ -13,6 +13,39 @@ const appShellSource = readAppShellSource(
   joinAppShellPath(process.cwd(), 'components', 'app-shell.tsx'),
   'utf8',
 );
+const refundsRouteSource = readAppShellSource(
+  joinAppShellPath(process.cwd(), 'app', 'refunds', 'page.tsx'),
+  'utf8',
+);
+const refundsScreenSource = readAppShellSource(
+  joinAppShellPath(process.cwd(), 'components', 'my-refunds-screen.tsx'),
+  'utf8',
+);
+
+appShellNavTest('vendor navigation restores the existing refund route on desktop and mobile', () => {
+  appShellNavAssert.match(
+    appShellSource,
+    /const REFUNDS_NAV_ITEM:[\s\S]*?label: 'คำขอคืนเงิน',[\s\S]*?href: '\/refunds'/,
+  );
+  appShellNavAssert.match(
+    appShellSource,
+    /items: \[[\s\S]*?REFUNDS_NAV_ITEM,[\s\S]*?REVIEWS_NAV_ITEM,[\s\S]*?NOTIFICATIONS_NAV_ITEM/,
+  );
+  appShellNavAssert.match(
+    appShellSource,
+    /const BOTTOM_NAV:[\s\S]*?REFUNDS_NAV_ITEM,[\s\S]*?REVIEWS_NAV_ITEM,[\s\S]*?NOTIFICATIONS_NAV_ITEM/,
+  );
+  appShellNavAssert.match(refundsRouteSource, /<MyRefundsScreen \/>/);
+  appShellNavAssert.match(refundsScreenSource, /คำขอคืนเงินของฉัน/);
+  appShellNavAssert.match(refundsScreenSource, /ติดตามคำขอคืนเงิน/);
+});
+
+appShellNavTest('Admin My Space does not inherit vendor refund navigation', () => {
+  appShellNavAssert.match(
+    appShellSource,
+    /!\['\/bookings', '\/refunds', '\/reviews'\]\.includes\(item\.href\)/,
+  );
+});
 
 appShellNavTest('admin mobile navigation opens Notifications without relying on item order', () => {
   appShellNavAssert.match(
