@@ -88,3 +88,30 @@ bookingReviewTest('success dialog keeps both explicit post-payment actions', () 
     /\/events\/\$\{encodeURIComponent\(booking\.event\.slug \?\? booking\.event\.id\)\}\/map/,
   );
 });
+
+bookingReviewTest('success dialog close control shares the Escape fallback on pointer and touch', () => {
+  bookingReviewAssert.match(
+    bookingReviewPaymentSource,
+    /const closeToBookings = useCallback\(\(\) => \{\s*window\.location\.assign\('\/bookings'\);/,
+  );
+  bookingReviewAssert.match(
+    bookingReviewPaymentSource,
+    /event\.key === 'Escape'[\s\S]*?event\.preventDefault\(\);[\s\S]*?closeToBookings\(\);/,
+  );
+  bookingReviewAssert.match(
+    bookingReviewPaymentSource,
+    /<button\s+type="button"\s+onClick=\{closeToBookings\}\s+aria-label="ปิดหน้าต่างและไปการจองของฉัน"/,
+  );
+  bookingReviewAssert.match(
+    bookingReviewPaymentSource,
+    /className="fixed inset-0 z-\[80\] flex items-start justify-center overflow-y-auto/,
+  );
+  bookingReviewAssert.match(
+    bookingReviewPaymentSource,
+    /'a\[href\], button:not\(\[disabled\]\)'/,
+  );
+  bookingReviewAssert.doesNotMatch(
+    bookingReviewPaymentSource,
+    /title="ยืนยันการจองเรียบร้อยแล้ว"/,
+  );
+});

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
@@ -14,6 +14,7 @@ import {
   Sparkles,
   Store,
   WalletCards,
+  X,
 } from 'lucide-react';
 import { BookingCountdown } from '@/components/booking-countdown';
 import { PreviewSlipUploadPanel } from '@/components/booking-screen';
@@ -396,13 +397,17 @@ function BookingPaymentSuccessDialog({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryActionRef = useRef<HTMLAnchorElement>(null);
+  const closeToBookings = useCallback(() => {
+    window.location.assign('/bookings');
+  }, []);
 
   useEffect(() => {
     primaryActionRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        window.location.assign('/bookings');
+        event.preventDefault();
+        closeToBookings();
         return;
       }
 
@@ -425,11 +430,11 @@ function BookingPaymentSuccessDialog({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [closeToBookings]);
 
   return (
     <div
-      className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-[#1d1230]/55 p-4 backdrop-blur-[5px]"
+      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-[#1d1230]/55 p-4 backdrop-blur-[5px] sm:py-6"
       role="presentation"
     >
       <div
@@ -442,6 +447,14 @@ function BookingPaymentSuccessDialog({
       >
         <div className="pointer-events-none absolute -left-12 -top-14 h-36 w-36 rounded-full bg-violet/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-16 -right-10 h-40 w-40 rounded-full bg-emerald/10 blur-2xl" />
+        <button
+          type="button"
+          onClick={closeToBookings}
+          aria-label="ปิดหน้าต่างและไปการจองของฉัน"
+          className="absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-line bg-white text-muted shadow-sm transition hover:border-violet/30 hover:bg-violet-tint hover:text-violet focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
 
         <div className="relative mx-auto grid h-24 w-24 place-items-center">
           <span className="absolute inset-2 rounded-full bg-[#dff7e9] motion-safe:animate-ping" />
@@ -492,7 +505,8 @@ function BookingPaymentSuccessDialog({
           </Link>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          หน้านี้จะไม่ย้อนกลับไปยังหน้าสำเร็จแบบเดิม กด Esc เพื่อไปหน้าการจองของฉัน
+          หน้านี้จะไม่ย้อนกลับไปยังหน้าสำเร็จแบบเดิม กดปุ่มปิดหรือ Esc
+          เพื่อไปหน้าการจองของฉัน
         </p>
       </div>
     </div>
