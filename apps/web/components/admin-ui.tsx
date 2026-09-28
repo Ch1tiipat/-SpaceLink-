@@ -115,7 +115,7 @@ export function AdminAccessGate({
 
   if (access !== 'allowed') {
     return (
-      <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f7fb] px-5 py-12">
+      <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5 py-12">
         <section className="max-w-lg rounded-[24px] border border-[#ebe5ef] bg-white p-8 text-center shadow-[0_18px_45px_rgba(54,36,91,0.07)]">
           <AlertCircle
             className="mx-auto h-11 w-11 text-[#dc2626]"
@@ -139,11 +139,7 @@ export function AdminAccessGate({
 
 export function AdminPage({ children }: { children: ReactNode }) {
   return (
-    <main className="relative isolate min-h-[calc(100vh-72px)] overflow-hidden bg-[radial-gradient(circle_at_92%_8%,rgba(166,120,255,.18),transparent_25%),radial-gradient(circle_at_8%_88%,rgba(218,195,255,.24),transparent_30%),linear-gradient(145deg,#fff_0%,#fbf9ff_44%,#f3edff_100%)] px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-y-[72px] right-0 -z-10 w-[70%] opacity-30 [background-image:radial-gradient(circle,rgba(117,56,238,.2)_1px,transparent_1.2px)] [background-size:28px_28px] [mask-image:linear-gradient(135deg,transparent_8%,#000_44%,transparent_88%)]"
-      />
+    <main className="sl-app-background relative isolate min-h-[calc(100vh-72px)] overflow-hidden px-4 py-7 sm:px-7 lg:px-9 lg:py-9">
       <div className="mx-auto max-w-[1440px]">{children}</div>
     </main>
   );
@@ -282,7 +278,7 @@ export function AdminEmpty({
 
 export function AdminPageState({ label }: { label: string }) {
   return (
-    <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f7fb] px-5">
+    <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5">
       <p className="flex items-center gap-2 rounded-2xl border border-[#e8e1ee] bg-white px-5 py-4 text-sm font-bold text-muted shadow-sm">
         <Loader2 className="h-4 w-4 animate-spin text-violet" aria-hidden />
         {label}

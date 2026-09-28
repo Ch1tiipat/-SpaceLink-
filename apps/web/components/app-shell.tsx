@@ -707,7 +707,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {header}
         <main
           role="status"
-          className="grid min-h-[calc(100vh-63px)] place-items-center bg-[#faf7ff] px-6 text-center text-sm font-semibold text-muted lg:min-h-[calc(100vh-72px)]"
+          className="sl-app-background grid min-h-[calc(100vh-63px)] place-items-center px-6 text-center text-sm font-semibold text-muted lg:min-h-[calc(100vh-72px)]"
         >
           {auth.status === 'loading'
             ? 'กำลังตรวจสอบการเข้าสู่ระบบ…'
@@ -749,7 +749,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         )}
 
-        <div className="min-w-0 bg-[linear-gradient(180deg,rgba(250,247,255,.7),rgba(255,255,255,.22)_45%,rgba(245,240,255,.5))]">
+        <div className="sl-app-background min-w-0">
           {activeBroadcast ? (
             <SystemBroadcastBanner
               broadcast={activeBroadcast}

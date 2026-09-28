@@ -163,11 +163,7 @@ export function AdminDashboard() {
   );
 
   return (
-    <main className="relative isolate min-h-[calc(100vh-72px)] overflow-hidden bg-[radial-gradient(circle_at_92%_5%,rgba(167,139,250,.18),transparent_22%),linear-gradient(145deg,#fff_0%,#fbf9ff_48%,#f5f0ff_100%)] pb-10">
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-y-[72px] right-0 -z-10 w-1/2 opacity-25 [background-image:radial-gradient(circle,rgba(117,56,238,.22)_1px,transparent_1.2px)] [background-size:26px_26px] [mask-image:linear-gradient(135deg,transparent_8%,#000_42%,transparent_90%)]"
-      />
+    <main className="sl-app-background relative isolate min-h-[calc(100vh-72px)] overflow-hidden pb-10">
       <div className="shell py-5 sm:py-6">
         <section className="relative overflow-hidden rounded-[24px] border border-white/80 bg-white/90 px-5 py-5 shadow-[0_16px_45px_rgba(74,48,112,.08)] backdrop-blur-sm sm:px-6">
           <div

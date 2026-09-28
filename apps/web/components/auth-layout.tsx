@@ -31,8 +31,8 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-[calc(100vh-63px)] flex-col bg-[#f8f6ff] lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(500px,0.96fr)_minmax(500px,1.04fr)]">
-      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-8 lg:items-center lg:bg-[radial-gradient(circle_at_15%_10%,rgba(124,58,237,0.1),transparent_25rem),radial-gradient(circle_at_85%_92%,rgba(91,33,182,0.06),transparent_20rem),#fff] lg:px-10 lg:py-12">
+    <div className="sl-app-background flex min-h-[calc(100vh-63px)] flex-col lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(500px,0.96fr)_minmax(500px,1.04fr)]">
+      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-8 lg:items-center lg:bg-white/30 lg:px-10 lg:py-12 lg:backdrop-blur-[2px]">
         <span className="pointer-events-none absolute -bottom-40 -left-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
         <div className="relative flex w-full max-w-[460px] flex-col gap-4 lg:max-w-[480px]">
           <Link
