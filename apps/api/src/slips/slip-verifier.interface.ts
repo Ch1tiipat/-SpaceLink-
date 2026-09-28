@@ -7,6 +7,8 @@ import { Prisma, SlipStatus } from '@prisma/client';
  */
 export const SLIP_VERIFIER = Symbol('SLIP_VERIFIER');
 
+export type SlipVerificationPurpose = 'PAYMENT' | 'REFUND_PAYOUT';
+
 /*
  * Money on both sides of this contract is `Prisma.Decimal`, never `number`
  * (AGENTS.md §6.1).
@@ -36,6 +38,14 @@ export interface SlipVerificationInput {
    * Pass the `Decimal` straight off the booking row — do not convert it.
    */
   expectedAmount: Prisma.Decimal;
+
+  /**
+   * Payment slips must target the organization's account. Refund payout slips
+   * target the vendor instead, so a provider must not apply the merchant
+   * receiver-account check to them. Missing values preserve the historical
+   * payment behaviour.
+   */
+  purpose?: SlipVerificationPurpose;
 }
 
 /**

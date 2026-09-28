@@ -64,6 +64,7 @@ export class RefundSlipVerificationService {
     const result = await this.verifier.verify({
       slipImageUrl: request.slipImageUrl,
       expectedAmount: request.expectedAmount,
+      purpose: 'REFUND_PAYOUT',
     });
 
     if (result.status === SlipStatus.DUPLICATE) {

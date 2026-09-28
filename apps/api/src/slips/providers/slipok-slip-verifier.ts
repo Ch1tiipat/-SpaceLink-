@@ -64,7 +64,12 @@ export class SlipOkSlipVerifier implements SlipVerifier {
           },
           body: JSON.stringify({
             url: input.slipImageUrl,
-            log: true,
+            // `log: true` asks SlipOK to compare the receiver with the
+            // merchant account linked to the branch. That is correct for
+            // incoming payments, but an outgoing refund intentionally names
+            // the vendor as receiver. Refund duplicate protection remains in
+            // RefundSlipVerificationService through its transRef checks.
+            log: input.purpose !== 'REFUND_PAYOUT',
             // SlipOK's wire contract requires a JSON number. This conversion is
             // deliberately confined to the external adapter.
             amount: input.expectedAmount.toNumber(),

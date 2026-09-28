@@ -66,6 +66,28 @@ describe('SlipOkSlipVerifier', () => {
     });
   });
 
+  it('does not ask SlipOK to match the merchant receiver for a refund payout', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      response({
+        success: true,
+        data: {
+          success: true,
+          transRef: 'REFUND-TX-001',
+          amount: 1500,
+        },
+      }),
+    );
+
+    await verifier().verify({ ...INPUT, purpose: 'REFUND_PAYOUT' });
+
+    const options = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(options.body as string)).toMatchObject({
+      url: INPUT.slipImageUrl,
+      amount: 1500,
+      log: false,
+    });
+  });
+
   it('maps SlipOK code 1012 to DUPLICATE without reusing transRef', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       response(
