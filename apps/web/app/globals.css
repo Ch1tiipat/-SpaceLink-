@@ -258,13 +258,13 @@ select {
 }
 
 .sl-floating-chat {
-  height: min(48rem, calc(100vh - 2rem - env(safe-area-inset-bottom)));
-  height: min(48rem, calc(100dvh - 2rem - env(safe-area-inset-bottom)));
+  height: min(38rem, calc(100vh - 2rem - env(safe-area-inset-bottom)));
+  height: min(38rem, calc(100dvh - 2rem - env(safe-area-inset-bottom)));
 }
 
 .sl-floating-support--with-bottom-nav .sl-floating-chat {
-  height: min(44rem, calc(100vh - 6rem - env(safe-area-inset-bottom)));
-  height: min(44rem, calc(100dvh - 6rem - env(safe-area-inset-bottom)));
+  height: min(36rem, calc(100vh - 6rem - env(safe-area-inset-bottom)));
+  height: min(36rem, calc(100dvh - 6rem - env(safe-area-inset-bottom)));
 }
 
 .sl-bottom-nav {
@@ -286,7 +286,7 @@ select {
 
   .sl-floating-chat,
   .sl-floating-support--with-bottom-nav .sl-floating-chat {
-    height: 42rem;
+    height: 38rem;
     max-height: calc(100vh - 5rem);
     max-height: calc(100dvh - 5rem - env(safe-area-inset-bottom));
   }
