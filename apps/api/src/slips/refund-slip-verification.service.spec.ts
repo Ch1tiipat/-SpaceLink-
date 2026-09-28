@@ -59,6 +59,11 @@ describe('RefundSlipVerificationService', () => {
       verifiedAt: expect.any(String) as string,
       nameMismatchWarning: false,
     });
+    expect(verify).toHaveBeenCalledWith({
+      slipImageUrl: request.slipImageUrl,
+      expectedAmount: EXPECTED,
+      purpose: 'REFUND_PAYOUT',
+    });
     expect(findUnique).toHaveBeenCalledWith({
       where: { transRef: 'refund-trans-ref' },
       select: { id: true },
