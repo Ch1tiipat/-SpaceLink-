@@ -563,6 +563,8 @@ function createChartGeometry(series: Array<{ label: string; value: number }>) {
   const bottom = 205;
   const maximum = Math.max(0, ...series.map((point) => point.value));
   const ceiling = maximum === 0 ? 4 : Math.max(5, Math.ceil(maximum / 5) * 5);
+  const middleValue = Math.round(ceiling / 2);
+  const middleY = bottom - (middleValue / ceiling) * (bottom - top);
   const step = series.length > 1 ? (right - left) / (series.length - 1) : 0;
   const points = series.map((point, index) => ({
     ...point,
@@ -581,9 +583,9 @@ function createChartGeometry(series: Array<{ label: string; value: number }>) {
     grid: [
       { value: ceiling, label: String(ceiling), y: top },
       {
-        value: Math.round(ceiling / 2),
-        label: String(Math.round(ceiling / 2)),
-        y: (top + bottom) / 2,
+        value: middleValue,
+        label: String(middleValue),
+        y: middleY,
       },
       { value: 0, label: '0', y: bottom },
     ],
