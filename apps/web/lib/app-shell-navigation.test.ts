@@ -39,3 +39,37 @@ appShellNavTest('vendor and admin mobile navigation share the named Notification
     /items: \[[\s\S]*?NOTIFICATIONS_NAV_ITEM,[\s\S]*?label: 'ติดต่อสอบถาม'/,
   );
 });
+
+appShellNavTest('Admin My Space keeps Support on its dedicated route', () => {
+  appShellNavAssert.match(
+    appShellSource,
+    /label: 'ติดต่อสอบถาม',[\s\S]*?href: '\/support',[\s\S]*?pathname\.startsWith\('\/support'\)/,
+  );
+  appShellNavAssert.match(
+    appShellSource,
+    /const ADMIN_MY_SPACE_NAV_GROUP:[\s\S]*?\.\.\.NAV_GROUPS\[1\],[\s\S]*?items: NAV_GROUPS\[1\]\.items/,
+  );
+  appShellNavAssert.doesNotMatch(
+    appShellSource,
+    /item\.href !== '\/support'/,
+  );
+});
+
+appShellNavTest('Admin role filtering cannot shift the named mobile destinations', () => {
+  appShellNavAssert.match(
+    appShellSource,
+    /if \(adminRole === 'SUPER_ADMIN'\) return true;/,
+  );
+  appShellNavAssert.match(
+    appShellSource,
+    /selectedOrganization\?\.membershipRole === 'OWNER'/,
+  );
+  appShellNavAssert.match(
+    appShellSource,
+    /const bottomNavItems = isAdmin[\s\S]*?\.\.\.visibleAdminItems, NOTIFICATIONS_NAV_ITEM/,
+  );
+  appShellNavAssert.doesNotMatch(
+    appShellSource,
+    /NAV_GROUPS\[1\]\.items\[3\]/,
+  );
+});
