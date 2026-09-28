@@ -220,6 +220,7 @@ function BookingEventCover({
       alt={alt}
       fill
       sizes={sizes}
+      unoptimized
       className="object-cover"
       onError={() => setHasLoadFailed(true)}
     />

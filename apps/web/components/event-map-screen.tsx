@@ -9,8 +9,23 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type ReactNode,
 } from 'react';
-import { Gauge, Sparkles, Store, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  Filter,
+  Gauge,
+  LayoutGrid,
+  MapPin,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Store,
+  X,
+} from 'lucide-react';
 import { ZoneMap } from '@/components/zone-map';
 import {
   getEventMap,
@@ -49,6 +64,16 @@ const zoneColors = [
 const moneyFormatter = new Intl.NumberFormat('th-TH', {
   maximumFractionDigits: 2,
 });
+
+const eventDateFormatter = new Intl.DateTimeFormat('th-TH', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+function formatEventDateRange(startDate: string, endDate: string): string {
+  return `${eventDateFormatter.format(new Date(startDate))} – ${eventDateFormatter.format(new Date(endDate))}`;
+}
 
 const mapZoomLevels = [1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -436,29 +461,59 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
     : 'Event นี้ปิดรับจองแล้ว';
 
   return (
-    <main className="sl-page pb-32">
-      <div className="shell max-w-[1280px] py-4">
-        <header className="sl-surface mb-3 flex min-h-[72px] items-center gap-4 p-3 max-md:flex-wrap">
-          <div className="min-w-[220px] flex-1 px-2">
-            <span className="sl-kicker">EVENT MAP</span>
-            <h1 className="mt-1 text-2xl font-black tracking-[-0.04em] max-sm:text-xl">
+    <main className="sl-page pb-12">
+      <div className="shell max-w-[1280px] py-5">
+        <header className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div>
+            <Link
+              href={`/events/${encodeURIComponent(data.event.slug)}`}
+              className="sl-chip mb-4 min-h-9 w-fit gap-2 bg-white"
+            >
+              <ArrowLeft aria-hidden size={15} />
+              กลับไปหน้า Event
+            </Link>
+            <span className="sl-kicker">EVENT FLOOR PLAN</span>
+            <h1 className="mt-1 text-3xl font-black tracking-[-0.045em] max-sm:text-2xl">
               แผนผังพื้นที่จัดงาน
             </h1>
-            <p className="mt-0.5 truncate text-sm text-muted">
-              {data.event.name} · {bookingAvailabilityText}
+            <p className="mt-1 text-base font-bold text-ink">
+              {data.event.name}
             </p>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays aria-hidden size={16} className="text-violet" />
+                {formatEventDateRange(data.event.startDate, data.event.endDate)}
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <MapPin aria-hidden size={16} className="text-violet" />
+                {data.event.venue.name}
+              </span>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2" aria-label="สรุปแผนผัง Event">
-            <SummaryStat label="Zone" value={`${metrics.zones}`} />
-            <SummaryStat label="Booth" value={`${metrics.booths}`} />
-            <SummaryStat label="ว่าง" value={`${metrics.available}`} green />
-          </div>
-          <Link
-            href={`/events/${encodeURIComponent(data.event.slug)}`}
-            className="sl-chip whitespace-nowrap"
+          <div
+            className="grid grid-cols-3 gap-3 max-sm:gap-2"
+            aria-label="สรุปแผนผัง Event"
           >
-            ← กลับ Event
-          </Link>
+            <MapMetric
+              icon={<LayoutGrid aria-hidden size={19} />}
+              label="โซนทั้งหมด"
+              value={`${metrics.zones}`}
+              detail="โซน"
+            />
+            <MapMetric
+              icon={<Store aria-hidden size={19} />}
+              label="บูธทั้งหมด"
+              value={`${metrics.booths}`}
+              detail="บูธ"
+            />
+            <MapMetric
+              icon={<CheckCircle2 aria-hidden size={19} />}
+              label="บูธว่าง"
+              value={`${metrics.available}`}
+              detail="พร้อมจอง"
+              green
+            />
+          </div>
         </header>
 
         <section className="sl-surface mb-3 flex min-h-[62px] flex-wrap items-center gap-3 border-[#dfd0f0] bg-[linear-gradient(105deg,#fbf8ff_0%,#ffffff_55%,#f2ebff_100%)] px-4 py-3">
@@ -560,7 +615,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           )}
         </section>
 
-        <section className="sl-surface min-w-0 overflow-hidden">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="sl-surface min-w-0 overflow-hidden lg:col-start-1 lg:row-span-2">
           <div className="flex min-h-[48px] items-center justify-between gap-4 border-b border-line px-4 py-2">
             <div>
               <span className="block text-xs font-extrabold text-[#a095a5]">
@@ -577,7 +633,24 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             </div>
           </div>
 
-          <div className="grid gap-3 border-b border-line bg-white px-4 py-4 sm:grid-cols-3">
+          <div className="border-b border-line bg-white px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <strong className="inline-flex items-center gap-2 text-sm">
+                <Filter aria-hidden size={16} className="text-violet" />
+                ตัวกรองบูธ
+              </strong>
+              {filtersActive ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex min-h-8 items-center gap-1.5 text-xs font-bold text-violet"
+                >
+                  <RotateCcw aria-hidden size={13} />
+                  รีเซ็ต
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-xs font-bold text-muted">
               สถานะบูธ
               <select
@@ -631,6 +704,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                 ))}
               </select>
             </label>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-[#fbf9ff] px-4 py-2">
@@ -640,15 +714,6 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               จาก {metrics.booths} บูธ · การกรองไม่เปลี่ยนรายการที่เลือกไว้
             </p>
             <div className="flex items-center gap-2">
-              {filtersActive ? (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="sl-chip min-h-9"
-                >
-                  ล้างตัวกรอง
-                </button>
-              ) : null}
               <span className="text-xs font-bold text-muted">Zoom</span>
               <button
                 type="button"
@@ -747,8 +812,8 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           )}
         </section>
 
-        <section className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr_.9fr]">
-          <article className="sl-surface p-5">
+        <section className="grid gap-3 lg:col-start-2 lg:row-start-1">
+          <article className="sl-surface order-2 p-5">
             <span className="sl-kicker">SELECTED ZONE</span>
             {selectedZone ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
@@ -788,7 +853,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             )}
           </article>
 
-          <article className="sl-surface p-5">
+          <article className="sl-surface order-1 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <span className="sl-kicker">QUICK ZONES</span>
@@ -822,7 +887,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             </div>
           </article>
 
-          <article className="sl-surface p-5">
+          <article className="sl-surface order-3 p-5">
             <span className="sl-kicker">BOOTH STATUS</span>
             <h2 className="mt-1 text-base font-black">สถานะ Booth</h2>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -836,33 +901,21 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
         </section>
 
         {eventBookable ? (
-          <section className="sl-surface sticky bottom-20 z-20 mt-4 border-[#cdb9ec] p-4 shadow-[0_18px_50px_rgba(54,36,91,.2)] md:bottom-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="min-w-[170px]">
-                <span className="text-xs font-extrabold uppercase tracking-[.12em] text-violet">
-                  Selected booths
-                </span>
-                <strong className="mt-1 block text-lg font-black">
-                  เลือกแล้ว {selectedBooths.length} บูธ
-                </strong>
-                <span className="text-sm text-muted">
-                  รวม {moneyFormatter.format(selectedTotal)} บาท
-                </span>
-                {quota.status === 'ready' ? (
-                  <span className="mt-1 block text-xs font-bold text-violet">
-                    โควตาคงเหลือ {quota.value.remainingQuota} จาก{' '}
-                    {quota.value.configuredQuota} บูธ
-                  </span>
-                ) : quota.status === 'loading' ? (
-                  <span className="mt-1 block text-xs text-muted">
-                    กำลังตรวจสอบโควตา…
-                  </span>
-                ) : null}
+          <section className="sl-surface border-[#cdb9ec] p-5 shadow-[0_18px_50px_rgba(54,36,91,.14)] lg:sticky lg:top-4 lg:col-start-2 lg:row-start-2">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-violet-tint text-violet">
+                <ClipboardCheck aria-hidden size={21} />
+              </span>
+              <div>
+                <span className="sl-kicker">BOOKING SUMMARY</span>
+                <h2 className="mt-0.5 text-lg font-black">สรุปการจอง</h2>
               </div>
+            </div>
 
-              <div className="flex min-w-[220px] flex-1 flex-wrap gap-2">
-                {selectedBooths.length > 0 ? (
-                  selectedBooths.map(({ booth, zone }) => (
+            {selectedBooths.length > 0 ? (
+              <>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selectedBooths.map(({ booth, zone }) => (
                     <button
                       key={booth.id}
                       type="button"
@@ -873,25 +926,59 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
                       Zone {zone.code} · {booth.code}
                       <span aria-hidden>×</span>
                     </button>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted">
-                    เลือก Booth ว่างจากแผนผังเพื่อเพิ่มลงรายการ
-                  </span>
-                )}
+                  ))}
+                </div>
+                <div className="mt-4 rounded-[16px] border border-[#e5daf6] bg-[#faf7ff] p-4">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-muted">เลือกแล้ว</span>
+                    <strong>{selectedBooths.length} บูธ</strong>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#e8dff3] pt-3">
+                    <span className="text-sm font-bold">ยอดรวม</span>
+                    <strong className="text-xl font-black text-violet">
+                      {moneyFormatter.format(selectedTotal)} บาท
+                    </strong>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 rounded-[16px] border border-dashed border-[#d9cdec] bg-[#faf8fd] px-4 py-6 text-center">
+                <LayoutGrid
+                  aria-hidden
+                  size={24}
+                  className="mx-auto text-[#aa96c9]"
+                />
+                <strong className="mt-2 block text-sm">
+                  ยังไม่ได้เลือก Booth
+                </strong>
+                <span className="mt-1 block text-xs leading-5 text-muted">
+                  เลือก Booth ว่างจากแผนผังด้านซ้าย
+                </span>
               </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => void continueToBooking()}
-                disabled={
-                  selectedBooths.length === 0 || quota.status !== 'ready'
-                }
-                className="sl-action-primary min-w-[170px] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                ดำเนินการต่อ →
-              </button>
-            </div>
+            {quota.status === 'ready' ? (
+              <div className="mt-4 flex items-center justify-between rounded-[13px] bg-[#f3edff] px-3 py-2 text-xs">
+                <span className="text-muted">โควตาคงเหลือ</span>
+                <strong className="text-violet">
+                  {quota.value.remainingQuota} จาก {quota.value.configuredQuota}{' '}
+                  บูธ
+                </strong>
+              </div>
+            ) : quota.status === 'loading' ? (
+              <span className="mt-4 block text-xs text-muted">
+                กำลังตรวจสอบโควตา…
+              </span>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void continueToBooking()}
+              disabled={selectedBooths.length === 0 || quota.status !== 'ready'}
+              className="sl-action-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ดำเนินการต่อ →
+            </button>
             {selectionError ? (
               <p role="alert" className="mt-3 text-sm font-bold text-[#9d620c]">
                 {selectionError}
@@ -919,6 +1006,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
             ) : null}
           </section>
         ) : null}
+        </div>
       </div>
       <BookingAccessModal
         kind={bookingAccessDialog}
@@ -988,9 +1076,19 @@ function BookingAccessModal({
   const closeLabel = quotaLimit
     ? 'ปิดข้อความโควตาเต็ม'
     : 'ปิดข้อความก่อนเลือกบูธ';
+  const quotaProgressCurrent = quotaLimit
+    ? hasPendingSelection
+      ? kind.selectedCount
+      : kind.activeBookingCount
+    : 0;
+  const quotaProgressMaximum = quotaLimit
+    ? hasPendingSelection
+      ? kind.effectiveSelectionLimit
+      : kind.configuredQuota
+    : 1;
 
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(24,16,38,.52)] p-5 backdrop-blur-[3px]">
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(24,16,38,.6)] p-4 backdrop-blur-[5px]">
       <button
         type="button"
         aria-label={closeLabel}
@@ -1003,66 +1101,101 @@ function BookingAccessModal({
         aria-modal="true"
         aria-labelledby="booking-access-title"
         aria-describedby="booking-access-description"
-        className="relative w-full max-w-[440px] rounded-[26px] border border-[#e7def2] bg-white p-6 shadow-[0_28px_80px_rgba(28,14,47,.32)]"
+        className="relative w-full max-w-[480px] overflow-hidden rounded-[30px] border border-white/60 bg-white shadow-[0_34px_100px_rgba(28,14,47,.4)]"
       >
-        <button
-          ref={closeButtonRef}
-          type="button"
-          onClick={onClose}
-          aria-label={closeLabel}
-          className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-xl border border-line text-muted transition hover:border-violet hover:text-violet"
-        >
-          <X className="h-5 w-5" aria-hidden />
-        </button>
-        <span className="grid h-14 w-14 place-items-center rounded-[20px] bg-violet-tint text-violet">
+        <div className="relative overflow-hidden bg-[linear-gradient(135deg,#4c1d95_0%,#7c3aed_55%,#a78bfa_100%)] px-6 py-6 text-white">
+          <span className="pointer-events-none absolute -right-8 -top-12 h-40 w-40 rounded-full border-[28px] border-white/10" />
+          <span className="pointer-events-none absolute -bottom-12 right-24 h-28 w-28 rounded-full bg-white/10 blur-sm" />
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label={closeLabel}
+            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-xl border border-white/25 bg-white/10 text-white transition hover:bg-white/20"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+          <span className="grid h-14 w-14 place-items-center rounded-[18px] border border-white/25 bg-white/15 shadow-[0_12px_30px_rgba(31,12,68,.22)]">
+            {quotaLimit ? (
+              <Gauge className="h-7 w-7" aria-hidden />
+            ) : (
+              <Store className="h-7 w-7" aria-hidden />
+            )}
+          </span>
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-extrabold">
+            <ShieldCheck aria-hidden size={14} />
+            {quotaLimit ? 'BOOKING QUOTA' : 'BOOKING ACCESS'}
+          </span>
+          <h2
+            id="booking-access-title"
+            className="mt-3 max-w-[360px] pr-8 text-2xl font-black leading-tight"
+          >
+            {quotaLimit
+              ? hasPendingSelection
+                ? 'เลือกบูธครบจำนวนที่กำหนดแล้ว'
+                : 'โควตาการจองบูธเต็มแล้ว'
+              : missingShop
+                ? 'สร้างร้านค้าก่อนเริ่มจองพื้นที่'
+                : 'เข้าสู่ระบบก่อนเลือกบูธ'}
+          </h2>
+        </div>
+
+        <div className="p-6">
+          <p
+            id="booking-access-description"
+            className="text-sm leading-6 text-muted"
+          >
+            {quotaLimit
+              ? hasPendingSelection
+                ? `คุณเลือกครบ ${kind.selectedCount}/${kind.effectiveSelectionLimit} บูธที่จองได้ในครั้งนี้แล้ว กรุณายืนยันรายการเดิม หรือส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
+                : `คุณใช้โควตาครบ ${kind.activeBookingCount}/${kind.configuredQuota} บูธสำหรับ Event นี้ หากต้องการจองเพิ่ม กรุณาส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
+              : missingShop
+                ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าและระบุหมวดสินค้าก่อนเลือกจองบูธ'
+                : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
+          </p>
+
           {quotaLimit ? (
-            <Gauge className="h-6 w-6" aria-hidden />
-          ) : (
-            <Store className="h-6 w-6" aria-hidden />
-          )}
-        </span>
-        <h2
-          id="booking-access-title"
-          className="mt-5 pr-12 text-xl font-black text-ink"
-        >
-          {quotaLimit
-            ? hasPendingSelection
-              ? 'เลือกบูธครบจำนวนที่กำหนดแล้ว'
-              : 'โควตาการจองบูธเต็มแล้ว'
-            : missingShop
-              ? 'ยังไม่มีร้านค้าสำหรับทำรายการจอง'
-              : 'เข้าสู่ระบบก่อนเลือกบูธ'}
-        </h2>
-        <p
-          id="booking-access-description"
-          className="mt-2 text-sm leading-6 text-muted"
-        >
-          {quotaLimit
-            ? hasPendingSelection
-              ? `คุณเลือกครบ ${kind.selectedCount}/${kind.effectiveSelectionLimit} บูธที่จองได้ในครั้งนี้แล้ว กรุณายืนยันบูธที่เลือกก่อน หรือส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
-              : `คุณใช้โควตาครบ ${kind.activeBookingCount}/${kind.configuredQuota} บูธสำหรับ Event นี้ หากต้องการจองเพิ่ม กรุณาส่งคำขอเพิ่มโควตาไปยังผู้จัดงาน`
-            : missingShop
-              ? 'บัญชีนี้ยังไม่มีร้านค้า กรุณาสร้างร้านค้าก่อนเลือกจองบูธ'
-              : 'กรุณาเข้าสู่ระบบและสร้างร้านค้าก่อนเลือกจองบูธ'}
-        </p>
-        <div
-          className={`mt-6 grid gap-3 ${missingShop || quotaLimit ? 'sm:grid-cols-2' : 'grid-cols-2'}`}
-        >
+            <div className="mt-5 rounded-[18px] border border-[#e1d4f5] bg-[#faf7ff] p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-bold text-ink">สิทธิ์การเลือกครั้งนี้</span>
+                <strong className="text-violet">
+                  {quotaProgressCurrent}/{quotaProgressMaximum} บูธ
+                </strong>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e7ddf7]">
+                <span
+                  className="block h-full rounded-full bg-[linear-gradient(90deg,#8b5cf6,#6d28d9)]"
+                  style={{
+                    width: `${Math.min(100, (quotaProgressCurrent / Math.max(1, quotaProgressMaximum)) * 100)}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted">
+                ระบบจะเก็บบูธที่เลือกไว้เดิม และจะไม่เพิ่มบูธที่เกินโควตา
+              </p>
+            </div>
+          ) : null}
+
+          <div
+            className={`mt-6 grid gap-3 ${missingShop || quotaLimit ? 'sm:grid-cols-2' : 'grid-cols-2'}`}
+          >
           {quotaLimit ? (
             <>
               <button
                 type="button"
                 onClick={onClose}
-                className="sl-action-secondary justify-center"
+                className="sl-action-secondary justify-center gap-2"
               >
+                <RotateCcw aria-hidden size={16} />
                 กลับไปเลือกใหม่
               </button>
               {hasPendingSelection ? (
                 <button
                   type="button"
                   onClick={onConfirmSelection}
-                  className="sl-action-primary justify-center"
+                  className="sl-action-primary justify-center gap-2"
                 >
+                  <CheckCircle2 aria-hidden size={16} />
                   ยืนยัน {kind.selectedCount} บูธที่เลือก
                 </button>
               ) : (
@@ -1075,10 +1208,11 @@ function BookingAccessModal({
                 </Link>
               )}
               <Link
-                href={`/help?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
+                href={`/support?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
                 onClick={onClose}
-                className={`justify-center ${hasPendingSelection ? 'sl-action-secondary sm:col-span-2' : 'sl-action-primary sm:col-span-2'}`}
+                className={`justify-center gap-2 ${hasPendingSelection ? 'sl-action-secondary sm:col-span-2' : 'sl-action-primary sm:col-span-2'}`}
               >
+                <Sparkles aria-hidden size={16} />
                 ขอเพิ่มโควตา / ติดต่อผู้จัดงาน
               </Link>
             </>
@@ -1117,27 +1251,42 @@ function BookingAccessModal({
               </Link>
             </>
           )}
+          </div>
         </div>
       </section>
     </div>
   );
 }
 
-function SummaryStat({
+function MapMetric({
+  icon,
   label,
   value,
+  detail,
   green = false,
 }: {
+  icon: ReactNode;
   label: string;
   value: string;
+  detail: string;
   green?: boolean;
 }) {
   return (
-    <div className="flex min-h-[55px] flex-col items-center justify-center rounded-[13px] border border-line bg-[#fbfafc]">
-      <span className="text-xs text-muted">{label}</span>
-      <strong className={`mt-0.5 text-lg ${green ? 'text-[#118454]' : ''}`}>
-        {value}
-      </strong>
+    <div className="min-w-0 rounded-[18px] border border-[#e7dff0] bg-white p-3 shadow-[0_10px_28px_rgba(54,36,91,.06)] sm:min-w-[116px]">
+      <span
+        className={`grid h-9 w-9 place-items-center rounded-[12px] ${green ? 'bg-[#eaf9f1] text-[#118454]' : 'bg-violet-tint text-violet'}`}
+      >
+        {icon}
+      </span>
+      <span className="mt-2 block truncate text-[11px] font-bold text-muted">
+        {label}
+      </span>
+      <div className="mt-0.5 flex items-baseline gap-1">
+        <strong className={`text-xl font-black ${green ? 'text-[#118454]' : ''}`}>
+          {value}
+        </strong>
+        <span className="text-[10px] text-muted">{detail}</span>
+      </div>
     </div>
   );
 }
