@@ -1208,7 +1208,7 @@ function BookingAccessModal({
                 </Link>
               )}
               <Link
-                href={`/help?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
+                href={`/support?type=QUOTA_INCREASE&eventId=${encodeURIComponent(kind.eventId)}&zoneId=${encodeURIComponent(kind.zoneId)}&boothId=${encodeURIComponent(kind.boothId)}`}
                 onClick={onClose}
                 className={`justify-center gap-2 ${hasPendingSelection ? 'sl-action-secondary sm:col-span-2' : 'sl-action-primary sm:col-span-2'}`}
               >

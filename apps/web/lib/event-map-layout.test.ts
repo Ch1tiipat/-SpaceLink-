@@ -28,6 +28,14 @@ eventMapLayoutTest('event map preserves booth selection and quota actions', () =
   eventMapLayoutAssert.match(eventMapSource, /นำ Booth .* ออกจากรายการ/);
   eventMapLayoutAssert.match(eventMapSource, /ดำเนินการต่อ →/);
   eventMapLayoutAssert.match(eventMapSource, /ขอเพิ่มโควตา \/ ติดต่อผู้จัดงาน/);
+  eventMapLayoutAssert.match(
+    eventMapSource,
+    /href=\{`\/support\?type=QUOTA_INCREASE&eventId=\$\{encodeURIComponent\(kind\.eventId\)\}&zoneId=\$\{encodeURIComponent\(kind\.zoneId\)\}&boothId=\$\{encodeURIComponent\(kind\.boothId\)\}`\}/,
+  );
+  eventMapLayoutAssert.doesNotMatch(
+    eventMapSource,
+    /href=\{`\/help\?type=QUOTA_INCREASE/,
+  );
 });
 
 eventMapLayoutTest('quota dialog provides a visual status and clear actions', () => {
