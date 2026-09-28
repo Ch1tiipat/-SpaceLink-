@@ -644,17 +644,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   if (isSuperAdminRoute) {
-    return (
-      <>
-        {activeBroadcast ? (
-          <SystemBroadcastBanner
-            broadcast={activeBroadcast}
-            onDismiss={dismissBroadcast}
-          />
-        ) : null}
-        {children}
-      </>
-    );
+    return <>{children}</>;
   }
 
   const hasPrivateNavigation = auth.status === 'signed-in';
@@ -750,7 +740,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <div className="sl-app-background min-w-0">
-          {activeBroadcast ? (
+          {activeBroadcast && !isAdminRoute ? (
             <SystemBroadcastBanner
               broadcast={activeBroadcast}
               onDismiss={dismissBroadcast}
@@ -844,7 +834,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         onCancel={() => setSignOutConfirmOpen(false)}
         onConfirm={confirmSignOut}
       />
-      <FloatingSupport auth={auth} hasBottomNav={hasPrivateNavigation} />
+      {!isAdminRoute ? (
+        <FloatingSupport auth={auth} hasBottomNav={hasPrivateNavigation} />
+      ) : null}
       <UxReviewPanel auth={auth} pathname={pathname} />
     </AdminOrganizationContext.Provider>
   );
@@ -859,23 +851,34 @@ function SystemBroadcastBanner({
 }) {
   return (
     <aside
-      aria-label="ประกาศจาก SpaceLink"
-      className="flex items-start gap-3 bg-[linear-gradient(100deg,#5b21b6,#7c3aed)] px-4 py-3 text-white shadow-[0_8px_22px_rgba(91,33,182,.18)] sm:px-6"
+      aria-label="Web Push จาก SpaceLink"
+      className="fixed right-3 top-[78px] z-[70] flex max-h-[min(280px,calc(100dvh-96px))] w-[min(380px,calc(100vw-24px))] items-start gap-3 overflow-hidden rounded-[20px] border border-[#ded8ff] bg-white p-3.5 text-ink shadow-[0_22px_60px_rgba(45,27,82,.22)] sm:right-5 sm:top-[86px] sm:p-4"
     >
-      <Megaphone className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_8px_20px_rgba(109,40,217,.24)]">
+        <Megaphone className="h-5 w-5" aria-hidden />
+      </span>
       <div className="min-w-0 flex-1">
-        <strong className="block text-sm font-extrabold">
+        <span className="block text-[10px] font-black uppercase tracking-[0.15em] text-violet">
+          Web Push · ประกาศสำคัญ
+        </span>
+        <strong className="mt-1 line-clamp-2 break-words text-sm font-extrabold">
           {broadcast.title}
         </strong>
-        <p className="mt-0.5 text-sm leading-5 text-white/90">
+        <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-muted">
           {broadcast.body}
         </p>
+        <Link
+          href="/notifications"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-extrabold text-violet hover:underline"
+        >
+          ดูการแจ้งเตือน <span aria-hidden>→</span>
+        </Link>
       </div>
       <button
         type="button"
         onClick={onDismiss}
         aria-label="ปิดประกาศนี้สำหรับเซสชันปัจจุบัน"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/85 transition hover:bg-white/15 hover:text-white"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f4f3ff] text-[#6b65a0] transition hover:bg-violet-tint hover:text-violet"
       >
         <X className="h-4 w-4" aria-hidden />
       </button>
@@ -1542,7 +1545,7 @@ function FloatingSupport({
   hasBottomNav: boolean;
 }) {
   const initialAnswer =
-    'สวัสดีครับ 👋 ผมคือ AI ช่วยคุณได้ ถามเรื่อง Event การเลือกโซนและบูธ การจอง การชำระเงิน หรือวิธีใช้งาน SpaceLink ได้เลยครับ';
+    'สวัสดีครับ 👋\nผมคือ AI ช่วยคุณได้ ถามเรื่องการจอง ชำระเงิน การอัปโหลดสลิป หรือการใช้งาน SpaceLink ได้เลยครับ';
   const [view, setView] = useState<'closed' | 'menu' | 'chat'>('closed');
   const [assistantMode, setAssistantMode] = useState<'help' | 'zone'>('help');
   const [question, setQuestion] = useState('');
@@ -1573,12 +1576,14 @@ function FloatingSupport({
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const requestController = useRef<AbortController | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const nextMessageId = useRef(1);
 
   const quickQuestions = [
     'เริ่มจองบูธอย่างไร',
-    'อัปโหลดสลิปที่ไหน',
     'ติดตามสถานะการจองที่ไหน',
+    'ขอเพิ่มโควต้า',
+    'วิธีชำระเงิน',
   ];
 
   useEffect(
@@ -1598,6 +1603,32 @@ function FloatingSupport({
     });
     return () => cancelAnimationFrame(animationFrame);
   }, [answer, askedQuestion, conversationHistory.length, view, zoneStep]);
+
+  useEffect(() => {
+    if (view !== 'chat') return;
+
+    const focusFrame = requestAnimationFrame(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>('[data-ai-dialog-close]')
+        ?.focus();
+    });
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setView('closed');
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', closeOnEscape);
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLButtonElement>('[data-floating-support-launcher]')
+          ?.focus();
+      });
+    };
+  }, [view]);
 
   function archiveCurrentExchange(): SupportConversationEntry | null {
     if (!answer.trim()) return null;
@@ -1969,26 +2000,25 @@ function FloatingSupport({
 
       {view === 'chat' ? (
         <section
-          aria-label="AI ช่วยคุณได้ SpaceLink"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="sl-ai-dialog-title"
+          aria-describedby="sl-ai-dialog-description"
           aria-busy={isAsking}
-          className="sl-floating-chat mb-3 flex w-[min(470px,calc(100vw-16px))] flex-col overflow-hidden rounded-[28px] border border-[#ded5f1] bg-[#fbf9fd] shadow-[0_24px_70px_rgba(45,27,82,.24)] sm:w-[min(470px,calc(100vw-32px))]"
+          className="sl-floating-chat mb-3 flex w-[min(344px,calc(100vw-16px))] flex-col overflow-hidden rounded-[24px] border border-[#d9d6ff] bg-[#fbfbff] shadow-[0_24px_70px_rgba(45,27,82,.24)] sm:w-[min(344px,calc(100vw-32px))]"
         >
-          <header className="shrink-0 bg-white px-3 pb-3 pt-2 sm:px-4 sm:pb-4">
+          <header className="shrink-0 bg-white px-3 pb-2 pt-2.5">
             <span
               aria-hidden="true"
-              className="mx-auto mb-2 block h-1 w-12 rounded-full bg-[#d7ccdc] sm:hidden"
+              className="mx-auto mb-2 block h-1 w-10 rounded-full bg-[#dedbff] sm:hidden"
             />
-            <div className="flex min-h-[58px] items-center gap-2 sm:min-h-[68px] sm:gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-[linear-gradient(135deg,#9b66f4,#6d28d9)] text-white shadow-[0_8px_22px_rgba(109,40,217,.22)] sm:h-12 sm:w-12">
-                <Sparkles className="h-5 w-5" aria-hidden />
-              </span>
+            <div className="flex min-h-[46px] items-center gap-2">
+              <BrandMark />
               <div className="min-w-0 flex-1">
-                <strong className="block text-base font-black tracking-[-0.02em] text-ink">
-                  AI ช่วยคุณได้
+                <strong className="block text-sm font-black tracking-[-0.02em] text-violet">
+                  SpaceLink
                 </strong>
-                <small className="mt-0.5 block text-xs text-muted">
-                  ผู้ช่วยค้นหาข้อมูลและแนะนำพื้นที่ของ SpaceLink
-                </small>
               </div>
               <button
                 type="button"
@@ -2005,7 +2035,7 @@ function FloatingSupport({
                 }}
                 aria-label="เริ่มบทสนทนาใหม่"
                 title="เริ่มบทสนทนาใหม่"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-line text-muted transition hover:border-violet hover:bg-violet-tint hover:text-violet"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f4f3ff] text-[#6b65a0] transition hover:bg-violet-tint hover:text-violet"
               >
                 <RotateCcw className="h-[18px] w-[18px]" aria-hidden />
               </button>
@@ -2013,13 +2043,28 @@ function FloatingSupport({
                 type="button"
                 onClick={() => setView('closed')}
                 aria-label="ปิดหน้าต่าง AI ช่วยคุณได้"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-line text-muted transition hover:border-violet hover:bg-violet-tint hover:text-violet"
+                data-ai-dialog-close
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f4f3ff] text-[#6b65a0] transition hover:bg-violet-tint hover:text-violet"
               >
                 <X className="h-[18px] w-[18px]" aria-hidden />
               </button>
             </div>
+            <div className="mt-1">
+              <h2
+                id="sl-ai-dialog-title"
+                className="text-[22px] font-black leading-tight tracking-[-0.035em] text-violet"
+              >
+                AI ช่วยคุณได้
+              </h2>
+              <p
+                id="sl-ai-dialog-description"
+                className="mt-0.5 text-[11px] font-semibold text-muted"
+              >
+                ตอบคำถาม และแนะนำการใช้งานของ SpaceLink
+              </p>
+            </div>
             <div
-              className="mt-2 grid grid-cols-2 rounded-[16px] bg-[#f0ebf3] p-1"
+              className="mt-2 grid grid-cols-2 overflow-hidden rounded-[12px] border border-[#dcd8ff] bg-white"
               role="tablist"
               aria-label="โหมดของ AI ช่วยคุณได้"
             >
@@ -2036,8 +2081,13 @@ function FloatingSupport({
                   aria-selected={assistantMode === mode}
                   disabled={isAsking}
                   onClick={() => changeAssistantMode(mode)}
-                  className={`min-h-10 rounded-[12px] px-3 text-sm font-extrabold transition disabled:cursor-wait disabled:opacity-60 ${assistantMode === mode ? 'bg-violet text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]' : 'text-[#675d70] hover:text-violet'}`}
+                  className={`inline-flex min-h-9 items-center justify-center gap-2 px-3 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 ${assistantMode === mode ? 'bg-[#eeeaff] text-violet' : 'text-[#675d70] hover:bg-[#faf9ff] hover:text-violet'}`}
                 >
+                  {mode === 'help' ? (
+                    <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <MapPinned className="h-3.5 w-3.5" aria-hidden />
+                  )}
                   {label}
                 </button>
               ))}
@@ -2045,9 +2095,9 @@ function FloatingSupport({
           </header>
           <div
             ref={transcriptRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-line bg-[#fbf9fd] p-3 sm:p-4"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-y border-[#ebe9ff] bg-[#fbfbff] p-3"
           >
-            <div className="mb-4 text-center text-[11px] leading-5 text-muted">
+            <div className="sr-only">
               AI อาจตอบคลาดเคลื่อนได้ โปรดตรวจสอบรายละเอียด Event และ Booth
               ก่อนจอง
             </div>
@@ -2059,7 +2109,7 @@ function FloatingSupport({
                       <span className="mb-1 block text-right text-[11px] font-bold text-muted">
                         คุณ
                       </span>
-                      <div className="rounded-[20px_20px_6px_20px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-4 py-3 text-sm leading-6 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
+                      <div className="rounded-[16px_16px_5px_16px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-3 py-2 text-xs leading-5 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
                         {entry.question}
                       </div>
                     </div>
@@ -2076,7 +2126,7 @@ function FloatingSupport({
                     <strong className="mb-1 block text-[11px] font-extrabold text-violet">
                       SpaceLink AI
                     </strong>
-                    <div className="rounded-[20px_20px_20px_6px] border border-[#dfe3f3] bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)]">
+                    <div className="rounded-[16px_16px_16px_5px] border border-[#e4e2ff] bg-[#f0efff] px-3 py-2 text-xs leading-5 text-ink shadow-[0_8px_22px_rgba(62,40,90,.04)]">
                       <p className="whitespace-pre-line">{entry.answer}</p>
                       {entry.source ? (
                         <small className="mt-2 block border-t border-[#eeeaf4] pt-2 text-[10px] font-bold text-muted">
@@ -2093,6 +2143,7 @@ function FloatingSupport({
                               <Link
                                 key={action}
                                 href={details.href}
+                                onClick={() => setView('closed')}
                                 className="rounded-full border border-[#d8c9ef] bg-[#faf7ff] px-3 py-1.5 text-xs font-extrabold text-violet transition hover:border-violet hover:bg-violet-tint"
                               >
                                 {details.label} →
@@ -2112,7 +2163,7 @@ function FloatingSupport({
                   <span className="mb-1 block text-right text-[11px] font-bold text-muted">
                     คุณ
                   </span>
-                  <div className="rounded-[20px_20px_6px_20px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-4 py-3 text-sm leading-6 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
+                  <div className="rounded-[16px_16px_5px_16px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] px-3 py-2 text-xs leading-5 text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]">
                     {askedQuestion}
                   </div>
                 </div>
@@ -2130,7 +2181,7 @@ function FloatingSupport({
                   {isAsking ? 'SpaceLink AI · กำลังตอบ…' : 'SpaceLink AI'}
                 </strong>
                 <div
-                  className={`rounded-[20px_20px_20px_6px] border bg-white px-4 py-3 text-sm leading-6 text-ink shadow-[0_8px_22px_rgba(62,40,90,.06)] ${isAsking ? 'border-[#8b5cf6] shadow-[0_0_0_1px_rgba(139,92,246,.12)]' : 'border-[#dfe3f3]'}`}
+                  className={`rounded-[16px_16px_16px_5px] border px-3 py-2 text-xs leading-5 text-ink shadow-[0_8px_22px_rgba(62,40,90,.04)] ${isAsking ? 'border-[#8b5cf6] bg-white shadow-[0_0_0_1px_rgba(139,92,246,.12)]' : 'border-[#e4e2ff] bg-[#f0efff]'}`}
                 >
                   <p className="whitespace-pre-line">{answer}</p>
                   {answerSource ? (
@@ -2148,6 +2199,7 @@ function FloatingSupport({
                           <Link
                             key={action}
                             href={details.href}
+                            onClick={() => setView('closed')}
                             className="rounded-full border border-[#d8c9ef] bg-[#faf7ff] px-3 py-1.5 text-xs font-extrabold text-violet transition hover:border-violet hover:bg-violet-tint"
                           >
                             {details.label} →
@@ -2268,38 +2320,79 @@ function FloatingSupport({
             ) : null}
 
             {zoneStep === 'result' && selectedEvent ? (
-              <div className="mt-3 grid gap-2" aria-label="บูธที่ AI แนะนำ">
-                {recommendations.map((recommendation, index) => {
-                  const matched = findRecommendedBooth(
-                    selectedMap,
-                    recommendation.boothId,
-                  );
-                  return (
-                    <Link
-                      key={recommendation.boothId}
-                      href={`/events/${encodeURIComponent(selectedEvent.slug)}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ''}`}
-                      className="rounded-xl border border-[#d9cbed] bg-white p-3 text-ink transition hover:border-violet hover:bg-[#faf7ff]"
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <strong className="text-sm">
-                          {index + 1}. บูธ {matched?.booth.code ?? 'ที่แนะนำ'}
-                          {matched ? ` · โซน ${matched.zone.code}` : ''}
-                        </strong>
-                        <small className="shrink-0 rounded-full bg-[#f1ebff] px-2 py-1 text-[10px] font-bold text-violet">
-                          {recommendation.source === 'AI_GEMINI'
-                            ? 'Gemini Flash'
-                            : 'Rule-based'}
-                        </small>
-                      </span>
-                      <span className="mt-1.5 block text-xs leading-5 text-muted">
-                        {recommendation.reason}
-                      </span>
-                      <span className="mt-2 block text-xs font-bold text-violet">
-                        เปิดแผนผังและเลือกบูธ →
-                      </span>
-                    </Link>
-                  );
-                })}
+              <div className="mt-3" aria-label="โซนที่ AI แนะนำ">
+                <strong className="block text-xs font-black text-violet">
+                  ข้อมูลที่ใช้แนะนำ
+                </strong>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-[#dfdcff] bg-white px-2.5 py-1 text-[10px] font-bold text-[#625c89]">
+                    {selectedShop?.name ?? 'ร้านของคุณ'}
+                  </span>
+                  <span className="rounded-full border border-[#dfdcff] bg-white px-2.5 py-1 text-[10px] font-bold text-[#625c89]">
+                    {selectedEvent.name}
+                  </span>
+                  <span className="rounded-full border border-[#dfdcff] bg-white px-2.5 py-1 text-[10px] font-bold text-[#625c89]">
+                    {selectedFacilities.length > 0
+                      ? `${selectedFacilities.length} อุปกรณ์`
+                      : 'ทุกอุปกรณ์'}
+                  </span>
+                </div>
+                <strong className="mt-3 block text-xs font-black text-violet">
+                  โซนที่แนะนำ
+                </strong>
+                <div className="mt-2 grid gap-2">
+                  {recommendations.map((recommendation, index) => {
+                    const matched = findRecommendedBooth(
+                      selectedMap,
+                      recommendation.boothId,
+                    );
+                    return (
+                      <Link
+                        key={recommendation.boothId}
+                        href={`/events/${encodeURIComponent(selectedEvent.slug)}/map${matched ? `?zone=${encodeURIComponent(matched.zone.id)}` : ''}`}
+                        onClick={() => setView('closed')}
+                        className="flex items-center gap-2.5 rounded-[14px] border border-[#dedaff] bg-white p-2.5 text-ink transition hover:border-violet hover:bg-[#faf7ff]"
+                      >
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eeeaff] text-sm font-black text-violet">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <strong className="block truncate text-xs">
+                            ZONE {matched?.zone.code ?? 'แนะนำ'} · Booth{' '}
+                            {matched?.booth.code ?? recommendation.boothId}
+                          </strong>
+                          <span className="mt-0.5 block truncate text-[10px] text-muted">
+                            {recommendation.reason}
+                          </span>
+                          <small className="mt-1 block text-[9px] font-bold text-[#6b65a0]">
+                            {recommendation.source === 'AI_GEMINI'
+                              ? 'แนะนำโดย AI จากข้อมูล SpaceLink'
+                              : 'แนะนำจากกฎข้อมูล SpaceLink'}
+                          </small>
+                        </span>
+                        <span className="text-lg font-bold text-violet" aria-hidden>
+                          ›
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/events/${encodeURIComponent(selectedEvent.slug)}/map`}
+                    onClick={() => setView('closed')}
+                    className="inline-flex min-h-9 items-center justify-center rounded-[12px] border border-violet bg-white px-3 text-[11px] font-extrabold text-violet"
+                  >
+                    ดูแผนผังเต็ม
+                  </Link>
+                  <Link
+                    href={`/events/${encodeURIComponent(selectedEvent.slug)}/map`}
+                    onClick={() => setView('closed')}
+                    className="inline-flex min-h-9 items-center justify-center rounded-[12px] bg-violet px-3 text-[11px] font-extrabold text-white"
+                  >
+                    เริ่มจองบูธ
+                  </Link>
+                </div>
               </div>
             ) : null}
 
@@ -2319,34 +2412,40 @@ function FloatingSupport({
             conversationHistory.length === 0 &&
             !askedQuestion &&
             answer === initialAnswer ? (
-              <div className="mt-4 grid gap-2.5" aria-label="คำถามแนะนำ">
-                {quickQuestions.map((quickQuestion) => (
-                  <button
-                    key={quickQuestion}
-                    type="button"
-                    disabled={isAsking}
-                    onClick={() => void askAssistant(quickQuestion)}
-                    className="min-h-12 rounded-[17px] border border-[#cfc2d7] bg-white px-4 py-3 text-left text-sm font-bold leading-5 text-[#4c3d55] transition hover:border-violet hover:bg-violet-tint hover:text-violet disabled:cursor-wait disabled:opacity-55"
-                  >
-                    {quickQuestion}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={resetAssistant}
-                  className="ml-auto mt-1 inline-flex min-h-10 items-center gap-2 rounded-full bg-[#eee8f2] px-4 text-xs font-extrabold text-[#66566d] transition hover:bg-violet-tint hover:text-violet"
-                >
-                  <RotateCcw className="h-4 w-4" aria-hidden />
-                  เริ่มคำถามใหม่
-                </button>
+              <div className="mt-3" aria-label="คำถามยอดนิยม">
+                <strong className="mb-2 block text-xs font-black text-violet">
+                  คำถามยอดนิยม
+                </strong>
+                <div className="grid grid-cols-2 gap-2">
+                  {quickQuestions.map((quickQuestion) => (
+                    <button
+                      key={quickQuestion}
+                      type="button"
+                      disabled={isAsking}
+                      onClick={() => void askAssistant(quickQuestion)}
+                      className="flex min-h-9 items-center justify-between gap-1 rounded-full border border-[#dcd8ff] bg-white px-3 text-left text-[10px] font-bold text-[#4c3d55] transition hover:border-violet hover:bg-violet-tint hover:text-violet disabled:cursor-wait disabled:opacity-55"
+                    >
+                      <span>{quickQuestion}</span>
+                      <span className="shrink-0 text-base text-violet" aria-hidden>
+                        ›
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
           </div>
-          <div className="shrink-0 bg-white p-3 sm:p-4">
-            <div className="rounded-[20px] border border-[#cfc4d6] bg-white p-2.5 shadow-[0_8px_24px_rgba(62,40,90,.06)] focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+          <div className="shrink-0 bg-white p-2.5">
+            <div className="flex items-end gap-2 rounded-[14px] border border-[#dcd8ff] bg-white p-1.5 shadow-[0_8px_24px_rgba(62,40,90,.06)] focus-within:border-violet focus-within:ring-2 focus-within:ring-[#efe8ff]">
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#f4f3ff] text-violet"
+                aria-hidden
+              >
+                <MessageCircle className="h-4 w-4" />
+              </span>
               <textarea
                 value={question}
-                rows={2}
+                rows={1}
                 disabled={isAsking}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
@@ -2361,23 +2460,21 @@ function FloatingSupport({
                     : 'พิมพ์คำถามเกี่ยวกับ SpaceLink'
                 }
                 aria-label="พิมพ์คำถามให้ AI ช่วยคุณได้"
-                className="max-h-24 min-h-[52px] w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
+                className="max-h-20 min-h-9 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-xs leading-5 outline-none placeholder:text-[#978ba5] disabled:cursor-wait"
               />
-              <div className="mt-1 flex items-center justify-between gap-3 border-t border-[#eee9f1] px-1 pt-2">
-                <small className="min-w-0 truncate text-[11px] font-semibold text-muted">
-                  ขับเคลื่อนโดย SpaceLink AI
-                </small>
-                <button
-                  type="button"
-                  disabled={isAsking || !question.trim()}
-                  onClick={() => void askAssistant()}
-                  aria-label="ส่งคำถามให้ AI"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Send className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={isAsking || !question.trim()}
+                onClick={() => void askAssistant()}
+                aria-label="ส่งคำถามให้ AI"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet text-white shadow-[0_7px_16px_rgba(124,58,237,.24)] transition hover:bg-[#6d28d9] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Send className="h-4 w-4" aria-hidden />
+              </button>
             </div>
+            <small className="mt-1.5 block text-center text-[9px] font-semibold text-[#aaa3c7]">
+              ขับเคลื่อนโดย SpaceLink AI
+            </small>
           </div>
         </section>
       ) : null}
@@ -2385,6 +2482,7 @@ function FloatingSupport({
       {view !== 'chat' ? (
         <button
           type="button"
+          data-floating-support-launcher
           aria-expanded={expanded}
           aria-label={
             expanded
@@ -2392,9 +2490,7 @@ function FloatingSupport({
               : 'เปิด AI ช่วยคุณได้และช่องทางติดต่อ SpaceLink'
           }
           title={expanded ? 'ปิดเมนูช่วยเหลือ' : 'AI ช่วยคุณได้ · ติดต่อเรา'}
-          onClick={() =>
-            setView((current) => (current === 'closed' ? 'menu' : 'closed'))
-          }
+          onClick={() => setView(expanded ? 'closed' : 'menu')}
           className="ml-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_16px_36px_rgba(109,40,217,0.34)] transition hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(109,40,217,0.4)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#d9c8ff]"
         >
           {expanded ? (
