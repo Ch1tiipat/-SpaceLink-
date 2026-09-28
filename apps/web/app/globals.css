@@ -29,18 +29,19 @@
 }
 
 html {
+  min-height: 100%;
+  background-color: #faf8ff;
+  background-image: url('/spacelink-page-background.svg');
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(
-      circle at 90% 0%,
-      rgba(139, 92, 246, 0.06),
-      transparent 28rem
-    ),
-    var(--background);
+  background: transparent;
   color: var(--ink);
   font-family:
     'IBM Plex Sans Thai',
@@ -119,23 +120,22 @@ select {
   isolation: isolate;
   min-height: calc(100vh - 72px);
   overflow: hidden;
+  background-color: rgba(250, 248, 255, 0.28);
+  background-image: url('/spacelink-page-background.svg');
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
 }
 
-.sl-page::before {
-  position: absolute;
-  z-index: -1;
-  top: -13rem;
-  right: -13rem;
-  width: 32rem;
-  height: 32rem;
-  border-radius: 9999px;
-  background: radial-gradient(
-    circle,
-    rgba(139, 92, 246, 0.07),
-    transparent 65%
-  );
-  content: '';
-  pointer-events: none;
+/* Shared canvas for layouts that do not use .sl-page (authentication,
+   administration loading states, and the Super Admin shell). Keeping this
+   presentation in one class prevents route-specific copies from drifting. */
+.sl-app-background {
+  background-color: rgba(250, 248, 255, 0.28);
+  background-image: url('/spacelink-page-background.svg');
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
 }
 
 .sl-page-shell {

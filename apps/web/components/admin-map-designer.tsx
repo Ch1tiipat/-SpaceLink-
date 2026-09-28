@@ -361,7 +361,7 @@ export function AdminMapDesigner() {
   const hasChanges = dirtyZones.size > 0 || dirtyBooths.size > 0;
 
   return (
-    <main className="min-h-[calc(100vh-72px)] bg-[#f8f7fb] px-4 py-7 sm:px-6 lg:px-8">
+    <main className="sl-app-background min-h-[calc(100vh-72px)] px-4 py-7 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1320px]">
         <section className="rounded-[24px] border border-[#e8e1ee] bg-white px-6 py-8 shadow-[0_12px_34px_rgba(54,36,91,0.045)] sm:px-9 lg:px-11">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
@@ -655,7 +655,7 @@ function Feedback({
 
 function PageState({ label }: { label: string }) {
   return (
-    <main className="grid min-h-[calc(100vh-72px)] place-items-center bg-[#f8f6fb] px-5">
+    <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5">
       <p className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-muted shadow-sm">
         {label}
       </p>
