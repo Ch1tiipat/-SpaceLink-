@@ -117,6 +117,14 @@ export function useAdminOrganizationSelection() {
   return useContext(AdminOrganizationContext);
 }
 
+const NOTIFICATIONS_NAV_ITEM: Extract<NavItem, { kind: 'link' }> = {
+  kind: 'link',
+  label: 'การแจ้งเตือน',
+  href: '/notifications',
+  icon: Bell,
+  matches: (pathname) => pathname.startsWith('/notifications'),
+};
+
 /**
  * The prototype lists หน้าหลัก and ค้นหา Event separately. Discovery is a
  * single page here, so they are one item; its sibling Event ที่แนะนำ is
@@ -150,25 +158,12 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         kind: 'link',
-        label: 'คำขอคืนเงิน',
-        href: '/refunds',
-        icon: RotateCcw,
-        matches: (pathname) => pathname.startsWith('/refunds'),
-      },
-      {
-        kind: 'link',
         label: 'รีวิว',
         href: '/reviews',
         icon: Star,
         matches: (pathname) => pathname.startsWith('/reviews'),
       },
-      {
-        kind: 'link',
-        label: 'การแจ้งเตือน',
-        href: '/notifications',
-        icon: Bell,
-        matches: (pathname) => pathname.startsWith('/notifications'),
-      },
+      NOTIFICATIONS_NAV_ITEM,
       {
         kind: 'link',
         label: 'ติดต่อสอบถาม',
@@ -291,8 +286,8 @@ const ADMIN_MY_SPACE_NAV_GROUP: NavGroup = {
 const BOTTOM_NAV: NavItem[] = [
   NAV_GROUPS[0].items[0],
   NAV_GROUPS[1].items[0],
-  NAV_GROUPS[1].items[2],
-  NAV_GROUPS[1].items[3],
+  NAV_GROUPS[1].items[1],
+  NOTIFICATIONS_NAV_ITEM,
 ];
 
 /**
@@ -672,7 +667,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? [NAV_GROUPS[0], visibleAdminNavGroup, ADMIN_MY_SPACE_NAV_GROUP]
     : NAV_GROUPS;
   const bottomNavItems = isAdmin
-    ? [NAV_GROUPS[0].items[0], ...visibleAdminItems, NAV_GROUPS[1].items[3]]
+    ? [NAV_GROUPS[0].items[0], ...visibleAdminItems, NOTIFICATIONS_NAV_ITEM]
     : BOTTOM_NAV;
   const header = (
     <Topbar
