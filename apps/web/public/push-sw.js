@@ -16,7 +16,18 @@ self.addEventListener('push', (event) => {
     icon: '/icon.svg',
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      self.clients
+        .matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ type: 'SPACELINK_PUSH_RECEIVED' });
+          });
+        }),
+    ]),
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
