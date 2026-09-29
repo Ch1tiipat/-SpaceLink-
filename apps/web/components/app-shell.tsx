@@ -67,6 +67,7 @@ import {
   type AdminOrganization,
 } from '@/lib/admin-organization-access';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { createSystemBroadcastRefreshController } from '@/lib/push-registration';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import {
   canUseUxPreview,
@@ -563,38 +564,27 @@ export function AppShell({ children }: { children: ReactNode }) {
     setActiveBroadcast(null);
     if (auth.status !== 'signed-in') return;
 
-    const controller = new AbortController();
-    let active = true;
-
-    void (async () => {
-      try {
+    const broadcastRefresh =
+      createSystemBroadcastRefreshController<SystemBroadcast>({
+      clearInterval: window.clearInterval.bind(window),
+      documentEvents: document,
+      async fetchBroadcast(signal) {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!active || !token) return;
+        if (!token) return null;
+        return getActiveSystemBroadcast(token, signal);
+      },
+      getDismissedBroadcastId: () =>
+        sessionStorage.getItem(DISMISSED_BROADCAST_KEY),
+      isVisible: () => document.visibilityState === 'visible',
+      onBroadcast: setActiveBroadcast,
+      serviceWorkerEvents: navigator.serviceWorker,
+      setInterval: window.setInterval.bind(window),
+      windowEvents: window,
+      });
 
-        const broadcast = await getActiveSystemBroadcast(
-          token,
-          controller.signal,
-        );
-        if (!active || !broadcast) return;
-        if (sessionStorage.getItem(DISMISSED_BROADCAST_KEY) === broadcast.id) {
-          return;
-        }
-        setActiveBroadcast(broadcast);
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          return;
-        }
-        // A broadcast is supplemental. A temporary failure must not block the
-        // authenticated application or replace its page-level error handling.
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
+    return broadcastRefresh.dispose;
   }, [auth.status]);
 
   function selectOrganization(organizationId: string) {
