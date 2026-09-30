@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
-  Camera,
   CalendarDays,
   CalendarSearch,
   ChevronLeft,
@@ -843,8 +842,6 @@ function HomepageFooter() {
             <div className="grid gap-3">
               <HomepageFooterLink href="mailto:support@spacelink.co" label="support@spacelink.co" icon={Mail} contact />
               <HomepageFooterLink href="tel:+66935275899" label="093-527-5899" icon={Phone} contact />
-              <HomepageFooterLink href="https://www.facebook.com/" label="Facebook" icon="facebook" contact />
-              <HomepageFooterLink href="https://www.instagram.com/" label="Instagram" icon={Camera} contact />
             </div>
           </section>
         </div>
@@ -870,7 +867,7 @@ function HomepageFooterLink({
 }: {
   href: string;
   label: string;
-  icon: LucideIcon | 'facebook';
+  icon: LucideIcon;
   contact?: boolean;
 }) {
   const content = (
@@ -878,11 +875,7 @@ function HomepageFooterLink({
       <span className={contact
         ? 'grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#e7dcff] text-[#753fe1]'
         : 'grid h-6 w-6 shrink-0 place-items-center text-[#8249ee]'}>
-        {Icon === 'facebook' ? (
-          <span aria-hidden className="text-xl font-black leading-none">f</span>
-        ) : (
-          <Icon aria-hidden className="h-[18px] w-[18px]" />
-        )}
+        <Icon aria-hidden className="h-[18px] w-[18px]" />
       </span>
       <span>{label}</span>
     </>
@@ -903,20 +896,27 @@ function AnnouncementCard({
   announcement: PublicAnnouncement;
   onOpen: (announcement: PublicAnnouncement, opener: HTMLButtonElement) => void;
 }) {
+  const organizationInitial =
+    announcement.organizationName.trim().charAt(0).toLocaleUpperCase('th-TH') || 'อ';
+
   return (
     <article className="flex h-[132px] overflow-hidden rounded-[12px] border border-[#8c789e] bg-[#ddccfa] text-[#452482] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(92,52,155,.16)]">
       <div className="relative flex w-[32%] shrink-0 flex-col items-center justify-center bg-white p-2">
         <span className="absolute left-1.5 top-1.5 rounded-full bg-[#696969] px-2 py-1 text-[10px] font-bold text-white">
           {announcement.type === 'EVENT' ? 'Event' : 'ประกาศ'}
         </span>
-        <Image
-          src="/brand/spacelink-mark.png"
-          alt=""
-          width={54}
-          height={54}
-          className="h-[54px] w-[54px] object-contain"
-        />
-        <span className="text-[11px] font-black text-[#6d28d9]">SpaceLink</span>
+        <span
+          aria-hidden
+          className="grid h-[54px] w-[54px] place-items-center rounded-full bg-[#e7dcff] text-2xl font-black text-[#6930cc]"
+        >
+          {organizationInitial}
+        </span>
+        <span
+          aria-hidden
+          className="line-clamp-1 max-w-full px-1 text-center text-[10px] font-black text-[#74529f]"
+        >
+          {announcement.organizationName}
+        </span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col px-2.5 py-2">
         <h3 className="line-clamp-1 text-[15px] font-black">{announcement.title}</h3>
@@ -1211,10 +1211,10 @@ function PlatformBenefits() {
               ลดขั้นตอนการทำงาน และช่วยให้ผู้ค้าค้นหาและจองพื้นที่ได้ง่ายยิ่งขึ้น
             </p>
             <Link
-              href="/register"
+              href="/support"
               className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#8752ef,#642bd7)] px-6 text-sm font-bold text-white shadow-[0_10px_20px_rgba(109,40,217,.2)] transition hover:-translate-y-0.5"
             >
-              เริ่มสร้างงานของคุณ <ArrowRight aria-hidden className="h-4 w-4" />
+              ติดต่อเพื่อเริ่มจัดงาน <ArrowRight aria-hidden className="h-4 w-4" />
             </Link>
           </div>
 

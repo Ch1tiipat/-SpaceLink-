@@ -13,6 +13,13 @@ const homepageSource = readHomepageSource(
   joinHomepagePath(process.cwd(), 'app', 'page.tsx'),
   'utf8',
 );
+const announcementCardSource = homepageSource.slice(
+  homepageSource.indexOf('function AnnouncementCard'),
+  homepageSource.indexOf('function EventCard'),
+);
+const platformBenefitsSource = homepageSource.slice(
+  homepageSource.indexOf('function PlatformBenefits'),
+);
 
 homepageTest('production homepage keeps the approved prototype hierarchy', () => {
   homepageAssert.match(homepageSource, /ประกาศข่าวสาร/);
@@ -32,6 +39,11 @@ homepageTest('production homepage retains runtime announcement states without pr
     homepageSource,
     /ข้อมูลประกาศตัวอย่างสำหรับหน้า Prototype/,
   );
+  homepageAssert.match(announcementCardSource, /organizationInitial/);
+  homepageAssert.doesNotMatch(
+    announcementCardSource,
+    /src="\/brand\/spacelink-mark\.png"/,
+  );
 });
 
 homepageTest('homepage footer replaces the shared footer only on the root page', () => {
@@ -39,4 +51,12 @@ homepageTest('homepage footer replaces the shared footer only on the root page',
   homepageAssert.match(homepageSource, /href="#home-top"/);
   homepageAssert.match(homepageSource, /href: '#announcements'/);
   homepageAssert.match(homepageSource, /href: '#events'/);
+});
+
+homepageTest('organizer and contact links lead to verified destinations', () => {
+  homepageAssert.match(platformBenefitsSource, /href="\/support"/);
+  homepageAssert.match(platformBenefitsSource, /ติดต่อเพื่อเริ่มจัดงาน/);
+  homepageAssert.doesNotMatch(platformBenefitsSource, /เริ่มสร้างงานของคุณ/);
+  homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.facebook\.com\//);
+  homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.instagram\.com\//);
 });
