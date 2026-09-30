@@ -110,6 +110,9 @@ function readImageDimensions(
 export function ProfileShopScreen() {
   const { state, refresh } = useVendorProfile();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorInitialTab, setEditorInitialTab] = useState<'profile' | 'shop'>(
+    'profile',
+  );
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [categories, setCategories] = useState<ProductCategory[] | null>(null);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
@@ -191,24 +194,26 @@ export function ProfileShopScreen() {
   const categoriesLoading = categories === null && categoriesError === null;
 
   return (
-    <main className="sl-page pb-16">
-      <div className="shell py-8">
+    <main className="sl-page min-h-screen pb-16">
+      <div className="shell py-7 sm:py-9">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <span className="sl-kicker">Profile</span>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
-              โปรไฟล์ของฉัน
+            <span className="text-[11px] font-black uppercase tracking-[.18em] text-violet">
+              Profile
+            </span>
+            <h1 className="mt-1 text-3xl font-black tracking-[-0.05em] text-ink sm:text-4xl">
+              โปรไฟล์<span className="text-violet">ของฉัน</span>
             </h1>
-            <p className="mt-2 text-muted">
+            <p className="mt-1.5 text-sm text-muted">
               {ready && !isVendor
                 ? 'ตรวจสอบข้อมูลบัญชีและช่องทางติดต่อของผู้ดูแลระบบ'
-                : 'ข้อมูลนี้จะถูกดึงไปใช้ในการจองและแสดงบนบูธ'}
+                : 'ข้อมูลร้านค้าของคุณที่ใช้สำหรับการจองพื้นที่และแสดงบนหน้าร้าน'}
             </p>
           </div>
           {ready && isVendor && (
             <Link
               href="/reviews"
-              className="sl-action-secondary inline-flex items-center gap-2 self-start"
+              className="inline-flex min-h-10 items-center gap-2 self-start rounded-xl border border-line bg-white px-4 text-sm font-bold text-ink transition hover:border-[#9f7aea] hover:text-violet"
             >
               <MessageSquareText className="h-4 w-4" aria-hidden />
               การรีวิวของฉัน
@@ -304,59 +309,61 @@ export function ProfileShopScreen() {
               </p>
             )}
 
-            <section className="sl-surface relative mt-8 overflow-hidden p-6 sm:p-7">
-              <span
-                aria-hidden
-                className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_70%_30%,rgba(124,58,237,0.13),transparent_65%)]"
-              />
-              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-                <span
-                  aria-hidden
-                  className="absolute -left-10 -top-14 h-40 w-40 rounded-full bg-violet-tint blur-3xl"
-                />
+            <section className="mt-6 overflow-hidden rounded-[22px] border border-[#e5def0] bg-white shadow-[0_16px_44px_rgba(70,46,108,.08)]">
+              <div className="h-1.5 bg-[linear-gradient(90deg,#6d28d9,#9a63ed,#d8c4ff)]" />
+              <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
                 <ShopLogoAvatar shop={ready.shop} />
                 <div className="min-w-0 flex-1">
-                  <span className="inline-flex rounded-full bg-violet-tint px-3 py-1 text-sm font-extrabold uppercase tracking-[.12em] text-violet">
-                    Vendor profile
-                  </span>
-                  <h2 className="mt-3 truncate text-2xl font-black tracking-[-0.035em] text-ink">
-                    {ready.shop.name}
-                  </h2>
-                  <p className="mt-1 text-sm font-bold text-muted">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate text-2xl font-black tracking-[-0.04em] text-ink">
+                      {ready.shop.name}
+                    </h2>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+                        ready.profile.isBlacklisted
+                          ? 'bg-[#fff0ee] text-[#b42318]'
+                          : 'bg-[#e8f9f0] text-[#14875a]'
+                      }`}
+                    >
+                      {ready.profile.isBlacklisted ? (
+                        <CircleAlert className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {ready.profile.isBlacklisted
+                        ? 'บัญชีถูกระงับ'
+                        : 'บัญชีพร้อมใช้งาน'}
+                    </span>
+                  </div>
+                  <p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-[#5f5770]">
+                    <UserRound className="h-4 w-4 text-[#8a7e9d]" aria-hidden />
                     {ready.profile.fullName}
                   </p>
-                  <p className="mt-1 truncate text-xs text-muted">
-                    {ready.profile.email}
+                  <p className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted">
+                    <Mail className="h-4 w-4 shrink-0 text-[#8a7e9d]" aria-hidden />
+                    <span className="truncate">{ready.profile.email}</span>
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-extrabold ${
-                      ready.profile.isBlacklisted
-                        ? 'bg-[#fff0ee] text-[#b42318]'
-                        : 'bg-[#ebfaf3] text-[#13795b]'
-                    }`}
-                  >
-                    {ready.profile.isBlacklisted ? (
-                      <CircleAlert className="h-4 w-4" aria-hidden />
-                    ) : (
-                      <BadgeCheck className="h-4 w-4" aria-hidden />
-                    )}
-                    {ready.profile.isBlacklisted
-                      ? 'บัญชีถูกระงับ'
-                      : 'บัญชีพร้อมใช้งาน'}
-                  </span>
                   <button
                     type="button"
                     onClick={() => {
                       setSavedNotice(null);
+                      setEditorInitialTab('profile');
                       setIsEditorOpen(true);
                     }}
-                    className="sl-action-primary inline-flex items-center gap-2"
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#8752ef,#6524dd)] px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(101,44,215,.22)] transition hover:-translate-y-0.5 sm:flex-none"
                   >
                     <Pencil className="h-4 w-4" aria-hidden />
                     แก้ไขโปรไฟล์
                   </button>
+                  <Link
+                    href="/bookings"
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[#a97ceb] bg-white px-5 text-sm font-extrabold text-violet transition hover:bg-violet-tint sm:flex-none"
+                  >
+                    <Package className="h-4 w-4" aria-hidden />
+                    การจองของฉัน
+                  </Link>
                 </div>
               </div>
             </section>
@@ -372,97 +379,93 @@ export function ProfileShopScreen() {
               </p>
             )}
 
-            <PushNotificationCard token={ready.token} />
-
-            <section
-              className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
-              aria-label="สรุปโปรไฟล์ร้านค้า"
-            >
-              <ProfileStat
-                icon={Star}
-                label="คะแนนร้านค้า"
-                value={
-                  ratingState === 'loading'
-                    ? 'กำลังโหลด…'
-                    : ratingState === 'error'
-                      ? 'โหลดไม่ได้'
-                      : averageRating === null
-                        ? 'ยังไม่มีรีวิว'
-                        : `${averageRating.toFixed(1)} / 5`
-                }
-              />
-              <ProfileStat
-                icon={Layers3}
-                label="หมวดสินค้า"
-                value={`${ready.shop.categories.length} หมวด`}
-              />
-              <ProfileStat
-                icon={Phone}
-                label="ข้อมูลติดต่อ"
-                value={ready.profile.phone ? 'พร้อมใช้งาน' : 'ยังไม่ระบุ'}
-                tone={ready.profile.phone ? 'green' : 'amber'}
-              />
-              <ProfileStat
-                icon={ready.profile.isBlacklisted ? CircleAlert : BadgeCheck}
-                label="สถานะบัญชี"
-                value={ready.profile.isBlacklisted ? 'ถูกระงับ' : 'พร้อมใช้งาน'}
-                tone={ready.profile.isBlacklisted ? 'danger' : 'green'}
-              />
-            </section>
-
-            <section className="sl-surface mt-5 p-6 sm:p-7">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-                <div>
-                  <span className="sl-kicker">Shop information</span>
-                  <h2 className="mt-2 text-lg font-bold">ข้อมูลร้านค้า</h2>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1.08fr_.92fr]">
+              <section className="rounded-[20px] border border-[#e5def0] bg-white p-5 shadow-[0_10px_32px_rgba(70,46,108,.055)] sm:p-6">
+                <div className="flex items-center justify-between gap-4 border-b border-[#eee9f4] pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-tint text-violet">
+                      <Store className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-black text-ink">ข้อมูลร้านค้า</h2>
+                      <p className="text-xs text-muted">ข้อมูลหลักที่ใช้แสดงกับผู้จัดงาน</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedNotice(null);
+                      setEditorInitialTab('shop');
+                      setIsEditorOpen(true);
+                    }}
+                    className="rounded-lg px-3 py-2 text-xs font-extrabold text-violet transition hover:bg-violet-tint"
+                  >
+                    แก้ไข
+                  </button>
                 </div>
-                <Link href="/bookings" className="sl-chip text-violet">
-                  การจองของฉัน
-                </Link>
-              </div>
+                <dl className="mt-2 divide-y divide-[#f0ecf5]">
+                  <ProfileShopDetail icon={Store} label="ชื่อร้าน" value={ready.shop.name} />
+                  <ProfileShopDetail icon={Mail} label="อีเมล" value={ready.profile.email} />
+                  <ProfileShopDetail icon={Phone} label="เบอร์โทรศัพท์" value={ready.profile.phone ?? 'ยังไม่ระบุ'} />
+                  <ProfileShopDetail
+                    icon={Layers3}
+                    label="หมวดหมู่สินค้า"
+                    value={ready.shop.categories.map((category) => category.name).join(', ') || 'ยังไม่ระบุ'}
+                  />
+                  <ProfileShopDetail icon={Package} label="รายละเอียดร้าน" value={ready.shop.description || 'ยังไม่ระบุ'} />
+                  <ProfileShopDetail icon={MapPin} label="จังหวัด" value={ready.profile.province ?? 'ยังไม่ระบุ'} />
+                </dl>
+              </section>
 
-              <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                <InfoLine
-                  icon={UserRound}
-                  label="ชื่อร้าน"
-                  value={ready.shop.name}
-                />
-                <InfoLine
-                  icon={Phone}
-                  label="เบอร์โทรศัพท์"
-                  value={ready.profile.phone ?? 'ยังไม่ระบุ'}
-                />
-                <InfoLine
-                  icon={Mail}
-                  label="อีเมล"
-                  value={ready.profile.email}
-                />
-                <InfoLine
-                  icon={Store}
-                  label="รายละเอียดร้าน"
-                  value={ready.shop.description || 'ยังไม่ระบุ'}
-                />
-                <InfoLine
-                  icon={Package}
-                  label="สินค้าที่ขาย"
-                  value={
-                    ready.shop.categories
-                      .map((category) => category.name)
-                      .join(', ') || 'ยังไม่ระบุ'
-                  }
-                />
-                <InfoLine
-                  icon={MapPin}
-                  label="จังหวัด"
-                  value={ready.profile.province ?? 'ยังไม่ระบุ'}
-                />
-              </dl>
-            </section>
+              <div className="grid content-start gap-4">
+                <section className="rounded-[20px] border border-[#e5def0] bg-white p-5 shadow-[0_10px_32px_rgba(70,46,108,.055)] sm:p-6" aria-label="สรุปโปรไฟล์ร้านค้า">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-tint text-violet">
+                      <Star className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-black text-ink">สรุปบัญชี</h2>
+                      <p className="text-xs text-muted">สถานะสำคัญของร้านคุณ</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2.5">
+                    <ProfileStat
+                      icon={Star}
+                      label="คะแนนร้านค้า"
+                      value={
+                        ratingState === 'loading'
+                          ? 'กำลังโหลด…'
+                          : ratingState === 'error'
+                            ? 'โหลดไม่ได้'
+                            : averageRating === null
+                              ? 'ยังไม่มีรีวิว'
+                              : `${averageRating.toFixed(1)} / 5`
+                      }
+                    />
+                    <ProfileStat icon={Layers3} label="หมวดสินค้า" value={`${ready.shop.categories.length} หมวด`} />
+                    <ProfileStat
+                      icon={Phone}
+                      label="ข้อมูลติดต่อ"
+                      value={ready.profile.phone ? 'พร้อมใช้งาน' : 'ยังไม่ระบุ'}
+                      tone={ready.profile.phone ? 'green' : 'amber'}
+                    />
+                    <ProfileStat
+                      icon={ready.profile.isBlacklisted ? CircleAlert : BadgeCheck}
+                      label="สถานะบัญชี"
+                      value={ready.profile.isBlacklisted ? 'ถูกระงับ' : 'พร้อมใช้งาน'}
+                      tone={ready.profile.isBlacklisted ? 'danger' : 'green'}
+                    />
+                  </div>
+                </section>
+                <PushNotificationCard token={ready.token} />
+              </div>
+            </div>
 
             {isEditorOpen && (
               <ProfileEditorDialog
                 profile={ready.profile}
                 shop={ready.shop}
+                initialTab={editorInitialTab}
                 token={ready.token}
                 refresh={refresh}
                 setProfileSaveWarning={setProfileSaveWarning}
@@ -809,7 +812,7 @@ function PushNotificationCard({ token }: { token: string }) {
 
   return (
     <section
-      className="sl-surface mt-4 p-5 sm:p-6"
+      className="rounded-[20px] border border-[#e5def0] bg-white p-5 shadow-[0_10px_32px_rgba(70,46,108,.055)] sm:p-6"
       aria-labelledby="push-notification-title"
     >
       <div className="flex items-start gap-4">
@@ -821,12 +824,11 @@ function PushNotificationCard({ token }: { token: string }) {
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="push-notification-title" className="font-bold text-ink">
-            เปิดการแจ้งเตือนบนอุปกรณ์นี้
+          <h2 id="push-notification-title" className="font-black text-ink">
+            การแจ้งเตือน
           </h2>
-          <p className="mt-1 text-sm leading-6 text-muted">
-            รับข่าวการจอง การชำระเงิน และประกาศสำคัญ แม้ไม่ได้เปิดหน้า SpaceLink
-            อยู่
+          <p className="mt-0.5 text-xs leading-5 text-muted">
+            ข่าวการจอง การชำระเงิน และประกาศสำคัญ
           </p>
         </div>
 
@@ -888,7 +890,7 @@ function PushNotificationCard({ token }: { token: string }) {
       {message ? (
         <p
           role={availability === 'error' ? 'alert' : 'status'}
-          className={`mt-3 text-sm font-bold ${availability === 'error' ? 'text-[#b42318]' : 'text-violet'}`}
+          className={`mt-3 rounded-xl px-3 py-2.5 text-xs font-bold ${availability === 'error' ? 'bg-[#fff0ee] text-[#b42318]' : 'bg-[#effaf4] text-[#147a53]'}`}
         >
           {message}
         </p>
@@ -908,7 +910,7 @@ function ShopLogoAvatar({ shop }: { shop: VendorShop }) {
         alt={`โลโก้ของ ${shop.name}`}
         width={82}
         height={82}
-        className="relative mx-auto block h-[82px] w-[82px] rounded-[28px] object-cover shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+        className="relative mx-auto block h-20 w-20 rounded-[24px] border border-[#eadfff] object-cover shadow-[0_12px_30px_rgba(109,40,217,.14)]"
       />
     );
   }
@@ -916,7 +918,7 @@ function ShopLogoAvatar({ shop }: { shop: VendorShop }) {
   return (
     <span
       aria-hidden
-      className="relative mx-auto grid h-[82px] w-[82px] place-items-center rounded-[28px] bg-gradient-to-br from-[#C4B5FD] to-[#6D28D9] text-[27px] font-bold text-white shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
+      className="relative mx-auto grid h-20 w-20 place-items-center rounded-[24px] border border-[#eadfff] bg-[linear-gradient(145deg,#faf7ff,#eee5ff)] text-2xl font-black text-violet shadow-[0_12px_30px_rgba(109,40,217,.14)]"
     >
       {[...shop.name.trim()][0] ?? '?'}
     </span>
@@ -926,6 +928,7 @@ function ShopLogoAvatar({ shop }: { shop: VendorShop }) {
 function ProfileEditorDialog({
   profile,
   shop,
+  initialTab,
   token,
   refresh,
   setProfileSaveWarning,
@@ -937,6 +940,7 @@ function ProfileEditorDialog({
 }: {
   profile: CurrentUser;
   shop: VendorShop;
+  initialTab: 'profile' | 'shop';
   token: string;
   refresh: () => void;
   setProfileSaveWarning: (message: string | null) => void;
@@ -951,7 +955,7 @@ function ProfileEditorDialog({
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const onCloseRef = useRef(onClose);
   const isSavingProfileRef = useRef(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'shop'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'shop'>(initialTab);
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [province, setProvince] = useState(profile.province ?? '');
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -1085,7 +1089,7 @@ function ProfileEditorDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] grid place-items-center overflow-y-auto bg-[#21172f]/55 p-3 backdrop-blur-[3px] sm:p-5"
+      className="fixed inset-0 z-[250] grid place-items-center overflow-y-auto bg-[#21172f]/55 p-3 backdrop-blur-[4px] sm:p-5"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target && !isSavingProfile) onClose();
       }}
@@ -1095,19 +1099,19 @@ function ProfileEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-editor-title"
-        className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_30px_90px_rgba(34,20,52,.28)] sm:max-h-[calc(100vh-2.5rem)]"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[720px] flex-col overflow-hidden rounded-[24px] border border-white/80 bg-white shadow-[0_32px_100px_rgba(35,20,60,.34)] sm:max-h-[calc(100dvh-2.5rem)]"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7 sm:py-5">
+        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
           <div>
             <span className="sl-kicker">Profile editor</span>
             <h2
               id="profile-editor-title"
               className="mt-1 text-xl font-black tracking-[-0.03em] text-ink sm:text-2xl"
             >
-              แก้ไขโปรไฟล์และร้านค้า
+              แก้ไขร้านค้าของฉัน
             </h2>
             <p className="mt-1 text-sm text-muted">
-              อัปเดตข้อมูลที่ใช้สำหรับการจองและหน้าร้านของคุณ
+              อัปเดตข้อมูลสำคัญให้ครบในหน้าต่างเดียว
             </p>
           </div>
           <button
@@ -1115,7 +1119,7 @@ function ProfileEditorDialog({
             type="button"
             onClick={onClose}
             disabled={isSavingProfile}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-muted transition hover:border-violet hover:text-violet disabled:opacity-50"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-muted transition hover:border-[#9f7aea] hover:text-violet disabled:opacity-50"
             aria-label="ปิดหน้าต่างแก้ไขโปรไฟล์"
           >
             <X className="h-5 w-5" aria-hidden />
@@ -1135,12 +1139,13 @@ function ProfileEditorDialog({
             tabIndex={activeTab === 'profile' ? 0 : -1}
             onClick={() => selectTab('profile')}
             onKeyDown={(event) => handleTabKeyDown(event, 0)}
-            className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold transition ${
               activeTab === 'profile'
                 ? 'bg-white text-violet shadow-sm'
                 : 'text-muted hover:text-violet'
             }`}
           >
+            <UserRound className="h-4 w-4" aria-hidden />
             ข้อมูลโปรไฟล์
           </button>
           <button
@@ -1155,12 +1160,13 @@ function ProfileEditorDialog({
             tabIndex={activeTab === 'shop' ? 0 : -1}
             onClick={() => selectTab('shop')}
             onKeyDown={(event) => handleTabKeyDown(event, 1)}
-            className={`rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold transition ${
               activeTab === 'shop'
                 ? 'bg-white text-violet shadow-sm'
                 : 'text-muted hover:text-violet'
             }`}
           >
+            <Store className="h-4 w-4" aria-hidden />
             ข้อมูลร้านค้า
           </button>
         </div>
@@ -1174,9 +1180,9 @@ function ProfileEditorDialog({
           noValidate
           className={`${activeTab === 'profile' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}
         >
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-              <div className="mb-6 flex items-center gap-4 rounded-2xl bg-[linear-gradient(135deg,#f8f5ff,#fff)] p-4">
-                <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#b69af5,#6d28d9)] text-2xl font-black text-white">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+              <div className="mb-5 flex items-center gap-4 rounded-2xl bg-[#f8f5fc] p-4">
+                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#a880ef,#6624dc)] text-xl font-black text-white">
                   {[...profile.fullName.trim()][0] ?? '?'}
                 </span>
                 <div>
@@ -1269,7 +1275,7 @@ function ProfileEditorDialog({
                 </p>
               )}
             </div>
-            <footer className="flex flex-col-reverse gap-3 border-t border-line bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
+            <footer className="flex flex-col-reverse gap-2 border-t border-line bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               <button
                 type="button"
                 onClick={onClose}
@@ -1292,7 +1298,7 @@ function ProfileEditorDialog({
           role="tabpanel"
           aria-labelledby="profile-editor-tab-shop"
           hidden={activeTab !== 'shop'}
-          className={`${activeTab === 'shop' ? 'block' : 'hidden'} min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7`}
+          className={`${activeTab === 'shop' ? 'block' : 'hidden'} min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6`}
         >
           <ShopLogoUploader shop={shop} token={token} refresh={refresh} />
           <div className="mt-5 border-t border-line pt-5">
@@ -1470,32 +1476,39 @@ function ShopLogoUploader({
   const logoControlsDisabled = isUploading || isCooldownActive;
 
   return (
-    <div className="relative">
-      {shownLogoUrl === shop.logoUrl ? (
-        <ShopLogoAvatar shop={shop} />
-      ) : (
-        /* eslint-disable-next-line @next/next/no-img-element -- local object URL */
-        <img
-          src={shownLogoUrl ?? ''}
-          alt="ตัวอย่างโลโก้ร้านที่เลือก"
-          width={82}
-          height={82}
-          className="relative mx-auto block h-[82px] w-[82px] rounded-[28px] object-cover shadow-[0_14px_32px_rgba(109,40,217,0.24)]"
-        />
-      )}
+    <div className="rounded-2xl border border-[#ece5f4] bg-[#fbfaff] p-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        {shownLogoUrl === shop.logoUrl ? (
+          <ShopLogoAvatar shop={shop} />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element -- local object URL */
+          <img
+            src={shownLogoUrl ?? ''}
+            alt="ตัวอย่างโลโก้ร้านที่เลือก"
+            width={80}
+            height={80}
+            className="relative mx-auto block h-20 w-20 rounded-[24px] border border-[#eadfff] object-cover shadow-[0_12px_30px_rgba(109,40,217,.14)]"
+          />
+        )}
 
-      <div className="mt-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-ink">โลโก้ร้าน</p>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            JPEG หรือ PNG ไม่เกิน 2 MB และไม่เกิน {MAX_LOGO_DIMENSION}×
+            {MAX_LOGO_DIMENSION} พิกเซล
+          </p>
+        </div>
         <label
           htmlFor="shop-logo"
           aria-disabled={logoControlsDisabled}
-          className={`inline-flex items-center gap-1.5 text-[13px] font-bold ${
+          className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-extrabold ${
             logoControlsDisabled
-              ? 'cursor-not-allowed text-muted'
-              : 'cursor-pointer text-violet'
+              ? 'cursor-not-allowed border-line text-muted opacity-60'
+              : 'cursor-pointer border-[#a97ceb] bg-white text-violet hover:bg-violet-tint'
           }`}
         >
           <ImageUp aria-hidden className="h-4 w-4" strokeWidth={2} />
-          {shop.logoUrl ? 'เปลี่ยนโลโก้' : 'เพิ่มโลโก้ร้าน'}
+          {shop.logoUrl ? 'เปลี่ยนรูปภาพ' : 'เพิ่มรูปภาพ'}
         </label>
         <input
           ref={inputRef}
@@ -1504,20 +1517,17 @@ function ShopLogoUploader({
           accept="image/jpeg,image/png"
           disabled={logoControlsDisabled}
           onChange={handleFileChange}
-          className="mt-2 block w-full text-base text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-[#ede7ff] file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-violet hover:file:bg-[#e3d9ff] disabled:cursor-not-allowed disabled:opacity-60"
+          className="sr-only"
         />
-        <p className="mt-1.5 text-sm leading-4 text-muted">
-          JPEG หรือ PNG ไม่เกิน 2 MB และไม่เกิน {MAX_LOGO_DIMENSION}×
-          {MAX_LOGO_DIMENSION} พิกเซล
-        </p>
-        {isCooldownActive && cooldownDate && (
-          <p className="mt-2 rounded-xl bg-[#f4f0ff] px-3 py-2 text-left text-sm font-bold leading-5 text-violet">
-            เปลี่ยนโลโก้ได้อีกครั้งวันที่{' '}
-            {BANGKOK_LOGO_DATE_FORMATTER.format(cooldownDate)} เวลา{' '}
-            {BANGKOK_LOGO_TIME_FORMATTER.format(cooldownDate)} น.
-          </p>
-        )}
       </div>
+
+      {isCooldownActive && cooldownDate && (
+        <p className="mt-3 rounded-xl bg-[#f4f0ff] px-3 py-2 text-left text-xs font-bold leading-5 text-violet">
+          เปลี่ยนโลโก้ได้อีกครั้งวันที่{' '}
+          {BANGKOK_LOGO_DATE_FORMATTER.format(cooldownDate)} เวลา{' '}
+          {BANGKOK_LOGO_TIME_FORMATTER.format(cooldownDate)} น.
+        </p>
+      )}
 
       {error && (
         <p
@@ -1533,7 +1543,7 @@ function ShopLogoUploader({
           type="button"
           onClick={handleUpload}
           disabled={logoControlsDisabled}
-          className="mt-2.5 w-full rounded-xl bg-violet px-4 py-2 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="mt-3 w-full rounded-xl bg-violet px-4 py-2.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {isUploading ? 'กำลังอัปโหลด…' : 'บันทึกโลโก้'}
         </button>
@@ -1555,23 +1565,45 @@ function ProfileStat({
 }) {
   const tones = {
     violet: 'bg-violet-tint text-violet',
-    green: 'bg-[#ebfaf3] text-[#13795b]',
+    green: 'bg-[#eaf9f2] text-[#168257]',
     amber: 'bg-[#fff8e8] text-[#895b08]',
     danger: 'bg-[#fff0ee] text-[#b42318]',
   } as const;
 
   return (
-    <article className="sl-soft-surface flex min-w-0 items-center gap-3 p-4 sm:p-5">
+    <article className="min-w-0 rounded-2xl border border-[#ece6f3] p-3.5">
       <span
-        className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${tones[tone]}`}
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${tones[tone]}`}
       >
-        <Icon className="h-5 w-5" aria-hidden />
+        <Icon className="h-4 w-4" aria-hidden />
       </span>
-      <div className="min-w-0">
-        <p className="text-sm font-bold text-muted">{label}</p>
-        <p className="mt-1 truncate text-sm font-extrabold text-ink">{value}</p>
-      </div>
+      <p className="mt-3 text-[11px] text-muted">{label}</p>
+      <p className={`mt-0.5 truncate text-sm font-extrabold ${tone === 'green' ? 'text-[#168257]' : tone === 'danger' ? 'text-[#b42318]' : 'text-ink'}`}>
+        {value}
+      </p>
     </article>
+  );
+}
+
+function ProfileShopDetail({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="grid gap-1 py-3.5 sm:grid-cols-[170px_1fr] sm:items-start sm:gap-4">
+      <dt className="flex items-center gap-2 text-sm text-muted">
+        <Icon aria-hidden className="h-4 w-4" strokeWidth={2} />
+        {label}
+      </dt>
+      <dd className="min-w-0 text-sm font-bold leading-6 text-ink sm:text-right">
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -1752,8 +1784,12 @@ function ShopForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="grid gap-4">
-      <label className="block">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className={`grid gap-4 ${mode === 'edit' ? 'sm:grid-cols-2' : ''}`}
+    >
+      <label className={`block ${mode === 'edit' ? 'sm:order-1' : ''}`}>
         <span className="mb-2 block text-sm font-bold">ชื่อร้าน</span>
         <input
           value={name}
@@ -1776,7 +1812,7 @@ function ShopForm({
         )}
       </label>
 
-      <label className="block">
+      <label className={`block ${mode === 'edit' ? 'sm:order-3 sm:col-span-2' : ''}`}>
         <span className="mb-2 block text-sm font-bold">รายละเอียดร้าน</span>
         <textarea
           value={description}
@@ -1804,7 +1840,7 @@ function ShopForm({
         </span>
       </label>
 
-      <div>
+      <div className={mode === 'edit' ? 'sm:order-2' : ''}>
         {/* MultiSelectMenu has no `disabled` prop, so while the options are
             still loading the trigger is made inert here instead — opening an
             empty picker would read as "there are no categories". */}
@@ -1840,7 +1876,7 @@ function ShopForm({
         )}
       </div>
 
-      <label className="block">
+      <label className={`block ${mode === 'edit' ? 'sm:order-4' : ''}`}>
         <span className="mb-2 block text-sm font-bold">เบอร์โทรศัพท์</span>
         <input
           type="tel"
@@ -1868,7 +1904,7 @@ function ShopForm({
         )}
       </label>
 
-      <label className="block">
+      <label className={`block ${mode === 'edit' ? 'sm:order-5' : ''}`}>
         <span className="mb-2 block text-sm font-bold">ชื่อผู้ติดต่อ</span>
         <input
           value={profile.fullName}
@@ -1880,7 +1916,7 @@ function ShopForm({
         </span>
       </label>
 
-      <label className="block">
+      <label className={`block ${mode === 'edit' ? 'sm:order-6' : ''}`}>
         <span className="mb-2 block text-sm font-bold">อีเมล</span>
         {/* Read-only on purpose: the address is the Supabase Auth identity
             (AGENTS.md §7) and there is no endpoint that changes it. */}
@@ -1895,7 +1931,7 @@ function ShopForm({
         </span>
       </label>
 
-      <label className="block">
+      <label className={`block ${mode === 'edit' ? 'sm:order-7' : ''}`}>
         <span className="mb-2 block text-sm font-bold">จังหวัด</span>
         <input
           value={province}
@@ -1934,7 +1970,7 @@ function ShopForm({
       {notice && (
         <p
           role="alert"
-          className="rounded-2xl border border-[#f1c6d0] bg-[#fff4f6] px-4 py-3 text-sm text-danger"
+          className={`rounded-2xl border border-[#f1c6d0] bg-[#fff4f6] px-4 py-3 text-sm text-danger ${mode === 'edit' ? 'sm:order-8 sm:col-span-2' : ''}`}
         >
           {notice}
         </p>
@@ -1943,7 +1979,7 @@ function ShopForm({
       <div
         className={`flex flex-col-reverse gap-3 bg-white sm:flex-row sm:justify-end ${
           mode === 'edit'
-            ? 'sticky -bottom-5 -mx-5 border-t border-line px-5 py-4 sm:-bottom-5 sm:-mx-7 sm:px-7'
+            ? 'sticky -bottom-5 -mx-5 border-t border-line px-5 py-4 sm:order-9 sm:col-span-2 sm:-bottom-5 sm:-mx-6 sm:px-6'
             : ''
         }`}
       >
