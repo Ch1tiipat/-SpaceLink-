@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -349,42 +350,42 @@ export default function DiscoveryPage() {
   }
 
   return (
-    <main className="sl-page pb-10">
-      <section className="shell pt-8">
-        <section className="relative flex min-h-[440px] items-center overflow-hidden rounded-[32px] bg-[#f5ecff] px-[clamp(24px,4vw,58px)] py-12 shadow-[0_28px_70px_rgba(62,37,99,0.12)] max-sm:min-h-[460px] max-sm:items-start max-sm:rounded-[24px] max-sm:py-10">
-          <div
-            aria-hidden
-            className="absolute inset-y-0 right-0 w-[76%] bg-[url('/home-hero.jpg')] bg-cover bg-[center_45%] max-sm:w-full"
+    <main className="sl-page overflow-hidden pb-10 text-[#1f1730]">
+      <section className="relative">
+        <section className="relative flex min-h-[470px] items-center overflow-hidden sm:min-h-[520px]">
+          <Image
+            src="/home-hero-spacelink-market.png"
+            alt="ร้านค้าและบูธภายในงาน SpaceLink"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-center"
           />
           <div
             aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(90deg,#fcfaff_0%,rgba(250,246,255,.98)_30%,rgba(246,237,255,.88)_46%,rgba(246,237,255,.27)_72%,transparent_100%)] max-sm:bg-[linear-gradient(180deg,rgba(252,250,255,.98)_0%,rgba(250,246,255,.94)_55%,rgba(246,237,255,.28)_100%)]"
+            className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,.96)_0%,rgba(252,248,255,.88)_34%,rgba(246,232,255,.56)_57%,rgba(139,83,218,.18)_78%,rgba(92,39,167,.06)_100%)] max-md:bg-[linear-gradient(180deg,rgba(255,255,255,.96)_0%,rgba(252,246,255,.90)_55%,rgba(224,200,255,.32)_100%)]"
           />
-          <div className="relative z-[1] w-[62%] max-w-[660px] max-md:w-[75%] max-sm:w-full">
-            <span className="inline-flex min-h-[30px] items-center rounded-full border border-[#decdf7] bg-white/80 px-[13px] py-1.5 text-sm font-bold text-[#5d2bc6]">
-              พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
-            </span>
-            <h1 className="my-5 text-[clamp(42px,4.6vw,72px)] font-black leading-[1.09] tracking-[-0.045em] text-[#171024] max-sm:text-[42px]">
+          <div className="relative z-[1] flex min-h-[470px] w-full max-w-[760px] flex-col justify-center px-7 pb-28 pt-10 sm:min-h-[520px] sm:px-14 lg:px-[clamp(64px,7vw,110px)]">
+            <h1 className="max-w-[660px] text-[clamp(40px,5.4vw,76px)] font-black leading-[.98] tracking-[-.055em] text-[#1c1427]">
               ค้นหาพื้นที่ขาย
-              <br />
-              <span className="bg-[linear-gradient(90deg,#4b21c6,#723adf,#a45fff)] bg-clip-text text-transparent">
+              <span className="mt-1 block bg-[linear-gradient(90deg,#5724c8,#7d3ff2,#a765ff)] bg-clip-text text-transparent">
                 ที่เหมาะกับร้านคุณ
               </span>
             </h1>
-            <p className="max-w-[580px] text-base leading-[1.8] text-[#514664] max-sm:text-sm">
-              รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
+            <p className="mt-5 max-w-[560px] text-sm font-medium leading-7 text-[#51465d] sm:text-base">
+              รวมงานแฟร์และอีเวนต์น่าสนใจ เลือกโซน ดูบูธว่าง
               และตรวจสอบพื้นที่ได้จากแผนผังจริง
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href="#eventSearch"
-                className="sl-action-primary inline-flex min-h-12 items-center gap-2 px-5"
+                className="inline-flex min-h-12 items-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#8b52f4,#6a2ed7)] px-5 text-sm font-extrabold text-white shadow-[0_12px_28px_rgba(105,45,215,.25)] transition hover:-translate-y-0.5"
               >
                 เริ่มสำรวจพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
               </a>
               <a
                 href="#events"
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[#cdbaf4] bg-white/90 px-5 text-sm font-bold text-[#6030d0] transition hover:bg-white"
+                className="inline-flex min-h-12 items-center gap-2 rounded-[14px] border border-white/80 bg-white/80 px-5 text-sm font-extrabold text-[#6530c9] shadow-[0_10px_26px_rgba(62,33,103,.12)] backdrop-blur-md transition hover:bg-white"
               >
                 ค้นหา Event <CalendarSearch aria-hidden className="h-4 w-4" />
               </a>
@@ -394,7 +395,7 @@ export default function DiscoveryPage() {
 
         <form
           id="eventSearch"
-          className="sl-surface relative z-30 mx-[18px] -mt-[22px] grid scroll-mt-24 grid-cols-[minmax(0,1.25fr)_minmax(135px,.75fr)_minmax(160px,.8fr)_minmax(155px,.8fr)_auto] gap-[10px] overflow-visible p-[18px] max-xl:grid-cols-3 max-md:grid-cols-2 max-sm:mx-[7px] max-sm:-mt-[13px] max-sm:grid-cols-1 max-sm:rounded-[19px] max-sm:p-3"
+          className="relative z-30 mx-auto -mt-[66px] grid w-[min(1180px,calc(100%-32px))] scroll-mt-24 gap-2.5 overflow-visible rounded-[24px] border border-[#d8cde5] bg-white/95 p-4 shadow-[0_18px_50px_rgba(72,38,120,.16)] backdrop-blur-xl sm:w-[min(1180px,calc(100%-72px))] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,.8fr)_auto]"
           onSubmit={(event) => {
             event.preventDefault();
             runSearch();
@@ -405,7 +406,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกงานหรือสถานที่"
             searchable
             searchPlaceholder="พิมพ์ชื่องานหรือสถานที่"
-            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
+            className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
@@ -417,7 +418,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกพื้นที่"
             searchable
             searchPlaceholder="พิมพ์จังหวัดหรือสถานที่"
-            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
+            className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))
@@ -427,7 +428,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="หมวดสินค้า"
             placeholder="ทุกหมวดสินค้า"
-            className="[&_button]:min-h-[66px]"
+            className="[&_button]:min-h-[58px]"
             value={draftFilters.categoryId}
             onChange={(categoryId) =>
               setDraftFilters((current) => ({ ...current, categoryId }))
@@ -437,7 +438,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="สถานะ Event"
             placeholder="ทุกสถานะ"
-            className="[&_button]:min-h-[66px]"
+            className="[&_button]:min-h-[58px]"
             value={draftFilters.eventStatus}
             onChange={(value) => applyEventStatus(value as EventStatusFilter)}
             options={[
@@ -448,7 +449,7 @@ export default function DiscoveryPage() {
           />
           <button
             type="submit"
-            className="sl-action-primary min-h-[66px] self-end whitespace-nowrap px-6 max-xl:w-full"
+            className="inline-flex min-h-[58px] self-end items-center justify-center whitespace-nowrap rounded-[15px] bg-[linear-gradient(135deg,#8a4cf5,#6126d9)] px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(109,40,217,.22)] transition hover:-translate-y-0.5"
           >
             ดูผลการค้นหา
           </button>
