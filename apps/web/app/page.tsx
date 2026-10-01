@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  Star,
   Store,
   UserRoundCheck,
   WalletCards,
@@ -44,6 +45,7 @@ import {
 import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
 import {
   getEventMap,
+  getEventReviews,
   getEvents,
   getPublicAnnouncements,
   getSavedEventIds,
@@ -51,6 +53,7 @@ import {
   type AdminAnnouncement,
   type DiscoveryEvent,
   type EventMap,
+  type EventReviewsPage,
   type EventZone,
 } from '@/lib/api';
 import { SavedEventsSection } from '@/components/saved-events-section';
@@ -72,7 +75,7 @@ import {
   type AnnouncementLoadStatus,
 } from '@/lib/home-announcement-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
-import { summarizeEventZones } from '@/lib/event-detail-view-model';
+import { safePublicHttpUrl, summarizeEventZones } from '@/lib/event-detail-view-model';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -873,6 +876,7 @@ export default function DiscoveryPage() {
         <EventPopup
           dialogRef={eventDialogRef}
           event={selectedEvent}
+          announcements={announcements}
           onRequestClose={closeEventPopup}
           onClosed={() => {
             setSelectedEvent(null);
@@ -1131,18 +1135,28 @@ type EventPopupLoadState =
   | { status: 'ready'; map: EventMap }
   | { status: 'error'; message: string };
 
+type EventPopupReviewsState =
+  | { status: 'loading' }
+  | { status: 'ready'; data: EventReviewsPage }
+  | { status: 'error' };
+
 function EventPopup({
   dialogRef,
   event,
+  announcements,
   onRequestClose,
   onClosed,
 }: {
   dialogRef: RefObject<HTMLDialogElement>;
   event: DiscoveryEvent;
+  announcements: PublicAnnouncement[];
   onRequestClose: () => void;
   onClosed: () => void;
 }) {
   const [loadState, setLoadState] = useState<EventPopupLoadState>({
+    status: 'loading',
+  });
+  const [reviewsState, setReviewsState] = useState<EventPopupReviewsState>({
     status: 'loading',
   });
   const [mapViewerOpen, setMapViewerOpen] = useState(false);
@@ -1169,6 +1183,18 @@ function EventPopup({
   }, [event.id]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    setReviewsState({ status: 'loading' });
+    getEventReviews(event.id, 1, 2, controller.signal)
+      .then((data) => setReviewsState({ status: 'ready', data }))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setReviewsState({ status: 'error' });
+      });
+    return () => controller.abort();
+  }, [event.id]);
+
+  useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -1179,7 +1205,14 @@ function EventPopup({
   const eventMap = loadState.status === 'ready' ? loadState.map : null;
   const summary = eventMap ? summarizeEventZones(eventMap.zones) : null;
   const mapHref = `/events/${encodeURIComponent(event.slug)}/map`;
-  const detailHref = `/events/${encodeURIComponent(event.slug)}`;
+  const eventAnnouncements = announcements
+    .filter((announcement) => announcement.eventId === event.id)
+    .slice(0, 2);
+  const organizer = eventMap?.event.organization;
+  const facebookUrl = safePublicHttpUrl(organizer?.facebookUrl ?? null);
+  const contactPhone = eventMap?.event.contactPhone ?? organizer?.contactPhone;
+  const contactEmail = eventMap?.event.contactEmail ?? organizer?.contactEmail;
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${event.venue.name} ${event.venue.address ?? ''}`)}`;
   const categories = [
     ...new Set([
       ...event.categories.map((category) => category.name),
@@ -1305,76 +1338,153 @@ function EventPopup({
             />
           </section>
 
-          <div className="mt-3 grid gap-3 lg:grid-cols-[.85fr_1.15fr]">
-            <section className="rounded-[16px] border border-[#e5ddf1] bg-white p-4 shadow-[0_8px_24px_rgba(78,55,121,.045)]">
-              <h2 className="inline-flex items-center gap-2 text-sm font-black text-[#5520ca]">
-                <FileText aria-hidden className="h-5 w-5" /> เกี่ยวกับงานนี้
-              </h2>
-              <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-[#655e77]">
+          <div className="mt-3 grid gap-2.5 lg:grid-cols-3">
+            <EventPopupSection icon={FileText} title="เกี่ยวกับงานนี้">
+              <p className="whitespace-pre-wrap text-xs leading-6 text-[#655e77]">
                 {event.description || 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียด Event นี้'}
               </p>
-              <div className="mt-4 border-t border-[#eee8f6] pt-4">
-                <p className="text-[11px] font-extrabold text-[#31254b]">ผู้จัดงาน</p>
-                <p className="mt-1 text-xs text-[#655e77]">{event.organization.name}</p>
-                <p className="mt-1 text-xs text-[#81798f]">{event.venue.address || 'ยังไม่ได้ระบุที่อยู่'}</p>
-              </div>
-              {eventMap?.event.policy?.generalRules ? (
-                <div className="mt-4 rounded-xl bg-[#f8f6fc] p-3">
-                  <p className="inline-flex items-center gap-2 text-[11px] font-extrabold text-[#5520ca]">
-                    <ShieldCheck aria-hidden className="h-4 w-4" /> กฎและเงื่อนไข
-                  </p>
-                  <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[10px] leading-5 text-[#716a80]">
-                    {eventMap.event.policy.generalRules}
-                  </p>
-                </div>
+              {eventMap?.event.joinInformation.length ? (
+                <ul className="mt-3 space-y-2 border-t border-[#eee8f6] pt-3">
+                  {eventMap.event.joinInformation.slice(0, 2).map((item) => (
+                    <li key={item.id} className="text-xs leading-5">
+                      <strong className="block text-[#31254b]">{item.title}</strong>
+                      <span className="line-clamp-2 whitespace-pre-wrap text-[#716a80]">{item.content}</span>
+                    </li>
+                  ))}
+                </ul>
               ) : null}
-            </section>
+            </EventPopupSection>
 
-            <section className="rounded-[16px] border border-[#e5ddf1] bg-white p-4 shadow-[0_8px_24px_rgba(78,55,121,.045)]">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="inline-flex items-center gap-2 text-sm font-black text-[#5520ca]">
-                  <MapIcon aria-hidden className="h-5 w-5" /> พื้นที่ภายในงาน
-                </h2>
-                {eventMap ? (
-                  <span className="text-[10px] font-bold text-[#81798f]">{eventMap.zones.length} โซน</span>
-                ) : null}
-              </div>
-              {loadState.status === 'loading' ? (
-                <div className="skeleton mt-3 h-[220px] rounded-[14px]" />
-              ) : loadState.status === 'error' ? (
-                <div role="alert" className="mt-3 rounded-[14px] bg-[#fff1f2] p-4 text-xs leading-5 text-[#a5263d]">
-                  {loadState.message}
+            <EventPopupSection icon={Megaphone} title="ข่าวสารล่าสุด">
+              {eventAnnouncements.length ? (
+                <div className="space-y-2">
+                  {eventAnnouncements.map((announcement) => (
+                    <article key={announcement.id} className="rounded-xl border border-[#e8e1f4] bg-[#fcfbff] px-3 py-2.5">
+                      <span className="text-[10px] text-[#898198]">
+                        {dateFormatter.format(new Date(announcement.publishedAt ?? announcement.createdAt))}
+                      </span>
+                      <strong className="mt-1 block text-xs text-[#31254b]">{announcement.title}</strong>
+                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[11px] leading-5 text-[#716a80]">{announcement.body}</p>
+                    </article>
+                  ))}
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setMapViewerOpen(true)}
-                  className="group relative mt-3 block min-h-[220px] w-full overflow-hidden rounded-[14px] border border-[#ddd4ea] bg-[#f6f3fb] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-                  aria-label="เปิดภาพแผนผังโซนแบบซูมได้"
-                >
-                  <RuntimeZoneMapVisual map={loadState.map} />
-                  <span className="absolute inset-x-3 bottom-3 inline-flex min-h-10 items-center justify-center rounded-xl bg-white/95 px-4 text-xs font-extrabold text-[#6330c6] shadow-lg backdrop-blur transition group-hover:bg-[#f4eeff]">
-                    กดดูและซูมแผนผังโซน
-                  </span>
-                </button>
+                <p className="text-xs leading-5 text-[#81798f]">ยังไม่มีข่าวสารสำหรับ Event นี้</p>
               )}
-              <Link
-                href={mapHref}
-                className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#7440e7] bg-white px-4 text-xs font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff]"
-              >
-                <MapIcon aria-hidden className="h-4 w-4" /> เปิดแผนผังจริง
+            </EventPopupSection>
+
+            <EventPopupSection icon={MessageCircle} title="ข่าวจากผู้จัดงาน">
+              <div className="rounded-xl border border-[#e8e1f4] bg-[#fcfbff] p-3">
+                <strong className="block text-xs text-[#31254b]">{event.organization.name}</strong>
+                {facebookUrl ? (
+                  <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-extrabold text-[#6330c6] hover:underline">
+                    ดูข่าวจาก Facebook ของผู้จัดงาน <ArrowRight aria-hidden className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <p className="mt-2 text-xs leading-5 text-[#81798f]">ผู้จัดงานยังไม่ได้เพิ่ม Facebook</p>
+                )}
+              </div>
+            </EventPopupSection>
+
+            <EventPopupSection icon={MapIcon} title="พื้นที่ภายในงาน">
+              {loadState.status === 'loading' ? (
+                <div className="skeleton h-[150px] rounded-xl" />
+              ) : loadState.status === 'error' ? (
+                <p role="alert" className="rounded-xl bg-[#fff1f2] p-3 text-xs text-[#a5263d]">{loadState.message}</p>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setMapViewerOpen(true)} className="group relative block h-[150px] w-full overflow-hidden rounded-xl border border-[#ddd4ea] bg-[#f6f3fb] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet" aria-label="เปิดภาพแผนผังโซนแบบซูมได้">
+                    <RuntimeZoneMapVisual map={loadState.map} />
+                    <span className="absolute inset-x-3 bottom-3 rounded-lg bg-white/95 px-3 py-2 text-center text-[11px] font-extrabold text-[#6330c6] shadow-lg">กดดูและซูมแผนผังโซน</span>
+                  </button>
+                  {eventMap?.zones.length ? (
+                    <div className="mt-2 space-y-1.5">
+                      {eventMap.zones.slice(0, 4).map((zone) => (
+                        <div key={zone.id} className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="truncate font-semibold text-[#43345e]">{zone.name || `โซน ${zone.code}`}</span>
+                          <span className="shrink-0 text-[#81798f]">{zone.booths.filter((booth) => booth.availability === 'AVAILABLE').length} บูธว่าง</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+              <Link href={mapHref} className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-full border border-[#cdb5f5] text-[11px] font-extrabold text-[#6330c6] hover:bg-[#f5f0ff]">
+                ดูแผนผังโซน <ArrowRight aria-hidden className="h-3.5 w-3.5" />
               </Link>
-            </section>
+            </EventPopupSection>
+
+            <EventPopupSection icon={ShieldCheck} title="กฎและเงื่อนไข (สรุป)">
+              {loadState.status === 'loading' ? (
+                <p className="text-xs text-[#81798f]">กำลังโหลดกฎของงาน…</p>
+              ) : eventMap?.event.policy && Object.values(eventMap.event.policy).some(Boolean) ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {([
+                    ['กฎของงาน', eventMap.event.policy.generalRules],
+                    ['การยกเลิก', eventMap.event.policy.cancellationPolicy],
+                    ['การคืนเงิน', eventMap.event.policy.refundPolicy],
+                  ] as const).filter(([, value]) => Boolean(value)).map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-[#f8f6fc] p-2.5">
+                      <strong className="block text-[11px] text-[#31254b]">{label}</strong>
+                      <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[10px] leading-4 text-[#777083]">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs leading-5 text-[#81798f]">ผู้จัดงานยังไม่ได้ระบุกฎและเงื่อนไข</p>
+              )}
+            </EventPopupSection>
+
+            <EventPopupSection icon={MapPin} title="การเดินทางเข้างาน">
+              <strong className="block text-xs text-[#31254b]">{event.venue.name}</strong>
+              <p className="mt-1 text-xs leading-5 text-[#777083]">{event.venue.address || 'ยังไม่ได้ระบุที่อยู่'}</p>
+              <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-[#cdb5f5] text-xs font-extrabold text-[#6330c6] hover:bg-[#f5f0ff]">
+                เปิดเส้นทางใน Google Maps <ArrowRight aria-hidden className="h-4 w-4" />
+              </a>
+            </EventPopupSection>
+
+            <EventPopupSection icon={Star} title="รีวิวจากผู้เข้าร่วมงาน" className="lg:col-span-2">
+              {reviewsState.status === 'loading' ? (
+                <p className="text-xs text-[#81798f]">กำลังโหลดรีวิว…</p>
+              ) : reviewsState.status === 'error' ? (
+                <p role="alert" className="text-xs text-[#a5263d]">โหลดรีวิวไม่สำเร็จ</p>
+              ) : reviewsState.data.count === 0 ? (
+                <p className="rounded-xl border border-dashed border-[#ded5eb] bg-[#fcfbff] p-5 text-center text-xs text-[#81798f]">Event นี้ยังไม่มีรีวิว</p>
+              ) : (
+                <div className="grid gap-2.5 sm:grid-cols-[.55fr_1fr_1fr]">
+                  <div className="rounded-xl bg-[#f7f3ff] p-3 text-center">
+                    <strong className="text-2xl font-black text-[#25164f]">{reviewsState.data.average?.toFixed(1) ?? '—'}<span className="text-sm">/5</span></strong>
+                    <span className="mt-1 block text-[10px] text-[#777083]">จาก {reviewsState.data.count} รีวิว</span>
+                  </div>
+                  {reviewsState.data.items.map((review) => (
+                    <article key={review.id} className="rounded-xl border border-[#e8e1f4] p-3">
+                      <span className="text-[10px] font-bold text-[#ffad25]">{'★'.repeat(Math.max(0, Math.min(5, Math.round(review.rating))))}{'☆'.repeat(5 - Math.max(0, Math.min(5, Math.round(review.rating))))}</span>
+                      <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-[#655e77]">{review.comment || 'ให้คะแนนโดยไม่มีข้อความ'}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </EventPopupSection>
+
+            <EventPopupSection icon={Phone} title="ข้อมูล Event">
+              <strong className="block text-xs text-[#31254b]">{event.organization.name}</strong>
+              <div className="mt-3 space-y-2 text-xs text-[#655e77]">
+                {contactPhone ? <a href={`tel:${contactPhone.replace(/[^+\d]/g, '')}`} className="flex items-center gap-2 hover:text-[#6330c6]"><Phone aria-hidden className="h-4 w-4" />{contactPhone}</a> : null}
+                {contactEmail ? <a href={`mailto:${encodeURIComponent(contactEmail)}`} className="flex items-center gap-2 break-all hover:text-[#6330c6]"><Mail aria-hidden className="h-4 w-4 shrink-0" />{contactEmail}</a> : null}
+                {!contactPhone && !contactEmail ? <p>ผู้จัดงานยังไม่ได้ระบุช่องทางติดต่อ</p> : null}
+              </div>
+            </EventPopupSection>
           </div>
         </div>
 
         <footer className="grid shrink-0 grid-cols-2 gap-3 border-t border-[#e6dff1] bg-white/95 px-4 py-3 backdrop-blur sm:flex sm:justify-center sm:px-6">
-          <Link
-            href={detailHref}
+          <button
+            type="button"
+            onClick={onRequestClose}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] border-2 border-[#7440e7] px-5 text-sm font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff] sm:min-w-[250px]"
           >
-            ดูรายละเอียด Event
-          </Link>
+            ปิด
+          </button>
           <Link
             href={mapHref}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#8752ef,#5e20e0)] px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(101,44,215,.25)] transition hover:-translate-y-0.5 sm:min-w-[250px]"
@@ -1470,6 +1580,27 @@ function EventPopupStat({
   );
 }
 
+function EventPopupSection({
+  icon: Icon,
+  title,
+  className = '',
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`min-w-0 rounded-[16px] border border-[#e5ddf1] bg-white p-4 shadow-[0_8px_24px_rgba(78,55,121,.045)] ${className}`}>
+      <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-black text-[#5520ca]">
+        <Icon aria-hidden className="h-5 w-5 shrink-0" /> {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 function RuntimeZoneMapVisual({
   map,
   expanded = false,
@@ -1477,12 +1608,12 @@ function RuntimeZoneMapVisual({
   map: EventMap;
   expanded?: boolean;
 }) {
-  const zones = map.zones.slice(0, expanded ? 12 : 6);
+  const zones = map.zones.slice(0, expanded ? 12 : 3);
   const mapImageUrl = map.event.mapImageUrl;
 
   return (
     <div
-      className={`relative grid h-full min-h-[220px] w-full gap-3 overflow-hidden bg-[#f5f3fa] p-4 ${expanded ? 'min-h-[430px] grid-cols-2 content-center sm:grid-cols-3' : 'grid-cols-2 content-center sm:grid-cols-3'}`}
+      className={`relative grid h-full w-full overflow-hidden bg-[#f5f3fa] ${expanded ? 'min-h-[430px] grid-cols-2 content-center gap-3 p-4 sm:grid-cols-3' : 'min-h-[150px] grid-cols-3 content-center gap-2 p-2'}`}
       style={
         mapImageUrl
           ? {
@@ -1509,7 +1640,7 @@ function RuntimeZoneMapVisual({
             'border-[#6fa8df] bg-[#e2f0ff] text-[#245f99]',
           ];
           return (
-            <span key={zone.id} className={`rounded-xl border-2 p-3 text-left shadow-sm ${tones[index % tones.length]}`}>
+            <span key={zone.id} className={`rounded-xl border-2 text-left shadow-sm ${expanded ? 'p-3' : 'p-2'} ${tones[index % tones.length]}`}>
               <strong className="block text-xs">{zone.code}</strong>
               <span className="mt-1 line-clamp-1 block text-[10px] font-semibold">{zone.name || `โซน ${zone.code}`}</span>
               <span className="mt-2 block text-[9px] opacity-75">{available} บูธว่าง</span>
