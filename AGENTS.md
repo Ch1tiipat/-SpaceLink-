@@ -379,6 +379,11 @@ the reason each one exists, are under **Definition of Done** below.
 - **Maintenance work** (chore, docs, ci, refactor, test) uses a **conventional-commit prefix** instead:
   `chore: add zone recommender seam`. **Do not create a Jira ticket only to satisfy the message format.**
 
+**One-time exception (2026-10-02):** The project requester approved the ended-event
+"จัดงานอีกครั้ง" feature and UI without a Jira ticket. Its single commit may use
+`feat: allow repeating ended events`. This exception applies only to that change;
+all other user-facing work still requires a Jira ticket.
+
 Infrastructure and scaffolding count as **maintenance even when they add new files** — guards, seams, filters and CI are `chore:`, not `feat:`. "New file" is not the test; "a user can now do something they could not do before" is.
 
 Two commits on `main` (`9c6ecba`, `fa36435`) used `feat:` before this rule existed. They were **not** rewritten: `main` is shared, and force-pushing it is forbidden. Leave them.
