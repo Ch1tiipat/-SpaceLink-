@@ -13,22 +13,29 @@ const eventDetailModalSource = readFileSync(
 );
 
 eventDetailModalTest(
-  'event detail dialog uses the compact desktop frame and safe mobile viewport',
+  'event detail dialog uses the approved wide frame and responsive card layout',
   () => {
     eventDetailModalAssert.match(
       eventDetailModalSource,
-      /w-\[min\(900px,calc\(100%-16px\)\)\]/,
+      /w-\[min\(1180px,calc\(100%-24px\)\)\]/,
     );
     eventDetailModalAssert.match(
       eventDetailModalSource,
-      /sm:max-h-\[min\(760px,calc\(100dvh-64px\)\)\]/,
+      /sm:max-h-\[calc\(100dvh-48px\)\]/,
     );
     eventDetailModalAssert.match(
       eventDetailModalSource,
-      /min-h-\[240px\]/,
+      /lg:grid-cols-\[\.95fr_1\.05fr\]/,
     );
-    eventDetailModalAssert.match(eventDetailModalSource, /max-sm:min-h-\[310px\]/);
-    eventDetailModalAssert.match(eventDetailModalSource, /line-clamp-2/);
+    eventDetailModalAssert.match(
+      eventDetailModalSource,
+      /lg:grid-cols-2 xl:grid-cols-3 \[&>section\]:mt-0/,
+    );
+    eventDetailModalAssert.match(eventDetailModalSource, /EventZonePreview/);
+    eventDetailModalAssert.doesNotMatch(
+      eventDetailModalSource,
+      /prototype-zone-map\.png|PROTOTYPE_EVENT_/,
+    );
   },
 );
 
@@ -47,7 +54,11 @@ eventDetailModalTest(
       eventDetailModalSource,
       /onClose=\{\(\) => router\.replace\('\/'\)\}/,
     );
-    eventDetailModalAssert.match(eventDetailModalSource, /ดู Zone Map →/);
+    eventDetailModalAssert.match(
+      eventDetailModalSource,
+      /document\.body\.style\.overflow = 'hidden'/,
+    );
+    eventDetailModalAssert.match(eventDetailModalSource, /ดูแผนผังโซน →/);
     eventDetailModalAssert.match(eventDetailModalSource, /บันทึก Event/);
     eventDetailModalAssert.match(
       eventDetailModalSource,

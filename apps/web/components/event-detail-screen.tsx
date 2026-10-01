@@ -15,6 +15,7 @@ import {
   Navigation,
   Star,
   Store,
+  X,
 } from 'lucide-react';
 import {
   getEventMap,
@@ -92,6 +93,11 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) dialog.showModal();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, []);
 
   const close = () => dialogRef.current?.close();
@@ -105,46 +111,61 @@ export function EventDetailScreen({ eventId }: { eventId: string }) {
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="w-[min(900px,calc(100%-16px))] max-h-[calc(100dvh-16px)] overflow-hidden rounded-[22px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65 sm:w-[min(900px,calc(100%-48px))] sm:max-h-[min(760px,calc(100dvh-64px))]"
+      className="w-[min(1180px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[24px] border border-white/70 bg-[#faf9ff] p-0 text-[#1e1638] shadow-[0_36px_120px_rgba(24,17,54,.4)] backdrop:bg-[#201b3b]/55 backdrop:backdrop-blur-[5px] sm:w-[min(1180px,calc(100%-64px))] sm:max-h-[calc(100dvh-48px)]"
     >
-      <div className="flex max-h-[calc(100dvh-16px)] flex-col sm:max-h-[min(760px,calc(100dvh-64px))]">
-        <header className="flex shrink-0 items-center justify-between border-b border-line bg-white px-4 py-3 sm:px-6">
-          <h2 id="event-dialog-title" className="text-base font-black sm:text-lg">
-            รายละเอียด Event
-          </h2>
+      <div className="flex max-h-[calc(100dvh-24px)] flex-col sm:max-h-[calc(100dvh-48px)]">
+        <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-[#e9e3f6] bg-[linear-gradient(90deg,#ffffff,#f4f0ff)] px-4 sm:px-6">
+          <div className="inline-flex items-center gap-2.5 text-[#5d27db]">
+            <Image
+              src="/brand/spacelink-mark.png"
+              alt=""
+              aria-hidden
+              width={38}
+              height={38}
+              className="h-8 w-8 object-contain"
+            />
+            <span className="text-lg font-black tracking-[-0.03em]">SpaceLink</span>
+            <h2
+              id="event-dialog-title"
+              className="hidden border-l border-[#d9ccef] pl-3 text-xs font-extrabold text-[#766d86] sm:block"
+            >
+              รายละเอียด Event
+            </h2>
+          </div>
           <button
             type="button"
+            autoFocus
             onClick={close}
             aria-label="ปิดรายละเอียด Event"
-            className="grid h-10 w-10 place-items-center rounded-full border border-line text-xl text-muted transition hover:border-violet/30 hover:text-violet"
+            className="grid h-10 w-10 place-items-center rounded-full text-[#5f5875] transition hover:bg-[#eee7fb] hover:text-[#5f27d7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet"
           >
-            ×
+            <X aria-hidden className="h-5 w-5" />
           </button>
         </header>
-        <div className="min-h-0 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-3 py-3 sm:px-5 sm:py-4">
           <EventDetailContent
             eventId={eventId}
             onClose={close}
             onEventResolved={setResolvedEvent}
           />
         </div>
-        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-line bg-white px-4 py-3 max-sm:gap-2 sm:px-6">
+        <footer className="relative grid shrink-0 grid-cols-2 gap-3 border-t border-[#e6dff1] bg-white/95 px-4 py-3 backdrop-blur sm:flex sm:justify-center sm:px-6">
           {event && !eventBookable ? (
-            <p className="mr-auto text-sm font-semibold text-muted">
+            <p className="col-span-2 text-center text-xs font-semibold text-muted sm:absolute sm:left-6 sm:text-left">
               {getEventBookingStatusLabel(event)} — ยังดูข้อมูลพื้นที่ได้
             </p>
           ) : null}
           <button
             type="button"
             onClick={close}
-            className="sl-action-secondary min-w-[110px] text-violet max-sm:flex-1"
+            className="inline-flex min-h-11 items-center justify-center rounded-[14px] border-2 border-[#7440e7] px-5 text-sm font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff] sm:min-w-[250px]"
           >
             ปิด
           </button>
           {event && footerAction ? (
             <Link
               href={`/events/${encodeURIComponent(event.slug)}/map`}
-              className="sl-action-primary min-w-[140px] max-sm:flex-1"
+              className="inline-flex min-h-11 items-center justify-center rounded-[14px] bg-[linear-gradient(135deg,#8752ef,#5e20e0)] px-5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(101,44,215,.25)] transition hover:-translate-y-0.5 sm:min-w-[250px]"
             >
               {footerAction.label}
             </Link>
@@ -373,6 +394,7 @@ export function EventDetailContent({
   const galleryUrls = event.galleryUrls
     .map(safePublicHttpsUrl)
     .filter((url): url is string => Boolean(url));
+  const mapImageUrl = safePublicHttpsUrl(event.mapImageUrl);
   const address = event.venue.address ?? event.venue.name;
   const dateRange = `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(new Date(event.endDate))}`;
   const timeRange = `${event.startTime ?? 'ยังไม่ระบุ'}${event.endTime ? ` – ${event.endTime}` : ''}`;
@@ -434,7 +456,7 @@ export function EventDetailContent({
   }
 
   return (
-    <div className="sl-page pb-0">
+    <div className="pb-0">
       {saveNotice ? (
         <div
           role={saveNotice.kind === 'error' ? 'alert' : 'status'}
@@ -445,48 +467,38 @@ export function EventDetailContent({
           {saveNotice.message}
         </div>
       ) : null}
-      <div className="shell max-w-[900px] py-4 sm:py-5">
+      <div className="mx-auto max-w-[1140px]">
         <section
-          className="relative flex min-h-[240px] items-end overflow-hidden rounded-[20px] bg-[#351160] px-5 py-5 text-white shadow-[0_20px_55px_rgba(62,37,99,0.16)] max-sm:min-h-[310px] sm:px-6 sm:py-6"
+          className="grid overflow-hidden rounded-[18px] border border-[#e4dcf3] bg-white shadow-[0_12px_32px_rgba(78,55,121,.08)] lg:grid-cols-[.95fr_1.05fr]"
         >
-          <EventHeroCover
-            bannerUrl={event.bannerUrl}
-            eventName={event.name}
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(31,11,55,.95)_0%,rgba(66,25,122,.78)_52%,rgba(32,63,68,.42)_100%)]" />
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/25 to-transparent" />
-          <div className="relative z-10 max-w-[780px]">
-            <span className="inline-flex rounded-full border border-white/25 bg-white/[0.13] px-3 py-1.5 text-sm font-bold">
+          <div className="flex min-h-[250px] flex-col justify-center p-5 sm:p-7">
+            <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-extrabold ${eventBookable ? 'bg-[#d9f8e4] text-[#16834e]' : 'bg-[#efedf2] text-[#6f6879]'}`}>
               {getEventBookingStatusLabel(event)}
             </span>
-            <h1 className="mt-3 max-w-[20ch] text-[clamp(30px,4.5vw,44px)] font-black leading-[1.12] tracking-[-0.045em]">
+            <h1 className="mt-3 max-w-[20ch] text-[clamp(28px,3.2vw,42px)] font-black leading-[1.08] tracking-[-0.045em] text-[#16102c]">
               {event.name}
             </h1>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-semibold text-white/90 sm:text-sm">
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-[#665d7c] sm:text-sm">
               <span className="inline-flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" aria-hidden />
+                <CalendarDays className="h-4 w-4 text-[#6d28d9]" aria-hidden />
                 {compactDateFormatter.format(new Date(event.startDate))} –{' '}
                 {compactDateFormatter.format(new Date(event.endDate))}
               </span>
               <span className="inline-flex items-center gap-2">
-                <MapPin className="h-4 w-4" aria-hidden />
+                <MapPin className="h-4 w-4 text-[#6d28d9]" aria-hidden />
                 {event.venue.name}
               </span>
-              <span className="inline-flex items-center gap-2">
-                <LayoutGrid className="h-4 w-4" aria-hidden />
-                {availableBooths} บูธว่าง
-              </span>
             </div>
-            <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-6 text-white/88">
+            <p className="mt-4 line-clamp-3 text-sm leading-6 text-[#5d5670]">
               {event.description ??
                 'ผู้จัดงานยังไม่ได้เพิ่มรายละเอียดของ Event นี้'}
             </p>
-            <div className="mt-4 flex flex-wrap gap-2.5 max-sm:flex-col">
+            <div className="mt-4 flex flex-wrap gap-2.5">
               <Link
                 href={`/events/${encodeURIComponent(event.slug)}/map`}
-                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-bold text-violet shadow-lg transition hover:-translate-y-0.5"
+                className="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#6d28d9] px-4 text-xs font-extrabold text-white shadow-[0_8px_20px_rgba(109,40,217,.22)] transition hover:-translate-y-0.5"
               >
-                ดู Zone Map →
+                ดูแผนผังโซน →
               </Link>
               <button
                 type="button"
@@ -503,10 +515,10 @@ export function EventDetailContent({
                     ? 'โหลดสถานะการบันทึก Event ไม่สำเร็จ'
                     : undefined
                 }
-                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSaved
-                    ? 'border-white bg-white text-violet'
-                    : 'border-white/35 bg-white/10 text-white hover:bg-white/20'
+                    ? 'border-[#d7c7f5] bg-[#f1ebff] text-violet'
+                    : 'border-[#ded5ea] bg-white text-[#6330c6] hover:bg-[#f5f0ff]'
                 }`}
               >
                 <Heart
@@ -525,6 +537,16 @@ export function EventDetailContent({
                         : 'บันทึก Event'}
               </button>
             </div>
+          </div>
+          <div className="relative min-h-[230px] overflow-hidden lg:min-h-[250px]">
+            <EventHeroCover
+              bannerUrl={event.bannerUrl}
+              eventName={event.name}
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#fff_0%,rgba(255,255,255,.35)_10%,transparent_30%)] lg:bg-[linear-gradient(90deg,#fff_0%,rgba(255,255,255,.88)_10%,rgba(255,255,255,.28)_28%,transparent_44%)]" />
+            <span className="absolute bottom-4 right-4 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-[11px] font-extrabold text-[#5b2bc1] shadow-lg backdrop-blur">
+              Good Booth Better Business
+            </span>
           </div>
         </section>
 
@@ -554,6 +576,7 @@ export function EventDetailContent({
           />
         </section>
 
+        <div className="mt-3 grid items-start gap-3 lg:grid-cols-2 xl:grid-cols-3 [&>section]:mt-0">
         <DetailSection kicker="EVENT INFORMATION" title="เกี่ยวกับ Event">
           <p className="whitespace-pre-line text-sm leading-7 text-muted">
             {event.description ??
@@ -607,6 +630,7 @@ export function EventDetailContent({
           kicker="EVENT DETAILS"
           title="รายละเอียดภายในงาน"
           description="รวมภาพบรรยากาศ กิจกรรม และสิ่งอำนวยความสะดวกของงาน"
+          className="lg:col-span-2 xl:col-span-3"
           count={
             galleryUrls.length > 0 ? `${galleryUrls.length} รูป` : undefined
           }
@@ -670,6 +694,16 @@ export function EventDetailContent({
             </Link>
           }
         >
+          <Link
+            href={`/events/${encodeURIComponent(event.slug)}/map`}
+            className="group relative mb-4 block min-h-[190px] overflow-hidden rounded-[14px] border border-[#ddd4ea] bg-[#f6f3fb] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+            aria-label={`เปิดแผนผังโซน ${event.name}`}
+          >
+            <EventZonePreview zones={zones} mapImageUrl={mapImageUrl} />
+            <span className="absolute inset-x-3 bottom-3 inline-flex min-h-9 items-center justify-center rounded-xl bg-white/95 px-4 text-[11px] font-extrabold text-[#6330c6] shadow-lg backdrop-blur transition group-hover:bg-[#f4eeff]">
+              กดดูแผนผังโซนจริง →
+            </span>
+          </Link>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <NumberCard label="Zone" value={`${zones.length}`} />
             <NumberCard label="บูธทั้งหมด" value={`${totalBooths}`} />
@@ -717,6 +751,7 @@ export function EventDetailContent({
           kicker="LOCATION"
           title="การเดินทางเข้างาน"
           description={address}
+          className="lg:col-span-2 xl:col-span-1"
         >
           <VenueLocationMap
             key={event.venue.id}
@@ -728,6 +763,7 @@ export function EventDetailContent({
         <DetailSection
           kicker="EVENT REVIEWS"
           title="รีวิวจากผู้เข้าร่วมงาน"
+          className="lg:col-span-2 xl:col-span-2"
           count={
             reviews?.eventId === event.id && reviews.data
               ? `${reviews.data.average?.toFixed(1) ?? '0.0'} ★ · ${reviews.data.count} รีวิว`
@@ -778,9 +814,10 @@ export function EventDetailContent({
             <EmptyState text="Event นี้ยังไม่มีรีวิว" />
           )}
         </DetailSection>
+        </div>
 
-        <section className="mt-5 grid gap-5 lg:grid-cols-[.85fr_1.15fr]">
-          <article className="sl-surface p-7">
+        <section className="mt-3 grid gap-3 lg:grid-cols-[.85fr_1.15fr]">
+          <article className="rounded-[16px] border border-[#e5ddf1] bg-white p-5 shadow-[0_8px_24px_rgba(78,55,121,.045)]">
             <div className="flex items-start justify-between gap-5">
               <div>
                 <span className="sl-kicker">RESERVATION</span>
@@ -817,7 +854,7 @@ export function EventDetailContent({
             </div>
           </article>
 
-          <article className="sl-surface p-7">
+          <article className="rounded-[16px] border border-[#e5ddf1] bg-white p-5 shadow-[0_8px_24px_rgba(78,55,121,.045)]">
             <span className="sl-kicker">EVENT INFO</span>
             <h2 className="mt-2 text-2xl font-black">ข้อมูล Event</h2>
             <p className="mt-2 text-sm text-muted">
@@ -1138,6 +1175,7 @@ function DetailSection({
   description,
   count,
   action,
+  className = '',
   children,
 }: {
   kicker: string;
@@ -1145,14 +1183,15 @@ function DetailSection({
   description?: string;
   count?: string;
   action?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="sl-surface mt-3 p-5 sm:p-6">
+    <section className={`mt-3 rounded-[16px] border border-[#e5ddf1] bg-white p-4 shadow-[0_8px_24px_rgba(78,55,121,.045)] sm:p-5 ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <span className="sl-kicker">{kicker}</span>
-          <h2 className="mt-1.5 text-[22px] font-black tracking-[-0.03em]">
+          <h2 className="mt-1.5 text-lg font-black tracking-[-0.03em] sm:text-xl">
             {title}
           </h2>
         </div>
@@ -1170,6 +1209,67 @@ function EmptyState({ text }: { text: string }) {
   return (
     <div className="grid min-h-[118px] place-items-center rounded-[16px] border border-dashed border-[#ddd2e6] bg-[#fcfbfd] px-5 text-center text-sm text-muted">
       {text}
+    </div>
+  );
+}
+
+function EventZonePreview({
+  zones,
+  mapImageUrl,
+}: {
+  zones: EventMap['zones'];
+  mapImageUrl: string | null;
+}) {
+  const visibleZones = zones.slice(0, 6);
+
+  return (
+    <div
+      className="grid min-h-[190px] grid-cols-2 content-center gap-2.5 bg-[#f5f3fa] p-4 pb-14 sm:grid-cols-3"
+      style={
+        mapImageUrl
+          ? {
+              backgroundImage: `linear-gradient(rgba(247,244,252,.16),rgba(247,244,252,.16)),url(${JSON.stringify(mapImageUrl)})`,
+              backgroundPosition: 'center',
+              backgroundSize: 'cover',
+            }
+          : undefined
+      }
+    >
+      {mapImageUrl ? (
+        <span className="col-span-full justify-self-center rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-bold text-[#5f5870] shadow-sm backdrop-blur">
+          ภาพแผนผังจากผู้จัดงาน
+        </span>
+      ) : visibleZones.length > 0 ? (
+        visibleZones.map((zone, index) => {
+          const available = zone.booths.filter(
+            (booth) => booth.availability === 'AVAILABLE',
+          ).length;
+          const tones = [
+            'border-[#f1ae54] bg-[#fff2d7] text-[#86520e]',
+            'border-[#aa83eb] bg-[#eee5ff] text-[#5f2bc7]',
+            'border-[#55bca8] bg-[#dff8f2] text-[#176b5c]',
+            'border-[#6fa8df] bg-[#e2f0ff] text-[#245f99]',
+          ];
+          return (
+            <span
+              key={zone.id}
+              className={`rounded-xl border-2 p-2.5 text-left shadow-sm ${tones[index % tones.length]}`}
+            >
+              <strong className="block text-xs">{zone.code}</strong>
+              <span className="mt-1 line-clamp-1 block text-[10px] font-semibold">
+                {zone.name || `โซน ${zone.code}`}
+              </span>
+              <span className="mt-1.5 block text-[9px] opacity-75">
+                {available} บูธว่าง
+              </span>
+            </span>
+          );
+        })
+      ) : (
+        <span className="col-span-full text-center text-xs font-semibold text-[#756d82]">
+          ผู้จัดงานยังไม่ได้เพิ่มแผนผังโซน
+        </span>
+      )}
     </div>
   );
 }
