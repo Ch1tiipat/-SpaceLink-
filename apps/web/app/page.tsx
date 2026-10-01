@@ -1,18 +1,30 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
-  BellRing,
+  BarChart3,
+  CalendarDays,
   CalendarSearch,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
+  Clock3,
   CreditCard,
-  Headphones,
-  MapPinned,
+  FileText,
+  Grid2X2,
+  Home,
+  Mail,
+  Megaphone,
+  MessageCircle,
+  Phone,
+  Search,
   ShieldCheck,
   Store,
+  UserRoundCheck,
+  WalletCards,
   type LucideIcon,
 } from 'lucide-react';
 import { SelectMenu, type SelectMenuOption } from '@/components/select-menu';
@@ -349,42 +361,47 @@ export default function DiscoveryPage() {
   }
 
   return (
-    <main className="sl-page pb-10">
-      <section className="shell pt-8">
-        <section className="relative flex min-h-[440px] items-center overflow-hidden rounded-[32px] bg-[#f5ecff] px-[clamp(24px,4vw,58px)] py-12 shadow-[0_28px_70px_rgba(62,37,99,0.12)] max-sm:min-h-[460px] max-sm:items-start max-sm:rounded-[24px] max-sm:py-10">
-          <div
-            aria-hidden
-            className="absolute inset-y-0 right-0 w-[76%] bg-[url('/home-hero.jpg')] bg-cover bg-[center_45%] max-sm:w-full"
+    <main id="home-top" className="sl-page sl-homepage overflow-hidden text-[#1f1730]">
+      <style jsx global>{`
+        main.sl-homepage + footer[aria-label='ข้อมูลส่วนท้าย SpaceLink'] {
+          display: none;
+        }
+      `}</style>
+      <section className="relative">
+        <section className="relative flex min-h-[470px] items-center overflow-hidden sm:min-h-[520px]">
+          <Image
+            src="/home-hero-spacelink-market.png"
+            alt="ร้านค้าและบูธภายในงาน SpaceLink"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-center"
           />
           <div
             aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(90deg,#fcfaff_0%,rgba(250,246,255,.98)_30%,rgba(246,237,255,.88)_46%,rgba(246,237,255,.27)_72%,transparent_100%)] max-sm:bg-[linear-gradient(180deg,rgba(252,250,255,.98)_0%,rgba(250,246,255,.94)_55%,rgba(246,237,255,.28)_100%)]"
+            className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,.96)_0%,rgba(252,248,255,.88)_34%,rgba(246,232,255,.56)_57%,rgba(139,83,218,.18)_78%,rgba(92,39,167,.06)_100%)] max-md:bg-[linear-gradient(180deg,rgba(255,255,255,.96)_0%,rgba(252,246,255,.90)_55%,rgba(224,200,255,.32)_100%)]"
           />
-          <div className="relative z-[1] w-[62%] max-w-[660px] max-md:w-[75%] max-sm:w-full">
-            <span className="inline-flex min-h-[30px] items-center rounded-full border border-[#decdf7] bg-white/80 px-[13px] py-1.5 text-sm font-bold text-[#5d2bc6]">
-              พื้นที่ที่ใช่ เชื่อมโอกาสใหม่ให้ร้านคุณ
-            </span>
-            <h1 className="my-5 text-[clamp(42px,4.6vw,72px)] font-black leading-[1.09] tracking-[-0.045em] text-[#171024] max-sm:text-[42px]">
+          <div className="relative z-[1] flex min-h-[470px] w-full max-w-[760px] flex-col justify-center px-7 pb-28 pt-10 sm:min-h-[520px] sm:px-14 lg:px-[clamp(64px,7vw,110px)]">
+            <h1 className="max-w-[660px] text-[clamp(40px,5.4vw,76px)] font-black leading-[.98] tracking-[-.055em] text-[#1c1427]">
               ค้นหาพื้นที่ขาย
-              <br />
-              <span className="bg-[linear-gradient(90deg,#4b21c6,#723adf,#a45fff)] bg-clip-text text-transparent">
+              <span className="mt-1 block bg-[linear-gradient(90deg,#5724c8,#7d3ff2,#a765ff)] bg-clip-text text-transparent">
                 ที่เหมาะกับร้านคุณ
               </span>
             </h1>
-            <p className="max-w-[580px] text-base leading-[1.8] text-[#514664] max-sm:text-sm">
-              รวมงานแฟร์และอีเวนต์ชั้นนำ เลือกโซน ดูบูธว่าง
+            <p className="mt-5 max-w-[560px] text-sm font-medium leading-7 text-[#51465d] sm:text-base">
+              รวมงานแฟร์และอีเวนต์น่าสนใจ เลือกโซน ดูบูธว่าง
               และตรวจสอบพื้นที่ได้จากแผนผังจริง
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href="#eventSearch"
-                className="sl-action-primary inline-flex min-h-12 items-center gap-2 px-5"
+                className="inline-flex min-h-12 items-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#8b52f4,#6a2ed7)] px-5 text-sm font-extrabold text-white shadow-[0_12px_28px_rgba(105,45,215,.25)] transition hover:-translate-y-0.5"
               >
                 เริ่มสำรวจพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
               </a>
               <a
                 href="#events"
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[#cdbaf4] bg-white/90 px-5 text-sm font-bold text-[#6030d0] transition hover:bg-white"
+                className="inline-flex min-h-12 items-center gap-2 rounded-[14px] border border-white/80 bg-white/80 px-5 text-sm font-extrabold text-[#6530c9] shadow-[0_10px_26px_rgba(62,33,103,.12)] backdrop-blur-md transition hover:bg-white"
               >
                 ค้นหา Event <CalendarSearch aria-hidden className="h-4 w-4" />
               </a>
@@ -394,7 +411,7 @@ export default function DiscoveryPage() {
 
         <form
           id="eventSearch"
-          className="sl-surface relative z-30 mx-[18px] -mt-[22px] grid scroll-mt-24 grid-cols-[minmax(0,1.25fr)_minmax(135px,.75fr)_minmax(160px,.8fr)_minmax(155px,.8fr)_auto] gap-[10px] overflow-visible p-[18px] max-xl:grid-cols-3 max-md:grid-cols-2 max-sm:mx-[7px] max-sm:-mt-[13px] max-sm:grid-cols-1 max-sm:rounded-[19px] max-sm:p-3"
+          className="relative z-30 mx-auto -mt-[66px] grid w-[min(1180px,calc(100%-32px))] scroll-mt-24 gap-2.5 overflow-visible rounded-[24px] border border-[#d8cde5] bg-white/95 p-4 shadow-[0_18px_50px_rgba(72,38,120,.16)] backdrop-blur-xl sm:w-[min(1180px,calc(100%-72px))] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,.8fr)_auto]"
           onSubmit={(event) => {
             event.preventDefault();
             runSearch();
@@ -405,7 +422,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกงานหรือสถานที่"
             searchable
             searchPlaceholder="พิมพ์ชื่องานหรือสถานที่"
-            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
+            className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.query}
             onChange={(query) =>
               setDraftFilters((current) => ({ ...current, query }))
@@ -417,7 +434,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกพื้นที่"
             searchable
             searchPlaceholder="พิมพ์จังหวัดหรือสถานที่"
-            className="[&_button]:min-h-[66px] [&_input]:min-h-[66px]"
+            className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.area}
             onChange={(area) =>
               setDraftFilters((current) => ({ ...current, area }))
@@ -427,7 +444,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="หมวดสินค้า"
             placeholder="ทุกหมวดสินค้า"
-            className="[&_button]:min-h-[66px]"
+            className="[&_button]:min-h-[58px]"
             value={draftFilters.categoryId}
             onChange={(categoryId) =>
               setDraftFilters((current) => ({ ...current, categoryId }))
@@ -437,7 +454,7 @@ export default function DiscoveryPage() {
           <SelectMenu
             label="สถานะ Event"
             placeholder="ทุกสถานะ"
-            className="[&_button]:min-h-[66px]"
+            className="[&_button]:min-h-[58px]"
             value={draftFilters.eventStatus}
             onChange={(value) => applyEventStatus(value as EventStatusFilter)}
             options={[
@@ -448,7 +465,7 @@ export default function DiscoveryPage() {
           />
           <button
             type="submit"
-            className="sl-action-primary min-h-[66px] self-end whitespace-nowrap px-6 max-xl:w-full"
+            className="inline-flex min-h-[58px] self-end items-center justify-center whitespace-nowrap rounded-[15px] bg-[linear-gradient(135deg,#8a4cf5,#6126d9)] px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(109,40,217,.22)] transition hover:-translate-y-0.5"
           >
             ดูผลการค้นหา
           </button>
@@ -456,25 +473,22 @@ export default function DiscoveryPage() {
       </section>
 
       <section
+        id="announcements"
         className="shell !mt-[52px] max-sm:!mt-[38px]"
         aria-labelledby="announcements-heading"
       >
-        <div className="mb-[18px] flex items-end justify-between gap-5">
+        <div className="relative mb-[18px] text-center">
           <div>
-            <span className="sl-kicker">ข่าวสารล่าสุด</span>
             <h2
               id="announcements-heading"
-              className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+              className="text-[clamp(26px,3vw,34px)] font-black tracking-[-0.035em] text-[#432687]"
             >
-              ประกาศจากผู้จัดงาน
+              ประกาศข่าวสาร
             </h2>
-            <p className="mt-1 text-xs text-muted">
-              อัปเดตจากองค์กรที่มี Event บน SpaceLink
-            </p>
           </div>
           {visibleAnnouncements.length > 1 ? (
             <div
-              className="flex gap-1"
+              className="absolute right-0 top-0 flex gap-1 max-sm:relative max-sm:mt-3 max-sm:justify-center"
               role="group"
               aria-label="เลื่อนดูประกาศ"
             >
@@ -498,7 +512,7 @@ export default function DiscoveryPage() {
           ) : null}
         </div>
         <div
-          className="mb-5 flex flex-wrap gap-2"
+          className="mb-7 flex flex-wrap justify-center gap-2"
           role="group"
           aria-label="กรองประกาศตามประเภท"
         >
@@ -516,13 +530,12 @@ export default function DiscoveryPage() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setAnnouncementFilter(option.value)}
-                className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+                className={`min-h-9 rounded-full border px-3.5 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
                   active
-                    ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]'
-                    : 'border-[#d8c7f6] bg-[#f6f1ff] text-violet hover:border-violet hover:bg-white'
+                    ? 'border-[#b699f2] bg-[#b699f2] text-white'
+                    : 'border-[#c8b0fa] bg-[#c8b0fa] text-white hover:bg-[#a984ed]'
                 }`}
               >
-                <span aria-hidden>{active ? '✓ ' : ''}</span>
                 {option.label}
               </button>
             );
@@ -541,7 +554,7 @@ export default function DiscoveryPage() {
             {[0, 1, 2].map((item) => (
               <span
                 key={item}
-                className="skeleton block h-[230px] rounded-[22px]"
+                className="skeleton block h-[130px] rounded-[12px]"
               />
             ))}
           </div>
@@ -565,17 +578,16 @@ export default function DiscoveryPage() {
         ) : (
           <div
             ref={announcementsScrollerRef}
-            className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
+            className="flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin] [scrollbar-color:#c4b5fd_transparent]"
             aria-label="ประกาศล่าสุด เลื่อนซ้ายหรือขวาเพื่อดูเพิ่มเติม"
           >
-            {visibleAnnouncements.map((announcement, index) => (
+            {visibleAnnouncements.map((announcement) => (
               <div
                 key={announcement.id}
-                className="min-w-[86%] snap-start sm:min-w-[calc(50%-8px)] lg:min-w-[calc((100%-32px)/3)]"
+                className="w-[min(310px,85vw)] shrink-0 snap-start sm:w-[min(340px,47vw)] lg:w-[calc((100%-40px)/3)]"
               >
                 <AnnouncementCard
                   announcement={announcement}
-                  index={index}
                   onOpen={openAnnouncement}
                 />
               </div>
@@ -607,7 +619,7 @@ export default function DiscoveryPage() {
             <span className="sl-kicker">ค้นหา Event</span>
             <h2
               id="events-heading"
-              className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+              className="mt-[7px] text-[26px] font-black tracking-[-0.025em] text-[#432687]"
             >
               งานที่เหมาะกับร้านของคุณ
             </h2>
@@ -633,8 +645,8 @@ export default function DiscoveryPage() {
                   onClick={() => applyEventStatus(option.value)}
                   className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
                     active
-                      ? 'border-violet bg-violet text-white shadow-[0_8px_20px_rgba(109,40,217,.18)]'
-                      : 'border-[#d8c7f6] bg-[#f6f1ff] text-violet hover:border-violet hover:bg-white'
+                      ? 'border-[#b699f2] bg-[#b699f2] text-white shadow-[0_8px_20px_rgba(109,40,217,.12)]'
+                      : 'border-[#c8b0fa] bg-[#c8b0fa] text-white hover:border-[#a984ed] hover:bg-[#a984ed]'
                   }`}
                 >
                   {option.label}
@@ -692,7 +704,6 @@ export default function DiscoveryPage() {
 
       <BookingJourney event={featuredEvent} />
       <PlatformBenefits />
-      <HomepageCallToAction />
       {savedNotice ? (
         <div
           role={savedNotice.kind === 'error' ? 'alert' : 'status'}
@@ -761,51 +772,174 @@ export default function DiscoveryPage() {
           </div>
         ) : null}
       </dialog>
+      <HomepageFooter />
     </main>
+  );
+}
+
+function HomepageFooter() {
+  const navigation: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: 'หน้าหลัก', href: '#home-top', icon: Home },
+    { label: 'ค้นหาพื้นที่', href: '#eventSearch', icon: Search },
+    { label: 'งานแนะนำ', href: '#events', icon: CalendarDays },
+    { label: 'ประกาศข่าวสาร', href: '#announcements', icon: Megaphone },
+  ];
+  const support: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: 'ติดต่อสอบถาม', href: '/support', icon: MessageCircle },
+    { label: 'ศูนย์ช่วยเหลือ', href: '/help', icon: CircleHelp },
+    { label: 'คำถามที่พบบ่อย', href: '/help', icon: FileText },
+    { label: 'นโยบายความเป็นส่วนตัว', href: '/privacy', icon: ShieldCheck },
+  ];
+
+  return (
+    <footer
+      id="home-footer"
+      aria-label="ข้อมูลส่วนท้าย SpaceLink"
+      className="relative mt-16 overflow-hidden bg-[linear-gradient(120deg,#f9f7ff,#f2ecff_52%,#f8f5ff)] text-[#402a80]"
+    >
+      <span aria-hidden className="pointer-events-none absolute -left-24 -top-20 h-52 w-52 rounded-full bg-[#e7d9ff]/45" />
+      <span aria-hidden className="pointer-events-none absolute -right-14 -top-20 h-44 w-44 rounded-full bg-[#e1d3ff]/50" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-28 -left-20 h-48 w-48 rounded-full bg-[#d9c8ff]/45" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-48 w-48 rounded-full bg-[#e5d9ff]/55" />
+      <div className="relative mx-auto max-w-[1180px] px-5 pb-5 pt-12 sm:px-7 lg:px-8">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.18fr_1fr_1fr_1fr] lg:gap-0">
+          <section className="lg:pr-7">
+            <Link href="#home-top" className="inline-flex items-center gap-2" aria-label="SpaceLink หน้าแรก">
+              <Image
+                src="/brand/spacelink-mark.png"
+                alt=""
+                width={56}
+                height={56}
+                className="h-14 w-14 object-contain"
+              />
+              <strong className="bg-[linear-gradient(90deg,#5421bd,#9153e7)] bg-clip-text text-[27px] font-black tracking-[-0.04em] text-transparent">
+                SpaceLink
+              </strong>
+            </Link>
+            <h2 className="mt-3 text-base font-black text-[#321970]">เกี่ยวกับเรา</h2>
+            <p className="mt-2 max-w-[260px] text-sm leading-6 text-[#615785]">
+              แพลตฟอร์มค้นหางาน เลือกโซนจองบูธ และติดตามสถานะ
+              สำหรับผู้ขายและผู้จัดงานในที่เดียว
+            </p>
+          </section>
+
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:px-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">สำรวจแพลตฟอร์ม</h2>
+            <div className="grid gap-4">
+              {navigation.map((item) => <HomepageFooterLink key={item.label} {...item} />)}
+            </div>
+          </section>
+
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:px-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">บริการช่วยเหลือ</h2>
+            <div className="grid gap-4">
+              {support.map((item) => <HomepageFooterLink key={item.label} {...item} />)}
+            </div>
+          </section>
+
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:pl-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">ติดต่อ SpaceLink</h2>
+            <div className="grid gap-3">
+              <HomepageFooterLink href="mailto:support@spacelink.co" label="support@spacelink.co" icon={Mail} contact />
+              <HomepageFooterLink href="tel:+66935275899" label="093-527-5899" icon={Phone} contact />
+            </div>
+          </section>
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-[#d6c6f2] pt-4 text-[11px] text-[#8272b2]">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>© {new Date().getFullYear() + 543} SpaceLink. สงวนลิขสิทธิ์ทุกประการ</span>
+            <Link href="/terms" className="hover:text-[#6d28d9]">เงื่อนไขการใช้งาน</Link>
+            <Link href="/accessibility" className="hover:text-[#6d28d9]">การเข้าถึงสำหรับทุกคน</Link>
+          </div>
+          <span className="italic text-[#8a5ce8]">Good Booth Better Business.</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function HomepageFooterLink({
+  href,
+  label,
+  icon: Icon,
+  contact = false,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  contact?: boolean;
+}) {
+  const content = (
+    <>
+      <span className={contact
+        ? 'grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#e7dcff] text-[#753fe1]'
+        : 'grid h-6 w-6 shrink-0 place-items-center text-[#8249ee]'}>
+        <Icon aria-hidden className="h-[18px] w-[18px]" />
+      </span>
+      <span>{label}</span>
+    </>
+  );
+
+  const className = "inline-flex min-w-0 items-center gap-3 text-[13px] text-[#615785] transition hover:text-[#6d28d9] focus-visible:rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet";
+  return href.startsWith('http') ? (
+    <a href={href} target="_blank" rel="noreferrer" className={className}>{content}</a>
+  ) : (
+    <Link href={href} className={className}>{content}</Link>
   );
 }
 
 function AnnouncementCard({
   announcement,
-  index,
   onOpen,
 }: {
   announcement: PublicAnnouncement;
-  index: number;
   onOpen: (announcement: PublicAnnouncement, opener: HTMLButtonElement) => void;
 }) {
-  const tones = [
-    'bg-[linear-gradient(135deg,#3b176c,#8959f3,#3a8079)]',
-    'bg-[linear-gradient(135deg,#187250,#64a76e)]',
-    'bg-[linear-gradient(135deg,#994b34,#e89a58)]',
-  ];
-  const cover = tones[index % tones.length];
+  const organizationInitial =
+    announcement.organizationName.trim().charAt(0).toLocaleUpperCase('th-TH') || 'อ';
 
   return (
-    <article className="sl-surface relative h-full overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
-      <div
-        className={`flex min-h-[130px] items-end p-[17px] text-white ${cover}`}
-      >
-        <strong className="text-[23px]">ประกาศ</strong>
+    <article className="flex h-[132px] overflow-hidden rounded-[12px] border border-[#8c789e] bg-[#ddccfa] text-[#452482] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(92,52,155,.16)]">
+      <div className="relative flex w-[32%] shrink-0 flex-col items-center justify-center bg-white p-2">
+        <span className="absolute left-1.5 top-1.5 rounded-full bg-[#696969] px-2 py-1 text-[10px] font-bold text-white">
+          {announcement.type === 'EVENT' ? 'Event' : 'ประกาศ'}
+        </span>
+        <span
+          aria-hidden
+          className="grid h-[54px] w-[54px] place-items-center rounded-full bg-[#e7dcff] text-2xl font-black text-[#6930cc]"
+        >
+          {organizationInitial}
+        </span>
+        <span
+          aria-hidden
+          className="line-clamp-1 max-w-full px-1 text-center text-[10px] font-black text-[#74529f]"
+        >
+          {announcement.organizationName}
+        </span>
       </div>
-      <span className="absolute right-[13px] top-[13px] rounded-full bg-[#f5efff] px-[9px] py-[5px] text-sm font-bold text-[#6d28d9]">
-        ข่าวงาน
-      </span>
-      <div className="p-[17px]">
-        <h3 className="text-[15px] font-extrabold">{announcement.title}</h3>
-        <p className="mt-1.5 min-h-[38px] line-clamp-2 text-sm leading-[1.65] text-muted">
+      <div className="flex min-w-0 flex-1 flex-col px-2.5 py-2">
+        <h3 className="line-clamp-1 text-[15px] font-black">{announcement.title}</h3>
+        <p className="line-clamp-1 text-[11px] font-semibold">
           {announcement.body}
         </p>
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-0.5 line-clamp-1 text-[10px]">
           {announcement.organizationName}
         </p>
-        <button
-          type="button"
-          onClick={(event) => onOpen(announcement, event.currentTarget)}
-          className="mt-3 inline-block text-sm font-bold text-[#6d28d9] hover:underline"
-        >
-          ดูเพิ่มเติม →
-        </button>
+        <div className="mt-auto flex items-end justify-between gap-1">
+          <span className="text-[9px] leading-tight">
+            {dateFormatter.format(
+              new Date(announcement.publishedAt ?? announcement.createdAt),
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={(event) => onOpen(announcement, event.currentTarget)}
+            className="shrink-0 rounded-full bg-[#bd97fa] px-2 py-1 text-[10px] font-bold text-white transition hover:bg-[#9866eb] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+          >
+            ดูเพิ่มเติม
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -926,34 +1060,30 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
     description: string;
     icon: LucideIcon;
     href: string;
-    action: string;
   }> = [
     {
-      number: '01',
-      title: 'ค้นหา Event ที่เหมาะกับร้าน',
+      number: '1',
+      title: 'ค้นหางานและพื้นที่',
       description:
-        'ค้นหาจากชื่องาน พื้นที่ หรือหมวดสินค้า เพื่อดูงานที่ตรงกับรูปแบบร้านของคุณ',
+        'เลือกงานที่สนใจและค้นหาพื้นที่ที่เหมาะกับร้านของคุณ',
       icon: CalendarSearch,
       href: '#eventSearch',
-      action: 'เริ่มค้นหา',
     },
     {
-      number: '02',
-      title: 'เลือก Zone และ Booth จากแผนผัง',
+      number: '2',
+      title: 'จองและชำระเงิน',
       description:
-        'ดูตำแหน่ง ราคา และสถานะบูธบนแผนผัง ก่อนเลือกพื้นที่ที่เหมาะกับการขาย',
-      icon: MapPinned,
-      href: event ? `/events/${encodeURIComponent(event.slug)}/map` : '#events',
-      action: 'ดูตัวอย่างแผนผัง',
-    },
-    {
-      number: '03',
-      title: 'ชำระเงินและติดตามสถานะ',
-      description:
-        'ตรวจสอบรายละเอียดการจอง ส่งหลักฐานการชำระเงิน และติดตามสถานะได้ในที่เดียว',
+        'เลือกบูธ เช็กข้อมูล และชำระเงินได้อย่างปลอดภัย',
       icon: CreditCard,
+      href: event ? `/events/${encodeURIComponent(event.slug)}/map` : '#events',
+    },
+    {
+      number: '3',
+      title: 'เตรียมร้านและเข้าร่วมงาน',
+      description:
+        'รับข้อมูลการจัดงานและเตรียมความพร้อมก่อนวันขาย',
+      icon: Store,
       href: '/bookings',
-      action: 'ดูการจองของฉัน',
     },
   ];
 
@@ -962,54 +1092,43 @@ function BookingJourney({ event }: { event?: DiscoveryEvent }) {
       className="shell !mt-[72px] max-sm:!mt-[48px]"
       aria-labelledby="booking-journey-heading"
     >
-      <div className="mx-auto max-w-[680px] text-center">
-        <span className="sl-kicker">วิธีการจอง</span>
-        <h2
-          id="booking-journey-heading"
-          className="mt-2 text-[clamp(27px,3vw,36px)] font-black tracking-[-0.035em]"
-        >
-          จองพื้นที่ขายได้ใน 3 ขั้นตอน
-        </h2>
-        <p className="mt-2 text-sm leading-7 text-muted">
-          ตั้งแต่ค้นหางานจนถึงติดตามการจอง ทุกขั้นตอนอยู่ใน SpaceLink
-        </p>
-      </div>
-
-      <div className="relative mt-7 grid gap-4 lg:grid-cols-3">
-        <span
-          aria-hidden
-          className="absolute left-[16%] right-[16%] top-10 hidden border-t border-dashed border-[#d8cbea] lg:block"
-        />
-        {steps.map((step) => {
-          const Icon = step.icon;
-          return (
-            <article
-              key={step.number}
-              className="sl-surface group relative overflow-hidden p-6 transition hover:-translate-y-1 hover:shadow-soft"
-            >
-              <div className="relative z-[1] flex items-center justify-between">
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[linear-gradient(135deg,#f1e8ff,#e9f7f3)] text-[#6d28d9] shadow-[0_8px_22px_rgba(109,40,217,0.10)]">
-                  <Icon aria-hidden className="h-5 w-5" />
-                </span>
-                <span className="text-[34px] font-black tracking-[-0.06em] text-[#eee8f5]">
-                  {step.number}
-                </span>
-              </div>
-              <h3 className="mt-5 text-lg font-extrabold tracking-[-0.02em]">
-                {step.title}
-              </h3>
-              <p className="mt-2 min-h-[68px] text-[12px] leading-7 text-muted">
-                {step.description}
-              </p>
+      <div className="rounded-[16px] border border-[#a68ce1] bg-white/35 px-7 py-6 max-sm:px-5">
+        <div className="text-center">
+          <h2
+            id="booking-journey-heading"
+            className="text-[clamp(27px,3vw,36px)] font-black tracking-[-0.035em] text-[#432687]"
+          >
+            จองพื้นที่ขายได้ใน 3 ขั้นตอน
+          </h2>
+          <p className="mt-1 text-sm text-[#55505d]">ง่าย ครบ จบในที่เดียว</p>
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-3">
+          {steps.map((step) => {
+            const Icon = step.icon;
+            return (
               <Link
+                key={step.number}
                 href={step.href}
-                className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-[#6d28d9] transition group-hover:gap-3"
+                className="group flex min-w-0 items-center gap-3 rounded-xl p-2 text-inherit transition hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet"
               >
-                {step.action} <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+                <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#d5bcff] text-[#6540a8]">
+                  <Icon aria-hidden className="h-7 w-7 stroke-[1.6]" />
+                  <span className="absolute -left-1 -top-2 grid h-7 w-7 place-items-center rounded-full bg-[#9564ef] text-xs font-bold text-white">
+                    {step.number}
+                  </span>
+                </span>
+                <span className="min-w-0">
+                  <strong className="block text-sm font-extrabold group-hover:text-[#6d28d9]">
+                    {step.title}
+                  </strong>
+                  <span className="mt-0.5 block text-xs leading-[1.5] text-muted">
+                    {step.description}
+                  </span>
+                </span>
               </Link>
-            </article>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -1022,129 +1141,105 @@ function PlatformBenefits() {
     icon: LucideIcon;
   }> = [
     {
-      title: 'ข้อมูลบูธชัดเจน',
-      description: 'ดูตำแหน่ง ราคา และสถานะว่างจากแผนผังของผู้จัดงาน',
-      icon: MapPinned,
+      title: 'จัดการโซนและบูธได้ในที่เดียว',
+      description: 'สร้าง แก้ไข จัดโซน และกำหนดจำนวนบูธได้อย่างยืดหยุ่น',
+      icon: Grid2X2,
     },
     {
-      title: 'จัดการร้านได้ในโปรไฟล์เดียว',
-      description: 'เตรียมข้อมูลร้านและใช้ประกอบการจองพื้นที่ของคุณ',
+      title: 'ดูสถานะบูธแบบเรียลไทม์',
+      description: 'ตรวจสอบบูธว่าง สำรอง และจองแล้วได้ทันทีบนแผนผังพื้นที่',
+      icon: Clock3,
+    },
+    {
+      title: 'ลดขั้นตอนการรับจองออนไลน์',
+      description: 'ผู้ค้าสามารถจองบูธได้เองผ่านระบบ ลดงานเอกสารและการสื่อสารซ้ำซ้อน',
+      icon: FileText,
+    },
+    {
+      title: 'ลดปัญหาการจองบูธซ้ำ',
+      description: 'ระบบตรวจสอบและป้องกันการจองซ้ำโดยอัตโนมัติ',
+      icon: ShieldCheck,
+    },
+    {
+      title: 'ตรวจสอบข้อมูลร้านค้าก่อนอนุมัติ',
+      description: 'ดูรายละเอียดร้านค้า เอกสาร และประวัติก่อนยืนยันการจอง',
+      icon: UserRoundCheck,
+    },
+    {
+      title: 'จัดการข้อมูลผู้ค้าอย่างเป็นระบบ',
+      description: 'เก็บข้อมูลร้านค้า การติดต่อ และเอกสารไว้ในที่เดียว',
       icon: Store,
     },
     {
-      title: 'ไม่พลาดสถานะสำคัญ',
-      description: 'ติดตามการจอง การชำระเงิน และการแจ้งเตือนจากระบบ',
-      icon: BellRing,
+      title: 'กำหนดราคาแต่ละโซนได้',
+      description: 'ตั้งราคาตามโซน ประเภทพื้นที่ หรือช่วงเวลาได้อย่างอิสระ',
+      icon: WalletCards,
     },
     {
-      title: 'มีช่องทางช่วยเหลือ',
-      description: 'เปิดหน้าช่วยเหลือเมื่อมีคำถามเกี่ยวกับการใช้งานและการจอง',
-      icon: Headphones,
+      title: 'ตรวจสอบประวัติการจองย้อนหลัง',
+      description: 'ดูข้อมูลการจอง รายได้ และสรุปผลหลังจบงานได้ง่าย',
+      icon: BarChart3,
     },
   ];
 
   return (
     <section
-      className="shell !mt-[56px] max-sm:!mt-[42px]"
+      className="shell !mb-[56px] !mt-[56px] max-sm:!mb-[42px] max-sm:!mt-[42px]"
       aria-labelledby="benefit-heading"
     >
-      <div className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(120deg,#201132_0%,#3c1d69_55%,#245b5b_100%)] px-8 py-10 text-white shadow-[0_28px_70px_rgba(45,25,73,0.16)] max-sm:rounded-[24px] max-sm:px-5 max-sm:py-7">
+      <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(120deg,rgba(255,255,255,.68),rgba(244,238,255,.82))] px-8 py-9 shadow-[0_16px_45px_rgba(92,52,155,.07)] max-sm:px-5 max-sm:py-7">
         <span
           aria-hidden
-          className="absolute -right-20 -top-24 h-72 w-72 rounded-full border-[50px] border-white/[0.035]"
+          className="absolute -bottom-32 -left-24 h-56 w-56 rounded-full border-[36px] border-[#d7c4ff]/30"
         />
-        <div className="relative grid items-center gap-8 lg:grid-cols-[.72fr_1.28fr]">
+        <div className="relative grid items-center gap-8 lg:grid-cols-[.76fr_1.24fr]">
           <div>
-            <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-[#c8a9ff]">
-              ทำไมต้อง SpaceLink
+            <span className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#7943d9]">
+              WHY SPACE LINK
             </span>
             <h2
               id="benefit-heading"
-              className="mt-3 text-[clamp(28px,3vw,38px)] font-black leading-[1.25] tracking-[-0.04em]"
+              className="mt-3 text-[clamp(27px,3vw,37px)] font-black leading-[1.18] tracking-[-0.04em] text-[#201751]"
             >
-              เตรียมร้านให้พร้อม
-              <br className="max-lg:hidden" /> ก่อนออกงาน
+              ทำไมผู้จัดงานและ
+              <br className="max-lg:hidden" /> เจ้าของพื้นที่ควรเลือกใช้
+              <br />
+              <span className="text-[#7943e7]">SpaceLink?</span>
             </h2>
-            <p className="mt-3 max-w-[430px] text-sm leading-7 text-white/70">
-              เครื่องมือที่ช่วยให้คุณเห็นข้อมูลที่ต้องใช้ตัดสินใจ
-              และกลับมาติดตามทุกการจองได้ง่ายขึ้น
+            <p className="mt-4 max-w-[430px] text-sm leading-7 text-[#6d667d]">
+              SpaceLink ช่วยให้ผู้จัดงานบริหารพื้นที่ โซน บูธ ผู้ค้า และการจองได้จากระบบเดียว
+              ลดขั้นตอนการทำงาน และช่วยให้ผู้ค้าค้นหาและจองพื้นที่ได้ง่ายยิ่งขึ้น
             </p>
             <Link
-              href="/help"
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15"
+              href="/support"
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#8752ef,#642bd7)] px-6 text-sm font-bold text-white shadow-[0_10px_20px_rgba(109,40,217,.2)] transition hover:-translate-y-0.5"
             >
-              ศูนย์ช่วยเหลือ <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+              ติดต่อเพื่อเริ่มจัดงาน <ArrowRight aria-hidden className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {benefits.map((benefit) => {
               const Icon = benefit.icon;
               return (
                 <article
                   key={benefit.title}
-                  className="rounded-[18px] border border-white/10 bg-white/[0.075] p-5 backdrop-blur-sm"
+                  className="flex min-h-[78px] items-center gap-3 rounded-[15px] border border-[#ebe4fa] bg-white/80 p-3 shadow-[0_8px_20px_rgba(74,37,130,.05)]"
                 >
-                  <Icon aria-hidden className="h-5 w-5 text-[#cdb3ff]" />
-                  <h3 className="mt-4 text-sm font-extrabold text-white">
-                    {benefit.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-6 text-white/65">
-                    {benefit.description}
-                  </p>
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eee5ff] text-[#7943df]">
+                    <Icon aria-hidden className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-extrabold text-[#261755]">
+                      {benefit.title}
+                    </h3>
+                    <p className="mt-0.5 text-[11px] leading-[1.4] text-[#837b95]">
+                      {benefit.description}
+                    </p>
+                  </div>
                 </article>
               );
             })}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function HomepageCallToAction() {
-  return (
-    <section
-      className="shell !mb-[40px] !mt-[48px] max-sm:!mb-[24px] max-sm:!mt-[36px]"
-      aria-labelledby="homepage-cta-heading"
-    >
-      <div className="sl-surface relative overflow-hidden px-8 py-9 max-sm:px-5">
-        <span
-          aria-hidden
-          className="absolute -bottom-28 -right-10 h-64 w-64 rounded-full bg-[radial-gradient(circle,#e8dcff_0%,rgba(232,220,255,0)_70%)]"
-        />
-        <div className="relative flex items-center justify-between gap-7 max-md:flex-col max-md:items-start">
-          <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#f1e9ff] text-[#6d28d9]">
-              <ShieldCheck aria-hidden className="h-6 w-6" />
-            </span>
-            <div>
-              <span className="sl-kicker">เริ่มสำรวจพื้นที่</span>
-              <h2
-                id="homepage-cta-heading"
-                className="mt-1.5 text-[clamp(23px,2.8vw,31px)] font-black tracking-[-0.035em]"
-              >
-                พร้อมหาพื้นที่ใหม่ให้ร้านของคุณแล้วหรือยัง?
-              </h2>
-              <p className="mt-2 text-xs leading-6 text-muted">
-                เลือกดู Event และตรวจสอบ Booth
-                จากข้อมูลที่ผู้จัดงานเผยแพร่ในระบบ
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2.5 max-sm:w-full">
-            <a
-              href="#eventSearch"
-              className="sl-action-primary min-h-11 px-5 max-sm:flex-1"
-            >
-              ค้นหา Event
-            </a>
-            <Link
-              href="/bookings"
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#ded5e9] bg-white px-5 text-xs font-bold text-[#4e415c] transition hover:border-[#a98ae2] hover:text-[#6d28d9] max-sm:flex-1"
-            >
-              การจองของฉัน
-            </Link>
           </div>
         </div>
       </div>
