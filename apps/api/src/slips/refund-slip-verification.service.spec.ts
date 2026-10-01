@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ConflictException,
+  GatewayTimeoutException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma, SlipStatus } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
@@ -98,6 +104,60 @@ describe('RefundSlipVerificationService', () => {
     });
     await expect(service.verifyAndStore(request)).rejects.toThrow(
       'ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ',
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes a provider amount mismatch from an unclassified invalid slip', async () => {
+    verify.mockResolvedValueOnce({
+      status: SlipStatus.INVALID,
+      message: 'ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ',
+    });
+    await expect(service.verifyAndStore(request)).rejects.toThrow(
+      'ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ',
+    );
+
+    verify.mockResolvedValueOnce({
+      status: SlipStatus.INVALID,
+      message: `private: ${request.slipImageUrl}`,
+    });
+    const failure = service.verifyAndStore(request);
+    await expect(failure).rejects.toThrow(
+      'สลิปคืนเงินไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่',
+    );
+    await expect(failure).rejects.not.toThrow(request.slipImageUrl);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['SlipOK request timed out', GatewayTimeoutException, 504],
+    ['SlipOK service is unavailable', ServiceUnavailableException, 503],
+    [
+      'SlipOK request failed with provider code 1004',
+      ServiceUnavailableException,
+      503,
+    ],
+    [
+      'SlipOK request failed with provider code 1009',
+      ServiceUnavailableException,
+      503,
+    ],
+    ['SlipOK returned invalid JSON', BadGatewayException, 502],
+    ['SlipOK request failed with provider code 9999', BadGatewayException, 502],
+  ])('returns a safe upstream error for %s', async (reason, kind, status) => {
+    verify.mockRejectedValueOnce(new Error(reason));
+
+    const failure = service.verifyAndStore(request);
+    await expect(failure).rejects.toBeInstanceOf(kind);
+    await expect(failure).rejects.toMatchObject({ status });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('treats an unexamined slip as an upstream failure, not an invalid slip', async () => {
+    verify.mockResolvedValueOnce({ status: SlipStatus.ERROR });
+
+    await expect(service.verifyAndStore(request)).rejects.toBeInstanceOf(
+      BadGatewayException,
     );
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

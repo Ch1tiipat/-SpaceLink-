@@ -104,6 +104,7 @@ describe('SlipOkSlipVerifier', () => {
 
     expect(result.status).toBe(SlipStatus.DUPLICATE);
     expect(result.transRef).toBeUndefined();
+    expect(result.message).toBe('สลิปนี้เคยถูกใช้แล้ว');
   });
 
   it.each([1005, 1006, 1007, 1008, 1011, 1013, 1014])(
@@ -116,8 +117,29 @@ describe('SlipOkSlipVerifier', () => {
       const result = await verifier().verify(INPUT);
 
       expect(result.status).toBe(SlipStatus.INVALID);
+      expect(result.message).not.toBe('invalid');
     },
   );
+
+  it('returns a fixed amount-mismatch message instead of provider text', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      response(
+        {
+          code: 1013,
+          message: `private: ${INPUT.slipImageUrl}`,
+        },
+        400,
+      ),
+    );
+
+    const result = await verifier().verify({
+      ...INPUT,
+      purpose: 'REFUND_PAYOUT',
+    });
+
+    expect(result.message).toBe('ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ');
+    expect(result.message).not.toContain(INPUT.slipImageUrl);
+  });
 
   it.each([1002, 1003, 1004, 1009, 1010])(
     'throws for provider/service code %s',
