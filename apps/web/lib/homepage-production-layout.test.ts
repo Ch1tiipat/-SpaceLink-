@@ -13,6 +13,10 @@ const homepageSource = readHomepageSource(
   joinHomepagePath(process.cwd(), 'app', 'page.tsx'),
   'utf8',
 );
+const appShellSource = readHomepageSource(
+  joinHomepagePath(process.cwd(), 'components', 'app-shell.tsx'),
+  'utf8',
+);
 const announcementCardSource = homepageSource.slice(
   homepageSource.indexOf('function AnnouncementCard'),
   homepageSource.indexOf('function EventCard'),
@@ -53,6 +57,21 @@ homepageTest('homepage footer replaces the shared footer only on the root page',
   homepageAssert.match(homepageSource, /href: '#events'/);
 });
 
+homepageTest('shared user footer keeps the approved homepage design on every user route', () => {
+  homepageAssert.match(appShellSource, /function UserFooter\(\)/);
+  homepageAssert.match(
+    appShellSource,
+    /bg-\[linear-gradient\(120deg,#f9f7ff,#f2ecff_52%,#f8f5ff\)\]/,
+  );
+  homepageAssert.match(appShellSource, /href: '\/#eventSearch'/);
+  homepageAssert.match(appShellSource, /href: '\/#announcements'/);
+  homepageAssert.match(appShellSource, /Good Booth Better Business\./);
+  homepageAssert.match(
+    appShellSource,
+    /\{!isAdminRoute \? <UserFooter \/> : null\}/,
+  );
+});
+
 homepageTest('organizer and contact links lead to verified destinations', () => {
   homepageAssert.match(platformBenefitsSource, /href="\/support"/);
   homepageAssert.match(platformBenefitsSource, /ติดต่อเพื่อเริ่มจัดงาน/);
@@ -60,3 +79,4 @@ homepageTest('organizer and contact links lead to verified destinations', () => 
   homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.facebook\.com\//);
   homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.instagram\.com\//);
 });
+
