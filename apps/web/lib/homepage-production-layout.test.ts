@@ -17,6 +17,10 @@ const announcementCardSource = homepageSource.slice(
   homepageSource.indexOf('function AnnouncementCard'),
   homepageSource.indexOf('function EventCard'),
 );
+const announcementDialogSource = homepageSource.slice(
+  homepageSource.indexOf('ref={announcementDialogRef}'),
+  homepageSource.indexOf('{selectedEvent ?'),
+);
 const platformBenefitsSource = homepageSource.slice(
   homepageSource.indexOf('function PlatformBenefits'),
 );
@@ -44,6 +48,20 @@ homepageTest('production homepage retains runtime announcement states without pr
     announcementCardSource,
     /src="\/brand\/spacelink-mark\.png"/,
   );
+});
+
+homepageTest('announcement cards and dialog keep the approved responsive information hierarchy', () => {
+  homepageAssert.match(announcementCardSource, /อ่านประกาศ/);
+  homepageAssert.match(announcementCardSource, /group relative flex h-\[174px\]/);
+  homepageAssert.match(announcementCardSource, /announcement\.organizationName/);
+  homepageAssert.match(announcementDialogSource, /ประกาศจากผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /โดย ทีมผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /ประเภท/);
+  homepageAssert.match(announcementDialogSource, /เผยแพร่เมื่อ/);
+  homepageAssert.match(announcementDialogSource, /ผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /max-h-\[calc\(100dvh-24px\)\]/);
+  homepageAssert.match(announcementDialogSource, /announcementOpenerRef\.current\?\.focus/);
+  homepageAssert.doesNotMatch(homepageSource, /แจ้งกำหนดการลงทะเบียนร้านค้า/);
 });
 
 homepageTest('homepage footer replaces the shared footer only on the root page', () => {
