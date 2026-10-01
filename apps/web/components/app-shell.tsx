@@ -17,7 +17,9 @@ import {
 import {
   Bell,
   CalendarDays,
+  CircleHelp,
   ChevronDown,
+  FileText,
   House,
   Inbox,
   Landmark,
@@ -25,12 +27,15 @@ import {
   LogOut,
   Map,
   MapPinned,
+  Mail,
   Megaphone,
   Menu,
   MessageCircle,
   Phone,
   RotateCcw,
+  Search,
   Send,
+  ShieldCheck,
   Sparkles,
   Star,
   ThumbsDown,
@@ -2547,70 +2552,113 @@ function findRecommendedBooth(eventMap: EventMap | null, boothId: string) {
 }
 
 function UserFooter() {
-  const currentYear = new Date().getFullYear();
+  const navigation: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: 'หน้าหลัก', href: '/', icon: House },
+    { label: 'ค้นหาพื้นที่', href: '/#eventSearch', icon: Search },
+    { label: 'งานแนะนำ', href: '/#events', icon: CalendarDays },
+    { label: 'ประกาศข่าวสาร', href: '/#announcements', icon: Megaphone },
+  ];
+  const support: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: 'ติดต่อสอบถาม', href: '/support', icon: MessageCircle },
+    { label: 'ศูนย์ช่วยเหลือ', href: '/help', icon: CircleHelp },
+    { label: 'คำถามที่พบบ่อย', href: '/help', icon: FileText },
+    { label: 'นโยบายความเป็นส่วนตัว', href: '/privacy', icon: ShieldCheck },
+  ];
 
   return (
     <footer
-      className="border-t border-white/10 bg-[#211b2f] text-white"
       aria-label="ข้อมูลส่วนท้าย SpaceLink"
+      className="relative mt-16 overflow-hidden bg-[linear-gradient(120deg,#f9f7ff,#f2ecff_52%,#f8f5ff)] text-[#402a80]"
     >
-      <div className="mx-auto max-w-[1180px] px-5 py-10 sm:px-7 lg:py-12">
-        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-12">
-          <section>
+      <span aria-hidden className="pointer-events-none absolute -left-24 -top-20 h-52 w-52 rounded-full bg-[#e7d9ff]/45" />
+      <span aria-hidden className="pointer-events-none absolute -right-14 -top-20 h-44 w-44 rounded-full bg-[#e1d3ff]/50" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-28 -left-20 h-48 w-48 rounded-full bg-[#d9c8ff]/45" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-48 w-48 rounded-full bg-[#e5d9ff]/55" />
+      <div className="relative mx-auto max-w-[1180px] px-5 pb-5 pt-12 sm:px-7 lg:px-8">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.18fr_1fr_1fr_1fr] lg:gap-0">
+          <section className="lg:pr-7">
             <Link
               href="/"
-              className="inline-flex items-center gap-3"
+              className="inline-flex items-center gap-2"
               aria-label="SpaceLink หน้าแรก"
             >
-              <BrandMark lightBackground />
-              <strong className="text-lg font-black tracking-[-.02em]">
+              <Image
+                src="/brand/spacelink-mark.png"
+                alt=""
+                width={56}
+                height={56}
+                className="h-14 w-14 object-contain"
+              />
+              <strong className="bg-[linear-gradient(90deg,#5421bd,#9153e7)] bg-clip-text text-[27px] font-black tracking-[-0.04em] text-transparent">
                 SpaceLink
               </strong>
             </Link>
-            <p className="mt-4 max-w-[320px] text-sm leading-6 text-white/70">
-              แพลตฟอร์มค้นหางาน เลือกโซน จองบูธ
-              และติดตามสถานะสำหรับผู้ขายและผู้จัดงานในที่เดียว
+            <h2 className="mt-3 text-base font-black text-[#321970]">เกี่ยวกับเรา</h2>
+            <p className="mt-2 max-w-[260px] text-sm leading-6 text-[#615785]">
+              แพลตฟอร์มค้นหางาน เลือกโซนจองบูธ และติดตามสถานะ
+              สำหรับผู้ขายและผู้จัดงานในที่เดียว
             </p>
           </section>
 
-          <FooterColumn title="สำรวจแพลตฟอร์ม">
-            <Link href="/">ค้นหา Event</Link>
-            <Link href="/bookings">การจองของฉัน</Link>
-            <Link href="/profile">โปรไฟล์ร้านค้า</Link>
-          </FooterColumn>
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:px-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">สำรวจแพลตฟอร์ม</h2>
+            <div className="grid gap-4">
+              {navigation.map((item) => <UserFooterLink key={item.label} {...item} />)}
+            </div>
+          </section>
 
-          <FooterColumn title="บริการช่วยเหลือ">
-            <Link href="/help">ศูนย์ช่วยเหลือ</Link>
-            <Link href="/notifications">การแจ้งเตือน</Link>
-            <Link href="/login">เข้าสู่ระบบ</Link>
-          </FooterColumn>
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:px-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">บริการช่วยเหลือ</h2>
+            <div className="grid gap-4">
+              {support.map((item) => <UserFooterLink key={item.label} {...item} />)}
+            </div>
+          </section>
 
-          <FooterColumn title="ติดต่อ SpaceLink">
-            <a href="tel:+66935275899">โทร 093-527-5899</a>
-            <a
-              href="https://www.facebook.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Facebook Page
-            </a>
-          </FooterColumn>
+          <section className="lg:border-l lg:border-[#e5dcfa] lg:pl-7">
+            <h2 className="mb-5 text-base font-black text-[#321970]">ติดต่อ SpaceLink</h2>
+            <div className="grid gap-3">
+              <UserFooterLink href="mailto:support@spacelink.co" label="support@spacelink.co" icon={Mail} contact />
+              <UserFooterLink href="tel:+66935275899" label="093-527-5899" icon={Phone} contact />
+            </div>
+          </section>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 text-sm text-white/45">
-          <span>
-            © {currentYear} SpaceLink · Multi-tenant Event Space Platform
-          </span>
-          <div className="flex flex-wrap gap-x-2 gap-y-1">
-            <Link href="/privacy">ความเป็นส่วนตัว</Link>
-            <span>·</span>
-            <Link href="/terms">เงื่อนไขการใช้งาน</Link>
-            <span>·</span>
-            <Link href="/accessibility">การเข้าถึงสำหรับทุกคน</Link>
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-[#d6c6f2] pt-4 text-[11px] text-[#8272b2]">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>© {new Date().getFullYear() + 543} SpaceLink. สงวนลิขสิทธิ์ทุกประการ</span>
+            <Link href="/terms" className="hover:text-[#6d28d9]">เงื่อนไขการใช้งาน</Link>
+            <Link href="/accessibility" className="hover:text-[#6d28d9]">การเข้าถึงสำหรับทุกคน</Link>
           </div>
+          <span className="italic text-[#8a5ce8]">Good Booth Better Business.</span>
         </div>
       </div>
     </footer>
+  );
+}
+
+function UserFooterLink({
+  href,
+  label,
+  icon: Icon,
+  contact = false,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  contact?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-w-0 items-center gap-3 text-[13px] text-[#615785] transition hover:text-[#6d28d9] focus-visible:rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet"
+    >
+      <span className={contact
+        ? 'grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#e7dcff] text-[#753fe1]'
+        : 'grid h-6 w-6 shrink-0 place-items-center text-[#8249ee]'}>
+        <Icon aria-hidden className="h-[18px] w-[18px]" />
+      </span>
+      <span>{label}</span>
+    </Link>
   );
 }
 
@@ -2730,23 +2778,6 @@ function SignOutConfirmDialog({
   );
 }
 
-function FooterColumn({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <h2 className="text-sm font-extrabold text-white">{title}</h2>
-      <div className="mt-4 grid gap-3 text-sm text-white/58 [&_a]:transition [&_a:hover]:text-white">
-        {children}
-      </div>
-    </section>
-  );
-}
-
 function BottomNav({
   pathname,
   hash,
@@ -2843,3 +2874,4 @@ function Avatar({
     </span>
   );
 }
+

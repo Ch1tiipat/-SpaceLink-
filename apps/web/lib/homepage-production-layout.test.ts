@@ -13,9 +13,17 @@ const homepageSource = readHomepageSource(
   joinHomepagePath(process.cwd(), 'app', 'page.tsx'),
   'utf8',
 );
+const homepageAppShellSource = readHomepageSource(
+  joinHomepagePath(process.cwd(), 'components', 'app-shell.tsx'),
+  'utf8',
+);
 const announcementCardSource = homepageSource.slice(
   homepageSource.indexOf('function AnnouncementCard'),
   homepageSource.indexOf('function EventCard'),
+);
+const announcementDialogSource = homepageSource.slice(
+  homepageSource.indexOf('ref={announcementDialogRef}'),
+  homepageSource.indexOf('{selectedEvent ?'),
 );
 const platformBenefitsSource = homepageSource.slice(
   homepageSource.indexOf('function PlatformBenefits'),
@@ -46,11 +54,40 @@ homepageTest('production homepage retains runtime announcement states without pr
   );
 });
 
+homepageTest('announcement cards and dialog keep the approved responsive information hierarchy', () => {
+  homepageAssert.match(announcementCardSource, /อ่านประกาศ/);
+  homepageAssert.match(announcementCardSource, /group relative flex h-\[174px\]/);
+  homepageAssert.match(announcementCardSource, /announcement\.organizationName/);
+  homepageAssert.match(announcementDialogSource, /ประกาศจากผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /โดย ทีมผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /ประเภท/);
+  homepageAssert.match(announcementDialogSource, /เผยแพร่เมื่อ/);
+  homepageAssert.match(announcementDialogSource, /ผู้จัดงาน/);
+  homepageAssert.match(announcementDialogSource, /max-h-\[calc\(100dvh-24px\)\]/);
+  homepageAssert.match(announcementDialogSource, /announcementOpenerRef\.current\?\.focus/);
+  homepageAssert.doesNotMatch(homepageSource, /แจ้งกำหนดการลงทะเบียนร้านค้า/);
+});
+
 homepageTest('homepage footer replaces the shared footer only on the root page', () => {
   homepageAssert.match(homepageSource, /main\.sl-homepage \+ footer/);
   homepageAssert.match(homepageSource, /href="#home-top"/);
   homepageAssert.match(homepageSource, /href: '#announcements'/);
   homepageAssert.match(homepageSource, /href: '#events'/);
+});
+
+homepageTest('shared user footer keeps the approved homepage design on every user route', () => {
+  homepageAssert.match(homepageAppShellSource, /function UserFooter\(\)/);
+  homepageAssert.match(
+    homepageAppShellSource,
+    /bg-\[linear-gradient\(120deg,#f9f7ff,#f2ecff_52%,#f8f5ff\)\]/,
+  );
+  homepageAssert.match(homepageAppShellSource, /href: '\/#eventSearch'/);
+  homepageAssert.match(homepageAppShellSource, /href: '\/#announcements'/);
+  homepageAssert.match(homepageAppShellSource, /Good Booth Better Business\./);
+  homepageAssert.match(
+    homepageAppShellSource,
+    /\{!isAdminRoute \? <UserFooter \/> : null\}/,
+  );
 });
 
 homepageTest('organizer and contact links lead to verified destinations', () => {
@@ -60,3 +97,4 @@ homepageTest('organizer and contact links lead to verified destinations', () => 
   homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.facebook\.com\//);
   homepageAssert.doesNotMatch(homepageSource, /https:\/\/www\.instagram\.com\//);
 });
+
