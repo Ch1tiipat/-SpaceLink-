@@ -13,7 +13,7 @@ const homepageSource = readHomepageSource(
   joinHomepagePath(process.cwd(), 'app', 'page.tsx'),
   'utf8',
 );
-const appShellSource = readHomepageSource(
+const homepageAppShellSource = readHomepageSource(
   joinHomepagePath(process.cwd(), 'components', 'app-shell.tsx'),
   'utf8',
 );
@@ -58,16 +58,16 @@ homepageTest('homepage footer replaces the shared footer only on the root page',
 });
 
 homepageTest('shared user footer keeps the approved homepage design on every user route', () => {
-  homepageAssert.match(appShellSource, /function UserFooter\(\)/);
+  homepageAssert.match(homepageAppShellSource, /function UserFooter\(\)/);
   homepageAssert.match(
-    appShellSource,
+    homepageAppShellSource,
     /bg-\[linear-gradient\(120deg,#f9f7ff,#f2ecff_52%,#f8f5ff\)\]/,
   );
-  homepageAssert.match(appShellSource, /href: '\/#eventSearch'/);
-  homepageAssert.match(appShellSource, /href: '\/#announcements'/);
-  homepageAssert.match(appShellSource, /Good Booth Better Business\./);
+  homepageAssert.match(homepageAppShellSource, /href: '\/#eventSearch'/);
+  homepageAssert.match(homepageAppShellSource, /href: '\/#announcements'/);
+  homepageAssert.match(homepageAppShellSource, /Good Booth Better Business\./);
   homepageAssert.match(
-    appShellSource,
+    homepageAppShellSource,
     /\{!isAdminRoute \? <UserFooter \/> : null\}/,
   );
 });
