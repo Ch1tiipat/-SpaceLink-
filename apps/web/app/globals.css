@@ -35,6 +35,8 @@ html {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   margin: 0;
   min-height: 100vh;
   background: transparent;
@@ -49,6 +51,22 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Paint the approved artwork once at the application boundary. Keeping the
+   canvas fixed to the viewport prevents long pages and nested route wrappers
+   from restarting the image at each section boundary. */
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: #faf8ff;
+  background-image: url('/spacelink-page-background.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  content: '';
+  pointer-events: none;
 }
 
 ::selection {
@@ -116,103 +134,15 @@ select {
   isolation: isolate;
   min-height: calc(100vh - 72px);
   overflow: hidden;
-  background-color: rgba(250, 248, 255, 0.28);
-  background-image:
-    linear-gradient(180deg, rgba(250, 248, 255, 0.16), rgba(245, 240, 255, 0.7)),
-    url('/spacelink-page-background.svg');
-  background-position:
-    center,
-    center top;
-  background-repeat:
-    no-repeat,
-    no-repeat;
-  background-size:
-    cover,
-    max(100%, 75rem) auto;
-  background-attachment: scroll;
+  background: transparent;
 }
 
-/* Shared canvas for layouts that do not use .sl-page (authentication,
-   administration loading states, and the Super Admin shell). Keeping this
-   presentation in one class prevents route-specific copies from drifting. */
+/* Route-level canvas classes remain layout hooks only. The body owns the
+   visual canvas so User, Auth, Admin and Super Admin routes cannot paint a
+   second copy over the same document. */
 .sl-app-background {
   position: relative;
-  background-color: rgba(250, 248, 255, 0.28);
-  background-image:
-    linear-gradient(180deg, rgba(250, 248, 255, 0.16), rgba(245, 240, 255, 0.7)),
-    url('/spacelink-page-background.svg');
-  background-position:
-    center,
-    center top;
-  background-repeat:
-    no-repeat,
-    no-repeat;
-  background-size:
-    cover,
-    max(100%, 75rem) auto;
-  background-attachment: scroll;
-}
-
-/* Keep the approved full-frame SVG static and untiled. Motion belongs to this
-   bounded ambient layer instead of the document-sized background, allowing
-   browsers to composite a small transform without repainting every scroll
-   frame. The 4% scale provides overscan for the short translation. */
-.sl-page::before,
-.sl-app-background::before {
-  position: absolute;
-  top: 2rem;
-  left: 4%;
-  width: 92%;
-  height: min(34rem, 65vh);
-  min-height: 24rem;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 28% 38%, rgba(139, 92, 246, 0.13), transparent 48%),
-    radial-gradient(circle at 76% 30%, rgba(99, 102, 241, 0.09), transparent 44%);
-  content: '';
-  opacity: 0.72;
-  pointer-events: none;
-  transform: translate3d(-1.25%, -0.75rem, 0) scale(1.04);
-  transform-origin: center;
-  will-change: transform;
-  animation: sl-background-drift 24s ease-in-out infinite alternate;
-}
-
-/* .sl-page owns an isolation boundary, so its ambient layer can safely sit at
-   a negative level. Standalone canvases deliberately do not create a stacking
-   context (dialogs must escape above AppShell navigation), therefore their
-   ambient layer sits at level zero: above the canvas background itself. */
-.sl-page::before {
-  z-index: -1;
-}
-
-.sl-app-background::before {
-  z-index: 0;
-}
-
-/* Positioned, auto-level content paints after the generated ::before without
-   creating a stacking context. Exclude existing positioning utilities so a
-   sticky header, fixed dialog, or decorative absolute child keeps its role. */
-.sl-app-background > :not(.absolute, .fixed, .sticky) {
-  position: relative;
-}
-
-/* AppShell can contain either a .sl-page or a route-level canvas. Hide the
-   ancestor ambient layer in both compositions so exactly one animated layer
-   remains. Do not isolate .sl-app-background itself: dialogs rendered inside
-   it must still stack above the sibling header and mobile navigation. */
-.sl-app-background:has(.sl-page, .sl-app-background)::before {
-  display: none;
-}
-
-@keyframes sl-background-drift {
-  from {
-    transform: translate3d(-1.25%, -0.75rem, 0) scale(1.04);
-  }
-
-  to {
-    transform: translate3d(1.25%, 0.75rem, 0) scale(1.04);
-  }
+  background: transparent;
 }
 
 .sl-page-shell {
@@ -392,13 +322,6 @@ select {
 
   .skeleton {
     animation: none;
-  }
-
-  .sl-page::before,
-  .sl-app-background::before {
-    animation: none;
-    transform: none;
-    will-change: auto;
   }
 
   .sl-action-primary,
