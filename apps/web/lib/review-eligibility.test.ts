@@ -4,66 +4,14 @@ const { test: reviewTest }: typeof import('node:test') = require('node:test');
 const { isBookingReviewEligible } =
   require('./review-eligibility.ts') as typeof import('./review-eligibility');
 
-const endedEvent = {
-  id: 'event-1',
-  name: 'งานทดสอบ',
-  endDate: '2026-09-05T00:00:00.000Z',
-  endTime: '20:00',
-};
-const now = new Date('2026-09-05T13:01:00.000Z');
-
-reviewTest('allows a completed booking after the event end time', () => {
-  reviewAssert.equal(
-    isBookingReviewEligible(
-      { status: 'COMPLETED', event: endedEvent },
-      now,
-    ),
-    true,
-  );
+(['CONFIRMED', 'COMPLETED'] as const).forEach((status) => {
+  reviewTest(`allows a ${status} booking immediately`, () => {
+    reviewAssert.equal(isBookingReviewEligible({ status }), true);
+  });
 });
 
-reviewTest('allows a completed booking exactly at the event end time', () => {
-  reviewAssert.equal(
-    isBookingReviewEligible(
-      { status: 'COMPLETED', event: endedEvent },
-      new Date('2026-09-05T13:00:00.000Z'),
-    ),
-    true,
-  );
-});
-
-reviewTest('rejects a booking that is not completed', () => {
-  reviewAssert.equal(
-    isBookingReviewEligible(
-      { status: 'CONFIRMED', event: endedEvent },
-      now,
-    ),
-    false,
-  );
-});
-
-reviewTest('rejects a completed booking before the event end time', () => {
-  reviewAssert.equal(
-    isBookingReviewEligible(
-      {
-        status: 'COMPLETED',
-        event: { ...endedEvent, endTime: '20:02' },
-      },
-      now,
-    ),
-    false,
-  );
-});
-
-reviewTest('uses the end of day when an event has no end time', () => {
-  reviewAssert.equal(
-    isBookingReviewEligible(
-      {
-        status: 'COMPLETED',
-        event: { ...endedEvent, endTime: null },
-      },
-      now,
-    ),
-    false,
-  );
+(['PENDING_PAYMENT', 'CANCELLED', 'NO_SHOW'] as const).forEach((status) => {
+  reviewTest(`rejects a ${status} booking`, () => {
+    reviewAssert.equal(isBookingReviewEligible({ status }), false);
+  });
 });

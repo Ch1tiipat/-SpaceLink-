@@ -626,7 +626,8 @@ export function MyReviewsScreen() {
                     })}
                   </div>
                   <div className="mt-6 rounded-2xl bg-[#f8f4ff] p-4 text-sm leading-6 text-muted">
-                    รีวิวได้เฉพาะการจองที่เสร็จสิ้นและ Event จบแล้วเท่านั้น
+                    รีวิวได้เมื่อชำระเงินสำเร็จและยืนยันการจองแล้ว
+                    หรือเมื่อการจองเสร็จสิ้น
                     การแก้ไขจะอัปเดตรีวิวเดิมโดยไม่สร้างรายการซ้ำ
                   </div>
                 </section>
@@ -980,13 +981,9 @@ function PendingReviewCard({
             {booking.booth.zone.name ?? booking.booth.zone.code} · Booth {booking.booth.code} · {booking.bookingCode}
           </p>
           <p className="mt-3 rounded-2xl bg-[#faf8fd] px-4 py-3 text-sm leading-6 text-muted">
-            งานจบแล้ว คุณสามารถเขียนรีวิวเพื่อแบ่งปันประสบการณ์ได้
+            ชำระเงินสำเร็จแล้ว เขียนรีวิวเพื่อแบ่งปันประสบการณ์ได้เลย
           </p>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-            <p className="flex items-center gap-2 text-sm text-muted">
-            <CalendarDays className="h-4 w-4" aria-hidden />
-            Event จบเมื่อ {DATE_FORMATTER.format(new Date(booking.event.endDate))}
-            </p>
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
