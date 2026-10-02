@@ -12,7 +12,6 @@ import {
   ReviewTargetType,
 } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { hasEventEndInstantPassed } from '../common/event-time';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminReviewsQueryDto } from './dto/admin-reviews-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -326,8 +325,6 @@ export class ReviewsService {
         event: {
           select: {
             organizationId: true,
-            endDate: true,
-            endTime: true,
           },
         },
         booth: { select: { zoneId: true } },
@@ -339,11 +336,11 @@ export class ReviewsService {
     }
 
     if (
-      booking.status !== BookingStatus.COMPLETED ||
-      !hasEventEndInstantPassed(booking.event.endDate, booking.event.endTime)
+      booking.status !== BookingStatus.CONFIRMED &&
+      booking.status !== BookingStatus.COMPLETED
     ) {
       throw new ForbiddenException(
-        'เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น',
+        'เขียนรีวิวได้หลังชำระเงินสำเร็จและยืนยันการจองแล้วเท่านั้น',
       );
     }
 
