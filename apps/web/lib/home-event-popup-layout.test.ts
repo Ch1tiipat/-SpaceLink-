@@ -31,3 +31,26 @@ popupTest('Event map preview is zoomable and links to the real map route', () =>
   );
   popupAssert.doesNotMatch(popupSource, /prototype-zone-map\.png/);
 });
+
+popupTest('Event popup contains the approved detail sections without a second detail-page CTA', () => {
+  const popup = popupSource.slice(
+    popupSource.indexOf('function EventPopup({'),
+    popupSource.indexOf('function EventPopupStat({'),
+  );
+  for (const title of [
+    'เกี่ยวกับงานนี้',
+    'ข่าวสารล่าสุด',
+    'ข่าวจากผู้จัดงาน',
+    'พื้นที่ภายในงาน',
+    'กฎและเงื่อนไข (สรุป)',
+    'การเดินทางเข้างาน',
+    'รีวิวจากผู้เข้าร่วมงาน',
+    'ข้อมูล Event',
+  ]) {
+    popupAssert.ok(popup.includes(`title="${title}"`), `${title} is missing`);
+  }
+  popupAssert.match(popup, /getEventReviews\(event\.id, 1, 2, controller\.signal\)/);
+  popupAssert.match(popup, /announcement\.eventId === event\.id/);
+  popupAssert.match(popup, /href=\{mapHref\}/);
+  popupAssert.doesNotMatch(popup, /detailHref|ดูรายละเอียด Event/);
+});
