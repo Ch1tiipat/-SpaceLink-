@@ -1,24 +1,18 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Building2,
   CalendarDays,
   CheckCircle2,
   Layers3,
-  MapPin,
   Maximize2,
-  QrCode,
   ShieldCheck,
   Store,
   Tag,
   WalletCards,
 } from 'lucide-react';
-import { BookingCountdown } from '@/components/booking-countdown';
-import { SlipUploadPanel } from '@/components/slip-upload-panel';
 import {
   ApiError,
   createBooking,
@@ -26,7 +20,6 @@ import {
   getAverageRating,
   getEventMap,
   getEventMapBySlug,
-  getMyBookings,
   type BookingRecord,
   type AverageRating,
   type EventBooth,
@@ -38,17 +31,10 @@ import { useBookingQuota } from '@/lib/use-booking-quota';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
 import { canUseUxPreview } from '@/lib/ux-preview';
 
-const HOLD_STATUS_REFRESH_ATTEMPTS = 13;
-const HOLD_STATUS_REFRESH_INTERVAL_MS = 5_000;
-
 type BoothRatingState =
   | { status: 'idle' }
   | { status: 'loading' | 'error'; boothId: string }
   | { status: 'ready'; boothId: string; value: AverageRating };
-
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
 
 function formatMoney(value: string): string {
   const [whole, fraction] = value.split('.');
@@ -92,11 +78,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
   const [selectedBooths, setSelectedBooths] = useState<EventBooth[]>([]);
-  const [createdBooking, setCreatedBooking] = useState<BookingRecord | null>(
-    null,
-  );
-  const [holdExpired, setHoldExpired] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const creationStartedRef = useRef(false);
   const [submitConflict, setSubmitConflict] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [boothRating, setBoothRating] = useState<BoothRatingState>({
@@ -242,13 +225,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [selectedBoothId]);
 
-  const selectedZone = useMemo(
-    () =>
-      data?.zones.find((zone) =>
-        zone.booths.some((booth) => booth.id === selectedBooth?.id),
-      ) ?? null,
-    [data, selectedBooth],
-  );
   const selectedBoothDetails = useMemo(
     () =>
       selectedBooths.map((booth) => ({
@@ -344,6 +320,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
 
   async function handleCreate() {
     if (
+      creationStartedRef.current ||
       vendor.status !== 'ready' ||
       !vendor.shop ||
       selectedBooths.length === 0 ||
@@ -356,6 +333,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       return;
     }
 
+    creationStartedRef.current = true;
     setIsCreating(true);
     setActionError(null);
     try {
@@ -379,7 +357,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
       }
 
       const selectedBooth = selectedBooths[0];
-      if (!selectedBooth) return;
+      if (!selectedBooth) {
+        throw new Error('ไม่พบ Booth ที่เลือก กรุณาลองใหม่');
+      }
       const now = new Date();
       const booking: BookingRecord = canUseUxPreview()
         ? {
@@ -412,9 +392,6 @@ export function BookingScreen({ eventId }: { eventId: string }) {
             },
             vendor.token,
           );
-      setCreatedBooking(booking);
-      setHoldExpired(false);
-
       router.push(
         `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`,
       );
@@ -430,39 +407,8 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           cause instanceof Error ? cause.message : 'สร้างการจองไม่สำเร็จ',
         );
       }
-    } finally {
+      creationStartedRef.current = false;
       setIsCreating(false);
-    }
-  }
-
-  async function handleHoldExpired() {
-    setHoldExpired(true);
-    if (vendor.status !== 'ready' || !createdBooking) return;
-    if (canUseUxPreview()) return;
-
-    for (
-      let attempt = 0;
-      attempt < HOLD_STATUS_REFRESH_ATTEMPTS;
-      attempt += 1
-    ) {
-      try {
-        const bookings = await getMyBookings(vendor.token);
-        const refreshed = bookings.find(
-          (booking) => booking.id === createdBooking.id,
-        );
-        if (!refreshed) return;
-
-        setCreatedBooking(refreshed);
-        if (refreshed.status !== 'PENDING_PAYMENT') return;
-      } catch {
-        // Keep upload disabled once the client-side hold has expired. A later
-        // visit to My Bookings will fetch the server status again.
-        return;
-      }
-
-      if (attempt < HOLD_STATUS_REFRESH_ATTEMPTS - 1) {
-        await wait(HOLD_STATUS_REFRESH_INTERVAL_MS);
-      }
     }
   }
 
@@ -602,8 +548,7 @@ export function BookingScreen({ eventId }: { eventId: string }) {
           </section>
         ) : null}
 
-        {!createdBooking ? (
-          <>
+        <>
             <ol className="mt-4 grid gap-2 rounded-[16px] border border-line bg-white p-2 sm:grid-cols-3">
               {[
                 ['1', 'เลือกบูธ', 'เลือกพื้นที่จาก Event Map'],
@@ -655,71 +600,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                 </article>
               ))}
             </section>
-          </>
-        ) : null}
+        </>
 
-        {createdBooking ? (
-          <section className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <PaymentSummary
-              booking={createdBooking}
-              event={data}
-              booth={selectedBooth}
-              zoneName={selectedZone?.name ?? selectedZone?.code ?? '-'}
-              shopName={shop?.name ?? '-'}
-              holdExpired={holdExpired}
-              onExpired={() => void handleHoldExpired()}
-              onChooseAgain={() => {
-                setCreatedBooking(null);
-                setHoldExpired(false);
-                setSelectedBooths([]);
-              }}
-            />
-
-            <div className="grid gap-5">
-              <PaymentMethodPanel
-                amount={createdBooking.boothPrice}
-                paymentQrDataUri={createdBooking.paymentQrDataUri ?? null}
-              />
-
-              {vendor.status === 'ready' &&
-                createdBooking.status === 'PENDING_PAYMENT' &&
-                (canUseUxPreview() ? (
-                  <PreviewSlipUploadPanel
-                    disabled={holdExpired}
-                    onConfirmed={() =>
-                      setCreatedBooking((current) =>
-                        current
-                          ? {
-                              ...current,
-                              status: 'CONFIRMED',
-                              confirmedAt: new Date().toISOString(),
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                ) : (
-                  <SlipUploadPanel
-                    bookingId={createdBooking.id}
-                    token={vendor.token}
-                    disabled={holdExpired}
-                    onConfirmed={(response) =>
-                      setCreatedBooking((current) =>
-                        current
-                          ? {
-                              ...current,
-                              status: response.booking.status,
-                              confirmedAt: response.booking.confirmedAt,
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                ))}
-            </div>
-          </section>
-        ) : (
-          <div className="mt-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="mt-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
             <section className="sl-surface min-w-0 p-4">
               {selectedBooths.length > 0 ? (
                 <div className="grid gap-3">
@@ -1260,137 +1143,9 @@ export function BookingScreen({ eventId }: { eventId: string }) {
                           : 'สร้าง Booking และไปชำระเงิน →'}
               </button>
             </aside>
-          </div>
-        )}
+        </div>
       </div>
     </main>
-  );
-}
-
-function PaymentSummary({
-  booking,
-  event,
-  booth,
-  zoneName,
-  shopName,
-  holdExpired,
-  onExpired,
-  onChooseAgain,
-}: {
-  booking: BookingRecord;
-  event: EventMap;
-  booth: EventBooth | null;
-  zoneName: string;
-  shopName: string;
-  holdExpired: boolean;
-  onExpired: () => void;
-  onChooseAgain: () => void;
-}) {
-  return (
-    <div className="sl-surface overflow-hidden">
-      <div className="bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] px-6 py-5 text-white sm:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-[.14em] text-white/70">
-              Payment
-            </span>
-            <h2 className="mt-1 text-2xl font-black">
-              ชำระเงินเพื่อยืนยันการจอง
-            </h2>
-          </div>
-          <span className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold backdrop-blur">
-            <BookingCountdown
-              expiresAt={booking.holdExpiresAt}
-              active={booking.status === 'PENDING_PAYMENT'}
-              onExpired={onExpired}
-            />
-          </span>
-        </div>
-      </div>
-
-      <div className="p-6 sm:p-8">
-        {booking.status === 'CONFIRMED' && (
-          <div className="mb-5 rounded-2xl border border-[#b9dfd3] bg-[#effaf6] p-5 text-emerald">
-            <b>ยืนยันการจองเรียบร้อยแล้ว</b>
-            <p className="mt-1 text-sm">
-              ระบบได้รับหลักฐานการชำระเงินและล็อกบูธนี้ให้ร้านของคุณแล้ว
-            </p>
-          </div>
-        )}
-
-        {holdExpired && (
-          <div className="rounded-2xl border border-[#fac5bf] bg-[#fff0ee] p-5 text-[#9f2218]">
-            <b>หมดเวลาชำระเงิน การจองนี้ถือเป็นโมฆะ</b>
-            <p className="mt-1 text-sm">
-              กรุณากลับไปเลือกบูธและเริ่มการจองใหม่อีกครั้ง
-            </p>
-            <button
-              type="button"
-              onClick={onChooseAgain}
-              className="mt-4 rounded-xl bg-[#b42318] px-4 py-2 text-sm font-bold text-white"
-            >
-              เลือกบูธใหม่
-            </button>
-          </div>
-        )}
-
-        <div className="mt-1 grid gap-5 sm:grid-cols-2">
-          <div className="rounded-2xl border border-line bg-[#faf8ff] p-5">
-            <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.1em] text-violet">
-              <MapPin className="h-4 w-4" aria-hidden /> สถานที่จัดงาน
-            </span>
-            <h3 className="mt-3 font-black">{event.event.venue.name}</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              {event.event.venue.address ?? 'ยังไม่ระบุที่อยู่'}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-line bg-[#faf8ff] p-5">
-            <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.1em] text-violet">
-              <Building2 className="h-4 w-4" aria-hidden /> รายละเอียดการจอง
-            </span>
-            <p className="mt-3 text-sm text-muted">รหัสการจอง</p>
-            <b className="block">{booking.bookingCode}</b>
-            <p className="mt-2 text-sm text-muted">ร้านค้า</p>
-            <b className="block">{shopName}</b>
-          </div>
-        </div>
-
-        <dl className="mt-6 divide-y divide-line text-sm">
-          <SummaryRow label="Event" value={event.event.name} />
-          <SummaryRow
-            label="บูธ / โซน"
-            value={`${booth?.code ?? booking.boothId} / ${zoneName}`}
-          />
-          <SummaryRow
-            label="ขนาดพื้นที่"
-            value={`${booth?.widthM ?? '-'} × ${booth?.heightM ?? '-'} เมตร`}
-          />
-          <SummaryRow
-            label="ค่าบูธ"
-            value={`${formatMoney(booking.boothPrice)} บาท`}
-          />
-          <SummaryRow label="ค่าธรรมเนียมระบบ" value="0 บาท" />
-        </dl>
-        <div className="mt-5 flex items-end justify-between rounded-2xl bg-[#201b2e] px-5 py-4 text-white">
-          <span className="text-sm text-white/70">ยอดชำระทั้งหมด</span>
-          <strong className="text-2xl">
-            {formatMoney(booking.boothPrice)} บาท
-          </strong>
-        </div>
-
-        {canUseUxPreview() &&
-        booking.status === 'PENDING_PAYMENT' &&
-        !holdExpired ? (
-          <button
-            type="button"
-            onClick={onExpired}
-            className="mt-4 w-full rounded-xl border border-dashed border-[#cfbded] px-4 py-2.5 text-sm font-bold text-violet hover:bg-violet-tint"
-          >
-            ทดสอบกรณีหมดเวลาชำระเงิน
-          </button>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -1480,75 +1235,5 @@ export function PreviewSlipUploadPanel({
         ทดสอบตรวจสลิปและยืนยันการจอง
       </button>
     </section>
-  );
-}
-
-function PaymentMethodPanel({
-  amount,
-  paymentQrDataUri,
-}: {
-  amount: string;
-  paymentQrDataUri: string | null;
-}) {
-  return (
-    <section className="sl-surface p-5 sm:p-6">
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-tint text-violet">
-          <ShieldCheck className="h-5 w-5" aria-hidden />
-        </span>
-        <div>
-          <h2 className="font-black">ชำระเงินด้วย PromptPay QR</h2>
-          <p className="text-xs text-muted">
-            ข้อมูลการชำระเงินจะถูกเข้ารหัสอย่างปลอดภัย
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-violet bg-violet-tint px-4 py-3 text-sm font-bold text-violet">
-        <QrCode className="h-5 w-5" aria-hidden />
-        PromptPay QR
-        <span className="ml-auto" aria-hidden>
-          ✓
-        </span>
-      </div>
-
-      <div className="mt-5 rounded-2xl bg-[#faf8ff] p-5 text-center">
-        {paymentQrDataUri ? (
-          <Image
-            src={paymentQrDataUri}
-            alt="QR Code PromptPay สำหรับชำระค่าบูธ"
-            width={320}
-            height={320}
-            unoptimized
-            className="mx-auto h-40 w-40 rounded-2xl border-8 border-white bg-white shadow-sm"
-          />
-        ) : (
-          <span className="mx-auto grid h-40 w-40 place-items-center rounded-2xl border-8 border-white bg-[repeating-conic-gradient(#201b2e_0_25%,#fff_0_50%)] bg-[length:16px_16px] shadow-sm">
-            <span className="grid h-14 w-14 place-items-center rounded-xl bg-white text-violet shadow">
-              <QrCode className="h-9 w-9" aria-hidden />
-            </span>
-          </span>
-        )}
-        <b className="mt-4 block">สแกนเพื่อชำระ {formatMoney(amount)} บาท</b>
-        {!paymentQrDataUri ? (
-          <p className="mt-1 text-xs text-muted">
-            QR ตัวอย่างสำหรับตรวจ UX/UI — ยังไม่ใช่ QR รับเงินจริง
-          </p>
-        ) : (
-          <p className="mt-1 text-xs text-muted">
-            QR PromptPay สร้างจากบัญชีรับเงินของผู้จัดงานและยอดค่าบูธรายการนี้
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-4">
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right font-bold">{value}</dd>
-    </div>
   );
 }
