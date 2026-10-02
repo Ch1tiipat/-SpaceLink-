@@ -451,6 +451,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
   }
 
   const eventBookable = isEventBookable(data.event);
+  const eventPopupHref = `/?event=${encodeURIComponent(data.event.slug)}`;
   const bookingAvailabilityText = eventBookable
     ? quota.status === 'ready'
       ? `กด Booth ว่างเพื่อเลือกได้อีก ${quota.value.effectiveSelectionLimit} บูธ`
@@ -466,7 +467,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
             <Link
-              href={`/events/${encodeURIComponent(data.event.slug)}`}
+              href={eventPopupHref}
               className="sl-chip mb-3 min-h-9 w-fit gap-2 bg-white"
             >
               <ArrowLeft aria-hidden size={15} />
@@ -955,7 +956,7 @@ export function EventMapScreen({ eventId }: { eventId: string }) {
               สร้าง Booking และไปชำระเงิน →
             </button>
             <Link
-              href={`/events/${encodeURIComponent(data.event.slug)}`}
+              href={eventPopupHref}
               className="sl-action-secondary mt-3 w-full justify-center"
             >
               <ArrowLeft aria-hidden size={15} />

@@ -44,6 +44,21 @@ eventMapLayoutTest('event map preserves booth selection and quota actions', () =
   );
 });
 
+eventMapLayoutTest('both Event map back actions restore the homepage Event popup', () => {
+  eventMapLayoutAssert.match(
+    eventMapSource,
+    /const eventPopupHref = `\/\?event=\$\{encodeURIComponent\(data\.event\.slug\)\}`;/,
+  );
+  eventMapLayoutAssert.equal(
+    (eventMapSource.match(/href=\{eventPopupHref\}/g) ?? []).length,
+    2,
+  );
+  eventMapLayoutAssert.doesNotMatch(
+    eventMapSource,
+    /href=\{`\/events\/\$\{encodeURIComponent\(data\.event\.slug\)\}`\}/,
+  );
+});
+
 eventMapLayoutTest('event map keeps missing booth prices unknown', () => {
   eventMapLayoutAssert.match(
     eventMapSource,
