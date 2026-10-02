@@ -339,6 +339,12 @@ export default function DiscoveryPage() {
       ),
     [appliedFilters, draftFilters.area, draftFilters.query, events],
   );
+  const currentEvents = visibleEvents.filter(
+    (event) => !hasEventEndCalendarDayPassed(event.endDate),
+  );
+  const pastEvents = visibleEvents.filter((event) =>
+    hasEventEndCalendarDayPassed(event.endDate),
+  );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
   const favoriteEvents = useMemo(
     () =>
@@ -793,19 +799,50 @@ export default function DiscoveryPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {visibleEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onOpen={openEventPopup}
-                isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
-                favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
-                requiresLogin={savedEvents.status === 'signed-out'}
-                onToggleFavorite={() => void toggleSavedEvent(event)}
-              />
-            ))}
-          </div>
+          <>
+            {currentEvents.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {currentEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onOpen={openEventPopup}
+                    isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
+                    favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
+                    requiresLogin={savedEvents.status === 'signed-out'}
+                    onToggleFavorite={() => void toggleSavedEvent(event)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="sl-surface p-6 text-sm text-muted">
+                ไม่มีงานที่กำลังเปิดอยู่ตามตัวกรองนี้
+              </p>
+            )}
+            {pastEvents.length > 0 ? (
+              <details className="mt-8 rounded-[22px] border border-line bg-white/75 p-5">
+                <summary className="cursor-pointer text-lg font-extrabold text-ink">
+                  งานที่ผ่านมา ({pastEvents.length})
+                </summary>
+                <p className="mt-2 text-sm text-muted">
+                  เก็บไว้ให้ดูรายละเอียดและประวัติ ไม่เปิดรับจองรอบนี้แล้ว
+                </p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {pastEvents.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onOpen={openEventPopup}
+                      isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
+                      favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
+                      requiresLogin={savedEvents.status === 'signed-out'}
+                      onToggleFavorite={() => void toggleSavedEvent(event)}
+                    />
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </>
         )}
       </section>
 

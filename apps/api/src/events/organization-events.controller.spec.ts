@@ -36,6 +36,8 @@ const ORG_ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const findByOrganization = jest.fn();
 const create = jest.fn();
 const quoteSubscription = jest.fn();
+const quoteRepeat = jest.fn();
+const repeat = jest.fn();
 const activateSubscription = jest.fn();
 const publish = jest.fn();
 const open = jest.fn();
@@ -57,6 +59,8 @@ const service = {
   findByOrganization,
   create,
   quoteSubscription,
+  quoteRepeat,
+  repeat,
   activateSubscription,
   publish,
   open,
@@ -85,6 +89,8 @@ function handler(
     | 'findByOrganization'
     | 'create'
     | 'quoteSubscription'
+    | 'quoteRepeat'
+    | 'repeat'
     | 'activateSubscription'
     | 'publish'
     | 'open'
@@ -176,6 +182,36 @@ describe('OrganizationEventsController', () => {
     expect(Reflect.getMetadata(ROLES_KEY, activationHandler)).toEqual([
       UserRole.SUPER_ADMIN,
     ]);
+  });
+
+  it('limits repeat and repeat quote to scoped ORG_ADMIN users', async () => {
+    const input = { startDate: '2099-10-10', endDate: '2099-10-11' };
+    for (const name of ['quoteRepeat', 'repeat'] as const) {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
+        SupabaseAuthGuard,
+        OrgScopeGuard,
+        RolesGuard,
+      ]);
+      expect(Reflect.getMetadata(ORG_SCOPE_KEY, handler(name))).toBe(
+        'organizationId',
+      );
+      expect(Reflect.getMetadata(ROLES_KEY, handler(name))).toEqual([
+        UserRole.ORG_ADMIN,
+      ]);
+    }
+
+    await controller.quoteRepeat(ORGANIZATION_ID, LEGACY_EVENT_ID, input);
+    await controller.repeat(ORGANIZATION_ID, LEGACY_EVENT_ID, input);
+    expect(quoteRepeat).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      input,
+      ORGANIZATION_ID,
+    );
+    expect(repeat).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      input,
+      ORGANIZATION_ID,
+    );
   });
 
   it('protects join-information writes for scoped organization admins only', () => {
