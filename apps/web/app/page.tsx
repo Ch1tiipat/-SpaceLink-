@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   useEffect,
   useMemo,
@@ -23,6 +24,7 @@ import {
   CreditCard,
   FileText,
   Grid2X2,
+  Heart,
   Home,
   Mail,
   Map as MapIcon,
@@ -49,6 +51,7 @@ import {
   getEvents,
   getPublicAnnouncements,
   getSavedEventIds,
+  saveEvent,
   unsaveEvent,
   type AdminAnnouncement,
   type DiscoveryEvent,
@@ -99,6 +102,7 @@ function formatDateRange(event: DiscoveryEvent) {
 }
 
 export default function DiscoveryPage() {
+  const router = useRouter();
   const [events, setEvents] = useState<DiscoveryEvent[]>([]);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [announcementFilter, setAnnouncementFilter] =
@@ -344,24 +348,41 @@ export default function DiscoveryPage() {
     setAppliedFilters((current) => ({ ...current, eventStatus }));
   }
 
-  async function removeSavedEvent(event: DiscoveryEvent) {
+  async function toggleSavedEvent(event: DiscoveryEvent) {
+    if (savedEvents.status === 'signed-out') {
+      router.push('/login');
+      return;
+    }
+    if (savedEvents.status === 'error') {
+      setSavedLoadAttempt((attempt) => attempt + 1);
+      return;
+    }
     if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
 
     const previousEventIds = savedEvents.eventIds;
     const { token } = savedEvents;
+    const wasSaved = previousEventIds.includes(event.id);
     setPendingSavedEventId(event.id);
     setSavedNotice(null);
     setSavedEvents({
       status: 'ready',
       token,
-      eventIds: withoutSavedEvent(previousEventIds, event.id),
+      eventIds: wasSaved
+        ? withoutSavedEvent(previousEventIds, event.id)
+        : [...previousEventIds, event.id],
     });
 
     try {
-      await unsaveEvent(event.id, token);
+      if (wasSaved) {
+        await unsaveEvent(event.id, token);
+      } else {
+        await saveEvent(event.id, token);
+      }
       setSavedNotice({
         kind: 'success',
-        message: `นำ ${event.name} ออกจากรายการโปรดแล้ว`,
+        message: wasSaved
+          ? `นำ ${event.name} ออกจากรายการโปรดแล้ว`
+          : `บันทึก ${event.name} เป็นรายการโปรดแล้ว`,
       });
     } catch (cause) {
       setSavedEvents({ status: 'ready', token, eventIds: previousEventIds });
@@ -646,7 +667,8 @@ export default function DiscoveryPage() {
             savedEvents.status === 'error' ? savedEvents.message : undefined
           }
           onRetry={() => setSavedLoadAttempt((attempt) => attempt + 1)}
-          onUnsave={(event) => void removeSavedEvent(event)}
+          onUnsave={(event) => void toggleSavedEvent(event)}
+          onOpen={openEventPopup}
         />
       ) : null}
 
@@ -660,7 +682,7 @@ export default function DiscoveryPage() {
             <span className="sl-kicker">ค้นหา Event</span>
             <h2
               id="events-heading"
-              className="mt-[7px] text-[26px] font-black tracking-[-0.025em] text-[#432687]"
+              className="mt-[7px] text-[clamp(26px,3vw,34px)] font-black tracking-[-0.035em] text-[#432687]"
             >
               งานที่เหมาะกับร้านของคุณ
             </h2>
@@ -733,12 +755,16 @@ export default function DiscoveryPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {visibleEvents.map((event) => (
               <EventCard
                 key={event.id}
                 event={event}
                 onOpen={openEventPopup}
+                isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
+                favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
+                requiresLogin={savedEvents.status === 'signed-out'}
+                onToggleFavorite={() => void toggleSavedEvent(event)}
               />
             ))}
           </div>
@@ -1088,45 +1114,71 @@ function AnnouncementDetailRow({
 function EventCard({
   event,
   onOpen,
+  isSaved,
+  favoriteBusy,
+  requiresLogin,
+  onToggleFavorite,
 }: {
   event: DiscoveryEvent;
   onOpen: (event: DiscoveryEvent, opener: HTMLButtonElement) => void;
+  isSaved: boolean;
+  favoriteBusy: boolean;
+  requiresLogin: boolean;
+  onToggleFavorite: () => void;
 }) {
   const bookable = isEventBookable(event);
+  const province = provinceFromAddress(event.venue.address ?? '');
   return (
-    <button
-      type="button"
-      onClick={(clickEvent) => onOpen(event, clickEvent.currentTarget)}
-      className="sl-surface relative block h-full w-full overflow-hidden text-left text-inherit transition hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-      aria-label={`ดูรายละเอียด ${event.name}`}
-    >
-      <div
-        className="flex min-h-[130px] items-end bg-cover bg-center p-[17px] text-white"
-        style={{
-          backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.82),rgba(78,30,150,.48),rgba(56,101,104,.38)),url(${JSON.stringify(getEventCoverUrl(event.bannerUrl))})`,
-        }}
-      >
-        <strong className="text-[23px]">{formatDateRange(event)}</strong>
-      </div>
-      <span
-        className={`absolute right-[13px] top-[13px] rounded-full px-[9px] py-[5px] text-sm font-bold ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}
-      >
-        {hasEventEndCalendarDayPassed(event.endDate)
-          ? 'สิ้นสุดแล้ว'
-          : bookable
-            ? 'เปิดจอง'
-            : 'ปิดรับจอง'}
-      </span>
-      <div className="p-[17px]">
-        <h3 className="text-[15px] font-extrabold">{event.name}</h3>
-        <p className="mt-1.5 min-h-[38px] text-sm leading-[1.65] text-muted">
-          {event.venue.name} · {provinceFromAddress(event.venue.address ?? '')}
-        </p>
-        <span className="mt-3 inline-block text-sm font-bold text-[#6d28d9]">
-          ดูเพิ่มเติม →
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#e8e0fa] bg-white shadow-[0_13px_32px_rgba(74,46,134,.09)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_20px_42px_rgba(74,46,134,.16)]">
+      <div className="relative aspect-[1.85] overflow-hidden bg-[#e8dafa]">
+        <Image
+          src={getEventCoverUrl(event.bannerUrl)}
+          alt={`ภาพปก ${event.name}`}
+          fill
+          unoptimized
+          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
+          className="object-cover transition duration-300 group-hover:scale-[1.04]"
+        />
+        <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-extrabold shadow-sm ${bookable ? 'bg-[#ecfff3] text-[#16723f]' : 'bg-[#f1eef2] text-[#756c79]'}`}>
+          {hasEventEndCalendarDayPassed(event.endDate)
+            ? 'สิ้นสุดแล้ว'
+            : bookable
+              ? 'เปิดจอง'
+              : 'ปิดรับจอง'}
         </span>
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          disabled={favoriteBusy}
+          aria-label={requiresLogin ? `เข้าสู่ระบบเพื่อบันทึก ${event.name}` : isSaved ? `นำ ${event.name} ออกจากรายการโปรด` : `บันทึก ${event.name} เป็นรายการโปรด`}
+          aria-pressed={isSaved}
+          className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-white text-[#6e32e7] shadow-[0_5px_16px_rgba(31,13,76,.2)] transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet disabled:cursor-wait disabled:opacity-60"
+        >
+          <Heart aria-hidden className={`h-5 w-5 ${isSaved ? 'fill-current' : ''}`} />
+        </button>
       </div>
-    </button>
+      <div className="flex flex-1 flex-col p-4">
+        <span className="w-fit rounded-full bg-[#f1eaff] px-3 py-1 text-[11px] font-extrabold text-[#6830d7]">
+          {event.categories[0]?.name ?? 'Event'}
+        </span>
+        <h3 className="mt-2 line-clamp-1 text-[17px] font-black leading-snug text-[#231447]">{event.name}</h3>
+        <p className="mt-2 inline-flex min-w-0 items-center gap-1.5 text-xs text-[#695b92]">
+          <MapPin aria-hidden className="h-4 w-4 shrink-0 text-[#713ae4]" />
+          <span className="truncate">{event.venue.name}{province ? ` · ${province}` : ''}</span>
+        </p>
+        <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-[#695b92]">
+          <CalendarDays aria-hidden className="h-4 w-4 shrink-0 text-[#713ae4]" />
+          {formatDateRange(event)}
+        </p>
+        <button
+          type="button"
+          onClick={(clickEvent) => onOpen(event, clickEvent.currentTarget)}
+          className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[13px] bg-[linear-gradient(105deg,#8050ef,#6625e2)] px-4 text-sm font-extrabold text-white shadow-[0_7px_14px_rgba(100,37,219,.18)] transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+        >
+          ดูรายละเอียด <ArrowRight aria-hidden className="h-4 w-4" />
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -1659,12 +1711,16 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setZones([]);
     getEventMap(event.id, controller.signal)
       .then((map) => {
-        const featured = [map.zones[0], map.zones[3], map.zones[5]].filter(
-          (zone): zone is EventZone => Boolean(zone),
+        setZones(
+          map.zones
+            .filter((zone) =>
+              zone.booths.some((booth) => booth.availability === 'AVAILABLE'),
+            )
+            .slice(0, 3),
         );
-        setZones(featured.length === 3 ? featured : map.zones.slice(0, 3));
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError')
@@ -1678,43 +1734,58 @@ function PopularAreaRecommendations({ event }: { event: DiscoveryEvent }) {
 
   return (
     <section
-      className="shell !mt-[56px] max-sm:!mt-[42px]"
+      className="shell !mt-[76px] max-sm:!mt-[48px]"
       aria-labelledby="recommended-heading"
     >
-      <span className="sl-kicker">พื้นที่แนะนำ</span>
+      <span className="text-xs font-bold uppercase tracking-[.32em] text-[#673bb9]">SpaceLink</span>
       <h2
         id="recommended-heading"
-        className="mt-[7px] text-[26px] font-black tracking-[-0.025em]"
+        className="mt-2 text-[clamp(26px,3vw,34px)] font-black tracking-[-0.035em] text-[#432687]"
       >
         พื้นที่นิยมที่เหมาะกับร้าน
       </h2>
-      <p className="mt-1 text-xs text-muted">
-        ดูตำแหน่งบูธยอดนิยม และเลือกพื้นที่ที่เหมาะกับสินค้าของคุณ
+      <p className="mt-3 text-sm text-[#8980a3] sm:text-lg">
+        เลือกโซนยอดนิยมที่เหมาะกับประเภทร้านของคุณ
       </p>
 
-      <div className="mt-[18px] grid gap-4 lg:grid-cols-3">
+      <div className="mx-auto mt-6 grid max-w-[1000px] gap-4 lg:grid-cols-3">
         {zones.map((zone) => {
           const available = zone.booths.filter(
             (booth) => booth.availability === 'AVAILABLE',
           ).length;
+          const booth = zone.booths.find(
+            (item) => item.availability === 'AVAILABLE',
+          );
+          const category = zone.categories[0]?.name ?? zone.name ?? 'พื้นที่ภายในงาน';
           return (
             <Link
               key={zone.id}
               href={`/events/${encodeURIComponent(event.slug)}/map?zone=${encodeURIComponent(zone.code)}`}
-              className="sl-surface flex items-start gap-[14px] p-5 text-inherit transition hover:-translate-y-0.5 hover:shadow-soft"
+              className="group min-w-0 overflow-hidden rounded-[23px] border border-[#eee9fb] bg-white p-1.5 text-inherit shadow-[0_18px_38px_rgba(82,47,155,.10)] transition hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(82,47,155,.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
             >
-              <span className="grid h-[43px] min-w-[76px] shrink-0 place-items-center whitespace-nowrap rounded-[13px] bg-[#f3edff] px-2 font-extrabold text-[#6d28d9]">
-                {zone.code}
+              <span className="relative block aspect-[2.05] overflow-hidden rounded-[18px] bg-[#e8dafa]">
+                <Image
+                  src={getEventCoverUrl(event.bannerUrl)}
+                  alt={`ภาพปก ${event.name}`}
+                  fill
+                  unoptimized
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  className="object-cover transition duration-300 group-hover:scale-[1.04]"
+                />
               </span>
-              <span className="min-w-0">
-                <strong className="block text-sm">
-                  โซน {zone.code} · {zone.name ?? `โซน ${zone.code}`}
-                </strong>
-                <span className="mt-1.5 block text-sm leading-[1.7] text-muted">
-                  มี {available} บูธว่าง ตรวจสอบตำแหน่งและราคาจากแผนผังจริง
+              <span className="block p-3 pt-4">
+                <span className="flex flex-wrap items-center gap-2.5">
+                  <span className="rounded-[11px] bg-[#ede6ff] px-3 py-1 text-xs font-extrabold text-[#5632b0]">โซน {zone.code}</span>
+                  <strong className="text-xl font-black text-[#27194e]">{booth ? `บูธ ${booth.code}` : `โซน ${zone.code}`}</strong>
                 </span>
-                <span className="mt-2.5 inline-block text-sm font-bold text-[#6d28d9]">
-                  ดูตำแหน่งบูธ →
+                <span className="mt-2 inline-flex items-center gap-2 text-[13px] font-bold text-[#5531a9]">
+                  <Store aria-hidden className="h-4 w-4 shrink-0" /> {category}
+                </span>
+                <span className="mt-1.5 line-clamp-2 min-h-9 text-[13px] leading-[18px] text-[#8a80a4]">
+                  {zone.description || `มี ${available} บูธว่างในโซนนี้`}
+                </span>
+                <span className="mt-2.5 inline-flex min-h-11 w-full items-center justify-between rounded-[13px] bg-[linear-gradient(105deg,#7950df,#5d39b2)] px-4 text-[13px] font-extrabold text-white shadow-[0_8px_16px_rgba(91,58,181,.16)] transition group-hover:brightness-110">
+                  ดูข้อมูลพื้นที่ <ArrowRight aria-hidden className="h-4 w-4" />
                 </span>
               </span>
             </Link>
