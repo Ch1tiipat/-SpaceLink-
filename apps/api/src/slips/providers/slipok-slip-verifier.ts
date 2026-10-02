@@ -9,7 +9,17 @@ import type {
 
 const SLIPOK_API_BASE_URL = 'https://api.slipok.com/api/line/apikey';
 const REQUEST_TIMEOUT_MS = 8000;
-const INVALID_CODES = new Set([1005, 1006, 1007, 1008, 1011, 1013, 1014]);
+// Provider messages may contain transaction details. Only these fixed
+// explanations may cross the verifier boundary into an admin-facing response.
+const INVALID_CODE_MESSAGES = new Map<number, string>([
+  [1005, 'ไฟล์สลิปต้องเป็นภาพที่รองรับ'],
+  [1006, 'ภาพสลิปไม่ชัดเจนหรือไม่ถูกต้อง'],
+  [1007, 'ไม่พบ QR Code ในภาพสลิป'],
+  [1008, 'QR Code ในสลิปไม่ถูกต้อง'],
+  [1011, 'QR Code ในสลิปหมดอายุหรือไม่พบรายการ'],
+  [1013, 'ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ'],
+  [1014, 'บัญชีผู้รับเงินในสลิปไม่ตรงกับบัญชีที่กำหนด'],
+]);
 
 type SlipOkParty = {
   displayName?: unknown;
@@ -145,23 +155,23 @@ function mapResponse(
   }
 
   const code = integer(payload.code);
-  const message = text(payload.message) ?? 'SlipOK could not verify this slip';
-
   if (code === 1012) {
     // Do not copy the repeated transRef into this row: the original row owns
     // that unique value. The provider raw body remains available to admins.
     return {
       status: SlipStatus.DUPLICATE,
       raw: payload,
-      message,
+      message: 'สลิปนี้เคยถูกใช้แล้ว',
     };
   }
 
-  if (code !== undefined && INVALID_CODES.has(code)) {
+  const invalidMessage =
+    code === undefined ? undefined : INVALID_CODE_MESSAGES.get(code);
+  if (invalidMessage) {
     return {
       status: SlipStatus.INVALID,
       raw: payload,
-      message,
+      message: invalidMessage,
     };
   }
 
