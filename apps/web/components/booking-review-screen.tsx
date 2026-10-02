@@ -372,7 +372,7 @@ export function BookingReviewScreen({ bookingId }: { bookingId: string }) {
     return (
       <BookingPageMessage
         title="ยังเขียนรีวิวไม่ได้"
-        detail="เขียนรีวิวได้เมื่อการจองเสร็จสิ้นและ Event จบแล้วเท่านั้น"
+        detail="เขียนรีวิวได้หลังชำระเงินสำเร็จและยืนยันการจองแล้วเท่านั้น"
         href={bookingHref}
         action="กลับรายละเอียดการจอง"
       />
