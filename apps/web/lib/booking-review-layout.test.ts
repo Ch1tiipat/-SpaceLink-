@@ -47,6 +47,29 @@ bookingReviewTest('booking review preserves responsive layout and existing actio
   bookingReviewAssert.match(bookingReviewSource, /นำ Booth .* ออกจากรายการ/);
 });
 
+bookingReviewTest('booking creation navigates to the payment route without flashing an inline QR screen', () => {
+  bookingReviewAssert.match(
+    bookingReviewSource,
+    /router\.push\(\s*`\/bookings\/\$\{encodeURIComponent\(booking\.bookingCode\)\}\/payment`/,
+  );
+  bookingReviewAssert.doesNotMatch(bookingReviewSource, /setCreatedBooking\(/);
+  bookingReviewAssert.doesNotMatch(bookingReviewSource, /<PaymentSummary/);
+  bookingReviewAssert.doesNotMatch(bookingReviewSource, /<PaymentMethodPanel/);
+});
+
+bookingReviewTest('booking creation stays locked through navigation and unlocks on an error', () => {
+  bookingReviewAssert.match(
+    bookingReviewSource,
+    /creationStartedRef\.current \|\|[\s\S]*?creationStartedRef\.current = true;/,
+  );
+  bookingReviewAssert.match(
+    bookingReviewSource,
+    /creationStartedRef\.current = false;\s*setIsCreating\(false\);/,
+  );
+  bookingReviewAssert.match(bookingReviewSource, /disabled=\{\s*isCreating \|\|/);
+  bookingReviewAssert.match(bookingReviewSource, /createBookingsBatch\(/);
+});
+
 bookingReviewTest('compact review balances shop and payment receiver information with the summary', () => {
   bookingReviewAssert.match(bookingReviewSource, /ร้านค้าที่ใช้จอง/);
   bookingReviewAssert.match(bookingReviewSource, /PAYMENT RECEIVER/);

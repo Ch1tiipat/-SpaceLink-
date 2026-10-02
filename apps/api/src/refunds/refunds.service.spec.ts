@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
@@ -1007,6 +1008,38 @@ describe('RefundsService', () => {
       expect(removeObject).toHaveBeenCalledWith(
         `refund-payouts/${REFUND_ID}/slip.png`,
       );
+      expect(refundRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('keeps an APPROVED refund unprocessed after a provider outage', async () => {
+      refundRequestFindFirst
+        .mockResolvedValueOnce(
+          adminRefund(RefundStatus.APPROVED, new Prisma.Decimal('1000')),
+        )
+        .mockResolvedValueOnce(
+          adminRefund(RefundStatus.APPROVED, new Prisma.Decimal('1000')),
+        );
+      verifyAndStoreRefundSlip.mockRejectedValueOnce(
+        new ServiceUnavailableException('provider unavailable'),
+      );
+
+      await expect(
+        service.uploadPayoutSlip(
+          BOOKING_ID,
+          REFUND_ID,
+          ORGANIZATION_ID,
+          ADMIN_ID,
+          { buffer: Buffer.from('refund-slip') },
+        ),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      await expect(
+        service.process(BOOKING_ID, REFUND_ID, ORGANIZATION_ID),
+      ).rejects.toThrow('ต้องอัปโหลดและตรวจสอบสลิปคืนเงินก่อนยืนยันการคืนเงิน');
+
+      expect(removeObject).toHaveBeenCalledWith(
+        `refund-payouts/${REFUND_ID}/slip.png`,
+      );
+      expect(refundRequestUpdateMany).not.toHaveBeenCalled();
     });
 
     it('processes only APPROVED and preserves its approved amount', async () => {
