@@ -89,6 +89,7 @@ import {
   safePublicHttpUrl,
   summarizeEventZones,
 } from '@/lib/event-detail-view-model';
+import { filterUsableAtmosphereUrls } from '@/lib/home-event-atmosphere';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -1296,14 +1297,19 @@ function EventPopup({
   });
   const [mapViewerOpen, setMapViewerOpen] = useState(false);
   const [atmosphereIndex, setAtmosphereIndex] = useState<number | null>(null);
+  const [failedAtmosphereUrls, setFailedAtmosphereUrls] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const [zoom, setZoom] = useState(1);
   const atmosphereTriggerRef = useRef<HTMLButtonElement>(null);
+  const eventPopupCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoadState({ status: 'loading' });
     setMapViewerOpen(false);
     setAtmosphereIndex(null);
+    setFailedAtmosphereUrls(new Set());
     setZoom(1);
     getEventMap(event.id, controller.signal)
       .then((map) => setLoadState({ status: 'ready', map }))
@@ -1347,14 +1353,22 @@ function EventPopup({
     .filter((announcement) => announcement.eventId === event.id)
     .slice(0, 2);
   const organizer = eventMap?.event.organization;
-  const galleryUrls = (eventMap?.event.galleryUrls ?? [])
+  const sanitizedGalleryUrls = (eventMap?.event.galleryUrls ?? [])
     .map(safePublicHttpsUrl)
     .filter((url): url is string => Boolean(url));
+  const galleryUrls = filterUsableAtmosphereUrls(
+    sanitizedGalleryUrls,
+    failedAtmosphereUrls,
+  );
   const atmospherePreviewUrl = galleryUrls[0] ?? null;
-  const activeAtmosphereUrl =
-    atmosphereIndex === null
+  const activeAtmosphereIndex =
+    atmosphereIndex === null || galleryUrls.length === 0
       ? null
-      : (galleryUrls[atmosphereIndex] ?? atmospherePreviewUrl);
+      : atmosphereIndex % galleryUrls.length;
+  const activeAtmosphereUrl =
+    activeAtmosphereIndex === null
+      ? null
+      : (galleryUrls[activeAtmosphereIndex] ?? null);
   const facebookUrl = safePublicHttpUrl(organizer?.facebookUrl ?? null);
   const contactPhone = eventMap?.event.contactPhone ?? organizer?.contactPhone;
   const contactEmail = eventMap?.event.contactEmail ?? organizer?.contactEmail;
@@ -1378,13 +1392,22 @@ function EventPopup({
 
   function closeAtmosphereViewer() {
     setAtmosphereIndex(null);
-    window.requestAnimationFrame(() => atmosphereTriggerRef.current?.focus());
+    window.requestAnimationFrame(() => {
+      (atmosphereTriggerRef.current ?? eventPopupCloseRef.current)?.focus();
+    });
+  }
+
+  function markAtmosphereImageFailed(url: string) {
+    setFailedAtmosphereUrls((current) => {
+      if (current.has(url)) return current;
+      return new Set([...current, url]);
+    });
   }
 
   function changeAtmosphereImage(delta: number) {
     if (galleryUrls.length < 2) return;
     setAtmosphereIndex((current) => {
-      const index = current ?? 0;
+      const index = (current ?? 0) % galleryUrls.length;
       return (index + delta + galleryUrls.length) % galleryUrls.length;
     });
   }
@@ -1408,6 +1431,35 @@ function EventPopup({
           setZoom(1);
         }
       }}
+      onKeyDown={(keyEvent) => {
+        if (atmosphereIndex === null) return;
+        if (keyEvent.key === 'ArrowLeft') changeAtmosphereImage(-1);
+        if (keyEvent.key === 'ArrowRight') changeAtmosphereImage(1);
+        if (keyEvent.key !== 'Tab') return;
+
+        const viewer = dialogRef.current?.querySelector<HTMLElement>(
+          '[data-atmosphere-viewer]',
+        );
+        const controls = Array.from(
+          viewer?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ??
+            [],
+        );
+        const firstControl = controls[0];
+        const lastControl = controls[controls.length - 1];
+        if (!viewer || !firstControl || !lastControl) return;
+
+        const activeElement = document.activeElement;
+        if (!viewer.contains(activeElement)) {
+          keyEvent.preventDefault();
+          (keyEvent.shiftKey ? lastControl : firstControl).focus();
+        } else if (keyEvent.shiftKey && activeElement === firstControl) {
+          keyEvent.preventDefault();
+          lastControl.focus();
+        } else if (!keyEvent.shiftKey && activeElement === lastControl) {
+          keyEvent.preventDefault();
+          firstControl.focus();
+        }
+      }}
       onClick={(clickEvent) => {
         if (clickEvent.target === clickEvent.currentTarget) onRequestClose();
       }}
@@ -1427,6 +1479,7 @@ function EventPopup({
             <span className="text-lg font-black tracking-[-0.03em]">SpaceLink</span>
           </div>
           <button
+            ref={eventPopupCloseRef}
             type="button"
             autoFocus
             onClick={onRequestClose}
@@ -1529,8 +1582,16 @@ function EventPopup({
                   className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
                 >
                   <Image
+                    ref={(image) => {
+                      if (image?.complete && image.naturalWidth === 0) {
+                        markAtmosphereImageFailed(atmospherePreviewUrl);
+                      }
+                    }}
                     src={atmospherePreviewUrl}
                     alt={`บรรยากาศภายใน ${event.name}`}
+                    onError={() =>
+                      markAtmosphereImageFailed(atmospherePreviewUrl)
+                    }
                     fill
                     unoptimized
                     sizes="(max-width: 1024px) 90vw, 360px"
@@ -1750,8 +1811,9 @@ function EventPopup({
           </section>
         ) : null}
 
-        {atmosphereIndex !== null && activeAtmosphereUrl ? (
+        {atmosphereIndex !== null ? (
           <section
+            data-atmosphere-viewer
             role="dialog"
             aria-modal="true"
             aria-label={`ภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
@@ -1760,42 +1822,35 @@ function EventPopup({
                 closeAtmosphereViewer();
               }
             }}
-            onKeyDown={(keyEvent) => {
-              if (keyEvent.key === 'ArrowLeft') changeAtmosphereImage(-1);
-              if (keyEvent.key === 'ArrowRight') changeAtmosphereImage(1);
-              if (keyEvent.key !== 'Tab') return;
-
-              const controls = Array.from(
-                keyEvent.currentTarget.querySelectorAll<HTMLButtonElement>(
-                  'button:not([disabled])',
-                ),
-              );
-              const firstControl = controls[0];
-              const lastControl = controls[controls.length - 1];
-              if (!firstControl || !lastControl) return;
-              if (keyEvent.shiftKey && document.activeElement === firstControl) {
-                keyEvent.preventDefault();
-                lastControl.focus();
-              } else if (
-                !keyEvent.shiftKey &&
-                document.activeElement === lastControl
-              ) {
-                keyEvent.preventDefault();
-                firstControl.focus();
-              }
-            }}
             className="absolute inset-0 z-[60] flex items-center justify-center bg-[#171025]/90 p-3 backdrop-blur-md sm:p-6"
           >
             <div className="relative h-full max-h-[720px] w-full max-w-[1080px] overflow-hidden rounded-[18px] border border-white/20 bg-[#21172f] shadow-[0_30px_90px_rgba(0,0,0,.55)]">
-              <Image
-                src={activeAtmosphereUrl}
-                alt={`ภาพบรรยากาศภายใน ${event.name} ลำดับ ${atmosphereIndex + 1}`}
-                fill
-                unoptimized
-                priority
-                sizes="100vw"
-                className="object-contain"
-              />
+              {activeAtmosphereUrl && activeAtmosphereIndex !== null ? (
+                <Image
+                  ref={(image) => {
+                    if (image?.complete && image.naturalWidth === 0) {
+                      markAtmosphereImageFailed(activeAtmosphereUrl);
+                    }
+                  }}
+                  src={activeAtmosphereUrl}
+                  alt={`ภาพบรรยากาศภายใน ${event.name} ลำดับ ${activeAtmosphereIndex + 1}`}
+                  onError={() =>
+                    markAtmosphereImageFailed(activeAtmosphereUrl)
+                  }
+                  fill
+                  unoptimized
+                  priority
+                  sizes="100vw"
+                  className="object-contain"
+                />
+              ) : (
+                <div
+                  role="status"
+                  className="grid h-full place-items-center px-16 text-center text-sm font-bold text-white"
+                >
+                  ไม่สามารถโหลดภาพบรรยากาศได้
+                </div>
+              )}
               <button
                 type="button"
                 autoFocus
@@ -1825,10 +1880,12 @@ function EventPopup({
                   </button>
                 </>
               ) : null}
-              <span className="absolute bottom-3 left-3 rounded-full bg-[#1f1730]/75 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
-                บรรยากาศภายใน {event.name} · ภาพที่ {atmosphereIndex + 1} จาก{' '}
-                {galleryUrls.length}
-              </span>
+              {activeAtmosphereIndex !== null ? (
+                <span className="absolute bottom-3 left-3 rounded-full bg-[#1f1730]/75 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
+                  บรรยากาศภายใน {event.name} · ภาพที่{' '}
+                  {activeAtmosphereIndex + 1} จาก {galleryUrls.length}
+                </span>
+              ) : null}
             </div>
           </section>
         ) : null}

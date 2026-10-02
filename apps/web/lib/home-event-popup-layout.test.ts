@@ -78,6 +78,17 @@ popupTest('Event popup renders runtime atmosphere images in the approved compact
     popup,
     /eventMap\?\.event\.galleryUrls[\s\S]*?safePublicHttpsUrl/,
   );
+  popupAssert.match(popup, /filterUsableAtmosphereUrls/);
+  popupAssert.match(popup, /setFailedAtmosphereUrls/);
+  popupAssert.match(popup, /image\?\.complete && image\.naturalWidth === 0/);
+  popupAssert.match(
+    popup,
+    /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(atmospherePreviewUrl\)/,
+  );
+  popupAssert.match(
+    popup,
+    /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(activeAtmosphereUrl\)/,
+  );
   popupAssert.match(popup, /title="บรรยากาศภายในงาน"/);
   popupAssert.match(popup, /h-\[126px\]/);
   popupAssert.match(popup, /ดูภาพบรรยากาศภายใน/);
@@ -87,7 +98,12 @@ popupTest('Event popup renders runtime atmosphere images in the approved compact
   popupAssert.match(popup, /keyEvent\.key === 'ArrowLeft'/);
   popupAssert.match(popup, /keyEvent\.key === 'ArrowRight'/);
   popupAssert.match(popup, /keyEvent\.key !== 'Tab'/);
-  popupAssert.match(popup, /atmosphereTriggerRef\.current\?\.focus\(\)/);
+  popupAssert.match(popup, /!viewer\.contains\(activeElement\)/);
+  popupAssert.match(
+    popup,
+    /atmosphereTriggerRef\.current \?\? eventPopupCloseRef\.current/,
+  );
+  popupAssert.match(popup, /ไม่สามารถโหลดภาพบรรยากาศได้/);
   popupAssert.match(
     popup,
     /clickEvent\.target === clickEvent\.currentTarget[\s\S]*?closeAtmosphereViewer\(\)/,
