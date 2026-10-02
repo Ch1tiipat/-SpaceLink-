@@ -868,6 +868,10 @@ export class EventsService {
   private async cleanupBannerUrl(url: string | null): Promise<void> {
     if (!url) return;
     try {
+      const references = await this.prisma.event.count({
+        where: { bannerUrl: url },
+      });
+      if (references > 0) return;
       await this.bannerStorage.removeByUrl(url);
     } catch {
       this.logger.error('Failed to clean up an event banner object');
@@ -877,7 +881,16 @@ export class EventsService {
   private async cleanupGalleryUrls(urls: string[]): Promise<void> {
     if (urls.length === 0) return;
     try {
-      await this.galleryStorage.removeByUrls(urls);
+      const unreferenced: string[] = [];
+      for (const url of urls) {
+        const references = await this.prisma.event.count({
+          where: { galleryUrls: { array_contains: [url] } },
+        });
+        if (references === 0) unreferenced.push(url);
+      }
+      if (unreferenced.length > 0) {
+        await this.galleryStorage.removeByUrls(unreferenced);
+      }
     } catch {
       this.logger.error('Failed to clean up removed event gallery objects');
     }

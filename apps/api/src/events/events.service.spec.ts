@@ -31,6 +31,7 @@ const eventUpdate = jest.fn();
 const eventUpdateMany = jest.fn();
 const eventDelete = jest.fn();
 const eventCreate = jest.fn();
+const eventCount = jest.fn();
 const savedEventFindMany = jest.fn();
 const savedEventUpsert = jest.fn();
 const savedEventDeleteMany = jest.fn();
@@ -63,6 +64,7 @@ const mockPrismaService = {
     updateMany: eventUpdateMany,
     delete: eventDelete,
     create: eventCreate,
+    count: eventCount,
   },
   savedEvent: {
     findMany: savedEventFindMany,
@@ -92,6 +94,7 @@ describe('EventsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    eventCount.mockResolvedValue(0);
     generateEventSlugMock.mockReturnValue('sut-market-abc123');
     uploadForEvent.mockResolvedValue([
       'https://project.supabase.co/storage/v1/object/public/event-gallery/event/new',
@@ -1146,6 +1149,20 @@ describe('EventsService', () => {
     );
   });
 
+  it('keeps a gallery object while a repeated event still references it', async () => {
+    const shared = 'https://example.com/shared.png';
+    findFirst.mockResolvedValue({ galleryUrls: [shared] });
+    eventUpdate.mockResolvedValue({ id: eventId, galleryUrls: [] });
+    eventCount.mockResolvedValue(1);
+
+    await service.update(eventId, { galleryUrls: [] }, orgId);
+
+    expect(eventCount).toHaveBeenCalledWith({
+      where: { galleryUrls: { array_contains: [shared] } },
+    });
+    expect(removeByUrls).not.toHaveBeenCalled();
+  });
+
   it('rejects injecting an external gallery URL through PATCH', async () => {
     findFirst.mockResolvedValue({
       galleryUrls: ['https://example.com/existing.png'],
@@ -1274,6 +1291,18 @@ describe('EventsService', () => {
       NotFoundException,
     );
     expect(eventUpdate).not.toHaveBeenCalled();
+    expect(removeBannerByUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps a banner object while a repeated event still references it', async () => {
+    const shared = 'https://example.com/shared-banner.png';
+    findFirst.mockResolvedValue({ bannerUrl: shared });
+    eventUpdate.mockResolvedValue({ id: eventId, bannerUrl: null });
+    eventCount.mockResolvedValue(1);
+
+    await service.removeBanner(eventId, orgId);
+
+    expect(eventCount).toHaveBeenCalledWith({ where: { bannerUrl: shared } });
     expect(removeBannerByUrl).not.toHaveBeenCalled();
   });
 
