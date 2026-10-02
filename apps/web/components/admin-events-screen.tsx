@@ -1847,6 +1847,17 @@ function CreateEventDialog({
   useEffect(() => setIsMounted(true), []);
 
   useEffect(() => {
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = previousDocumentOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     bannerRef.current = banner;
   }, [banner]);
 
@@ -1944,16 +1955,16 @@ function CreateEventDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-[#24172f]/45 p-4"
+      className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-[#24172f]/45 p-4"
       role="presentation"
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-event-title"
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[1px] text-violet">
               Subscription preview
@@ -1978,7 +1989,10 @@ function CreateEventDialog({
           </button>
         </div>
 
-        <form onSubmit={calculate} className="mt-6 grid gap-4 sm:grid-cols-2">
+        <form
+          onSubmit={calculate}
+          className="mt-5 grid min-h-0 gap-4 overflow-y-auto pr-1 sm:grid-cols-2"
+        >
           <Field label="ชื่ออีเวนต์" className="sm:col-span-2">
             <input
               required
@@ -2043,7 +2057,7 @@ function CreateEventDialog({
               maxLength={2000}
               value={input.description}
               onChange={(event) => update('description', event.target.value)}
-              className={`${INPUT_CLASS} py-3`}
+              className={`${INPUT_CLASS} !h-auto min-h-24 resize-y py-3`}
             />
           </Field>
 
@@ -2058,7 +2072,7 @@ function CreateEventDialog({
                   ? `ตัวอย่าง ${banner.file.name}`
                   : 'ตัวอย่างภาพปกเริ่มต้น'
               }
-              className="mt-2 aspect-video w-full rounded-[18px] bg-cover bg-center"
+              className="mt-2 h-44 w-full rounded-[18px] bg-cover bg-center sm:h-52"
               style={{
                 backgroundImage: `linear-gradient(120deg,rgba(36,16,62,.38),rgba(56,101,104,.16)),url(${JSON.stringify(banner?.previewUrl ?? getEventCoverUrl(null))})`,
               }}
