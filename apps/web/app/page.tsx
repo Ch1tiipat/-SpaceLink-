@@ -16,6 +16,7 @@ import {
   BarChart3,
   CalendarDays,
   CalendarSearch,
+  Camera,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -1294,12 +1295,15 @@ function EventPopup({
     status: 'loading',
   });
   const [mapViewerOpen, setMapViewerOpen] = useState(false);
+  const [atmosphereIndex, setAtmosphereIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
+  const atmosphereTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoadState({ status: 'loading' });
     setMapViewerOpen(false);
+    setAtmosphereIndex(null);
     setZoom(1);
     getEventMap(event.id, controller.signal)
       .then((map) => setLoadState({ status: 'ready', map }))
@@ -1343,6 +1347,14 @@ function EventPopup({
     .filter((announcement) => announcement.eventId === event.id)
     .slice(0, 2);
   const organizer = eventMap?.event.organization;
+  const galleryUrls = (eventMap?.event.galleryUrls ?? [])
+    .map(safePublicHttpsUrl)
+    .filter((url): url is string => Boolean(url));
+  const atmospherePreviewUrl = galleryUrls[0] ?? null;
+  const activeAtmosphereUrl =
+    atmosphereIndex === null
+      ? null
+      : (galleryUrls[atmosphereIndex] ?? atmospherePreviewUrl);
   const facebookUrl = safePublicHttpUrl(organizer?.facebookUrl ?? null);
   const contactPhone = eventMap?.event.contactPhone ?? organizer?.contactPhone;
   const contactEmail = eventMap?.event.contactEmail ?? organizer?.contactEmail;
@@ -1364,14 +1376,33 @@ function EventPopup({
     );
   }
 
+  function closeAtmosphereViewer() {
+    setAtmosphereIndex(null);
+    window.requestAnimationFrame(() => atmosphereTriggerRef.current?.focus());
+  }
+
+  function changeAtmosphereImage(delta: number) {
+    if (galleryUrls.length < 2) return;
+    setAtmosphereIndex((current) => {
+      const index = current ?? 0;
+      return (index + delta + galleryUrls.length) % galleryUrls.length;
+    });
+  }
+
   return (
     <dialog
       ref={dialogRef}
       aria-modal="true"
       aria-labelledby="event-popup-title"
-      onClose={onClosed}
+      onClose={() => {
+        setAtmosphereIndex(null);
+        onClosed();
+      }}
       onCancel={(cancelEvent) => {
-        if (mapViewerOpen) {
+        if (atmosphereIndex !== null) {
+          cancelEvent.preventDefault();
+          closeAtmosphereViewer();
+        } else if (mapViewerOpen) {
           cancelEvent.preventDefault();
           setMapViewerOpen(false);
           setZoom(1);
@@ -1487,6 +1518,42 @@ function EventPopup({
                 </ul>
               ) : null}
             </EventPopupSection>
+
+            {atmospherePreviewUrl ? (
+              <EventPopupSection icon={Camera} title="บรรยากาศภายในงาน">
+                <button
+                  ref={atmosphereTriggerRef}
+                  type="button"
+                  onClick={() => setAtmosphereIndex(0)}
+                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
+                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                >
+                  <Image
+                    src={atmospherePreviewUrl}
+                    alt={`บรรยากาศภายใน ${event.name}`}
+                    fill
+                    unoptimized
+                    sizes="(max-width: 1024px) 90vw, 360px"
+                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                  />
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
+                  />
+                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
+                    <span>
+                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
+                      <span className="mt-0.5 block text-[9px] text-white/80">
+                        {galleryUrls.length} รูปจากผู้จัดงาน
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
+                      ดูภาพเต็ม
+                    </span>
+                  </span>
+                </button>
+              </EventPopupSection>
+            ) : null}
 
             <EventPopupSection icon={Megaphone} title="ข่าวสารล่าสุด">
               {eventAnnouncements.length ? (
@@ -1679,6 +1746,89 @@ function EventPopup({
                   เปิดแผนผังจริง <ArrowRight aria-hidden className="h-4 w-4" />
                 </Link>
               </div>
+            </div>
+          </section>
+        ) : null}
+
+        {atmosphereIndex !== null && activeAtmosphereUrl ? (
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`ภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
+            onClick={(clickEvent) => {
+              if (clickEvent.target === clickEvent.currentTarget) {
+                closeAtmosphereViewer();
+              }
+            }}
+            onKeyDown={(keyEvent) => {
+              if (keyEvent.key === 'ArrowLeft') changeAtmosphereImage(-1);
+              if (keyEvent.key === 'ArrowRight') changeAtmosphereImage(1);
+              if (keyEvent.key !== 'Tab') return;
+
+              const controls = Array.from(
+                keyEvent.currentTarget.querySelectorAll<HTMLButtonElement>(
+                  'button:not([disabled])',
+                ),
+              );
+              const firstControl = controls[0];
+              const lastControl = controls[controls.length - 1];
+              if (!firstControl || !lastControl) return;
+              if (keyEvent.shiftKey && document.activeElement === firstControl) {
+                keyEvent.preventDefault();
+                lastControl.focus();
+              } else if (
+                !keyEvent.shiftKey &&
+                document.activeElement === lastControl
+              ) {
+                keyEvent.preventDefault();
+                firstControl.focus();
+              }
+            }}
+            className="absolute inset-0 z-[60] flex items-center justify-center bg-[#171025]/90 p-3 backdrop-blur-md sm:p-6"
+          >
+            <div className="relative h-full max-h-[720px] w-full max-w-[1080px] overflow-hidden rounded-[18px] border border-white/20 bg-[#21172f] shadow-[0_30px_90px_rgba(0,0,0,.55)]">
+              <Image
+                src={activeAtmosphereUrl}
+                alt={`ภาพบรรยากาศภายใน ${event.name} ลำดับ ${atmosphereIndex + 1}`}
+                fill
+                unoptimized
+                priority
+                sizes="100vw"
+                className="object-contain"
+              />
+              <button
+                type="button"
+                autoFocus
+                onClick={closeAtmosphereViewer}
+                aria-label="ปิดภาพบรรยากาศแบบเต็ม"
+                className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-[#1f1730]/75 text-white shadow-lg backdrop-blur transition hover:bg-[#5d27db] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                <X aria-hidden className="h-5 w-5" />
+              </button>
+              {galleryUrls.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => changeAtmosphereImage(-1)}
+                    aria-label="ดูภาพบรรยากาศก่อนหน้า"
+                    className="absolute left-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-[#1f1730]/70 text-white shadow-lg backdrop-blur transition hover:bg-[#5d27db] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:left-5"
+                  >
+                    <ChevronLeft aria-hidden className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeAtmosphereImage(1)}
+                    aria-label="ดูภาพบรรยากาศถัดไป"
+                    className="absolute right-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-[#1f1730]/70 text-white shadow-lg backdrop-blur transition hover:bg-[#5d27db] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:right-5"
+                  >
+                    <ChevronRight aria-hidden className="h-5 w-5" />
+                  </button>
+                </>
+              ) : null}
+              <span className="absolute bottom-3 left-3 rounded-full bg-[#1f1730]/75 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
+                บรรยากาศภายใน {event.name} · ภาพที่ {atmosphereIndex + 1} จาก{' '}
+                {galleryUrls.length}
+              </span>
             </div>
           </section>
         ) : null}
