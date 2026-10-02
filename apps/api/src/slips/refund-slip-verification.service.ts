@@ -1,15 +1,30 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
+  GatewayTimeoutException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, RefundStatus, SlipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SLIP_VERIFIER } from './slip-verifier.interface';
-import type { SlipVerifier } from './slip-verifier.interface';
+import type {
+  SlipVerificationResult,
+  SlipVerifier,
+} from './slip-verifier.interface';
 
 const REFUND_PAYOUT_EVIDENCE_KIND = 'REFUND_PAYOUT_SLIP';
+const INVALID_SLIP_MESSAGES = new Set([
+  'ไฟล์สลิปต้องเป็นภาพที่รองรับ',
+  'ภาพสลิปไม่ชัดเจนหรือไม่ถูกต้อง',
+  'ไม่พบ QR Code ในภาพสลิป',
+  'QR Code ในสลิปไม่ถูกต้อง',
+  'QR Code ในสลิปหมดอายุหรือไม่พบรายการ',
+  'ยอดในสลิปไม่ตรงกับยอดคืนเงินที่อนุมัติ',
+  'บัญชีผู้รับเงินในสลิปไม่ตรงกับบัญชีที่กำหนด',
+]);
 
 export interface RefundPayoutEvidence {
   kind: typeof REFUND_PAYOUT_EVIDENCE_KIND;
@@ -61,14 +76,31 @@ export class RefundSlipVerificationService {
   async verifyAndStore(
     request: RefundPayoutVerificationRequest,
   ): Promise<RefundPayoutVerificationResponse> {
-    const result = await this.verifier.verify({
-      slipImageUrl: request.slipImageUrl,
-      expectedAmount: request.expectedAmount,
-      purpose: 'REFUND_PAYOUT',
-    });
+    let result: SlipVerificationResult;
+    try {
+      result = await this.verifier.verify({
+        slipImageUrl: request.slipImageUrl,
+        expectedAmount: request.expectedAmount,
+        purpose: 'REFUND_PAYOUT',
+      });
+    } catch (error) {
+      throw refundVerifierFailure(error);
+    }
 
     if (result.status === SlipStatus.DUPLICATE) {
       throw new ConflictException('สลิปนี้เคยถูกใช้แล้ว');
+    }
+    if (result.status === SlipStatus.ERROR) {
+      throw new BadGatewayException(
+        'ยังตรวจสอบสลิปคืนเงินไม่ได้ กรุณาลองใหม่ภายหลัง',
+      );
+    }
+    if (result.status === SlipStatus.INVALID) {
+      throw new BadRequestException(
+        result.message && INVALID_SLIP_MESSAGES.has(result.message)
+          ? result.message
+          : 'สลิปคืนเงินไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่',
+      );
     }
     if (result.status !== SlipStatus.VERIFIED) {
       throw new BadRequestException('SlipOK ไม่สามารถยืนยันสลิปคืนเงินนี้ได้');
@@ -144,6 +176,40 @@ export class RefundSlipVerificationService {
       nameMismatchWarning,
     };
   }
+}
+
+function refundVerifierFailure(error: unknown): Error {
+  // The adapter emits fixed, sanitized messages. Never forward an upstream
+  // response body, signed URL, key, or an arbitrary verifier exception.
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'SlipOK request timed out') {
+    return new GatewayTimeoutException(
+      'การตรวจสอบสลิปใช้เวลานานเกินไป กรุณาลองใหม่ภายหลัง',
+    );
+  }
+  if (
+    message === 'SlipOK service is unavailable' ||
+    /^SlipOK request failed with provider code (1009|1010)$/.test(message)
+  ) {
+    return new ServiceUnavailableException(
+      'ผู้ให้บริการตรวจสลิปหรือธนาคารยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
+    );
+  }
+  if (
+    /^SlipOK request failed with provider code (1001|1002|1003|1004)$/.test(
+      message,
+    )
+  ) {
+    return new ServiceUnavailableException(
+      'บริการตรวจสลิปยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
+    );
+  }
+  if (message.startsWith('SlipOK ')) {
+    return new BadGatewayException(
+      'ผู้ให้บริการตรวจสลิปตอบกลับไม่ถูกต้อง กรุณาลองใหม่ภายหลัง',
+    );
+  }
+  return error instanceof Error ? error : new Error('Slip verification failed');
 }
 
 export function parseRefundPayoutEvidence(
