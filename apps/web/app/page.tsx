@@ -51,6 +51,7 @@ import {
   getEvents,
   getPublicAnnouncements,
   getSavedEventIds,
+  getVenueLocation,
   saveEvent,
   unsaveEvent,
   type AdminAnnouncement,
@@ -58,6 +59,7 @@ import {
   type EventMap,
   type EventReviewsPage,
   type EventZone,
+  type VenueLocation,
 } from '@/lib/api';
 import { SavedEventsSection } from '@/components/saved-events-section';
 import { getEventCoverUrl } from '@/lib/event-cover';
@@ -78,7 +80,14 @@ import {
   type AnnouncementLoadStatus,
 } from '@/lib/home-announcement-filters';
 import { isEventBookable } from '@/lib/event-booking-rules';
-import { safePublicHttpUrl, summarizeEventZones } from '@/lib/event-detail-view-model';
+import {
+  googleMapsDirectionsUrl,
+  googleMapsEmbedUrl,
+  parseVenueCoordinates,
+  safePublicHttpsUrl,
+  safePublicHttpUrl,
+  summarizeEventZones,
+} from '@/lib/event-detail-view-model';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -99,6 +108,20 @@ function formatDateRange(event: DiscoveryEvent) {
   return `${dateFormatter.format(new Date(event.startDate))} – ${dateFormatter.format(
     new Date(event.endDate),
   )}`;
+}
+
+function replaceEventPopupUrl(slug: string | null) {
+  const url = new URL(window.location.href);
+  if (slug) {
+    url.searchParams.set('event', slug);
+  } else {
+    url.searchParams.delete('event');
+  }
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
 }
 
 export default function DiscoveryPage() {
@@ -154,6 +177,20 @@ export default function DiscoveryPage() {
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (loading || events.length === 0 || selectedEvent) return;
+    const requestedSlug = new URLSearchParams(window.location.search).get(
+      'event',
+    );
+    if (!requestedSlug) return;
+    const requestedEvent = events.find((event) => event.slug === requestedSlug);
+    if (requestedEvent) {
+      setSelectedEvent(requestedEvent);
+    } else {
+      replaceEventPopupUrl(null);
+    }
+  }, [events, loading, selectedEvent]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -421,6 +458,7 @@ export default function DiscoveryPage() {
     opener: HTMLButtonElement,
   ) {
     eventOpenerRef.current = opener;
+    replaceEventPopupUrl(event.slug);
     setSelectedEvent(event);
   }
 
@@ -942,8 +980,10 @@ export default function DiscoveryPage() {
           announcements={announcements}
           onRequestClose={closeEventPopup}
           onClosed={() => {
+            replaceEventPopupUrl(null);
             setSelectedEvent(null);
             eventOpenerRef.current?.focus();
+            eventOpenerRef.current = null;
           }}
         />
       ) : null}
@@ -1229,6 +1269,11 @@ type EventPopupReviewsState =
   | { status: 'ready'; data: EventReviewsPage }
   | { status: 'error' };
 
+type EventPopupVenueState =
+  | { status: 'loading' }
+  | { status: 'ready'; venue: VenueLocation }
+  | { status: 'error'; message: string };
+
 function EventPopup({
   dialogRef,
   event,
@@ -1301,7 +1346,6 @@ function EventPopup({
   const facebookUrl = safePublicHttpUrl(organizer?.facebookUrl ?? null);
   const contactPhone = eventMap?.event.contactPhone ?? organizer?.contactPhone;
   const contactEmail = eventMap?.event.contactEmail ?? organizer?.contactEmail;
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${event.venue.name} ${event.venue.address ?? ''}`)}`;
   const categories = [
     ...new Set([
       ...event.categories.map((category) => category.name),
@@ -1525,11 +1569,7 @@ function EventPopup({
             </EventPopupSection>
 
             <EventPopupSection icon={MapPin} title="การเดินทางเข้างาน">
-              <strong className="block text-xs text-[#31254b]">{event.venue.name}</strong>
-              <p className="mt-1 text-xs leading-5 text-[#777083]">{event.venue.address || 'ยังไม่ได้ระบุที่อยู่'}</p>
-              <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-[#cdb5f5] text-xs font-extrabold text-[#6330c6] hover:bg-[#f5f0ff]">
-                เปิดเส้นทางใน Google Maps <ArrowRight aria-hidden className="h-4 w-4" />
-              </a>
+              <EventPopupVenueMap event={event} />
             </EventPopupSection>
 
             <EventPopupSection icon={Star} title="รีวิวจากผู้เข้าร่วมงาน" className="lg:col-span-2">
@@ -1687,6 +1727,125 @@ function EventPopupSection({
       </h2>
       {children}
     </section>
+  );
+}
+
+function EventPopupVenueMap({ event }: { event: DiscoveryEvent }) {
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadState, setLoadState] = useState<EventPopupVenueState>({
+    status: 'loading',
+  });
+  const [mapProviderFailed, setMapProviderFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadState({ status: 'loading' });
+    setMapProviderFailed(false);
+    getVenueLocation(event.venue.id, controller.signal)
+      .then((venue) => setLoadState({ status: 'ready', venue }))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setLoadState({
+          status: 'error',
+          message:
+            cause instanceof Error
+              ? cause.message
+              : 'โหลดตำแหน่งสถานที่ไม่สำเร็จ',
+        });
+      });
+    return () => controller.abort();
+  }, [event.venue.id, loadAttempt]);
+
+  const venue = loadState.status === 'ready' ? loadState.venue : null;
+  const coordinates = venue
+    ? parseVenueCoordinates(venue.latitude, venue.longitude)
+    : null;
+  const directionsUrl = venue
+    ? safePublicHttpsUrl(venue.googleMapsUrl) ??
+      (coordinates ? googleMapsDirectionsUrl(coordinates) : null)
+    : null;
+  const venueName = venue?.name ?? event.venue.name;
+
+  return (
+    <div aria-busy={loadState.status === 'loading'}>
+      <strong className="block text-xs text-[#31254b]">
+        {venueName}
+      </strong>
+      <p className="mt-1 text-xs leading-5 text-[#777083]">
+        {venue?.address ?? event.venue.address ?? 'ยังไม่ได้ระบุที่อยู่'}
+      </p>
+
+      {loadState.status === 'loading' ? (
+        <div
+          aria-label="กำลังโหลดแผนที่การเดินทาง"
+          className="skeleton mt-3 h-[132px] rounded-xl"
+        />
+      ) : loadState.status === 'error' ? (
+        <div className="mt-3 rounded-xl border border-[#f1d5da] bg-[#fff7f8] p-3">
+          <p role="alert" className="text-xs leading-5 text-[#9d2940]">
+            {loadState.message}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+            className="mt-2 text-xs font-extrabold text-[#6330c6] hover:underline"
+          >
+            ลองโหลดอีกครั้ง
+          </button>
+        </div>
+      ) : coordinates && !mapProviderFailed ? (
+        <div className="relative mt-3 h-[132px] overflow-hidden rounded-xl border border-[#ddd4ea] bg-[#f5f2fb]">
+          <iframe
+            title={`แผนที่การเดินทางไป ${venueName}`}
+            src={googleMapsEmbedUrl(coordinates)}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            onError={() => setMapProviderFailed(true)}
+            className="pointer-events-none h-full w-full border-0"
+          />
+          {directionsUrl ? (
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`เปิดเส้นทางไป ${venueName} ใน Google Maps`}
+              className="absolute inset-0 flex items-end justify-end p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-violet"
+            >
+              <span className="rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-extrabold text-[#6330c6] shadow-md backdrop-blur">
+                กดเปิดแผนที่
+              </span>
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mt-3 grid min-h-[108px] place-items-center rounded-xl border border-dashed border-[#d9cfea] bg-[#faf8fe] p-4 text-center">
+          <div>
+            <MapPin aria-hidden className="mx-auto h-6 w-6 text-[#7c3aed]" />
+            <p className="mt-2 text-[11px] leading-5 text-[#777083]">
+              {mapProviderFailed
+                ? 'ไม่สามารถแสดงตัวอย่างแผนที่ได้'
+                : 'สถานที่นี้ยังไม่ได้บันทึกพิกัดแผนที่'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {directionsUrl ? (
+        <a
+          href={directionsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-[#cdb5f5] text-xs font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff]"
+        >
+          เปิดเส้นทางใน Google Maps
+          <ArrowRight aria-hidden className="h-4 w-4" />
+        </a>
+      ) : loadState.status === 'ready' ? (
+        <span className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-full border border-[#e2dce9] bg-[#faf9fc] px-3 text-center text-[11px] font-bold text-[#81798f]">
+          ยังไม่มีลิงก์เส้นทางสำหรับสถานที่นี้
+        </span>
+      ) : null}
+    </div>
   );
 }
 
