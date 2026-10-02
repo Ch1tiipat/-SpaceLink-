@@ -25,6 +25,7 @@ import { CreateEventInformationDto } from './dto/create-event-information.dto';
 import { CreateEventJoinInformationDto } from './dto/create-event-join-information.dto';
 import { ReorderEventInformationDto } from './dto/reorder-event-information.dto';
 import { ReorderEventJoinInformationDto } from './dto/reorder-event-join-information.dto';
+import { RepeatEventDto } from './dto/repeat-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { UpdateEventInformationDto } from './dto/update-event-information.dto';
 import { UpdateEventJoinInformationDto } from './dto/update-event-join-information.dto';
@@ -69,6 +70,30 @@ export class OrganizationEventsController {
     @Body() input: CreateEventDto,
   ) {
     return this.eventsService.create(input, organizationId);
+  }
+
+  @Post(':eventId/repeat/quote')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  quoteRepeat(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: RepeatEventDto,
+  ) {
+    return this.eventsService.quoteRepeat(eventId, input, organizationId);
+  }
+
+  @Post(':eventId/repeat')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  repeat(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @Body() input: RepeatEventDto,
+  ) {
+    return this.eventsService.repeat(eventId, input, organizationId);
   }
 
   /**

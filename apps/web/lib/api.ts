@@ -743,6 +743,14 @@ export type AdminOrganizationEvent = EventSummary & {
   information: EventInformation[];
 };
 
+export type RepeatAdminEventInput = {
+  startDate: string;
+  endDate: string;
+  startTime?: string;
+  endTime?: string;
+  expectedFinalPrice?: string;
+};
+
 export type SaveEventJoinInformationInput = {
   title: string;
   content: string;
@@ -2035,6 +2043,34 @@ export function createAdminEvent(
     input,
     { token },
     'สร้างอีเวนต์ไม่สำเร็จ',
+  );
+}
+
+export function quoteRepeatAdminEvent(
+  organizationId: string,
+  eventId: string,
+  input: RepeatAdminEventInput,
+  token: string,
+): Promise<EventSubscriptionQuote> {
+  return postJson<EventSubscriptionQuote>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/repeat/quote`,
+    input,
+    { token },
+    'คำนวณค่าบริการรอบใหม่ไม่สำเร็จ',
+  );
+}
+
+export function repeatAdminEvent(
+  organizationId: string,
+  eventId: string,
+  input: RepeatAdminEventInput,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return postJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/repeat`,
+    input,
+    { token },
+    'สร้างอีเวนต์รอบใหม่ไม่สำเร็จ',
   );
 }
 

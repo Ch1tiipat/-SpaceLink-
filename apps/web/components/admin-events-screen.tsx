@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowDown,
   ArrowUp,
@@ -54,7 +55,9 @@ import {
   getAdminVenues,
   openAdminEvent,
   publishAdminEvent,
+  quoteRepeatAdminEvent,
   quoteAdminEventSubscription,
+  repeatAdminEvent,
   reorderAdminEventInformation,
   reorderAdminEventJoinInformation,
   updateAdminEventInformation,
@@ -69,8 +72,13 @@ import {
   type EventJoinInformation,
   type EventInformation,
   type EventInformationType,
+  type RepeatAdminEventInput,
 } from '@/lib/api';
 import { getEventCoverUrl } from '@/lib/event-cover';
+import {
+  handleRepeatEventDialogKeyboard,
+  restoreRepeatEventDialogFocus,
+} from '@/lib/repeat-event-dialog-keyboard';
 
 type EventFilter = 'ALL' | AdminOrganizationEvent['status'];
 
@@ -119,6 +127,9 @@ export function AdminEventsScreen() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [repeatEvent, setRepeatEvent] = useState<AdminOrganizationEvent | null>(
+    null,
+  );
   const [notice, setNotice] = useState('');
   const [busyAction, setBusyAction] = useState('');
   const [galleryEvent, setGalleryEvent] =
@@ -505,6 +516,18 @@ export function AdminEventsScreen() {
                               : 'ปิดอีเวนต์'}
                         </button>
                       ) : null}
+                      {displayedStatus === 'COMPLETED' &&
+                      organization?.accessSource === 'MEMBERSHIP' ? (
+                        <button
+                          type="button"
+                          onClick={() => setRepeatEvent(event)}
+                          disabled={Boolean(busyAction)}
+                          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet px-4 text-xs font-extrabold text-white disabled:opacity-50"
+                        >
+                          <CalendarClock className="h-4 w-4" aria-hidden />
+                          จัดงานอีกครั้ง
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setBannerEvent(event)}
@@ -569,6 +592,21 @@ export function AdminEventsScreen() {
             onCreated={(message) => {
               setCreateOpen(false);
               setNotice(message);
+              setReloadKey((value) => value + 1);
+            }}
+          />
+        ) : null}
+
+        {repeatEvent && token && organizationId ? (
+          <RepeatEventDialog
+            key={repeatEvent.id}
+            event={repeatEvent}
+            organizationId={organizationId}
+            token={token}
+            onClose={() => setRepeatEvent(null)}
+            onCreated={() => {
+              setRepeatEvent(null);
+              setNotice('สร้างอีเวนต์รอบใหม่และค่าบริการสถานะร่างแล้ว');
               setReloadKey((value) => value + 1);
             }}
           />
@@ -1789,6 +1827,7 @@ function CreateEventDialog({
   onClose: () => void;
   onCreated: (message: string) => void;
 }) {
+  const [isMounted, setIsMounted] = useState(false);
   const [input, setInput] = useState<CreateAdminEventInput>({
     venueId: venues[0]?.id ?? '',
     name: '',
@@ -1804,6 +1843,8 @@ function CreateEventDialog({
   const [banner, setBanner] = useState<PendingBannerFile | null>(null);
   const inputRevision = useRef(0);
   const bannerRef = useRef(banner);
+
+  useEffect(() => setIsMounted(true), []);
 
   useEffect(() => {
     bannerRef.current = banner;
@@ -1899,16 +1940,18 @@ function CreateEventDialog({
     setError('');
   }
 
-  return (
+  if (!isMounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4"
+      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-[#24172f]/45 p-4"
       role="presentation"
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-event-title"
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -2097,7 +2140,260 @@ function CreateEventDialog({
           </div>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body,
+  );
+}
+
+function RepeatEventDialog({
+  event,
+  organizationId,
+  token,
+  onClose,
+  onCreated,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [isMounted, setIsMounted] = useState(false);
+  const [input, setInput] = useState<RepeatAdminEventInput>({
+    startDate: '',
+    endDate: '',
+    startTime: '',
+    endTime: '',
+  });
+  const [quote, setQuote] = useState<EventSubscriptionQuote | null>(null);
+  const [busy, setBusy] = useState<'quote' | 'create' | ''>('');
+  const [error, setError] = useState('');
+  const revision = useRef(0);
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => setIsMounted(true), []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closeButtonRef.current?.focus();
+
+    function onKeyDown(keyEvent: KeyboardEvent) {
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      handleRepeatEventDialogKeyboard(
+        keyEvent,
+        focusable,
+        document.activeElement,
+        () => onCloseRef.current(),
+      );
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      restoreRepeatEventDialogFocus(previousFocusRef.current);
+    };
+  }, [isMounted]);
+
+  function update(key: keyof RepeatAdminEventInput, value: string) {
+    setInput((current) => ({ ...current, [key]: value }));
+    revision.current += 1;
+    setQuote(null);
+    setError('');
+  }
+
+  function cleanedInput(): RepeatAdminEventInput {
+    return {
+      startDate: input.startDate,
+      endDate: input.endDate,
+      ...(input.startTime ? { startTime: input.startTime } : {}),
+      ...(input.endTime ? { endTime: input.endTime } : {}),
+    };
+  }
+
+  async function calculate(submitEvent: FormEvent) {
+    submitEvent.preventDefault();
+    setBusy('quote');
+    setError('');
+    const currentRevision = revision.current;
+    try {
+      const result = await quoteRepeatAdminEvent(
+        organizationId,
+        event.id,
+        cleanedInput(),
+        token,
+      );
+      if (currentRevision === revision.current) setQuote(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'คำนวณราคาไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function create() {
+    if (!quote || busy) return;
+    setBusy('create');
+    setError('');
+    try {
+      await repeatAdminEvent(
+        organizationId,
+        event.id,
+        { ...cleanedInput(), expectedFinalPrice: quote.finalPrice },
+        token,
+      );
+      onCreated();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'สร้างอีเวนต์รอบใหม่ไม่สำเร็จ',
+      );
+    } finally {
+      setBusy('');
+    }
+  }
+
+  if (!isMounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-[#24172f]/45 p-4"
+      role="presentation"
+    >
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="repeat-event-title"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[1px] text-violet">
+              รอบใหม่ของอีเวนต์
+            </p>
+            <h2
+              id="repeat-event-title"
+              className="mt-1 text-2xl font-black text-ink"
+            >
+              จัดงานอีกครั้ง
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              {event.name} · {event.venue.name}
+            </p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="ปิด"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-[#e4ddea]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-4 rounded-xl bg-[#faf7ff] p-3 text-sm leading-6 text-muted">
+          ระบบจะคัดลอกรายละเอียดและภาพของงานเดิม
+          แต่ไม่คัดลอกการจองหรือข้อมูลการเงิน
+          รอบใหม่เริ่มเป็นฉบับร่างและคิดค่าบริการใหม่
+        </p>
+        <form onSubmit={calculate} className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Field label="วันเริ่มรอบใหม่">
+            <input
+              required
+              type="date"
+              value={input.startDate}
+              onChange={(changeEvent) =>
+                update('startDate', changeEvent.target.value)
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field label="วันสิ้นสุดรอบใหม่">
+            <input
+              required
+              type="date"
+              min={input.startDate || undefined}
+              value={input.endDate}
+              onChange={(changeEvent) =>
+                update('endDate', changeEvent.target.value)
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field label="เวลาเริ่ม">
+            <input
+              type="time"
+              value={input.startTime}
+              onChange={(changeEvent) =>
+                update('startTime', changeEvent.target.value)
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field label="เวลาสิ้นสุด">
+            <input
+              type="time"
+              value={input.endTime}
+              onChange={(changeEvent) =>
+                update('endTime', changeEvent.target.value)
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          {error ? (
+            <p
+              role="alert"
+              className="sm:col-span-2 rounded-xl bg-[#fff0ef] px-4 py-3 text-sm font-bold text-[#b42318]"
+            >
+              {error}
+            </p>
+          ) : null}
+          {quote ? <QuoteCard quote={quote} /> : null}
+          <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-10 rounded-xl border border-[#ddd4e7] px-4 text-sm font-bold text-muted"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={Boolean(busy)}
+              className="h-10 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet disabled:opacity-50"
+            >
+              {busy === 'quote'
+                ? 'กำลังคำนวณ…'
+                : quote
+                  ? 'คำนวณใหม่'
+                  : 'ดูค่าบริการ'}
+            </button>
+            {quote ? (
+              <button
+                type="button"
+                onClick={() => void create()}
+                disabled={Boolean(busy)}
+                className="h-10 rounded-xl bg-violet px-5 text-sm font-extrabold text-white disabled:opacity-50"
+              >
+                {busy === 'create' ? 'กำลังสร้าง…' : 'ยืนยันสร้างรอบใหม่'}
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

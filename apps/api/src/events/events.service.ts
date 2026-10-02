@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { RepeatEventDto } from './dto/repeat-event.dto';
 import { ActivateSubscriptionDto } from './dto/activate-subscription.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { decimalString } from '../common/decimal';
@@ -121,6 +122,183 @@ export class EventsService {
     }
 
     throw new Error('Event slug generation attempts exhausted');
+  }
+
+  quoteRepeat(eventId: string, input: RepeatEventDto, organizationId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const source = await this.findRepeatSource(
+        transaction,
+        eventId,
+        organizationId,
+      );
+      validateRepeatDates(input);
+      const quote = await this.buildSubscriptionQuote(
+        transaction,
+        { ...input, venueId: source.venueId, name: source.name },
+        organizationId,
+      );
+      return serializeQuote(quote);
+    });
+  }
+
+  async repeat(eventId: string, input: RepeatEventDto, organizationId: string) {
+    for (let attempt = 1; attempt <= MAX_EVENT_SLUG_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (transaction) => {
+            const source = await this.findRepeatSource(
+              transaction,
+              eventId,
+              organizationId,
+            );
+            validateRepeatDates(input);
+            const existingRound = await transaction.event.findFirst({
+              where: {
+                organizationId,
+                venueId: source.venueId,
+                name: source.name,
+                startDate: dateValue(input.startDate),
+                endDate: dateValue(input.endDate),
+              },
+              select: { id: true },
+            });
+            if (existingRound) {
+              throw new ConflictException('มีอีเวนต์นี้ในช่วงวันที่เลือกแล้ว');
+            }
+
+            const quote = await this.buildSubscriptionQuote(
+              transaction,
+              { ...input, venueId: source.venueId, name: source.name },
+              organizationId,
+            );
+            if (
+              input.expectedFinalPrice === undefined ||
+              !quote.finalPrice.equals(input.expectedFinalPrice)
+            ) {
+              throw new BadRequestException(
+                'ค่าบริการเปลี่ยนไป กรุณาคำนวณราคาใหม่ก่อนสร้างรอบใหม่',
+              );
+            }
+
+            const event = await transaction.event.create({
+              data: {
+                organizationId,
+                venueId: source.venueId,
+                name: source.name,
+                slug: generateEventSlug(source.name),
+                description: source.description,
+                contactPhone: source.contactPhone,
+                contactEmail: source.contactEmail,
+                mapImageUrl: source.mapImageUrl,
+                startDate: dateValue(input.startDate),
+                endDate: dateValue(input.endDate),
+                startTime: input.startTime,
+                endTime: input.endTime,
+                bannerUrl: source.bannerUrl,
+                galleryUrls: galleryUrlArray(source.galleryUrls),
+                status: EventStatus.DRAFT,
+                joinInformation: {
+                  create: source.joinInformation.map((item) => ({
+                    title: item.title,
+                    content: item.content,
+                    sortOrder: item.sortOrder,
+                  })),
+                },
+                information: {
+                  create: source.information.map((item) => ({
+                    title: item.title,
+                    description: item.description,
+                    type: item.type,
+                    sortOrder: item.sortOrder,
+                  })),
+                },
+                ...(source.policy
+                  ? {
+                      policy: {
+                        create: {
+                          generalRules: source.policy.generalRules,
+                          cancellationPolicy: source.policy.cancellationPolicy,
+                          refundPolicy: source.policy.refundPolicy,
+                          noShowDeductionPercent:
+                            source.policy.noShowDeductionPercent,
+                        },
+                      },
+                    }
+                  : {}),
+              },
+              include: {
+                joinInformation: { orderBy: { sortOrder: 'asc' } },
+                information: { orderBy: { sortOrder: 'asc' } },
+              },
+            });
+            const subscription = await transaction.subscription.create({
+              data: {
+                organizationId,
+                eventId: event.id,
+                status: SubscriptionStatus.DRAFT,
+                baseFee: quote.values.baseFee,
+                zoneCount: quote.zoneCount,
+                perZoneRate: quote.values.perZoneRate,
+                eventDays: quote.eventDays,
+                perDayRate: quote.values.perDayRate,
+                calculatedPrice: quote.calculatedPrice,
+                priceMin: quote.values.priceMin,
+                priceMax: quote.values.priceMax,
+                finalPrice: quote.finalPrice,
+                isOverMax: quote.isOverMax,
+              },
+            });
+            return {
+              ...withGalleryUrls(event),
+              venue: quote.venue,
+              subscription: serializeSubscription(subscription),
+            };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          attempt < MAX_EVENT_SLUG_ATTEMPTS &&
+          (isEventSlugConflict(error) || isSerializationConflict(error))
+        ) {
+          continue;
+        }
+        if (isSerializationConflict(error)) {
+          throw new ConflictException(
+            'มีการสร้างรอบใหม่พร้อมกัน กรุณาโหลดรายการใหม่',
+          );
+        }
+        throw error;
+      }
+    }
+    throw new Error('Event slug generation attempts exhausted');
+  }
+
+  private async findRepeatSource(
+    transaction: Prisma.TransactionClient,
+    eventId: string,
+    organizationId: string,
+  ) {
+    const source = await transaction.event.findFirst({
+      where: { id: eventId, organizationId },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
+        policy: true,
+      },
+    });
+    if (!source) throw new NotFoundException('Event not found');
+    if (
+      (source.status !== EventStatus.PUBLISHED &&
+        source.status !== EventStatus.ONGOING &&
+        source.status !== EventStatus.COMPLETED) ||
+      source.endDate.toISOString().slice(0, 10) >= bangkokToday()
+    ) {
+      throw new BadRequestException(
+        'จัดงานอีกครั้งได้หลังอีเวนต์จบแล้วเท่านั้น',
+      );
+    }
+    return source;
   }
 
   quoteSubscription(createEventDto: CreateEventDto, organizationId: string) {
@@ -871,6 +1049,32 @@ function inclusiveDays(startValue: string, endValue: string): number {
   return Math.floor(difference / 86_400_000) + 1;
 }
 
+function bangkokToday(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function validateRepeatDates(input: RepeatEventDto): void {
+  inclusiveDays(input.startDate, input.endDate);
+  const bangkokNow = new Date(Date.now() + 7 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
+  if (
+    input.startDate < bangkokNow.slice(0, 10) ||
+    (input.startDate === bangkokNow.slice(0, 10) &&
+      (!input.startTime || input.startTime <= bangkokNow.slice(11)))
+  ) {
+    throw new BadRequestException('วันและเวลาเริ่มรอบใหม่ต้องอยู่ในอนาคต');
+  }
+  if (
+    input.startDate === input.endDate &&
+    input.startTime &&
+    input.endTime &&
+    input.endTime <= input.startTime
+  ) {
+    throw new BadRequestException('เวลาสิ้นสุดต้องหลังเวลาเริ่ม');
+  }
+}
+
 function dateValue(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`);
   if (
@@ -910,6 +1114,13 @@ function isEventSlugConflict(error: unknown): boolean {
   }
 
   return typeof target === 'string' && target.includes('slug');
+}
+
+function isSerializationConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2034'
+  );
 }
 
 function serializeQuote(quote: SubscriptionQuoteCalculation) {

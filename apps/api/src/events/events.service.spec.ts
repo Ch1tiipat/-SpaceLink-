@@ -428,6 +428,183 @@ describe('EventsService', () => {
     });
   });
 
+  describe('repeat an ended event', () => {
+    const venueId = '00000000-0000-4000-8000-0000000000b1';
+    const source = {
+      id: eventId,
+      organizationId: orgId,
+      venueId,
+      name: 'Spacelink',
+      description: 'Market',
+      contactPhone: '0812345678',
+      contactEmail: 'organizer@example.com',
+      mapImageUrl: 'https://example.com/map.png',
+      startDate: new Date('2026-09-01T00:00:00.000Z'),
+      endDate: new Date('2026-09-02T00:00:00.000Z'),
+      status: EventStatus.PUBLISHED,
+      bannerUrl: 'https://example.com/banner.jpg',
+      galleryUrls: ['https://example.com/gallery.jpg'],
+      joinInformation: [{ title: 'Join', content: 'Info', sortOrder: 0 }],
+      information: [
+        {
+          title: 'Inside',
+          description: 'Details',
+          type: 'ATMOSPHERE',
+          sortOrder: 0,
+        },
+      ],
+      policy: {
+        generalRules: 'Rules',
+        cancellationPolicy: 'Cancel',
+        refundPolicy: 'Refund',
+        noShowDeductionPercent: new Prisma.Decimal('70'),
+      },
+    };
+    const input = {
+      startDate: '2099-10-10',
+      endDate: '2099-10-11',
+      startTime: '09:00',
+      endTime: '18:00',
+    };
+
+    beforeEach(() => {
+      venueFindFirst.mockResolvedValue({ id: venueId, name: 'SUT' });
+      zoneCount.mockResolvedValue(4);
+      platformConfigFindFirst.mockResolvedValue(null);
+    });
+
+    it('quotes only an ended event in the scoped organization', async () => {
+      findFirst.mockResolvedValueOnce(source);
+      await expect(
+        service.quoteRepeat(eventId, input, orgId),
+      ).resolves.toMatchObject({
+        eventDays: 2,
+        finalPrice: '900',
+      });
+      expect(findFirst).toHaveBeenCalledWith({
+        where: { id: eventId, organizationId: orgId },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
+          policy: true,
+        },
+      });
+    });
+
+    it('copies only event details and creates a new draft subscription in one transaction', async () => {
+      findFirst.mockResolvedValueOnce(source).mockResolvedValueOnce(null);
+      eventCreate.mockResolvedValue({
+        id: 'new-event',
+        galleryUrls: source.galleryUrls,
+        joinInformation: source.joinInformation,
+        information: source.information,
+      });
+      subscriptionCreate.mockImplementation(({ data }) =>
+        Promise.resolve({ id: 'new-subscription', ...data }),
+      );
+
+      const result = await service.repeat(
+        eventId,
+        { ...input, expectedFinalPrice: '900' },
+        orgId,
+      );
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(eventCreate).toHaveBeenCalledWith({
+        data: {
+          organizationId: orgId,
+          venueId,
+          name: source.name,
+          slug: 'sut-market-abc123',
+          description: source.description,
+          contactPhone: source.contactPhone,
+          contactEmail: source.contactEmail,
+          mapImageUrl: source.mapImageUrl,
+          bannerUrl: source.bannerUrl,
+          galleryUrls: source.galleryUrls,
+          startDate: new Date('2099-10-10T00:00:00.000Z'),
+          endDate: new Date('2099-10-11T00:00:00.000Z'),
+          startTime: '09:00',
+          endTime: '18:00',
+          status: EventStatus.DRAFT,
+          joinInformation: { create: source.joinInformation },
+          information: { create: source.information },
+          policy: { create: source.policy },
+        },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
+        },
+      });
+      expect(subscriptionCreate).toHaveBeenCalledWith({
+        data: {
+          organizationId: orgId,
+          eventId: 'new-event',
+          status: SubscriptionStatus.DRAFT,
+          baseFee: new Prisma.Decimal('500'),
+          zoneCount: 4,
+          perZoneRate: new Prisma.Decimal('50'),
+          eventDays: 2,
+          perDayRate: new Prisma.Decimal('100'),
+          calculatedPrice: new Prisma.Decimal('900'),
+          priceMin: new Prisma.Decimal('500'),
+          priceMax: new Prisma.Decimal('15000'),
+          finalPrice: new Prisma.Decimal('900'),
+          isOverMax: false,
+        },
+      });
+      expect(result.subscription.finalPrice).toBe('900');
+    });
+
+    it('does not create anything for an event in another organization', async () => {
+      findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.repeat(eventId, { ...input, expectedFinalPrice: '900' }, orgId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(eventCreate).not.toHaveBeenCalled();
+    });
+
+    it('does not repeat a currently running event or a duplicate date range', async () => {
+      findFirst.mockResolvedValueOnce({
+        ...source,
+        endDate: new Date('2099-10-11T00:00:00.000Z'),
+      });
+      await expect(
+        service.repeat(eventId, { ...input, expectedFinalPrice: '900' }, orgId),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(eventCreate).not.toHaveBeenCalled();
+
+      findFirst
+        .mockResolvedValueOnce(source)
+        .mockResolvedValueOnce({ id: 'duplicate' });
+      await expect(
+        service.repeat(eventId, { ...input, expectedFinalPrice: '900' }, orgId),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(eventCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an earlier start time on the current Bangkok day', async () => {
+      const now = new Date(Date.now() + 7 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      findFirst.mockResolvedValueOnce(source);
+      await expect(
+        service.repeat(
+          eventId,
+          {
+            ...input,
+            startDate: now,
+            endDate: now,
+            startTime: '00:00',
+            expectedFinalPrice: '900',
+          },
+          orgId,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(eventCreate).not.toHaveBeenCalled();
+    });
+  });
+
   describe('manual subscription activation', () => {
     const input = { reason: 'ตรวจสอบยอดโอนโดยผู้ดูแลระบบแล้ว' };
     const activeSubscription = {
