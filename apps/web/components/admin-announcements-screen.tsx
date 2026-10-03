@@ -8,7 +8,6 @@ import {
   Edit3,
   Loader2,
   Megaphone,
-  Plus,
   Save,
   Trash2,
 } from 'lucide-react';
@@ -265,8 +264,6 @@ export function AdminAnnouncementsScreen() {
           <AdminPanel
             title="ประกาศขององค์กร"
             count={announcements.length}
-            actionLabel="สร้างประกาศ"
-            onAction={startCreate}
           >
             <EntityList
               loading={loading}
@@ -331,30 +328,17 @@ export function AdminAnnouncementsScreen() {
 function AdminPanel({
   title,
   count,
-  actionLabel,
-  onAction,
   children,
 }: {
   title: string;
   count: number;
-  actionLabel: string;
-  onAction: () => void;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-[28px] border border-line bg-white p-5 shadow-[0_20px_50px_rgba(54,36,91,0.06)] sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black text-ink">{title}</h2>
-          <p className="text-xs text-muted">{count} รายการ</p>
-        </div>
-        <button
-          type="button"
-          onClick={onAction}
-          className="flex items-center gap-2 rounded-xl bg-violet px-4 py-2.5 text-xs font-extrabold text-white"
-        >
-          <Plus className="h-4 w-4" aria-hidden /> {actionLabel}
-        </button>
+      <div>
+        <h2 className="text-xl font-black text-ink">{title}</h2>
+        <p className="text-xs text-muted">{count} รายการ</p>
       </div>
       {children}
     </section>
@@ -462,7 +446,11 @@ function AnnouncementEditor({
           className="flex items-center gap-2 rounded-xl bg-[#15803d] px-4 py-2.5 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Save className="h-4 w-4" aria-hidden />
-          {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+          {saving
+            ? 'กำลังบันทึก...'
+            : mode === 'edit'
+              ? 'บันทึกการแก้ไข'
+              : 'สร้างประกาศ'}
         </button>
         {mode === 'edit' && (
           <button
