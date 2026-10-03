@@ -320,12 +320,12 @@ export default function DiscoveryPage() {
             : 'ยังไม่มีงานหรือสถานที่',
         );
   const areaFilterOptions = loading
-    ? [{ value: '', label: 'กำลังโหลดพื้นที่…' }]
+    ? [{ value: '', label: 'กำลังโหลดจังหวัด…' }]
     : error
-      ? [{ value: '', label: 'โหลดพื้นที่ไม่สำเร็จ' }]
+      ? [{ value: '', label: 'โหลดจังหวัดไม่สำเร็จ' }]
       : withAllOption(
           filters.areas,
-          filters.areas.length > 0 ? 'ทุกพื้นที่' : 'ยังไม่มีข้อมูลพื้นที่',
+          filters.areas.length > 0 ? 'ทุกจังหวัด' : 'ยังไม่มีข้อมูลจังหวัด',
         );
 
   const visibleEvents = useMemo(
@@ -524,6 +524,7 @@ export default function DiscoveryPage() {
             placeholder="ทุกงานหรือสถานที่"
             searchable
             searchPlaceholder="พิมพ์ชื่องานหรือสถานที่"
+            searchMaxLength={50}
             className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.query}
             onChange={(query) =>
@@ -532,10 +533,11 @@ export default function DiscoveryPage() {
             options={eventFilterOptions}
           />
           <SelectMenu
-            label="พื้นที่"
-            placeholder="ทุกพื้นที่"
+            label="จังหวัด"
+            placeholder="ทุกจังหวัด"
             searchable
-            searchPlaceholder="พิมพ์จังหวัดหรือสถานที่"
+            searchPlaceholder="พิมพ์จังหวัด"
+            searchMaxLength={20}
             className="[&_button]:min-h-[58px] [&_input]:min-h-[58px]"
             value={draftFilters.area}
             onChange={(area) =>

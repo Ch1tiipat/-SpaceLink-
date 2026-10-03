@@ -24,10 +24,12 @@ export const EMPTY_HOME_EVENT_FILTERS: HomeEventFilters = {
 };
 
 export function provinceFromAddress(address: string): string {
-  const prefixed = /จังหวัด(\S+)/.exec(address);
+  const normalized = address.trim();
+  const prefixed = /จังหวัด(\S+)/.exec(normalized);
   if (prefixed) return prefixed[1];
-  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
-  return address;
+  if (normalized.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
+  if (/^[ก-๙]{2,20}$/.test(normalized)) return normalized;
+  return '';
 }
 
 export function buildHomeEventFilterOptions(
@@ -51,13 +53,13 @@ export function buildHomeAreaFilterOptions(
   events: DiscoveryEvent[],
 ): HomeFilterOption[] {
   return uniqueHomeFilterOptions(
-    events.flatMap((event) => {
+    events.map((event) => {
       const address = event.venue.address?.trim() ?? '';
       const province = provinceFromAddress(address);
-      return [province, event.venue.name, address].map((area) => ({
-        value: area,
-        label: area,
-      }));
+      return {
+        value: province,
+        label: province,
+      };
     }),
   );
 }

@@ -81,6 +81,11 @@ homeFilterTest('extracts Thai provinces for filter options', () => {
     provinceFromAddress('เขตปทุมวัน กรุงเทพมหานคร'),
     'กรุงเทพมหานคร',
   );
+  homeFilterAssert.equal(provinceFromAddress('นครราชสีมา'), 'นครราชสีมา');
+  homeFilterAssert.equal(
+    provinceFromAddress('111 ถนนมหาวิทยาลัย อำเภอเมือง'),
+    '',
+  );
 });
 
 homeFilterTest(
@@ -120,6 +125,20 @@ homeFilterTest(
     homeFilterAssert.equal(
       areaOptions.filter(({ value }) => value === 'นครราชสีมา').length,
       1,
+    );
+    homeFilterAssert.equal(
+      areaOptions.some(({ value }) => value === 'ลานกิจกรรมกลางเมือง'),
+      false,
+    );
+    homeFilterAssert.equal(
+      areaOptions.some(
+        ({ value }) => value === 'อำเภอเมือง จังหวัดนครราชสีมา',
+      ),
+      false,
+    );
+    homeFilterAssert.deepEqual(
+      areaOptions.map(({ value }) => value),
+      ['นครราชสีมา', 'กรุงเทพมหานคร'],
     );
     homeFilterAssert.ok(areaOptions.every(({ value }) => value.length > 0));
   },
