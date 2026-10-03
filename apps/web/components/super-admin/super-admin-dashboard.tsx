@@ -245,7 +245,7 @@ export function SuperAdminDashboard() {
       ) : null}
 
       <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(310px,.65fr)]">
-        <article className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,.97),rgba(241,232,255,.94))] p-7 shadow-[0_22px_60px_rgba(74,48,112,.1)] sm:p-9">
+        <article className="sl-super-motion-card relative overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,.97),rgba(241,232,255,.94))] p-7 shadow-[0_22px_60px_rgba(74,48,112,.1)] sm:p-9">
           <div aria-hidden className="absolute -right-20 -top-24 h-64 w-64 rounded-full border border-[#7c3aed]/15 shadow-[0_0_0_45px_rgba(124,58,237,.05),0_0_0_90px_rgba(124,58,237,.025)]" />
           <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div><p className="text-[11px] font-extrabold tracking-[.16em] text-[#7c3aed]">TODAY&apos;S FOCUS</p><h2 className="mt-2 text-2xl font-black tracking-[-.04em] text-[#242032]">เรื่องที่ควรจัดการวันนี้</h2><p className="mt-2 text-sm text-[#82788b]">ข้อมูลจริงจากทุกองค์กร เรียงตามงานที่ต้องติดตาม</p></div>
@@ -257,7 +257,7 @@ export function SuperAdminDashboard() {
             <FocusLink href="/super-admin/organizations" value={counts.SUSPENDED + counts.INACTIVE} label="องค์กรที่ควรติดตาม" />
           </div>
         </article>
-        <article className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,#5b21b6,#7c3aed_56%,#9b5cf6)] p-7 text-white shadow-[0_22px_60px_rgba(91,33,182,.24)] sm:p-8">
+        <article className="sl-super-motion-card relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,#5b21b6,#7c3aed_56%,#9b5cf6)] p-7 text-white shadow-[0_22px_60px_rgba(91,33,182,.24)] sm:p-8">
           <div aria-hidden className="absolute -right-12 -top-12 h-40 w-40 rounded-full border border-white/20 shadow-[0_0_0_35px_rgba(255,255,255,.05),0_0_0_70px_rgba(255,255,255,.025)]" />
           <p className="relative text-[11px] font-extrabold tracking-[.16em] text-white/70">PLATFORM SIGNAL</p>
           <p className="relative mt-7 text-5xl font-black tracking-[-.06em]">{bookings.length.toLocaleString('th-TH')}</p>
@@ -381,7 +381,7 @@ export function SuperAdminDashboard() {
       </section>
 
       <section className="mt-[18px] grid gap-[18px] xl:grid-cols-[minmax(0,1.55fr)_minmax(310px,.85fr)]">
-        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+        <article className="sl-super-motion-card overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
           <header className="flex flex-col gap-3 border-b border-[#eee8f4] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">
@@ -433,7 +433,7 @@ export function SuperAdminDashboard() {
           </div>
         </article>
 
-        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+        <article className="sl-super-motion-card overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
           <header className="flex items-center justify-between border-b border-[#eee8f4] px-5 py-4">
             <div>
               <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">
@@ -552,7 +552,7 @@ export function SuperAdminDashboard() {
           )}
         </article>
 
-        <article className="overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
+        <article className="sl-super-motion-card overflow-hidden rounded-2xl border border-[#e5dcf0] bg-white shadow-[0_16px_38px_rgba(74,48,112,.06)]">
           <header className="border-b border-[#eee8f4] px-5 py-4">
             <span className="text-[11px] font-extrabold tracking-[.8px] text-[#7c3aed]">
               RECENT ACTIVITY
@@ -785,7 +785,7 @@ function MetricCard({
   loading: boolean;
 }) {
   return (
-    <article className="group flex items-center gap-3.5 overflow-hidden rounded-[20px] border border-white/75 bg-white/90 p-[18px] shadow-[0_14px_34px_rgba(74,48,112,.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#d9c7ef] hover:shadow-[0_18px_42px_rgba(74,48,112,.11)]">
+    <article className="sl-super-motion-card group flex items-center gap-3.5 overflow-hidden rounded-[20px] border border-white/75 bg-white/90 p-[18px] shadow-[0_14px_34px_rgba(74,48,112,.06)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#d9c7ef] hover:shadow-[0_18px_42px_rgba(74,48,112,.11)]">
       <span
         className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105 ${TONES[tone].icon}`}
       >
@@ -921,6 +921,7 @@ function StatusChart({
         <path d="M55 40H630M55 95H630M55 150H630M55 205H630" />
       </g>
       <polyline
+        pathLength="1"
         points={points}
         fill="none"
         stroke="#7c3aed"

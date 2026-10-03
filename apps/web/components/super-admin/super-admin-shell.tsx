@@ -339,7 +339,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="sl-app-background min-h-screen">
+    <div className="sl-super-shell sl-app-background min-h-screen">
       <header className="sticky top-0 z-30 flex h-[63px] items-center justify-between gap-3 border-b border-[#e8e1f4] bg-[#eee4ff]/95 px-[18px] shadow-[0_8px_28px_rgba(61,43,88,.045)] backdrop-blur-xl lg:h-[72px] lg:px-[30px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -428,7 +428,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
                 <div
                   role="menu"
                   aria-label="เมนูบัญชี"
-                  className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] rounded-2xl border border-[#e7def2] bg-white p-2 shadow-[0_20px_55px_rgba(39,24,63,.18)]"
+                  className="sl-super-popover absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] rounded-2xl border border-[#e7def2] bg-white p-2 shadow-[0_20px_55px_rgba(39,24,63,.18)]"
                 >
                   <p className="border-b border-[#ebe4ef] px-3 py-2 text-xs font-bold text-[#82788b]">
                     บัญชีผู้ดูแลแพลตฟอร์ม
@@ -473,21 +473,21 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
         ) : null}
 
         <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_91%_12%,rgba(169,120,255,.16),transparent_26%),linear-gradient(180deg,rgba(250,247,255,.86),rgba(255,255,255,.22)_44%,rgba(245,240,255,.55))]">
-          <main className="min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]">
+          <main className="sl-super-main min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]">
           {children}
           </main>
         </div>
       </div>
 
       {drawerOpen ? (
-        <div className="fixed inset-0 z-50 bg-[rgba(24,16,38,.5)] backdrop-blur-[2px] lg:hidden">
+        <div className="sl-super-drawer fixed inset-0 z-50 bg-[rgba(24,16,38,.5)] backdrop-blur-[2px] lg:hidden">
           <button
             type="button"
             aria-label="ปิดเมนู"
             onClick={() => setDrawerOpen(false)}
             className="absolute inset-0"
           />
-          <aside className="relative flex h-full w-[min(88vw,340px)] flex-col overflow-y-auto border-r border-[#ebe5ef] bg-white px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] shadow-[18px_0_55px_rgba(35,22,56,.2)]">
+          <aside className="sl-super-drawer-panel relative flex h-full w-[min(88vw,340px)] flex-col overflow-y-auto border-r border-[#ebe5ef] bg-white px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] shadow-[18px_0_55px_rgba(35,22,56,.2)]">
             <button
               type="button"
               onClick={() => setDrawerOpen(false)}
@@ -575,7 +575,7 @@ function NotificationMenu({
     <section
       role="dialog"
       aria-label="รายการแจ้งเตือน Super Admin"
-      className="fixed inset-x-3 top-[72px] z-40 flex max-h-[calc(100dvh-5rem)] flex-col overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(390px,calc(100vw-2rem))]"
+      className="sl-super-popover fixed inset-x-3 top-[72px] z-40 flex max-h-[calc(100dvh-5rem)] flex-col overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(390px,calc(100vw-2rem))]"
     >
       <header className="flex items-start justify-between gap-3 border-b border-[#eee8f3] bg-[linear-gradient(135deg,#fff,#faf7ff)] px-4 py-4">
         <div>
