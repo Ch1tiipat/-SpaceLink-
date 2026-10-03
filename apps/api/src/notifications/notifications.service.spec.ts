@@ -427,7 +427,7 @@ describe('NotificationsService', () => {
     error.mockRestore();
   });
 
-  it('creates an in-app invitation after a completed event', async () => {
+  it('creates an in-app invitation as soon as a booking is confirmed', async () => {
     bookingFindMany.mockResolvedValue([
       {
         id: REVIEW_BOOKING_ID,
@@ -451,16 +451,13 @@ describe('NotificationsService', () => {
 
     expect(bookingFindMany).toHaveBeenCalledWith({
       where: {
-        status: BookingStatus.COMPLETED,
-        event: {
-          endDate: { lte: new Date('2026-08-19T00:00:00.000Z') },
-        },
+        status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
       },
       select: {
         id: true,
         vendorUserId: true,
         vendor: { select: { notificationPreferences: true } },
-        event: { select: { name: true, endDate: true, endTime: true } },
+        event: { select: { name: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
@@ -506,20 +503,8 @@ describe('NotificationsService', () => {
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
-  it('does not invite before the event end time', async () => {
-    bookingFindMany.mockResolvedValue([
-      {
-        id: REVIEW_BOOKING_ID,
-        vendorUserId: USER_ID,
-        vendor: { notificationPreferences: null },
-        event: {
-          name: 'งานเกษตร มทส. 2569',
-          endDate: new Date('2026-08-19T00:00:00.000Z'),
-          endTime: '01:00',
-        },
-        booth: { code: 'A05' },
-      },
-    ]);
+  it('does not query review or notification rows when no confirmed booking is eligible', async () => {
+    bookingFindMany.mockResolvedValue([]);
 
     await expect(service.createReviewEligibilityNotifications()).resolves.toBe(
       0,
