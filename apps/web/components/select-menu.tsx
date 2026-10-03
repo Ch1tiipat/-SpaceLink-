@@ -30,6 +30,8 @@ type SelectMenuProps = {
   /** Lets users narrow a long option list by typing in the trigger. */
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Limits text typed into a searchable trigger. */
+  searchMaxLength?: number;
   className?: string;
 };
 
@@ -57,6 +59,7 @@ export function SelectMenu({
   hideLabel = false,
   searchable = false,
   searchPlaceholder = 'พิมพ์เพื่อค้นหา',
+  searchMaxLength,
   className = '',
 }: SelectMenuProps) {
   const [open, setOpen] = useState(false);
@@ -243,6 +246,7 @@ export function SelectMenu({
             }
             value={open ? searchText : selected?.label ?? ''}
             placeholder={open ? searchPlaceholder : placeholder}
+            maxLength={searchMaxLength}
             onFocus={() => {
               if (!open) openMenu();
             }}
