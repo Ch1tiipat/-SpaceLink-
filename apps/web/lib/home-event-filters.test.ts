@@ -200,7 +200,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['future', 'ended'],
+      ['future'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
@@ -238,7 +238,7 @@ homeFilterTest('filters bookable and closed events independently', () => {
       isBookableForTest,
       NOW,
     ).map(({ id }) => id),
-    ['ended', 'closed'],
+    ['closed'],
   );
   homeFilterAssert.equal(
     hasEventEndCalendarDayPassed(events[2].endDate, NOW),
@@ -249,6 +249,12 @@ homeFilterTest('filters bookable and closed events independently', () => {
 homeFilterTest(
   'keeps status chips compatible with the other home discovery filters',
   () => {
+    const registrationClosed = makeHomeEvent({
+      id: 'closed',
+      name: 'Registration Closed',
+      status: 'DRAFT',
+    });
+
     homeFilterAssert.deepEqual(
       filterHomeEvents(
         events,
@@ -265,7 +271,7 @@ homeFilterTest(
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
-        events,
+        [...events, registrationClosed],
         {
           ...EMPTY_HOME_EVENT_FILTERS,
           area: 'นครราชสีมา',
@@ -275,7 +281,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ended'],
+      ['closed'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
@@ -284,13 +290,13 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['future', 'ongoing', 'ended'],
+      ['future', 'ongoing'],
     );
   },
 );
 
 homeFilterTest(
-  'stably ranks bookable events before closed and ended events in all',
+  'stably ranks bookable events before closed events and excludes ended events',
   () => {
     const closed = makeHomeEvent({
       id: 'closed',
@@ -311,7 +317,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ongoing', 'future', 'second-bookable', 'closed', 'ended'],
+      ['ongoing', 'future', 'second-bookable', 'closed'],
     );
   },
 );

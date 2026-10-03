@@ -341,12 +341,6 @@ export default function DiscoveryPage() {
       ),
     [appliedFilters, draftFilters.area, draftFilters.query, events],
   );
-  const currentEvents = visibleEvents.filter(
-    (event) => !hasEventEndCalendarDayPassed(event.endDate),
-  );
-  const pastEvents = visibleEvents.filter((event) =>
-    hasEventEndCalendarDayPassed(event.endDate),
-  );
   const featuredEvent = visibleEvents.find((event) => isEventBookable(event));
   const favoriteEvents = useMemo(
     () =>
@@ -723,20 +717,25 @@ export default function DiscoveryPage() {
         className="shell !mt-[56px] scroll-mt-24 max-sm:!mt-[42px]"
         aria-labelledby="events-heading"
       >
-        <div className="mb-[18px] flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
+        <div className="mb-5 flex items-end justify-between gap-5 max-md:flex-col max-md:items-start">
           <div>
             <span className="sl-kicker">ค้นหา Event</span>
             <h2
               id="events-heading"
               className="mt-[7px] text-[clamp(26px,3vw,34px)] font-black tracking-[-0.035em] text-[#432687]"
             >
-              งานที่เหมาะกับร้านของคุณ
+              ค้นหาอีเวนต์สำหรับร้านคุณ
             </h2>
+            <p className="mt-1.5 text-sm text-muted">
+              เลือกดูงานทั้งหมด หรือตามสถานะเปิดจองและปิดจอง
+            </p>
           </div>
+        </div>
+        <div className="mb-6 overflow-x-auto [scrollbar-width:none]">
           <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label="กรองงานที่เหมาะกับร้านของคุณตามสถานะ"
+            className="flex min-w-max justify-end gap-2.5 max-md:justify-start"
+            role="tablist"
+            aria-label="กรองอีเวนต์ตามสถานะการรับจอง"
           >
             {(
               [
@@ -750,12 +749,13 @@ export default function DiscoveryPage() {
                 <button
                   key={option.value}
                   type="button"
-                  aria-pressed={active}
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => applyEventStatus(option.value)}
-                  className={`min-h-11 rounded-full border px-5 text-sm font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
+                  className={`min-h-12 rounded-full border px-6 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(109,40,217,.10)] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
                     active
-                      ? 'border-[#b699f2] bg-[#b699f2] text-white shadow-[0_8px_20px_rgba(109,40,217,.12)]'
-                      : 'border-[#c8b0fa] bg-[#c8b0fa] text-white hover:border-[#a984ed] hover:bg-[#a984ed]'
+                      ? 'border-[#a17bea] bg-[#aa84ef]'
+                      : 'border-[#c8b0fa] bg-[#c8b0fa] hover:border-[#b699f2] hover:bg-[#b699f2]'
                   }`}
                 >
                   {option.label}
@@ -764,6 +764,29 @@ export default function DiscoveryPage() {
             })}
           </div>
         </div>
+        {!loading && !error ? (
+          <div className="mb-4 flex items-end justify-between gap-4 max-sm:flex-col max-sm:items-start">
+            <div>
+              <h3 className="text-xl font-black text-[#2d2040]">
+                {appliedFilters.eventStatus === 'all'
+                  ? 'อีเวนต์ทั้งหมด'
+                  : appliedFilters.eventStatus === 'bookable'
+                    ? 'อีเวนต์ที่เปิดรับจอง'
+                    : 'อีเวนต์ที่ปิดรับจอง'}
+              </h3>
+              <p className="mt-1 text-sm text-muted">
+                {appliedFilters.eventStatus === 'all'
+                  ? 'รวมงานที่เปิดและปิดรับจอง โดยไม่รวมงานที่สิ้นสุดแล้ว'
+                  : appliedFilters.eventStatus === 'bookable'
+                    ? 'เลือกดูรายละเอียดและจองพื้นที่ได้ทันที'
+                    : 'งานยังไม่สิ้นสุด แต่ไม่มีบูธเปิดรับจองเพิ่ม'}
+              </p>
+            </div>
+            <span className="rounded-full border border-[#ded2f4] bg-white/80 px-3 py-1.5 text-xs font-bold text-[#6f627f]">
+              พบ {visibleEvents.length} งาน
+            </span>
+          </div>
+        ) : null}
         {loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
@@ -801,50 +824,19 @@ export default function DiscoveryPage() {
             </button>
           </div>
         ) : (
-          <>
-            {currentEvents.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {currentEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onOpen={openEventPopup}
-                    isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
-                    favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
-                    requiresLogin={savedEvents.status === 'signed-out'}
-                    onToggleFavorite={() => void toggleSavedEvent(event)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="sl-surface p-6 text-sm text-muted">
-                ไม่มีงานที่กำลังเปิดอยู่ตามตัวกรองนี้
-              </p>
-            )}
-            {pastEvents.length > 0 ? (
-              <details className="mt-8 rounded-[22px] border border-line bg-white/75 p-5">
-                <summary className="cursor-pointer text-lg font-extrabold text-ink">
-                  งานที่ผ่านมา ({pastEvents.length})
-                </summary>
-                <p className="mt-2 text-sm text-muted">
-                  เก็บไว้ให้ดูรายละเอียดและประวัติ ไม่เปิดรับจองรอบนี้แล้ว
-                </p>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {pastEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onOpen={openEventPopup}
-                      isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
-                      favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
-                      requiresLogin={savedEvents.status === 'signed-out'}
-                      onToggleFavorite={() => void toggleSavedEvent(event)}
-                    />
-                  ))}
-                </div>
-              </details>
-            ) : null}
-          </>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {visibleEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onOpen={openEventPopup}
+                isSaved={savedEvents.status === 'ready' && savedEvents.eventIds.includes(event.id)}
+                favoriteBusy={savedEvents.status === 'loading' || pendingSavedEventId !== null}
+                requiresLogin={savedEvents.status === 'signed-out'}
+                onToggleFavorite={() => void toggleSavedEvent(event)}
+              />
+            ))}
+          </div>
         )}
       </section>
 

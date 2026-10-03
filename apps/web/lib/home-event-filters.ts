@@ -75,6 +75,8 @@ export function filterHomeEvents(
   const areaKeyword = normalizeSearchText(filters.area);
 
   const filtered = events.filter((event) => {
+    const hasEnded = hasEventEndCalendarDayPassed(event.endDate, now);
+    const bookable = isBookable(event, now);
     const searchable = normalizeSearchText(
       [event.name, event.venue.name].join(' '),
     );
@@ -93,9 +95,9 @@ export function filterHomeEvents(
         event.categories.some(
           (category) => category.id === filters.categoryId,
         )) &&
-      (filters.eventStatus === 'all' ||
-        (filters.eventStatus === 'bookable' && isBookable(event, now)) ||
-        (filters.eventStatus === 'closed' && !isBookable(event, now)))
+      ((filters.eventStatus === 'all' && !hasEnded) ||
+        (filters.eventStatus === 'bookable' && bookable) ||
+        (filters.eventStatus === 'closed' && !hasEnded && !bookable))
     );
   });
 
@@ -105,11 +107,7 @@ export function filterHomeEvents(
     .map((event, sourceIndex) => ({
       event,
       sourceIndex,
-      priority: isBookable(event, now)
-        ? 0
-        : hasEventEndCalendarDayPassed(event.endDate, now)
-          ? 2
-          : 1,
+      priority: isBookable(event, now) ? 0 : 1,
     }))
     .sort(
       (left, right) =>
