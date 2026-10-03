@@ -626,12 +626,9 @@ export function MyBookingsScreen() {
                       ),
                     ),
                   ).join(', ');
-                  const reviewBooking =
-                    group.status === 'COMPLETED'
-                      ? group.bookings.find((item) =>
-                          isBookingReviewEligible(item),
-                        )
-                      : undefined;
+                  const reviewBooking = group.bookings.find((item) =>
+                    isBookingReviewEligible(item),
+                  );
                   const paymentHref = booking.paymentGroupId
                     ? `/bookings/payment-groups/${encodeURIComponent(booking.paymentGroupId)}/payment`
                     : `/bookings/${encodeURIComponent(booking.bookingCode)}/payment`;
@@ -1008,17 +1005,12 @@ function BookingDetailDialog({
             href: `/bookings/${encodeURIComponent(cancellableBooking.bookingCode)}`,
             label: 'ยกเลิกการจอง',
           }
-        : reviewBooking
+        : !hasMixedStatuses
           ? {
-              href: `/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`,
-              label: 'เขียนรีวิว',
+              href: `/bookings/${encodeURIComponent(booking.bookingCode)}`,
+              label: 'ดูรายละเอียด',
             }
-          : !hasMixedStatuses
-            ? {
-                href: `/bookings/${encodeURIComponent(booking.bookingCode)}`,
-                label: 'ดูรายละเอียด',
-              }
-            : null;
+          : null;
 
   async function handleCopy() {
     const summary = [
@@ -1282,7 +1274,9 @@ function BookingDetailDialog({
               ? 'กรุณาชำระเงินตามยอดที่กำหนด และแนบสลิปเพื่อให้ผู้จัดงานตรวจสอบ'
               : hasFinished
                 ? 'รายการนี้เสร็จสิ้นแล้ว คุณสามารถเปิดหน้ารายละเอียดเพื่อรีวิวหรือดำเนินการอื่นได้'
-                : 'การจองได้รับการยืนยันแล้ว คุณสามารถเก็บสรุปการจองไว้ใช้ตรวจสอบ'}
+                : reviewBooking
+                  ? 'ชำระเงินสำเร็จและยืนยันการจองแล้ว คุณสามารถเขียนรีวิวได้ทันที'
+                  : 'การจองได้รับการยืนยันแล้ว คุณสามารถเก็บสรุปการจองไว้ใช้ตรวจสอบ'}
           </div>
 
           {actionMessage ? (
@@ -1298,13 +1292,6 @@ function BookingDetailDialog({
               className="sl-action-secondary text-violet"
             >
               คัดลอกข้อมูล
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="sl-action-secondary"
-            >
-              ปิด
             </button>
             {group.status === 'PENDING_PAYMENT' && !holdExpired ? (
               <Link href={paymentHref} className="sl-action-primary">
@@ -1323,11 +1310,19 @@ function BookingDetailDialog({
                 type="button"
                 onClick={() => void handleDownloadSummary()}
                 disabled={isDownloading}
-                className="sl-action-primary"
+                className={reviewBooking ? 'sl-action-secondary' : 'sl-action-primary'}
               >
                 {isDownloading ? 'กำลังสร้าง PNG…' : 'ดาวน์โหลดสรุป PNG'}
               </button>
             )}
+            {reviewBooking ? (
+              <Link
+                href={`/bookings/${encodeURIComponent(reviewBooking.bookingCode)}/review`}
+                className="sl-action-primary"
+              >
+                รีวิว
+              </Link>
+            ) : null}
             {statusAction ? (
               <Link
                 href={statusAction.href}

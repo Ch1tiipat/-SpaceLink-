@@ -186,6 +186,7 @@ const createAdminAccess = jest.fn();
 const prismaTransaction = jest.fn();
 const createForUser = jest.fn();
 const createForOrganizationAdmins = jest.fn();
+const createReviewEligibilityNotifications = jest.fn();
 const recordAuditLog = jest.fn();
 
 const mockPrismaService = {
@@ -224,6 +225,7 @@ const mockSlipStorageService = {
 const mockNotificationsService = {
   createForUser,
   createForOrganizationAdmins,
+  createReviewEligibilityNotifications,
 };
 const mockAuditLogsService = { record: recordAuditLog };
 
@@ -331,6 +333,7 @@ describe('BookingsService', () => {
     removeObject.mockResolvedValue(undefined);
     createForUser.mockResolvedValue(null);
     createForOrganizationAdmins.mockResolvedValue(1);
+    createReviewEligibilityNotifications.mockResolvedValue(0);
     recordAuditLog.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -1322,6 +1325,7 @@ describe('BookingsService', () => {
           relatedEntityId: PAYMENT_GROUP_ID,
         }) as object,
       );
+      expect(createReviewEligibilityNotifications).toHaveBeenCalledTimes(1);
     });
 
     it('keeps every member pending when the verified total is wrong', async () => {
@@ -1343,6 +1347,7 @@ describe('BookingsService', () => {
       });
       expect(paymentGroupUpdateMany).not.toHaveBeenCalled();
       expect(bookingUpdateMany).not.toHaveBeenCalled();
+      expect(createReviewEligibilityNotifications).not.toHaveBeenCalled();
     });
 
     it('rejects and removes the uploaded object when not every member can confirm', async () => {
@@ -1551,6 +1556,7 @@ describe('BookingsService', () => {
           relatedEntityId: BOOKING_ID,
         },
       );
+      expect(createReviewEligibilityNotifications).toHaveBeenCalledTimes(1);
     });
 
     it('keeps confirmation successful when notification delivery fails', async () => {
@@ -1605,6 +1611,7 @@ describe('BookingsService', () => {
       });
       expect(bookingUpdateMany).not.toHaveBeenCalled();
       expect(createForUser).not.toHaveBeenCalled();
+      expect(createReviewEligibilityNotifications).not.toHaveBeenCalled();
     });
 
     it('does not confirm a VERIFIED result with no amount', async () => {

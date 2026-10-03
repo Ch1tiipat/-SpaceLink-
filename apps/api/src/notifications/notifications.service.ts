@@ -8,7 +8,6 @@ import {
   UserRole,
   type Notification,
 } from '@prisma/client';
-import { hasEventEndInstantPassed } from '../common/event-time';
 import { PrismaService } from '../prisma/prisma.service';
 import { isNotificationTypeEnabled } from './notification-preferences';
 import { PushSenderService } from './push-sender.service';
@@ -390,23 +389,19 @@ export class NotificationsService {
   private async createReviewEligibilityNotificationsWithinTransaction(
     transaction: Prisma.TransactionClient,
   ): Promise<number> {
-    const candidateBookings = await transaction.booking.findMany({
+    const eligibleBookings = await transaction.booking.findMany({
       where: {
-        status: BookingStatus.COMPLETED,
-        event: { endDate: { lte: this.bangkokCalendarDate() } },
+        status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
       },
       select: {
         id: true,
         vendorUserId: true,
         vendor: { select: { notificationPreferences: true } },
-        event: { select: { name: true, endDate: true, endTime: true } },
+        event: { select: { name: true } },
         booth: { select: { code: true } },
       },
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
-    const eligibleBookings = candidateBookings.filter((booking) =>
-      hasEventEndInstantPassed(booking.event.endDate, booking.event.endTime),
-    );
 
     if (eligibleBookings.length === 0) return 0;
 
@@ -464,8 +459,8 @@ export class NotificationsService {
         {
           userId: booking.vendorUserId,
           type: NotificationType.SYSTEM,
-          title: 'ถึงเวลารีวิวพื้นที่แล้ว',
-          body: `${booking.event.name} · บูธ ${booking.booth.code} พร้อมให้คุณแบ่งปันประสบการณ์แล้ว`,
+          title: 'ยืนยันการจองแล้ว เขียนรีวิวได้เลย',
+          body: `${booking.event.name} · บูธ ${booking.booth.code} พร้อมให้คุณเขียนรีวิวแล้ว`,
           relatedEntityType: REVIEW_NOTIFICATION_ENTITY_TYPE,
           relatedEntityId: booking.id,
         },
