@@ -6,6 +6,7 @@ const { test: refundTest }: typeof import('node:test') = require('node:test');
 const {
   canRequestRefund,
   isValidRefundAmount,
+  refundFlowAction,
   sumRefundAmounts,
 } = require('./refund-request-policy.ts') as typeof import('./refund-request-policy');
 
@@ -36,6 +37,75 @@ refundTest('rejects non-cancelled, exempt, unpaid, and duplicate requests', () =
   refundAssert.equal(
     canRequestRefund(booking, [{ bookingId: booking.id }]),
     false,
+  );
+});
+
+refundTest('offers a direct request for cancelled bookings', () => {
+  refundAssert.equal(
+    refundFlowAction(
+      { ...booking, bookingEndDate: '2026-10-04T00:00:00.000Z' },
+      [],
+      '2026-10-03T05:00:00.000Z',
+    ),
+    'REQUEST',
+  );
+});
+
+refundTest('offers cancel then request for confirmed bookings before the deadline', () => {
+  refundAssert.equal(
+    refundFlowAction(
+      {
+        ...booking,
+        status: 'CONFIRMED',
+        bookingEndDate: '2026-10-03T17:00:00.000Z',
+      },
+      [],
+      '2026-10-03T16:59:59.000Z',
+    ),
+    'CANCEL_AND_REQUEST',
+  );
+});
+
+refundTest('does not offer cancellation after the Thailand calendar deadline', () => {
+  refundAssert.equal(
+    refundFlowAction(
+      {
+        ...booking,
+        status: 'CONFIRMED',
+        bookingEndDate: '2026-10-03T16:59:59.000Z',
+      },
+      [],
+      '2026-10-03T17:00:00.000Z',
+    ),
+    null,
+  );
+});
+
+refundTest('rejects ineligible and duplicate refund flows', () => {
+  const confirmed = {
+    ...booking,
+    status: 'CONFIRMED' as const,
+    bookingEndDate: '2026-10-04T00:00:00.000Z',
+  };
+  refundAssert.equal(
+    refundFlowAction({ ...confirmed, status: 'PENDING_PAYMENT' }, []),
+    null,
+  );
+  refundAssert.equal(
+    refundFlowAction({ ...confirmed, status: 'COMPLETED' }, []),
+    null,
+  );
+  refundAssert.equal(
+    refundFlowAction({ ...confirmed, isPaymentExempt: true }, []),
+    null,
+  );
+  refundAssert.equal(
+    refundFlowAction({ ...confirmed, confirmedAt: null }, []),
+    null,
+  );
+  refundAssert.equal(
+    refundFlowAction(confirmed, [{ bookingId: confirmed.id }]),
+    null,
   );
 });
 

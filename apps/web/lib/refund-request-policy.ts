@@ -5,6 +5,42 @@ type RefundBooking = Pick<
   'id' | 'status' | 'isPaymentExempt' | 'confirmedAt'
 >;
 
+type RefundFlowBooking = RefundBooking & Pick<MyBooking, 'bookingEndDate'>;
+
+export type RefundFlowAction = 'REQUEST' | 'CANCEL_AND_REQUEST';
+
+const thailandDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Bangkok',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function hasExistingRefund(
+  bookingId: string,
+  refunds: Pick<RefundRequest, 'bookingId'>[],
+): boolean {
+  return refunds.some((refund) => refund.bookingId === bookingId);
+}
+
+function isCancellationWindowOpen(
+  bookingEndDate: string,
+  now: string | number = Date.now(),
+): boolean {
+  const endDate = new Date(bookingEndDate);
+  const currentDate = new Date(now);
+  if (
+    Number.isNaN(endDate.getTime()) ||
+    Number.isNaN(currentDate.getTime())
+  ) {
+    return false;
+  }
+  return (
+    thailandDateFormatter.format(endDate) >=
+    thailandDateFormatter.format(currentDate)
+  );
+}
+
 export function canRequestRefund(
   booking: RefundBooking,
   refunds: Pick<RefundRequest, 'bookingId'>[],
@@ -13,8 +49,30 @@ export function canRequestRefund(
     booking.status === 'CANCELLED' &&
     !booking.isPaymentExempt &&
     booking.confirmedAt !== null &&
-    !refunds.some((refund) => refund.bookingId === booking.id)
+    !hasExistingRefund(booking.id, refunds)
   );
+}
+
+export function refundFlowAction(
+  booking: RefundFlowBooking,
+  refunds: Pick<RefundRequest, 'bookingId'>[],
+  now: string | number = Date.now(),
+): RefundFlowAction | null {
+  if (
+    booking.isPaymentExempt ||
+    booking.confirmedAt === null ||
+    hasExistingRefund(booking.id, refunds)
+  ) {
+    return null;
+  }
+  if (booking.status === 'CANCELLED') return 'REQUEST';
+  if (
+    booking.status === 'CONFIRMED' &&
+    isCancellationWindowOpen(booking.bookingEndDate, now)
+  ) {
+    return 'CANCEL_AND_REQUEST';
+  }
+  return null;
 }
 
 const AMOUNT_PATTERN = /^(?!0(?:\.0{1,2})?$)(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/;

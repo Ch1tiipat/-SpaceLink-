@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { getPreviewBookings } from '@/components/booking-detail-screen';
 import {
+  cancelBooking,
   createBatchRefundRequests,
   getMyBookings,
   getMyRefunds,
@@ -33,8 +34,8 @@ import {
   type RefundRequest,
 } from '@/lib/api';
 import {
-  canRequestRefund,
   isValidRefundAmount,
+  refundFlowAction,
   sumRefundAmounts,
 } from '@/lib/refund-request-policy';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
@@ -142,8 +143,11 @@ export function MyRefundsScreen() {
     };
   }, [state]);
 
-  const eligibleBookings = useMemo(
-    () => bookings.filter((booking) => canRequestRefund(booking, refunds)),
+  const refundCandidates = useMemo(
+    () =>
+      bookings.filter(
+        (booking) => refundFlowAction(booking, refunds) !== null,
+      ),
     [bookings, refunds],
   );
 
@@ -424,10 +428,20 @@ export function MyRefundsScreen() {
 
       {requestOpen && state.status === 'ready' ? (
         <RefundRequestDialog
-          bookings={eligibleBookings}
+          bookings={refundCandidates}
           token={state.token}
           isPreview={canUseUxPreview()}
           onClose={() => setRequestOpen(false)}
+          onBookingsCancelled={(cancelledBookings) => {
+            const cancelledById = new Map(
+              cancelledBookings.map((booking) => [booking.id, booking]),
+            );
+            setBookings((current) =>
+              current.map(
+                (booking) => cancelledById.get(booking.id) ?? booking,
+              ),
+            );
+          }}
           onCreated={(created) => {
             const createdIds = new Set(created.map(({ id }) => id));
             setRefunds((current) => [
@@ -494,14 +508,17 @@ function RefundRequestDialog({
   token,
   isPreview,
   onClose,
+  onBookingsCancelled,
   onCreated,
 }: {
   bookings: MyBooking[];
   token: string;
   isPreview: boolean;
   onClose: () => void;
+  onBookingsCancelled: (bookings: MyBooking[]) => void;
   onCreated: (refunds: RefundRequest[]) => void;
 }) {
+  const [workingBookings, setWorkingBookings] = useState(bookings);
   const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -514,8 +531,13 @@ function RefundRequestDialog({
   const [payoutPromptPayId, setPayoutPromptPayId] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const selectedBookings = bookings.filter((booking) =>
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [progressMessage, setProgressMessage] = useState('');
+  const selectedBookings = workingBookings.filter((booking) =>
     selectedBookingIds.has(booking.id),
+  );
+  const bookingsToCancel = selectedBookings.filter(
+    (booking) => booking.status === 'CONFIRMED',
   );
   const totalAmount = sumRefundAmounts(
     selectedBookings.map((booking) => amounts[booking.id] ?? ''),
@@ -524,7 +546,8 @@ function RefundRequestDialog({
     (booking) => !booking.refundPayoutAccountName?.trim(),
   );
   const allSelected =
-    bookings.length > 0 && selectedBookingIds.size === bookings.length;
+    workingBookings.length > 0 &&
+    selectedBookingIds.size === workingBookings.length;
 
   function toggleBooking(bookingId: string) {
     setSelectedBookingIds((current) => {
@@ -534,22 +557,18 @@ function RefundRequestDialog({
       return next;
     });
     setSubmitError('');
+    setConfirmationOpen(false);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function validateSubmission(): string | null {
     const trimmedReason = reason.trim();
     const normalizedPromptPayId = payoutPromptPayId.trim();
 
     if (selectedBookings.length === 0) {
-      setSubmitError('กรุณาเลือกอย่างน้อย 1 บูธที่ต้องการขอคืนเงิน');
-      return;
+      return 'กรุณาเลือกอย่างน้อย 1 บูธที่ต้องการขอคืนเงิน';
     }
     if (missingPayerNameBooking) {
-      setSubmitError(
-        `ไม่พบชื่อผู้โอนสำหรับ Booth ${missingPayerNameBooking.booth.code} กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน`,
-      );
-      return;
+      return `ไม่พบชื่อผู้โอนสำหรับ Booth ${missingPayerNameBooking.booth.code} กรุณาติดต่อผู้จัดงานหรือฝ่ายสนับสนุน`;
     }
     const invalidBooking = selectedBookings.find((booking) =>
       !isValidRefundAmount(
@@ -558,29 +577,77 @@ function RefundRequestDialog({
       ),
     );
     if (invalidBooking) {
-      setSubmitError(
-        `ยอดคืน Booth ${invalidBooking.booth.code} ต้องมากกว่า 0 และไม่เกินราคาบูธ`,
-      );
-      return;
+      return `ยอดคืน Booth ${invalidBooking.booth.code} ต้องมากกว่า 0 และไม่เกินราคาบูธ`;
     }
     if (!trimmedReason) {
-      setSubmitError('กรุณาระบุเหตุผลที่ขอคืนเงิน');
-      return;
+      return 'กรุณาระบุเหตุผลที่ขอคืนเงิน';
     }
     if (!/^(\d{10}|\d{13}|\d{15})$/.test(normalizedPromptPayId)) {
-      setSubmitError(
-        'PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัว 13/15 หลัก',
-      );
+      return 'PromptPay ต้องเป็นเบอร์โทร 10 หลัก หรือเลขประจำตัว 13/15 หลัก';
+    }
+    return null;
+  }
+
+  async function submitRequest(allowCancellation: boolean) {
+    const validationError = validateSubmission();
+    if (validationError) {
+      setSubmitError(validationError);
+      setConfirmationOpen(false);
+      return;
+    }
+    if (bookingsToCancel.length > 0 && !allowCancellation) {
+      setSubmitError('');
+      setConfirmationOpen(true);
       return;
     }
 
     setIsSubmitting(true);
     setSubmitError('');
+    setConfirmationOpen(false);
     try {
       if (isPreview) {
         setSubmitError('โหมดตัวอย่างไม่ส่งคำร้องเข้าสู่ระบบจริง');
         return;
       }
+      const cancelledBookings: MyBooking[] = [];
+      for (const booking of bookingsToCancel) {
+        setProgressMessage(`กำลังยกเลิก Booth ${booking.booth.code}…`);
+        try {
+          const cancelled = await cancelBooking(booking.id, reason, token);
+          cancelledBookings.push({ ...booking, ...cancelled });
+        } catch (cause) {
+          if (cancelledBookings.length > 0) {
+            const cancelledById = new Map(
+              cancelledBookings.map((item) => [item.id, item]),
+            );
+            setWorkingBookings((current) =>
+              current.map((item) => cancelledById.get(item.id) ?? item),
+            );
+            onBookingsCancelled(cancelledBookings);
+          }
+          const message =
+            cause instanceof Error
+              ? cause.message
+              : 'สถานะการจองเปลี่ยนไป กรุณาลองใหม่';
+          setSubmitError(
+            `ยกเลิก Booth ${booking.booth.code} ไม่สำเร็จ: ${message}`,
+          );
+          return;
+        }
+      }
+      if (cancelledBookings.length > 0) {
+        const cancelledById = new Map(
+          cancelledBookings.map((booking) => [booking.id, booking]),
+        );
+        setWorkingBookings((current) =>
+          current.map((booking) => cancelledById.get(booking.id) ?? booking),
+        );
+        onBookingsCancelled(cancelledBookings);
+      }
+
+      setProgressMessage('กำลังส่งคำร้องคืนเงิน…');
+      const trimmedReason = reason.trim();
+      const normalizedPromptPayId = payoutPromptPayId.trim();
       const input: CreateBatchRefundRequestsInput = {
         items: selectedBookings.map((booking) => ({
           bookingId: booking.id,
@@ -597,7 +664,13 @@ function RefundRequestDialog({
       );
     } finally {
       setIsSubmitting(false);
+      setProgressMessage('');
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitRequest(false);
   }
 
   return (
@@ -608,11 +681,11 @@ function RefundRequestDialog({
             <RotateCcw className="h-9 w-9" aria-hidden />
           </span>
           <h3 className="mt-5 text-xl font-black">
-            ยังไม่มีการจองที่ขอคืนเงินได้
+            ยังไม่มีการจองที่ยกเลิกหรือขอคืนเงินได้
           </h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-            คำขอคืนเงินเปิดสำหรับการจองที่เคยยืนยันและชำระเงินแล้ว
-            ก่อนถูกยกเลิกเท่านั้น
+            รายการต้องชำระเงินและยืนยันแล้ว ยังอยู่ในช่วงยกเลิก
+            หรือยกเลิกไว้แล้ว และยังไม่มีคำขอคืนเงินเดิม
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
@@ -623,10 +696,10 @@ function RefundRequestDialog({
               ปิด
             </button>
             <Link
-              href="/bookings?tab=cancelled"
+              href="/bookings"
               className="sl-action-primary"
             >
-              ดูการจองที่ยกเลิก
+              ดูการจองของฉัน
             </Link>
           </div>
         </div>
@@ -645,7 +718,7 @@ function RefundRequestDialog({
                 setSelectedBookingIds(
                   allSelected
                     ? new Set()
-                    : new Set(bookings.map(({ id }) => id)),
+                    : new Set(workingBookings.map(({ id }) => id)),
                 )
               }
               className="sl-action-secondary text-violet"
@@ -655,8 +728,9 @@ function RefundRequestDialog({
           </div>
 
           <div className="mt-4 grid max-h-[310px] gap-3 overflow-y-auto pr-1">
-            {bookings.map((booking) => {
+            {workingBookings.map((booking) => {
               const selected = selectedBookingIds.has(booking.id);
+              const needsCancellation = booking.status === 'CONFIRMED';
               return (
                 <div
                   key={booking.id}
@@ -674,9 +748,22 @@ function RefundRequestDialog({
                       className="mt-1 h-5 w-5 accent-violet"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-black">
-                        Booth {booking.booth.code} · Zone{' '}
-                        {booking.booth.zone.name ?? booking.booth.zone.code}
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-black">
+                          Booth {booking.booth.code} · Zone{' '}
+                          {booking.booth.zone.name ?? booking.booth.zone.code}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                            needsCancellation
+                              ? 'bg-[#fff3d9] text-[#895b08]'
+                              : 'bg-[#e8f8ef] text-[#176c50]'
+                          }`}
+                        >
+                          {needsCancellation
+                            ? 'ยกเลิกก่อนคืนเงิน'
+                            : 'พร้อมขอคืนเงิน'}
+                        </span>
                       </span>
                       <span className="mt-1 block text-sm text-muted">
                         {booking.event.name} · {booking.bookingCode}
@@ -716,6 +803,13 @@ function RefundRequestDialog({
               รวม {totalAmount ? formatMoney(totalAmount) : '—'} บาท
             </strong>
           </div>
+
+          {bookingsToCancel.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-[#f2d39b] bg-[#fff8e8] px-4 py-3 text-sm leading-6 text-[#79500a]">
+              เลือกแล้ว {bookingsToCancel.length} บูธที่ยังยืนยันอยู่
+              ระบบจะขอให้คุณยืนยันการยกเลิกเฉพาะบูธเหล่านี้ก่อนส่งคำขอคืนเงิน
+            </div>
+          ) : null}
 
           <div className="mt-4 grid gap-4">
             <label className="grid gap-1.5 text-sm font-bold">
@@ -776,24 +870,68 @@ function RefundRequestDialog({
                 className="rounded-xl border border-line px-4 py-3 font-normal outline-none focus:border-violet"
               />
             </label>
+            {progressMessage ? (
+              <p role="status" className="text-sm font-semibold text-violet">
+                {progressMessage}
+              </p>
+            ) : null}
             {submitError ? (
               <p role="alert" className="text-sm font-semibold text-danger">
                 {submitError}
               </p>
             ) : null}
-            <button
-              type="submit"
-              disabled={
-                isSubmitting ||
-                selectedBookings.length === 0 ||
-                Boolean(missingPayerNameBooking)
-              }
-              className="sl-action-primary w-full disabled:opacity-50"
-            >
-              {isSubmitting
-                ? 'กำลังส่งคำร้อง…'
-                : `ส่งคำร้องคืนเงิน ${selectedBookings.length} บูธ`}
-            </button>
+            {confirmationOpen ? (
+              <div
+                role="alert"
+                className="rounded-2xl border border-danger/30 bg-[#fff4f4] p-4"
+              >
+                <h4 className="font-black text-danger">
+                  ยืนยันยกเลิก {bookingsToCancel.length} บูธ
+                </h4>
+                <p className="mt-1 text-sm leading-6 text-muted">
+                  การยกเลิกย้อนกลับไม่ได้ เมื่อยกเลิกสำเร็จระบบจะส่งคำขอคืนเงินต่อทันที
+                </p>
+                <ul className="mt-2 grid gap-1 text-sm font-semibold">
+                  {bookingsToCancel.map((booking) => (
+                    <li key={booking.id}>
+                      • {booking.event.name} · Booth {booking.booth.code}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmationOpen(false)}
+                    className="sl-action-secondary"
+                  >
+                    กลับไปตรวจสอบ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitRequest(true)}
+                    className="rounded-xl bg-danger px-4 py-3 font-bold text-white"
+                  >
+                    ยืนยันยกเลิกและขอคืนเงิน
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  selectedBookings.length === 0 ||
+                  Boolean(missingPayerNameBooking)
+                }
+                className="sl-action-primary w-full disabled:opacity-50"
+              >
+                {isSubmitting
+                  ? 'กำลังดำเนินการ…'
+                  : bookingsToCancel.length > 0
+                    ? `ยกเลิกบูธและขอคืนเงิน ${selectedBookings.length} บูธ`
+                    : `ส่งคำร้องคืนเงิน ${selectedBookings.length} บูธ`}
+              </button>
+            )}
           </div>
         </form>
       )}
@@ -808,7 +946,11 @@ function RefundTermsDialog({ onClose }: { onClose: () => void }) {
         <h3 className="font-black">รายการที่ยื่นคำขอได้</h3>
         <ul className="mt-3 grid gap-3 text-sm leading-6 text-muted">
           <li>• เป็นการจองที่เคยได้รับการยืนยันและมีการชำระเงินแล้ว</li>
-          <li>• สถานะการจองถูกยกเลิก และยังไม่มีคำขอคืนเงินเดิม</li>
+          <li>
+            • หากยังยืนยันอยู่ ต้องอยู่ในช่วงยกเลิก
+            และคุณต้องยืนยันยกเลิกบูธก่อนส่งคำขอ
+          </li>
+          <li>• การยกเลิกบูธย้อนกลับไม่ได้ และต้องยังไม่มีคำขอคืนเงินเดิม</li>
           <li>• ยอดที่ขอคืนต้องมากกว่า 0 และไม่เกินราคาบูธที่ชำระ</li>
           <li>• รับเงินคืนผ่านหมายเลข PromptPay ที่ระบุเท่านั้น</li>
         </ul>
