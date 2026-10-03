@@ -284,6 +284,98 @@ select {
   display: none;
 }
 
+/* Motion belongs to the Super Admin shell only. Keep it brief so data-heavy
+   screens remain readable, and do not animate when reduced motion is set. */
+@media (prefers-reduced-motion: no-preference) {
+  .sl-super-main > * {
+    animation: sl-super-page-in 420ms cubic-bezier(0.2, 0.75, 0.25, 1) backwards;
+  }
+
+  .sl-super-main .sl-super-motion-card {
+    animation: sl-super-card-in 520ms cubic-bezier(0.2, 0.75, 0.25, 1) backwards;
+    transition: transform 220ms ease;
+  }
+
+  .sl-super-main .sl-super-motion-card:nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  .sl-super-main .sl-super-motion-card:nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  .sl-super-main .sl-super-motion-card:hover {
+    transform: translateY(-3px);
+  }
+
+  .sl-super-shell nav a > svg {
+    transition: transform 180ms ease;
+  }
+
+  .sl-super-shell nav a:hover > svg {
+    transform: scale(1.12);
+  }
+
+  .sl-super-popover {
+    transform-origin: top right;
+    animation: sl-super-popover-in 190ms ease-out backwards;
+  }
+
+  .sl-super-drawer {
+    animation: sl-super-fade-in 200ms ease-out backwards;
+  }
+
+  .sl-super-drawer-panel {
+    animation: sl-super-drawer-in 260ms cubic-bezier(0.2, 0.75, 0.25, 1) backwards;
+  }
+
+  .sl-super-main svg[aria-label='กราฟเส้นจำนวนองค์กรตามสถานะ'] polyline {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: sl-super-line-draw 900ms ease-out 120ms forwards;
+  }
+
+  .sl-super-main svg[aria-label='กราฟเส้นจำนวนองค์กรตามสถานะ'] circle {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: sl-super-dot-in 300ms ease-out 620ms backwards;
+  }
+}
+
+@keyframes sl-super-page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sl-super-card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sl-super-popover-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sl-super-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sl-super-drawer-in {
+  from { transform: translateX(-24px); }
+  to { transform: none; }
+}
+
+@keyframes sl-super-line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes sl-super-dot-in {
+  from { opacity: 0; transform: scale(0.25); }
+  to { opacity: 1; transform: none; }
+}
+
 @media (min-width: 1024px) {
   .sl-floating-support,
   .sl-floating-support--with-bottom-nav {
