@@ -69,6 +69,48 @@ popupTest('Event popup contains the approved detail sections without a second de
   popupAssert.doesNotMatch(popup, /detailHref|ดูรายละเอียด Event/);
 });
 
+popupTest('Event popup renders runtime atmosphere images in the approved compact viewer', () => {
+  const popup = popupSource.slice(
+    popupSource.indexOf('function EventPopup({'),
+    popupSource.indexOf('function EventPopupStat({'),
+  );
+  popupAssert.match(
+    popup,
+    /eventMap\?\.event\.galleryUrls[\s\S]*?safePublicHttpsUrl/,
+  );
+  popupAssert.match(popup, /filterUsableAtmosphereUrls/);
+  popupAssert.match(popup, /setFailedAtmosphereUrls/);
+  popupAssert.match(popup, /image\?\.complete && image\.naturalWidth === 0/);
+  popupAssert.match(
+    popup,
+    /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(atmospherePreviewUrl\)/,
+  );
+  popupAssert.match(
+    popup,
+    /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(activeAtmosphereUrl\)/,
+  );
+  popupAssert.match(popup, /title="บรรยากาศภายในงาน"/);
+  popupAssert.match(popup, /h-\[126px\]/);
+  popupAssert.match(popup, /ดูภาพบรรยากาศภายใน/);
+  popupAssert.match(popup, /aria-label="ปิดภาพบรรยากาศแบบเต็ม"/);
+  popupAssert.match(popup, /ดูภาพบรรยากาศก่อนหน้า/);
+  popupAssert.match(popup, /ดูภาพบรรยากาศถัดไป/);
+  popupAssert.match(popup, /keyEvent\.key === 'ArrowLeft'/);
+  popupAssert.match(popup, /keyEvent\.key === 'ArrowRight'/);
+  popupAssert.match(popup, /keyEvent\.key !== 'Tab'/);
+  popupAssert.match(popup, /!viewer\.contains\(activeElement\)/);
+  popupAssert.match(
+    popup,
+    /atmosphereTriggerRef\.current \?\? eventPopupCloseRef\.current/,
+  );
+  popupAssert.match(popup, /ไม่สามารถโหลดภาพบรรยากาศได้/);
+  popupAssert.match(
+    popup,
+    /clickEvent\.target === clickEvent\.currentTarget[\s\S]*?closeAtmosphereViewer\(\)/,
+  );
+  popupAssert.doesNotMatch(popup, /event-atmosphere-sut-2569\.png/);
+});
+
 popupTest('travel section uses the stored venue coordinates and Google Maps URL', () => {
   popupAssert.match(
     popupSource,
