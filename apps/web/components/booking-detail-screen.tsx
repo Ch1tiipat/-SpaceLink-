@@ -140,6 +140,10 @@ function createPreviewBooking(bookingId: string): MyBooking | null {
     createdAt: new Date(now - 60_000).toISOString(),
     updatedAt: new Date(now - 60_000).toISOString(),
     paymentQrDataUri: null,
+    refundPayoutAccountName:
+      status === 'CONFIRMED' || completed || cancelled
+        ? 'ผู้โอนตัวอย่าง'
+        : null,
     event: {
       id: 'demo-event',
       slug: 'demo-event',
