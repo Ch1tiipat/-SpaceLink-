@@ -575,7 +575,7 @@ function NotificationMenu({
     <section
       role="dialog"
       aria-label="รายการแจ้งเตือน Super Admin"
-      className="absolute right-0 top-12 z-40 w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)]"
+      className="fixed inset-x-3 top-[72px] z-40 flex max-h-[calc(100dvh-5rem)] flex-col overflow-hidden rounded-2xl border border-[#e4daee] bg-white text-left shadow-[0_24px_70px_rgba(31,23,48,.22)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(390px,calc(100vw-2rem))]"
     >
       <header className="flex items-start justify-between gap-3 border-b border-[#eee8f3] bg-[linear-gradient(135deg,#fff,#faf7ff)] px-4 py-4">
         <div>
@@ -624,7 +624,7 @@ function NotificationMenu({
           </p>
         </div>
       ) : (
-        <div className="max-h-[390px] divide-y divide-[#f0ebf4] overflow-y-auto">
+        <div className="min-h-0 max-h-[390px] divide-y divide-[#f0ebf4] overflow-y-auto">
           {latest.map((notification) => (
             <button
               key={notification.id}
