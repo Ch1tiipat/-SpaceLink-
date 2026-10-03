@@ -471,8 +471,8 @@ describe('NotificationsService', () => {
         {
           userId: USER_ID,
           type: NotificationType.SYSTEM,
-          title: 'ถึงเวลารีวิวพื้นที่แล้ว',
-          body: 'งานเกษตร มทส. 2569 · บูธ A05 พร้อมให้คุณแบ่งปันประสบการณ์แล้ว',
+          title: 'ยืนยันการจองแล้ว เขียนรีวิวได้เลย',
+          body: 'งานเกษตร มทส. 2569 · บูธ A05 พร้อมให้คุณเขียนรีวิวแล้ว',
           relatedEntityType: 'BOOKING_REVIEW',
           relatedEntityId: REVIEW_BOOKING_ID,
         },

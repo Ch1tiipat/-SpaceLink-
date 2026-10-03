@@ -459,8 +459,8 @@ export class NotificationsService {
         {
           userId: booking.vendorUserId,
           type: NotificationType.SYSTEM,
-          title: 'ถึงเวลารีวิวพื้นที่แล้ว',
-          body: `${booking.event.name} · บูธ ${booking.booth.code} พร้อมให้คุณแบ่งปันประสบการณ์แล้ว`,
+          title: 'ยืนยันการจองแล้ว เขียนรีวิวได้เลย',
+          body: `${booking.event.name} · บูธ ${booking.booth.code} พร้อมให้คุณเขียนรีวิวแล้ว`,
           relatedEntityType: REVIEW_NOTIFICATION_ENTITY_TYPE,
           relatedEntityId: booking.id,
         },
