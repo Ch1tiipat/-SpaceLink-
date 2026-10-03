@@ -2,6 +2,7 @@
 
 import { Download, Eye, LoaderCircle, X } from 'lucide-react';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getAdminBookingSlipAccess } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
@@ -86,7 +87,7 @@ export function AdminSlipActions({
         ) : null}
       </div>
 
-      {previewUrl ? (
+      {previewUrl ? createPortal(
         <div
           role="dialog"
           aria-modal="true"
@@ -111,7 +112,7 @@ export function AdminSlipActions({
                 type="button"
                 onClick={closePreview}
                 aria-label="ปิดหน้าต่างดูสลิป"
-                className="grid h-10 w-10 place-items-center rounded-full border border-[#e7dfea] text-[#62576c]"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#e7dfea] text-[#62576c]"
               >
                 <X className="h-5 w-5" aria-hidden />
               </button>
@@ -128,7 +129,8 @@ export function AdminSlipActions({
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
