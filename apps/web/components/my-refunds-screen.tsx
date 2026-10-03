@@ -36,6 +36,7 @@ import {
 import {
   isValidRefundAmount,
   refundFlowAction,
+  refundFlowFailureMessage,
   sumRefundAmounts,
 } from '@/lib/refund-request-policy';
 import { useVendorProfile } from '@/lib/use-vendor-profile';
@@ -533,6 +534,8 @@ function RefundRequestDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [progressMessage, setProgressMessage] = useState('');
+  const confirmationBackRef = useRef<HTMLButtonElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
   const selectedBookings = workingBookings.filter((booking) =>
     selectedBookingIds.has(booking.id),
   );
@@ -548,6 +551,10 @@ function RefundRequestDialog({
   const allSelected =
     workingBookings.length > 0 &&
     selectedBookingIds.size === workingBookings.length;
+
+  useEffect(() => {
+    if (confirmationOpen) confirmationBackRef.current?.focus();
+  }, [confirmationOpen]);
 
   function toggleBooking(bookingId: string) {
     setSelectedBookingIds((current) => {
@@ -601,6 +608,7 @@ function RefundRequestDialog({
       return;
     }
 
+    const cancelledBookings: MyBooking[] = [];
     setIsSubmitting(true);
     setSubmitError('');
     setConfirmationOpen(false);
@@ -609,7 +617,6 @@ function RefundRequestDialog({
         setSubmitError('โหมดตัวอย่างไม่ส่งคำร้องเข้าสู่ระบบจริง');
         return;
       }
-      const cancelledBookings: MyBooking[] = [];
       for (const booking of bookingsToCancel) {
         setProgressMessage(`กำลังยกเลิก Booth ${booking.booth.code}…`);
         try {
@@ -630,7 +637,10 @@ function RefundRequestDialog({
               ? cause.message
               : 'สถานะการจองเปลี่ยนไป กรุณาลองใหม่';
           setSubmitError(
-            `ยกเลิก Booth ${booking.booth.code} ไม่สำเร็จ: ${message}`,
+            refundFlowFailureMessage(
+              `ยกเลิก Booth ${booking.booth.code} ไม่สำเร็จ: ${message}`,
+              cancelledBookings.map((item) => item.booth.code),
+            ),
           );
           return;
         }
@@ -659,8 +669,13 @@ function RefundRequestDialog({
       };
       onCreated(await createBatchRefundRequests(input, token));
     } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : 'กรุณาลองใหม่อีกครั้ง';
       setSubmitError(
-        cause instanceof Error ? cause.message : 'ส่งคำร้องคืนเงินไม่สำเร็จ',
+        refundFlowFailureMessage(
+          `ส่งคำร้องคืนเงินไม่สำเร็จ: ${message}`,
+          cancelledBookings.map((booking) => booking.booth.code),
+        ),
       );
     } finally {
       setIsSubmitting(false);
@@ -673,8 +688,17 @@ function RefundRequestDialog({
     void submitRequest(false);
   }
 
+  function returnToReview() {
+    setConfirmationOpen(false);
+    requestAnimationFrame(() => submitButtonRef.current?.focus());
+  }
+
   return (
-    <RefundDialogFrame title="ขอคืนเงิน" onClose={onClose}>
+    <RefundDialogFrame
+      title="ขอคืนเงิน"
+      onClose={onClose}
+      canClose={!isSubmitting}
+    >
       {bookings.length === 0 ? (
         <div className="py-8 text-center">
           <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-violet-tint text-violet">
@@ -900,8 +924,9 @@ function RefundRequestDialog({
                 </ul>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
+                    ref={confirmationBackRef}
                     type="button"
-                    onClick={() => setConfirmationOpen(false)}
+                    onClick={returnToReview}
                     className="sl-action-secondary"
                   >
                     กลับไปตรวจสอบ
@@ -917,6 +942,7 @@ function RefundRequestDialog({
               </div>
             ) : (
               <button
+                ref={submitButtonRef}
                 type="submit"
                 disabled={
                   isSubmitting ||
@@ -1017,15 +1043,22 @@ function RefundSuccessDialog({
 function RefundDialogFrame({
   title,
   onClose,
+  canClose = true,
   children,
 }: {
   title: string;
   onClose: () => void;
+  canClose?: boolean;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const canCloseRef = useRef(canClose);
+
+  useEffect(() => {
+    canCloseRef.current = canClose;
+  }, [canClose]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -1035,7 +1068,7 @@ function RefundDialogFrame({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onClose();
+        if (canCloseRef.current) onClose();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -1068,7 +1101,7 @@ function RefundDialogFrame({
     <div
       className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-[#201b2e]/65 px-3 pb-3 pt-20 backdrop-blur-[2px] sm:px-5 sm:pb-5 sm:pt-24"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (canClose && event.target === event.currentTarget) onClose();
       }}
     >
       <section
@@ -1086,8 +1119,9 @@ function RefundDialogFrame({
             ref={closeRef}
             type="button"
             onClick={onClose}
+            disabled={!canClose}
             aria-label="ปิดหน้าต่าง"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-muted transition hover:bg-mist hover:text-ink"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-muted transition hover:bg-mist hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-5 w-5" aria-hidden />
           </button>

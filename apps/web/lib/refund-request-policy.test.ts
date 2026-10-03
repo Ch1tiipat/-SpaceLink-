@@ -7,6 +7,7 @@ const {
   canRequestRefund,
   isValidRefundAmount,
   refundFlowAction,
+  refundFlowFailureMessage,
   sumRefundAmounts,
 } = require('./refund-request-policy.ts') as typeof import('./refund-request-policy');
 
@@ -125,4 +126,23 @@ refundTest('sums selected booth amounts without floating-point money math', () =
   refundAssert.equal(sumRefundAmounts(['0.01', '0.02']), '0.03');
   refundAssert.equal(sumRefundAmounts([]), null);
   refundAssert.equal(sumRefundAmounts(['1500', 'invalid']), null);
+});
+
+refundTest('explains irreversible partial cancellation and how to retry', () => {
+  const message = refundFlowFailureMessage(
+    'ยกเลิก Booth A03 ไม่สำเร็จ: กรุณาลองใหม่',
+    ['A01', 'A02', 'A01'],
+  );
+
+  refundAssert.match(message, /Booth ที่ยกเลิกสำเร็จแล้ว: A01, A02/);
+  refundAssert.match(message, /การยกเลิกย้อนกลับไม่ได้/);
+  refundAssert.match(message, /ยังไม่ได้ส่งคำขอคืนเงิน/);
+  refundAssert.match(message, /กรุณากดยื่นคำขออีกครั้ง/);
+});
+
+refundTest('keeps a normal failure concise when no booth was cancelled', () => {
+  refundAssert.equal(
+    refundFlowFailureMessage('ส่งคำร้องคืนเงินไม่สำเร็จ', []),
+    'ส่งคำร้องคืนเงินไม่สำเร็จ',
+  );
 });

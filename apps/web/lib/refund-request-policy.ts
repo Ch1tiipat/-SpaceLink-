@@ -9,6 +9,18 @@ type RefundFlowBooking = RefundBooking & Pick<MyBooking, 'bookingEndDate'>;
 
 export type RefundFlowAction = 'REQUEST' | 'CANCEL_AND_REQUEST';
 
+export function refundFlowFailureMessage(
+  failure: string,
+  cancelledBoothCodes: string[],
+): string {
+  const uniqueCodes = [...new Set(cancelledBoothCodes.map((code) => code.trim()))]
+    .filter(Boolean)
+    .join(', ');
+  if (!uniqueCodes) return failure;
+
+  return `${failure} Booth ที่ยกเลิกสำเร็จแล้ว: ${uniqueCodes} การยกเลิกย้อนกลับไม่ได้ และยังไม่ได้ส่งคำขอคืนเงิน กรุณากดยื่นคำขออีกครั้ง`;
+}
+
 const thailandDateFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Bangkok',
   year: 'numeric',
