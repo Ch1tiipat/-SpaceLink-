@@ -551,6 +551,93 @@ describe('NotificationsService', () => {
     expect(sendToUser).toHaveBeenCalledTimes(1);
   });
 
+  it.each([1, 3])(
+    'returns the committed count of %i before stalled pushes settle, even when they later fail',
+    async (count) => {
+      const bookingIds = Array.from(
+        { length: count },
+        (_, index) => `test-booking-${index}`,
+      );
+      bookingFindMany.mockResolvedValue(
+        bookingIds.map((id, index) => ({
+          id,
+          vendorUserId: USER_ID,
+          vendor: { notificationPreferences: null },
+          event: { name: 'งานทดสอบ' },
+          booth: { code: `A0${index + 1}` },
+        })),
+      );
+      notificationFindMany.mockResolvedValue([]);
+      notificationCreateMany.mockResolvedValue({ count });
+      let failPush!: (error: Error) => void;
+      const stalledPush = new Promise<void>((_resolve, reject) => {
+        failPush = reject;
+      });
+      sendToUser.mockReturnValue(stalledPush);
+      const timedOut = Symbol('payment response timed out');
+      const deadline = new Promise<typeof timedOut>((resolve) => {
+        setTimeout(() => resolve(timedOut), 1_000);
+      });
+      const response = Promise.race([
+        service.createReviewEligibilityNotifications(bookingIds),
+        deadline,
+      ]);
+      try {
+        await jest.advanceTimersByTimeAsync(1_000);
+        await expect(response).resolves.toBe(count);
+        expect(sendToUser).toHaveBeenCalledTimes(count);
+        expect(notificationCreateMany).toHaveBeenCalledTimes(1);
+        const notificationIds = sendToUser.mock.calls.map(
+          ([, payload]: [string, { notificationId: string }]) =>
+            payload.notificationId,
+        );
+        expect(new Set(notificationIds).size).toBe(count);
+        bookingIds.forEach((id) => {
+          expect(sendToUser).toHaveBeenCalledWith(
+            USER_ID,
+            expect.objectContaining({ url: `/bookings/${id}/review` }),
+          );
+        });
+      } finally {
+        // Rejection after the response must also be consumed by the dispatcher.
+        failPush(new Error('late push failure'));
+        await jest.advanceTimersByTimeAsync(0);
+      }
+      await expect(response).resolves.toBe(count);
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['rejected promise', 'synchronous throw'])(
+    'preserves committed invitations and attempts every push after a %s',
+    async (failureMode) => {
+      const bookingIds = [REVIEW_BOOKING_ID, OLDER_REVIEW_BOOKING_ID];
+      bookingFindMany.mockResolvedValue(
+        bookingIds.map((id) => ({
+          id,
+          vendorUserId: USER_ID,
+          vendor: { notificationPreferences: null },
+          event: { name: 'งานทดสอบ' },
+          booth: { code: 'A01' },
+        })),
+      );
+      notificationFindMany.mockResolvedValue([]);
+      notificationCreateMany.mockResolvedValue({ count: 2 });
+      sendToUser.mockImplementation(() => {
+        const error = new Error('push unavailable');
+        if (failureMode === 'synchronous throw') throw error;
+        return Promise.reject(error);
+      });
+      await expect(
+        service.createReviewEligibilityNotifications(bookingIds),
+      ).resolves.toBe(2);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(sendToUser).toHaveBeenCalledTimes(2);
+      expect(notificationCreateMany).toHaveBeenCalledTimes(1);
+      expect(prismaTransaction).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('never pushes a rolled-back invitation, including a serializable retry', async () => {
     bookingFindMany.mockResolvedValue([
       {

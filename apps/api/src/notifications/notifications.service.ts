@@ -64,16 +64,20 @@ export class NotificationsService {
           // The cron backfills in-app only. Direct payment triggers push only
           // rows this committed transaction created, never historical rows.
           if (bookingIds) {
-            await Promise.allSettled(
-              result.invitations.map((invitation) =>
-                this.pushSender.sendToUser(invitation.userId, {
-                  title: invitation.title,
-                  body: invitation.body,
-                  notificationId: invitation.id,
-                  url: `/bookings/${invitation.relatedEntityId}/review`,
-                }),
-              ),
-            );
+            // A stalled provider must not delay the payment response. Isolate
+            // each dispatch, including synchronous sender failures, from it.
+            for (const invitation of result.invitations) {
+              void Promise.resolve()
+                .then(() =>
+                  this.pushSender.sendToUser(invitation.userId, {
+                    title: invitation.title,
+                    body: invitation.body,
+                    notificationId: invitation.id,
+                    url: `/bookings/${invitation.relatedEntityId}/review`,
+                  }),
+                )
+                .catch(() => undefined);
+            }
           }
           return result.count;
         } catch (error) {
