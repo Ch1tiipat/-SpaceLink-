@@ -168,6 +168,14 @@ export default function DiscoveryPage() {
   const [selectedEvent, setSelectedEvent] = useState<DiscoveryEvent | null>(
     null,
   );
+  const live = online && !loading && !error;
+
+  useEffect(() => {
+    if (live) return;
+    announcementDialogRef.current?.close();
+    setSelectedAnnouncement(null);
+    setSelectedEvent(null);
+  }, [live]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -221,7 +229,7 @@ export default function DiscoveryPage() {
   }, []);
 
   useEffect(() => {
-    if (loading || events.length === 0 || selectedEvent) return;
+    if (!live || events.length === 0 || selectedEvent) return;
     const requestedSlug = new URLSearchParams(window.location.search).get(
       'event',
     );
@@ -232,7 +240,7 @@ export default function DiscoveryPage() {
     } else {
       replaceEventPopupUrl(null);
     }
-  }, [events, loading, selectedEvent]);
+  }, [events, live, selectedEvent]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -384,8 +392,8 @@ export default function DiscoveryPage() {
     : error
       ? [{ value: '', label: 'โหลดงานหรือสถานที่ไม่สำเร็จ' }]
       : withAllOption(
-          filters.events,
-          filters.events.length > 0
+          live ? filters.events : [],
+          live && filters.events.length > 0
             ? 'ทุกงานหรือสถานที่'
             : 'ยังไม่มีงานหรือสถานที่',
         );
@@ -394,8 +402,8 @@ export default function DiscoveryPage() {
     : error
       ? [{ value: '', label: 'โหลดจังหวัดไม่สำเร็จ' }]
       : withAllOption(
-          filters.areas,
-          filters.areas.length > 0 ? 'ทุกจังหวัด' : 'ยังไม่มีข้อมูลจังหวัด',
+          live ? filters.areas : [],
+          live && filters.areas.length > 0 ? 'ทุกจังหวัด' : 'ยังไม่มีข้อมูลจังหวัด',
         );
 
   const visibleEvents = useMemo(
@@ -426,13 +434,13 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     const dialog = announcementDialogRef.current;
-    if (selectedAnnouncement && dialog && !dialog.open) dialog.showModal();
-  }, [selectedAnnouncement]);
+    if (live && selectedAnnouncement && dialog && !dialog.open) dialog.showModal();
+  }, [live, selectedAnnouncement]);
 
   useEffect(() => {
     const dialog = eventDialogRef.current;
-    if (selectedEvent && dialog && !dialog.open) dialog.showModal();
-  }, [selectedEvent]);
+    if (live && selectedEvent && dialog && !dialog.open) dialog.showModal();
+  }, [live, selectedEvent]);
 
   function scrollUpdates(direction: -1 | 1) {
     const scroller = announcementsScrollerRef.current;
@@ -626,7 +634,7 @@ export default function DiscoveryPage() {
             onChange={(categoryId) =>
               setDraftFilters((current) => ({ ...current, categoryId }))
             }
-            options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')}
+            options={withAllOption(live ? filters.categories : [], 'ทุกหมวดสินค้า')}
           />
           <SelectMenu
             label="สถานะ Event"
@@ -650,7 +658,7 @@ export default function DiscoveryPage() {
         </form>
       </section>
 
-      {online && !error ? <section
+      {live ? <section
         id="announcements"
         className="shell !mt-[52px] max-sm:!mt-[38px]"
         aria-labelledby="announcements-heading"
@@ -776,7 +784,7 @@ export default function DiscoveryPage() {
 
       : null}
 
-      {online && !loading && !error && savedEvents.status !== 'signed-out' ? (
+      {live && savedEvents.status !== 'signed-out' ? (
         <SavedEventsSection
           status={savedEvents.status}
           events={favoriteEvents}
@@ -842,7 +850,7 @@ export default function DiscoveryPage() {
             })}
           </div>
         </div>
-        {online && !loading && !error ? (
+        {live ? (
           <div className="mb-4 flex items-end justify-between gap-4 max-sm:flex-col max-sm:items-start">
             <div>
               <h3 className="text-xl font-black text-[#2d2040]">
@@ -936,9 +944,9 @@ export default function DiscoveryPage() {
         )}
       </section>
 
-      {featuredEvent && <PopularAreaRecommendations event={featuredEvent} />}
+      {live && featuredEvent && <PopularAreaRecommendations event={featuredEvent} />}
 
-      <BookingJourney event={featuredEvent} />
+      <BookingJourney event={live ? featuredEvent : undefined} />
       <PlatformBenefits />
       {savedNotice ? (
         <div
@@ -963,7 +971,7 @@ export default function DiscoveryPage() {
         }}
         className="w-[min(680px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[24px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65"
       >
-        {selectedAnnouncement ? (
+        {live && selectedAnnouncement ? (
           <div className="flex max-h-[calc(100dvh-24px)] flex-col">
             <div className="flex items-center justify-between gap-4 border-b border-[#eee8f7] px-5 py-4 sm:px-7">
               <span className="rounded-full bg-[#f1ebff] px-3 py-1.5 text-[11px] font-extrabold text-[#6d28d9]">
@@ -1063,7 +1071,7 @@ export default function DiscoveryPage() {
           </div>
         ) : null}
       </dialog>
-      {selectedEvent ? (
+      {live && selectedEvent ? (
         <EventPopup
           dialogRef={eventDialogRef}
           event={selectedEvent}

@@ -64,3 +64,60 @@ netTest('missing/invalid API env stays safe; placeholder still has a scoped Netw
   const rules = cachingRules('https://placeholder.invalid');
   netAssert.equal((rules[1].urlPattern as RegExp).test('https://placeholder.invalid/events/discovery'), true);
 });
+
+netTest('homepage live gate hides recommendations and keeps the real journey fallback offline, loading or failed', () => {
+  const React = require('react') as typeof import('react');
+  const { renderToStaticMarkup } = require('react-dom/server') as typeof import('react-dom/server');
+  const source = netTs.createSourceFile('page.tsx', netFs.readFileSync('app/page.tsx', 'utf8'), netTs.ScriptTarget.Latest, true, netTs.ScriptKind.TSX);
+  let liveDeclaration = '';
+  let recommendation = '';
+  let journeyCall = '';
+  let journeyFunction = '';
+  function visit(node: import('typescript').Node) {
+    if (netTs.isVariableDeclaration(node) && node.name.getText(source) === 'live') liveDeclaration = node.getText(source);
+    if (netTs.isJsxExpression(node) && node.expression?.getText(source).includes('<PopularAreaRecommendations')) recommendation = node.expression.getText(source);
+    if (netTs.isJsxSelfClosingElement(node) && node.tagName.getText(source) === 'BookingJourney') journeyCall = node.getText(source);
+    if (netTs.isFunctionDeclaration(node) && node.name?.text === 'BookingJourney') journeyFunction = node.getText(source);
+    netTs.forEachChild(node, visit);
+  }
+  visit(source);
+  netAssert.ok(liveDeclaration && recommendation && journeyCall && journeyFunction);
+  const code = netTs.transpileModule(journeyFunction + '\nconst ' + liveDeclaration
+    + '; module.exports = [' + recommendation + ', ' + journeyCall + '];', {
+    compilerOptions: { module: netTs.ModuleKind.CommonJS, jsx: netTs.JsxEmit.ReactJSX },
+  }).outputText;
+  for (const state of [
+    { online: false, loading: false, error: null },
+    { online: true, loading: true, error: null },
+    { online: true, loading: false, error: 'API failure' },
+    { online: true, loading: false, error: null },
+  ]) {
+    const testModule: { exports: import('react').ReactNode[] } = { exports: [] };
+    const icon = () => React.createElement('span');
+    netVm.runInNewContext(code, {
+      ...state, module: testModule, exports: testModule.exports, require,
+      featuredEvent: { slug: 'event-a' }, CalendarSearch: icon, CreditCard: icon, Store: icon,
+      Link: ({ href, children }: { href: string; children: import('react').ReactNode }) => React.createElement('a', { href }, children),
+      PopularAreaRecommendations: () => React.createElement('div', {}, 'LIVE_AVAILABILITY'),
+    });
+    const html = renderToStaticMarkup(React.createElement(React.Fragment, {}, ...testModule.exports));
+    if (!state.online || state.loading || state.error) {
+      netAssert.doesNotMatch(html, /LIVE_AVAILABILITY|\/events\/event-a\/map/);
+      netAssert.match(html, /href="#events"/);
+    } else {
+      netAssert.match(html, /LIVE_AVAILABILITY/);
+      netAssert.match(html, /href="\/events\/event-a\/map"/);
+    }
+  }
+});
+
+netTest('other homepage event consumers gate their live data without changing featured-event selection', () => {
+  const source = netFs.readFileSync('app/page.tsx', 'utf8');
+  netAssert.match(source, /const featuredEvent = visibleEvents\.find\(\(event\) => isEventBookable\(event\)\);/);
+  for (const field of ['events', 'areas', 'categories']) netAssert.ok(source.includes('live ? filters.' + field + ' : []'));
+  netAssert.match(source, /live && savedEvents\.status !== 'signed-out'/);
+  netAssert.match(source, /live && selectedEvent \? \(/);
+  netAssert.match(source, /live && selectedAnnouncement \? \(/);
+  netAssert.match(source, /if \(!live \|\| events\.length === 0 \|\| selectedEvent\) return;/);
+  netAssert.match(source, /if \(live\) return;\s*announcementDialogRef\.current\?\.close\(\);\s*setSelectedAnnouncement\(null\);\s*setSelectedEvent\(null\);/);
+});
