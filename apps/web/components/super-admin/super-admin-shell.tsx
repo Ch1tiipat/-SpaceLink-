@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -34,6 +34,7 @@ import {
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { getSuperAdminNotificationHref } from '@/lib/super-admin-notifications';
 import { useAuthState } from '@/lib/use-auth-state';
+import { AdminUnavailableState } from '@/components/admin-ui';
 
 type NavigationItem = {
   label: string;
@@ -138,7 +139,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
-  const { auth, signOut } = useAuthState();
+  const { auth, signOut, retry } = useAuthState();
   const [collapsed, setCollapsed] = useState(false);
   const [launcherY, setLauncherY] = useState(160);
   const launcherDragRef = useRef({ startY: 0, top: 160, moved: false });
@@ -246,6 +247,8 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
       router.replace('/');
     }
   }, [auth, router]);
+
+  if (auth.status === 'unavailable') return <AdminUnavailableState onRetry={retry} />;
 
   if (auth.status !== 'signed-in' || auth.role !== 'SUPER_ADMIN') {
     return (
