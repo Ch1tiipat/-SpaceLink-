@@ -1575,50 +1575,6 @@ function EventPopup({
               ) : null}
             </EventPopupSection>
 
-            {atmospherePreviewUrl ? (
-              <EventPopupSection icon={Camera} title="บรรยากาศภายในงาน">
-                <button
-                  ref={atmosphereTriggerRef}
-                  type="button"
-                  onClick={() => setAtmosphereIndex(0)}
-                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
-                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-                >
-                  <Image
-                    ref={(image) => {
-                      if (image?.complete && image.naturalWidth === 0) {
-                        markAtmosphereImageFailed(atmospherePreviewUrl);
-                      }
-                    }}
-                    src={atmospherePreviewUrl}
-                    alt={`บรรยากาศภายใน ${event.name}`}
-                    onError={() =>
-                      markAtmosphereImageFailed(atmospherePreviewUrl)
-                    }
-                    fill
-                    unoptimized
-                    sizes="(max-width: 1024px) 90vw, 360px"
-                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
-                  />
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
-                  />
-                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
-                    <span>
-                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
-                      <span className="mt-0.5 block text-[9px] text-white/80">
-                        {galleryUrls.length} รูปจากผู้จัดงาน
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
-                      ดูภาพเต็ม
-                    </span>
-                  </span>
-                </button>
-              </EventPopupSection>
-            ) : null}
-
             <EventPopupSection icon={Megaphone} title="ข่าวสารล่าสุด">
               {eventAnnouncements.length ? (
                 <div className="space-y-2">
@@ -1639,9 +1595,19 @@ function EventPopup({
 
             <EventPopupSection icon={MessageCircle} title="ข่าวจากผู้จัดงาน">
               <div className="rounded-xl border border-[#e8e1f4] bg-[#fcfbff] p-3">
-                <strong className="block text-xs text-[#31254b]">{event.organization.name}</strong>
+                <div className="flex items-center gap-3">
+                  <FacebookBrandMark />
+                  <span className="min-w-0">
+                    <strong className="block truncate text-xs text-[#31254b]">
+                      {event.organization.name}
+                    </strong>
+                    <span className="mt-0.5 block text-[10px] text-[#81798f]">
+                      Facebook ผู้จัดงาน
+                    </span>
+                  </span>
+                </div>
                 {facebookUrl ? (
-                  <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-extrabold text-[#6330c6] hover:underline">
+                  <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full border border-[#d4c1f5] px-3 text-xs font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff]">
                     ดูข่าวจาก Facebook ของผู้จัดงาน <ArrowRight aria-hidden className="h-4 w-4" />
                   </a>
                 ) : (
@@ -1734,6 +1700,54 @@ function EventPopup({
                 {!contactPhone && !contactEmail ? <p>ผู้จัดงานยังไม่ได้ระบุช่องทางติดต่อ</p> : null}
               </div>
             </EventPopupSection>
+
+            {atmospherePreviewUrl ? (
+              <EventPopupSection
+                icon={Camera}
+                title="บรรยากาศภายในงาน"
+                className="lg:col-span-3"
+              >
+                <button
+                  ref={atmosphereTriggerRef}
+                  type="button"
+                  onClick={() => setAtmosphereIndex(0)}
+                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
+                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                >
+                  <Image
+                    ref={(image) => {
+                      if (image?.complete && image.naturalWidth === 0) {
+                        markAtmosphereImageFailed(atmospherePreviewUrl);
+                      }
+                    }}
+                    src={atmospherePreviewUrl}
+                    alt={`บรรยากาศภายใน ${event.name}`}
+                    onError={() =>
+                      markAtmosphereImageFailed(atmospherePreviewUrl)
+                    }
+                    fill
+                    unoptimized
+                    sizes="(max-width: 1024px) 90vw, 1040px"
+                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                  />
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
+                  />
+                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
+                    <span>
+                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
+                      <span className="mt-0.5 block text-[9px] text-white/80">
+                        {galleryUrls.length} รูปจากผู้จัดงาน
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
+                      ดูภาพเต็ม
+                    </span>
+                  </span>
+                </button>
+              </EventPopupSection>
+            ) : null}
           </div>
         </div>
 
@@ -1937,6 +1951,19 @@ function EventPopupSection({
       </h2>
       {children}
     </section>
+  );
+}
+
+function FacebookBrandMark() {
+  return (
+    <span
+      aria-hidden
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#6b35df] text-white shadow-[0_6px_18px_rgba(107,53,223,.24)]"
+    >
+      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" focusable="false">
+        <path d="M13.5 22v-8.5h2.85l.43-3.33H13.5V8.04c0-.96.27-1.62 1.65-1.62h1.76V3.44a23.8 23.8 0 0 0-2.57-.13c-2.54 0-4.28 1.55-4.28 4.4v2.46H7.2v3.33h2.86V22h3.44Z" />
+      </svg>
+    </span>
   );
 }
 
