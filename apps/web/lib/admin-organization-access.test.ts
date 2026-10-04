@@ -81,6 +81,27 @@ test('non-admin roles do not receive an admin organization catalog', () => {
   );
 });
 
+test('SUPER_ADMIN catalogs are identical for zero, one and multiple memberships', () => {
+  const platformOrganizations = [
+    platformOrganization,
+    { ...platformOrganization, id: membership.id, name: membership.name },
+    { ...platformOrganization, id: 'other-org', name: 'Other Organization' },
+  ];
+  const catalog = buildAdminOrganizationCatalog('SUPER_ADMIN', [], platformOrganizations);
+  for (const memberships of [
+    [],
+    [membership],
+    [membership, { ...membership, id: 'other-org', membershipRole: 'OWNER' as const }],
+  ]) {
+    assert.deepEqual(buildAdminOrganizationCatalog('SUPER_ADMIN', memberships, platformOrganizations), catalog);
+  }
+  assert.deepEqual(catalog.map(({ id }) => id), platformOrganizations.map(({ id }) => id));
+  assert.ok(catalog.every((organization) => organization.membershipRole === null &&
+    !organization.canEditQuota && !organization.canManagePayments && !organization.canManageZones));
+  assert.equal(selectAdminOrganizationId(catalog, 'other-org', membership.id), 'other-org');
+  assert.equal(selectAdminOrganizationId(catalog, 'unknown', membership.id), membership.id);
+});
+
 test('organization selection prefers requested, stored, then first valid id', () => {
   const organizations = [{ id: 'first' }, { id: 'second' }];
 

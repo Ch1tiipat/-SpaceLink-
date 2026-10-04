@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   BadgeCheck,
   Building2,
@@ -41,6 +41,10 @@ function isHttpUrl(value: string): boolean {
 export function AdminOrganizationSettings() {
   const router = useRouter();
   const { selectedOrganizationId } = useAdminOrganizationSelection();
+  const selectedOrganizationRef = useRef({ id: selectedOrganizationId });
+  if (selectedOrganizationRef.current.id !== selectedOrganizationId) {
+    selectedOrganizationRef.current = { id: selectedOrganizationId };
+  }
   const [access, setAccess] = useState<AccessState>('loading');
   const [token, setToken] = useState('');
   const [userRole, setUserRole] = useState<CurrentUser['role'] | null>(null);
@@ -126,7 +130,16 @@ export function AdminOrganizationSettings() {
     const organization = organizations.find(
       ({ id }) => id === selectedOrganizationId,
     );
-    if (!organization) return;
+    if (!organization) {
+      setOrganizationId('');
+      setOrganizationName('');
+      setPromptpayId('');
+      setFacebookUrl('');
+      setLineUrl('');
+      setCurrentBookingQuota(null);
+      setBookingQuotaInput('');
+      return;
+    }
 
     setOrganizationId(organization.id);
     setOrganizationName(organization.name);
@@ -147,8 +160,10 @@ export function AdminOrganizationSettings() {
   }, [selectedOrganizationId]);
 
   const selectedOrganization = organizations.find(
-    ({ id }) => id === organizationId,
+    ({ id }) => id === selectedOrganizationId,
   );
+  const canSaveSelectedOrganization =
+    !!selectedOrganization && organizationId === selectedOrganizationId;
   const canEditBookingQuota =
     userRole === 'ORG_ADMIN' &&
     (selectedOrganization?.membershipRole === 'OWNER' ||
@@ -160,6 +175,11 @@ export function AdminOrganizationSettings() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      !canSaveSelectedOrganization ||
+      selectedOrganizationRef.current.id !== organizationId
+    ) return;
+    const selectionAtSubmit = selectedOrganizationRef.current;
     setError(null);
     setSuccess(null);
 
@@ -177,9 +197,11 @@ export function AdminOrganizationSettings() {
         promptpayId,
         token,
       );
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       setPromptpayId(updated.promptpayId ?? '');
       setSuccess('บันทึกหมายเลข PromptPay เรียบร้อยแล้ว');
     } catch (cause) {
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       setError(
         cause instanceof Error
           ? cause.message
@@ -192,6 +214,11 @@ export function AdminOrganizationSettings() {
 
   async function handleQuotaSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      !canSaveSelectedOrganization ||
+      selectedOrganizationRef.current.id !== organizationId
+    ) return;
+    const selectionAtSubmit = selectedOrganizationRef.current;
     setQuotaError(null);
     setQuotaSuccess(null);
 
@@ -214,9 +241,11 @@ export function AdminOrganizationSettings() {
         bookingQuotaPerVendor,
         token,
       );
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       quotaUpdated = true;
 
       const refreshed = await getMe(token);
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       const refreshedOrganization = refreshed.organizations.find(
         ({ id }) => id === organizationId,
       );
@@ -232,6 +261,7 @@ export function AdminOrganizationSettings() {
       );
       setQuotaSuccess('บันทึกโควตาการจองเรียบร้อยแล้ว');
     } catch (cause) {
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       setQuotaError(
         quotaUpdated
           ? 'บันทึกแล้วแต่โหลดค่าล่าสุดไม่สำเร็จ กรุณาโหลดหน้านี้ใหม่'
@@ -246,6 +276,11 @@ export function AdminOrganizationSettings() {
 
   async function handleSocialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      !canSaveSelectedOrganization ||
+      selectedOrganizationRef.current.id !== organizationId
+    ) return;
+    const selectionAtSubmit = selectedOrganizationRef.current;
     setSocialError(null);
     setSocialSuccess(null);
 
@@ -278,6 +313,7 @@ export function AdminOrganizationSettings() {
         },
         token,
       );
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       setFacebookUrl(updated.facebookUrl ?? '');
       setLineUrl(updated.lineUrl ?? '');
       setOrganizations((current) =>
@@ -293,6 +329,7 @@ export function AdminOrganizationSettings() {
       );
       setSocialSuccess('บันทึกช่องทางติดต่อขององค์กรเรียบร้อยแล้ว');
     } catch (cause) {
+      if (selectedOrganizationRef.current !== selectionAtSubmit) return;
       setSocialError(
         cause instanceof Error
           ? cause.message
@@ -360,14 +397,23 @@ export function AdminOrganizationSettings() {
             <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
               องค์กรที่กำลังตั้งค่า
             </p>
-            <h2 className="mt-2 text-xl font-black">{organizationName}</h2>
+            <h2 className="mt-2 text-xl font-black">
+              {selectedOrganization ? organizationName : 'องค์กรที่เลือก'}
+            </h2>
             <div className="mt-5 flex items-center gap-2 rounded-2xl bg-[#f5fbf8] px-4 py-3 text-sm font-bold text-[#187554]">
               <BadgeCheck className="h-5 w-5" aria-hidden />
-              ยืนยันสิทธิ์ผู้ดูแลแล้ว
+              {selectedOrganization
+                ? 'ยืนยันสิทธิ์ผู้ดูแลแล้ว'
+                : 'ไม่สามารถแก้ไของค์กรนี้ที่หน้านี้ได้'}
             </div>
           </aside>
 
           <div className="grid gap-6">
+            {!selectedOrganization ? (
+              <p role="alert" className="sl-surface p-6 text-sm font-bold text-muted">
+                ไม่สามารถแก้ไของค์กรนี้ที่หน้านี้ได้ เนื่องจากบัญชีนี้ไม่ได้เป็นสมาชิกขององค์กรที่เลือก
+              </p>
+            ) : null}
             {canManageOrganizationFinance ? (
               <>
                 <form className="sl-surface p-6 sm:p-8" onSubmit={handleSubmit}>
@@ -425,7 +471,7 @@ export function AdminOrganizationSettings() {
 
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || !canSaveSelectedOrganization}
                     className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
@@ -605,7 +651,7 @@ export function AdminOrganizationSettings() {
 
                   <button
                     type="submit"
-                    disabled={socialSaving}
+                    disabled={socialSaving || !canSaveSelectedOrganization}
                     className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {socialSaving ? 'กำลังบันทึก...' : 'บันทึกช่องทางติดต่อ'}
@@ -685,7 +731,7 @@ export function AdminOrganizationSettings() {
 
                 <button
                   type="submit"
-                  disabled={quotaSaving}
+                  disabled={quotaSaving || !canSaveSelectedOrganization}
                   className="mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-violet px-6 py-3 font-extrabold text-white shadow-lg shadow-violet/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {quotaSaving ? 'กำลังบันทึก...' : 'บันทึกโควตาการจอง'}
