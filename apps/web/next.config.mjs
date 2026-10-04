@@ -1,6 +1,24 @@
 import withPWAInit from 'next-pwa';
 import defaultRuntimeCaching from 'next-pwa/cache.js';
 
+// Restrict this rule to the configured API origin; storage and other hosts
+// continue using their existing image/cache rules. Missing/invalid env is safe.
+let apiOrigin;
+try {
+  const url = new URL(process.env.NEXT_PUBLIC_API_URL);
+  if (url.protocol === 'https:' || url.protocol === 'http:') apiOrigin = url.origin;
+} catch {
+  apiOrigin = undefined;
+}
+const apiRuntimeCaching = apiOrigin
+  ? [{
+      urlPattern: new RegExp('^' + apiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:/|$)'),
+      handler: 'NetworkOnly',
+      method: 'GET',
+      options: {},
+    }]
+  : [];
+
 const runtimeCaching = [
   {
     // Authenticated API responses contain account-specific data. They must
@@ -10,6 +28,7 @@ const runtimeCaching = [
     method: 'GET',
     options: {},
   },
+  ...apiRuntimeCaching,
   ...defaultRuntimeCaching,
 ];
 

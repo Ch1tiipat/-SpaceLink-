@@ -23,9 +23,11 @@ import {
   type CurrentUser,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { accessAfterFailure } from '@/lib/admin-access-state';
+import { AdminUnavailableState } from '@/components/admin-ui';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 
-type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
+type AccessState = 'unavailable' | 'loading' | 'allowed' | 'denied' | 'no-organization';
 type OrganizationOption = CurrentUser['organizations'][number];
 type ChartRange = 'day' | 'week' | 'month' | 'year';
 
@@ -47,11 +49,18 @@ export function AdminDashboard() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    setAccess('loading');
+    setToken('');
+    const accessTimeout = window.setTimeout(() => {
+      if (active) setAccess('unavailable');
+      controller.abort();
+    }, 15_000);
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           router.replace('/login');
@@ -75,12 +84,15 @@ export function AdminDashboard() {
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess('denied');
+        if (active) setAccess(accessAfterFailure(cause));
+      } finally {
+        window.clearTimeout(accessTimeout);
       }
     })();
 
     return () => {
       active = false;
+      window.clearTimeout(accessTimeout);
       controller.abort();
     };
   }, [router]);
@@ -135,6 +147,8 @@ export function AdminDashboard() {
     setOrganizationId(nextId);
     selectGlobalOrganization(nextId);
   }
+
+  if (access === 'unavailable') return <AdminUnavailableState />;
 
   if (access === 'loading') {
     return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแลองค์กร" />;

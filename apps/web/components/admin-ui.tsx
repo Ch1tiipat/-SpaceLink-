@@ -10,12 +10,9 @@ import {
   type AdminOrganization,
 } from '@/lib/admin-organization-access';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { accessAfterFailure, canShowProtectedContent, type AdminAccessState } from '@/lib/admin-access-state';
 
-export type AdminAccessState =
-  | 'loading'
-  | 'allowed'
-  | 'denied'
-  | 'no-organization';
+export type { AdminAccessState } from '@/lib/admin-access-state';
 
 export function useAdminPageAccess(requiredPermission?: 'payments' | 'zones'): {
   access: AdminAccessState;
@@ -33,11 +30,18 @@ export function useAdminPageAccess(requiredPermission?: 'payments' | 'zones'): {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    setAccess('loading');
+    setToken('');
+    const accessTimeout = window.setTimeout(() => {
+      if (active) setAccess('unavailable');
+      controller.abort();
+    }, 15_000);
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           router.replace('/login');
@@ -61,12 +65,15 @@ export function useAdminPageAccess(requiredPermission?: 'payments' | 'zones'): {
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess('denied');
+        if (active) setAccess(accessAfterFailure(cause));
+      } finally {
+        window.clearTimeout(accessTimeout);
       }
     })();
 
     return () => {
       active = false;
+      window.clearTimeout(accessTimeout);
       controller.abort();
     };
   }, [router]);
@@ -89,7 +96,9 @@ export function useAdminPageAccess(requiredPermission?: 'payments' | 'zones'): {
   let resolvedAccess = access;
   if (access === 'allowed') {
     if (catalogStatus === 'loading') resolvedAccess = 'loading';
-    else if (catalogStatus === 'error') resolvedAccess = 'denied';
+    else if (catalogStatus === 'error') resolvedAccess = 'unavailable';
+    else if (catalogStatus === 'unavailable') resolvedAccess = 'unavailable';
+    else if (catalogStatus === 'denied') resolvedAccess = 'denied';
     else if (!organization) resolvedAccess = 'no-organization';
     else if (!hasRequiredPermission) resolvedAccess = 'denied';
   }
@@ -113,7 +122,9 @@ export function AdminAccessGate({
     return <AdminPageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแลองค์กร" />;
   }
 
-  if (access !== 'allowed') {
+  if (access === 'unavailable') return <AdminUnavailableState />;
+
+  if (!canShowProtectedContent(access)) {
     return (
       <main className="sl-app-background grid min-h-[calc(100vh-72px)] place-items-center px-5 py-12">
         <section className="max-w-lg rounded-[24px] border border-[#ebe5ef] bg-white p-8 text-center shadow-[0_18px_45px_rgba(54,36,91,0.07)]">
@@ -135,6 +146,20 @@ export function AdminAccessGate({
   }
 
   return <>{children}</>;
+}
+
+export function AdminUnavailableState({ onRetry = () => window.location.reload() }: {
+  onRetry?: () => void;
+}) {
+  return (
+    <main className="sl-app-background grid min-h-[60vh] place-items-center px-5 py-12">
+      <section role="alert" className="sl-surface max-w-lg p-8 text-center">
+        <h1 className="text-xl font-black">ยังตรวจสอบสิทธิ์ไม่ได้</h1>
+        <p className="mt-3 text-sm text-muted">ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง</p>
+        <button type="button" onClick={onRetry} className="sl-action-primary mt-5 px-5 py-3">ลองอีกครั้ง</button>
+      </section>
+    </main>
+  );
 }
 
 export function AdminPage({ children }: { children: ReactNode }) {

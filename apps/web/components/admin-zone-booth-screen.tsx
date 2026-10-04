@@ -38,9 +38,11 @@ import {
   type SaveZoneInput,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { accessAfterFailure } from '@/lib/admin-access-state';
+import { AdminUnavailableState } from '@/components/admin-ui';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 
-type AccessState = 'loading' | 'allowed' | 'denied';
+type AccessState = 'unavailable' | 'loading' | 'allowed' | 'denied';
 type EditorMode = 'create' | 'edit';
 
 type VenueDraft = {
@@ -134,11 +136,18 @@ export function AdminZoneBoothScreen() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    setAccess('loading');
+    setToken('');
+    const accessTimeout = window.setTimeout(() => {
+      if (active) setAccess('unavailable');
+      controller.abort();
+    }, 15_000);
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           router.replace('/login');
@@ -168,12 +177,15 @@ export function AdminZoneBoothScreen() {
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess('denied');
+        if (active) setAccess(accessAfterFailure(cause));
+      } finally {
+        window.clearTimeout(accessTimeout);
       }
     })();
 
     return () => {
       active = false;
+      window.clearTimeout(accessTimeout);
       controller.abort();
     };
   }, [router, selectedOrganizationId]);
@@ -576,6 +588,8 @@ export function AdminZoneBoothScreen() {
     setError(null);
     setSuccess(null);
   }
+
+  if (access === 'unavailable') return <AdminUnavailableState />;
 
   if (access === 'loading')
     return <PageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแล" />;

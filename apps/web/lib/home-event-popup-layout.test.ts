@@ -111,6 +111,45 @@ popupTest('Event popup renders runtime atmosphere images in the approved compact
   popupAssert.doesNotMatch(popup, /event-atmosphere-sut-2569\.png/);
 });
 
+popupTest('organizer news uses the Facebook brand treatment from the prototype', () => {
+  const popup = popupSource.slice(
+    popupSource.indexOf('function EventPopup({'),
+    popupSource.indexOf('function EventPopupStat({'),
+  );
+
+  popupAssert.match(popup, /<FacebookBrandMark \/>/);
+  popupAssert.match(popup, /Facebook ผู้จัดงาน/);
+  popupAssert.match(popup, /ดูข่าวจาก Facebook ของผู้จัดงาน/);
+});
+
+popupTest('Event atmosphere is the final content section in the popup', () => {
+  const popup = popupSource.slice(
+    popupSource.indexOf('function EventPopup({'),
+    popupSource.indexOf('function EventPopupStat({'),
+  );
+  const eventInfoIndex = popup.indexOf('title="ข้อมูล Event"');
+  const atmosphereIndex = popup.indexOf('title="บรรยากาศภายในงาน"');
+  const footerIndex = popup.indexOf('<footer', atmosphereIndex);
+
+  popupAssert.ok(eventInfoIndex >= 0, 'Event info section is missing');
+  popupAssert.ok(
+    atmosphereIndex > eventInfoIndex,
+    'atmosphere must follow Event info',
+  );
+  popupAssert.ok(
+    footerIndex > atmosphereIndex,
+    'atmosphere must remain the final section before the popup footer',
+  );
+  popupAssert.match(
+    popup.slice(atmosphereIndex, footerIndex),
+    /className="lg:col-span-3"/,
+  );
+  popupAssert.doesNotMatch(
+    popup.slice(atmosphereIndex + 1, footerIndex),
+    /<EventPopupSection/,
+  );
+});
+
 popupTest('travel section uses the stored venue coordinates and Google Maps URL', () => {
   popupAssert.match(
     popupSource,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
@@ -46,6 +46,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthState, type AuthState } from '@/lib/use-auth-state';
+import { isAuthorizationFailure } from '@/lib/network-error';
 import {
   askSupportAssistant,
   getEventMap,
@@ -105,7 +106,7 @@ type NavItem =
 type NavGroup = { label: string; items: NavItem[] };
 type AdminOrganizationContextValue = {
   organizations: AdminOrganization[];
-  catalogStatus: 'loading' | 'ready' | 'error';
+  catalogStatus: 'loading' | 'ready' | 'error' | 'unavailable' | 'denied';
   selectedOrganizationId: string;
   selectOrganization: (organizationId: string) => void;
 };
@@ -332,7 +333,7 @@ const FOCUSABLE_SELECTOR =
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { auth, signOut } = useAuthState();
+  const { auth, signOut, retry } = useAuthState();
   const requiresUserSession =
     PRIVATE_USER_ROUTES.some(
       (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -351,7 +352,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     Awaited<ReturnType<typeof getSuperAdminOrganizations>>
   >([]);
   const [superAdminCatalogStatus, setSuperAdminCatalogStatus] = useState<
-    'loading' | 'ready' | 'error'
+    'loading' | 'ready' | 'error' | 'unavailable' | 'denied'
   >('loading');
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -461,7 +462,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           return;
         if (active) {
           setSuperAdminOrganizations([]);
-          setSuperAdminCatalogStatus('error');
+          setSuperAdminCatalogStatus(isAuthorizationFailure(cause) ? 'denied' : 'unavailable');
         }
       }
     })();
@@ -689,7 +690,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  const hasPrivateNavigation = auth.status === 'signed-in';
+  const catalogUnavailable = catalogStatus === 'unavailable' || catalogStatus === 'error';
+  const hasPrivateNavigation = auth.status === 'signed-in' && !catalogUnavailable;
   const isBareRoute = BARE_ROUTES.has(pathname);
   const selectedOrganization = organizations.find(
     (organization) => organization.id === selectedOrganizationId,
@@ -715,12 +717,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     : BOTTOM_NAV;
   const header = (
     <Topbar
-      auth={auth}
+      auth={catalogUnavailable ? { status: 'unavailable' } : auth}
       hasSidebar={hasPrivateNavigation && !isBareRoute}
       mobileSidebarOpen={mobileSidebarOpen}
       mobileSidebarTriggerRef={mobileSidebarTriggerRef}
       onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
-      showTenantSwitcher={isAdmin && isAdminRoute}
+      showTenantSwitcher={isAdmin && isAdminRoute && !catalogUnavailable}
       organizations={organizations}
       selectedOrganizationId={selectedOrganizationId}
       onSelectOrganization={selectOrganization}
@@ -733,6 +735,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (isBareRoute) return <>{header}{children}</>;
 
+  if (isAdminRoute && (auth.status === 'unavailable' || catalogUnavailable)) {
+    return <>{header}<main className="sl-page grid min-h-[60vh] place-items-center p-6"><section role="alert" className="sl-surface p-8 text-center"><p>ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง</p><button type="button" onClick={() => window.location.reload()} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button></section></main></>;
+  }
+
   if (requiresUserSession && auth.status !== 'signed-in') {
     return (
       <>
@@ -743,6 +749,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {auth.status === 'loading'
             ? 'กำลังตรวจสอบการเข้าสู่ระบบ…'
+            : auth.status === 'unavailable'
+              ? <div><p>ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง</p><button type="button" onClick={retry} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button></div>
             : 'กำลังพาไปหน้าเข้าสู่ระบบ…'}
         </main>
       </>
@@ -1319,6 +1327,10 @@ function Topbar({
           </>
         )}
 
+        {auth.status === 'unavailable' && (
+          <button type="button" onClick={() => window.location.reload()} className="rounded-xl px-3 py-2 text-xs font-bold text-muted">ยังตรวจสอบบัญชีไม่ได้ · ลองอีกครั้ง</button>
+        )}
+
         {auth.status === 'signed-in' && (
           <AccountMenu
             fullName={auth.fullName}
@@ -1784,7 +1796,9 @@ function FloatingSupport({
     if (auth.status !== 'signed-in') {
       setZoneStep('idle');
       setAnswer(
-        'กรุณาเข้าสู่ระบบก่อนครับ เพื่อให้ผมอ่านเฉพาะข้อมูลร้านของคุณและแนะนำบูธที่ยังว่างได้อย่างปลอดภัย',
+        auth.status === 'unavailable'
+          ? 'ยังตรวจสอบบัญชีไม่ได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง'
+          : 'กรุณาเข้าสู่ระบบก่อนครับ เพื่อให้ผมอ่านเฉพาะข้อมูลร้านของคุณและแนะนำบูธที่ยังว่างได้อย่างปลอดภัย',
       );
       return;
     }
@@ -2441,7 +2455,7 @@ function FloatingSupport({
             ) : null}
 
             {zoneStep === 'idle' &&
-            auth.status !== 'signed-in' &&
+            auth.status === 'signed-out' &&
             isZoneRecommendationQuestion(askedQuestion) ? (
               <Link
                 href="/login"

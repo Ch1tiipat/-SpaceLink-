@@ -1,4 +1,5 @@
 import { ApiError } from './api';
+import { isNetworkFailure } from './network-error';
 
 /**
  * Error copy for the authentication screens, kept in one place so /login and
@@ -59,6 +60,7 @@ export const BLACKLISTED_MESSAGE: AuthErrorMessage = {
 export function describeSendError(
   error: SupabaseAuthErrorLike,
   mode: 'login' | 'register',
+  online?: boolean,
 ): AuthErrorMessage {
   if (
     mode === 'login' &&
@@ -93,6 +95,8 @@ export function describeSendError(
       text: 'ระบบไม่รับอีเมลนี้ ตรวจสอบตัวสะกดหรือลองใช้อีเมลอื่น',
     };
   }
+
+  if (isNetworkFailure(error)) return describeConnectionSendError(online);
 
   return {
     text: 'ส่งรหัสยืนยันไม่สำเร็จ ตรวจสอบอีเมลอีกครั้งแล้วกดส่งรหัสใหม่',
@@ -170,12 +174,21 @@ export function describeProfileError(cause: unknown): AuthErrorMessage {
 
 /** An exception thrown before the request left the browser — in practice the
  * missing-environment-variable error, whose message is already specific. */
-export function describeUnexpectedSendError(cause: unknown): AuthErrorMessage {
+export function describeUnexpectedSendError(cause: unknown, online?: boolean): AuthErrorMessage {
+  if (isNetworkFailure(cause)) return describeConnectionSendError(online);
   if (cause instanceof Error && cause.message.length > 0) {
     return { text: cause.message };
   }
 
   return {
     text: 'ส่งรหัสยืนยันไม่สำเร็จ ตรวจสอบอีเมลอีกครั้งแล้วกดส่งรหัสใหม่',
+  };
+}
+
+export function describeConnectionSendError(online?: boolean): AuthErrorMessage {
+  return {
+    text: online === false
+      ? 'ขณะนี้ออฟไลน์ กรุณาเชื่อมต่ออินเทอร์เน็ตก่อนขอรหัสยืนยัน'
+      : 'ขณะนี้เชื่อมต่อไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองส่งรหัสอีกครั้ง',
   };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import { useRouter } from 'next/navigation';
 import {
   useEffect,
@@ -92,6 +92,7 @@ import {
 import { filterUsableAtmosphereUrls } from '@/lib/home-event-atmosphere';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { connectionMessage, isNetworkFailure } from '@/lib/network-error';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
 type SavedEventsAccess =
@@ -145,6 +146,9 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const savedGeneration = useRef(0);
   const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
     status: 'loading',
   });
@@ -164,24 +168,68 @@ export default function DiscoveryPage() {
   const [selectedEvent, setSelectedEvent] = useState<DiscoveryEvent | null>(
     null,
   );
+  const live = online && !loading && !error;
+
+  useEffect(() => {
+    if (live) return;
+    announcementDialogRef.current?.close();
+    setSelectedAnnouncement(null);
+    setSelectedEvent(null);
+  }, [live]);
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    setEvents([]);
+    if (navigator.onLine === false) {
+      setError(connectionMessage(false));
+      setLoading(false);
+      return;
+    }
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      setError('การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองอีกครั้ง');
+      setLoading(false);
+    }, 15_000);
     getEvents(controller.signal)
-      .then(setEvents)
+      .then((rows) => { if (!controller.signal.aborted) setEvents(rows); })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        setError(
-          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
-        );
+        if (controller.signal.aborted) return;
+        setError(isNetworkFailure(cause)
+          ? connectionMessage(navigator.onLine)
+          : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง');
       })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!controller.signal.aborted || timedOut) setLoading(false);
+      });
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [loadAttempt]);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const offline = () => setOnline(false);
+    const online = () => {
+      setOnline(true);
+      setLoadAttempt((attempt) => attempt + 1);
+      setSavedLoadAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    return () => {
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
+    };
   }, []);
 
   useEffect(() => {
-    if (loading || events.length === 0 || selectedEvent) return;
+    if (!live || events.length === 0 || selectedEvent) return;
     const requestedSlug = new URLSearchParams(window.location.search).get(
       'event',
     );
@@ -192,7 +240,7 @@ export default function DiscoveryPage() {
     } else {
       replaceEventPopupUrl(null);
     }
-  }, [events, loading, selectedEvent]);
+  }, [events, live, selectedEvent]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -240,50 +288,80 @@ export default function DiscoveryPage() {
   }, [events]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let controller = new AbortController();
     let active = true;
+    let authEventSeen = false;
+    let readyToken: string | undefined;
+    let timeout: number | undefined;
     let supabase: ReturnType<typeof getSupabaseBrowserClient>;
-
+    const setFailure = (cause: unknown) => setSavedEvents({
+      status: 'error',
+      message: isNetworkFailure(cause)
+        ? connectionMessage(navigator.onLine)
+        : 'โหลดรายการโปรดไม่สำเร็จ กรุณาลองอีกครั้ง',
+    });
     setSavedEvents({ status: 'loading' });
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch {
-      setSavedEvents({ status: 'signed-out' });
-      return;
+    savedGeneration.current += 1;
+    try { supabase = getSupabaseBrowserClient(); }
+    catch { setSavedEvents({ status: 'signed-out' }); return; }
+
+    async function resolve(token: string | undefined) {
+      readyToken = undefined;
+      const generation = ++savedGeneration.current;
+      controller.abort();
+      controller = new AbortController();
+      const request = controller;
+      window.clearTimeout(timeout);
+      setPendingSavedEventId(null);
+      setSavedNotice(null);
+      setSavedEvents({ status: 'loading' });
+      if (!token) { setSavedEvents({ status: 'signed-out' }); return; }
+      timeout = window.setTimeout(() => {
+        if (active && generation === savedGeneration.current) {
+          setSavedEvents({ status: 'error', message: 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองอีกครั้ง' });
+        }
+        request.abort();
+      }, 15_000);
+      try {
+        const eventIds = await getSavedEventIds(token, request.signal);
+        if (active && !request.signal.aborted && generation === savedGeneration.current) {
+          readyToken = token;
+          setSavedEvents({ status: 'ready', token, eventIds });
+        }
+      } catch (cause) {
+        if (active && !request.signal.aborted && generation === savedGeneration.current) setFailure(cause);
+      } finally {
+        if (generation === savedGeneration.current) window.clearTimeout(timeout);
+      }
     }
 
-    void (async () => {
-      try {
-        const { data, error: sessionError } =
-          await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        const token = data.session?.access_token;
-        if (!token) {
-          if (active) setSavedEvents({ status: 'signed-out' });
-          return;
-        }
-
-        const eventIds = await getSavedEventIds(token, controller.signal);
-        if (active) setSavedEvents({ status: 'ready', token, eventIds });
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          return;
-        }
-        if (active) {
-          setSavedEvents({
-            status: 'error',
-            message:
-              cause instanceof Error
-                ? cause.message
-                : 'โหลดรายการโปรดไม่สำเร็จ',
-          });
-        }
+    timeout = window.setTimeout(() => {
+      if (active) setSavedEvents({ status: 'error', message: 'ยังตรวจสอบบัญชีไม่ได้ กรุณาลองอีกครั้ง' });
+    }, 15_000);
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) throw error;
+      if (active && !authEventSeen) return resolve(data.session?.access_token);
+    }).catch((cause: unknown) => {
+      if (active && !authEventSeen) {
+        window.clearTimeout(timeout);
+        setFailure(cause);
       }
-    })();
-
+    });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+      authEventSeen = true;
+      // Visibility recovery can emit SIGNED_IN with the same session again.
+      // Preserve ready favorites and any pending mutation for that session.
+      if (event !== 'SIGNED_OUT' && readyToken && session?.access_token === readyToken) return;
+      // Do not await API work inside a Supabase auth callback.
+      void resolve(session?.access_token);
+    });
     return () => {
       active = false;
+      savedGeneration.current += 1;
+      window.clearTimeout(timeout);
       controller.abort();
+      data.subscription.unsubscribe();
     };
   }, [savedLoadAttempt]);
 
@@ -314,8 +392,8 @@ export default function DiscoveryPage() {
     : error
       ? [{ value: '', label: 'โหลดงานหรือสถานที่ไม่สำเร็จ' }]
       : withAllOption(
-          filters.events,
-          filters.events.length > 0
+          live ? filters.events : [],
+          live && filters.events.length > 0
             ? 'ทุกงานหรือสถานที่'
             : 'ยังไม่มีงานหรือสถานที่',
         );
@@ -324,8 +402,8 @@ export default function DiscoveryPage() {
     : error
       ? [{ value: '', label: 'โหลดจังหวัดไม่สำเร็จ' }]
       : withAllOption(
-          filters.areas,
-          filters.areas.length > 0 ? 'ทุกจังหวัด' : 'ยังไม่มีข้อมูลจังหวัด',
+          live ? filters.areas : [],
+          live && filters.areas.length > 0 ? 'ทุกจังหวัด' : 'ยังไม่มีข้อมูลจังหวัด',
         );
 
   const visibleEvents = useMemo(
@@ -356,13 +434,13 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     const dialog = announcementDialogRef.current;
-    if (selectedAnnouncement && dialog && !dialog.open) dialog.showModal();
-  }, [selectedAnnouncement]);
+    if (live && selectedAnnouncement && dialog && !dialog.open) dialog.showModal();
+  }, [live, selectedAnnouncement]);
 
   useEffect(() => {
     const dialog = eventDialogRef.current;
-    if (selectedEvent && dialog && !dialog.open) dialog.showModal();
-  }, [selectedEvent]);
+    if (live && selectedEvent && dialog && !dialog.open) dialog.showModal();
+  }, [live, selectedEvent]);
 
   function scrollUpdates(direction: -1 | 1) {
     const scroller = announcementsScrollerRef.current;
@@ -399,6 +477,7 @@ export default function DiscoveryPage() {
     if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
 
     const previousEventIds = savedEvents.eventIds;
+    const generation = savedGeneration.current;
     const { token } = savedEvents;
     const wasSaved = previousEventIds.includes(event.id);
     setPendingSavedEventId(event.id);
@@ -417,6 +496,7 @@ export default function DiscoveryPage() {
       } else {
         await saveEvent(event.id, token);
       }
+      if (generation !== savedGeneration.current) return;
       setSavedNotice({
         kind: 'success',
         message: wasSaved
@@ -424,6 +504,7 @@ export default function DiscoveryPage() {
           : `บันทึก ${event.name} เป็นรายการโปรดแล้ว`,
       });
     } catch (cause) {
+      if (generation !== savedGeneration.current) return;
       setSavedEvents({ status: 'ready', token, eventIds: previousEventIds });
       setSavedNotice({
         kind: 'error',
@@ -433,7 +514,7 @@ export default function DiscoveryPage() {
             : 'นำ Event ออกจากรายการโปรดไม่สำเร็จ',
       });
     } finally {
-      setPendingSavedEventId(null);
+      if (generation === savedGeneration.current) setPendingSavedEventId(null);
     }
   }
 
@@ -553,7 +634,7 @@ export default function DiscoveryPage() {
             onChange={(categoryId) =>
               setDraftFilters((current) => ({ ...current, categoryId }))
             }
-            options={withAllOption(filters.categories, 'ทุกหมวดสินค้า')}
+            options={withAllOption(live ? filters.categories : [], 'ทุกหมวดสินค้า')}
           />
           <SelectMenu
             label="สถานะ Event"
@@ -565,6 +646,7 @@ export default function DiscoveryPage() {
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
               { value: 'closed', label: 'ปิดจอง' },
+              { value: 'past', label: 'งานที่ผ่านมา' },
             ]}
           />
           <button
@@ -576,7 +658,7 @@ export default function DiscoveryPage() {
         </form>
       </section>
 
-      <section
+      {live ? <section
         id="announcements"
         className="shell !mt-[52px] max-sm:!mt-[38px]"
         aria-labelledby="announcements-heading"
@@ -700,7 +782,9 @@ export default function DiscoveryPage() {
         )}
       </section>
 
-      {savedEvents.status !== 'signed-out' ? (
+      : null}
+
+      {live && savedEvents.status !== 'signed-out' ? (
         <SavedEventsSection
           status={savedEvents.status}
           events={favoriteEvents}
@@ -729,13 +813,13 @@ export default function DiscoveryPage() {
               ค้นหาอีเวนต์สำหรับร้านคุณ
             </h2>
             <p className="mt-1.5 text-sm text-muted">
-              เลือกดูงานทั้งหมด หรือตามสถานะเปิดจองและปิดจอง
+              เลือกดูงานทั้งหมด งานที่เปิดจอง ปิดจอง หรืองานที่ผ่านมา
             </p>
           </div>
         </div>
-        <div className="mb-6 overflow-x-auto [scrollbar-width:none]">
+        <div className="mb-6">
           <div
-            className="flex min-w-max justify-end gap-2.5 max-md:justify-start"
+            className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:justify-end"
             role="group"
             aria-label="กรองอีเวนต์ตามสถานะการรับจอง"
           >
@@ -744,6 +828,7 @@ export default function DiscoveryPage() {
                 { value: 'all', label: 'ทั้งหมด' },
                 { value: 'bookable', label: 'เปิดจอง' },
                 { value: 'closed', label: 'ปิดจอง' },
+                { value: 'past', label: 'งานที่ผ่านมา' },
               ] as const
             ).map((option) => {
               const active = appliedFilters.eventStatus === option.value;
@@ -765,7 +850,7 @@ export default function DiscoveryPage() {
             })}
           </div>
         </div>
-        {!loading && !error ? (
+        {live ? (
           <div className="mb-4 flex items-end justify-between gap-4 max-sm:flex-col max-sm:items-start">
             <div>
               <h3 className="text-xl font-black text-[#2d2040]">
@@ -773,14 +858,18 @@ export default function DiscoveryPage() {
                   ? 'อีเวนต์ทั้งหมด'
                   : appliedFilters.eventStatus === 'bookable'
                     ? 'อีเวนต์ที่เปิดรับจอง'
-                    : 'อีเวนต์ที่ปิดรับจอง'}
+                    : appliedFilters.eventStatus === 'past'
+                      ? 'อีเวนต์ที่ผ่านมา'
+                      : 'อีเวนต์ที่ปิดรับจอง'}
               </h3>
               <p className="mt-1 text-sm text-muted">
                 {appliedFilters.eventStatus === 'all'
                   ? 'รวมงานที่เปิดและปิดรับจอง โดยไม่รวมงานที่สิ้นสุดแล้ว'
                   : appliedFilters.eventStatus === 'bookable'
                     ? 'เลือกดูรายละเอียดและจองพื้นที่ได้ทันที'
-                    : 'งานยังไม่สิ้นสุด แต่ไม่มีบูธเปิดรับจองเพิ่ม'}
+                    : appliedFilters.eventStatus === 'past'
+                      ? 'งานที่สิ้นสุดแล้ว เปิดดูรายละเอียดได้ แต่จองไม่ได้'
+                      : 'งานยังไม่สิ้นสุด แต่ไม่มีบูธเปิดรับจองเพิ่ม'}
               </p>
             </div>
             <span className="rounded-full border border-[#ded2f4] bg-white/80 px-3 py-1.5 text-xs font-bold text-[#6f627f]">
@@ -788,7 +877,16 @@ export default function DiscoveryPage() {
             </span>
           </div>
         ) : null}
-        {loading ? (
+        {!online ? (
+          <div role="alert" className="sl-surface p-8 text-center">
+            <p>{connectionMessage(false)}</p>
+            <button type="button" onClick={() => {
+              setOnline(navigator.onLine);
+              setLoadAttempt((attempt) => attempt + 1);
+              setSavedLoadAttempt((attempt) => attempt + 1);
+            }} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button>
+          </div>
+        ) : loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <span
@@ -799,7 +897,8 @@ export default function DiscoveryPage() {
           </div>
         ) : error ? (
           <div className="sl-surface p-8 text-center text-sm text-red-700">
-            โหลดข้อมูลไม่สำเร็จ: {error}
+            <p role="alert">{error}</p>
+            <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button>
           </div>
         ) : visibleEvents.length === 0 ? (
           <div className="sl-surface p-8 text-center">
@@ -808,10 +907,14 @@ export default function DiscoveryPage() {
               className="mx-auto h-9 w-9 text-violet"
             />
             <h3 className="mt-3 text-lg font-extrabold">
-              ไม่พบ Event ตามเงื่อนไขที่เลือก
+              {appliedFilters.eventStatus === 'past'
+                ? 'ไม่พบอีเวนต์ที่ผ่านมา ตามเงื่อนไขที่เลือก'
+                : 'ไม่พบ Event ตามเงื่อนไขที่เลือก'}
             </h3>
             <p className="mt-1 text-sm text-muted">
-              ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง
+              {appliedFilters.eventStatus === 'past'
+                ? 'ลองเปลี่ยนงาน พื้นที่ หรือหมวดสินค้า หรือเลือกสถานะอื่นเพื่อดูงานที่ยังไม่สิ้นสุด'
+                : 'ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง'}
             </p>
             <button
               type="button"
@@ -841,9 +944,9 @@ export default function DiscoveryPage() {
         )}
       </section>
 
-      {featuredEvent && <PopularAreaRecommendations event={featuredEvent} />}
+      {live && featuredEvent && <PopularAreaRecommendations event={featuredEvent} />}
 
-      <BookingJourney event={featuredEvent} />
+      <BookingJourney event={live ? featuredEvent : undefined} />
       <PlatformBenefits />
       {savedNotice ? (
         <div
@@ -868,7 +971,7 @@ export default function DiscoveryPage() {
         }}
         className="w-[min(680px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[24px] border border-[#ded2f3] bg-white p-0 text-ink shadow-[0_30px_100px_rgba(28,15,58,.28)] backdrop:bg-[#1b1030]/65"
       >
-        {selectedAnnouncement ? (
+        {live && selectedAnnouncement ? (
           <div className="flex max-h-[calc(100dvh-24px)] flex-col">
             <div className="flex items-center justify-between gap-4 border-b border-[#eee8f7] px-5 py-4 sm:px-7">
               <span className="rounded-full bg-[#f1ebff] px-3 py-1.5 text-[11px] font-extrabold text-[#6d28d9]">
@@ -968,7 +1071,7 @@ export default function DiscoveryPage() {
           </div>
         ) : null}
       </dialog>
-      {selectedEvent ? (
+      {live && selectedEvent ? (
         <EventPopup
           dialogRef={eventDialogRef}
           event={selectedEvent}
@@ -1565,50 +1668,6 @@ function EventPopup({
               ) : null}
             </EventPopupSection>
 
-            {atmospherePreviewUrl ? (
-              <EventPopupSection icon={Camera} title="บรรยากาศภายในงาน">
-                <button
-                  ref={atmosphereTriggerRef}
-                  type="button"
-                  onClick={() => setAtmosphereIndex(0)}
-                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
-                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-                >
-                  <Image
-                    ref={(image) => {
-                      if (image?.complete && image.naturalWidth === 0) {
-                        markAtmosphereImageFailed(atmospherePreviewUrl);
-                      }
-                    }}
-                    src={atmospherePreviewUrl}
-                    alt={`บรรยากาศภายใน ${event.name}`}
-                    onError={() =>
-                      markAtmosphereImageFailed(atmospherePreviewUrl)
-                    }
-                    fill
-                    unoptimized
-                    sizes="(max-width: 1024px) 90vw, 360px"
-                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
-                  />
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
-                  />
-                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
-                    <span>
-                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
-                      <span className="mt-0.5 block text-[9px] text-white/80">
-                        {galleryUrls.length} รูปจากผู้จัดงาน
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
-                      ดูภาพเต็ม
-                    </span>
-                  </span>
-                </button>
-              </EventPopupSection>
-            ) : null}
-
             <EventPopupSection icon={Megaphone} title="ข่าวสารล่าสุด">
               {eventAnnouncements.length ? (
                 <div className="space-y-2">
@@ -1629,9 +1688,19 @@ function EventPopup({
 
             <EventPopupSection icon={MessageCircle} title="ข่าวจากผู้จัดงาน">
               <div className="rounded-xl border border-[#e8e1f4] bg-[#fcfbff] p-3">
-                <strong className="block text-xs text-[#31254b]">{event.organization.name}</strong>
+                <div className="flex items-center gap-3">
+                  <FacebookBrandMark />
+                  <span className="min-w-0">
+                    <strong className="block truncate text-xs text-[#31254b]">
+                      {event.organization.name}
+                    </strong>
+                    <span className="mt-0.5 block text-[10px] text-[#81798f]">
+                      Facebook ผู้จัดงาน
+                    </span>
+                  </span>
+                </div>
                 {facebookUrl ? (
-                  <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-extrabold text-[#6330c6] hover:underline">
+                  <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full border border-[#d4c1f5] px-3 text-xs font-extrabold text-[#6330c6] transition hover:bg-[#f5f0ff]">
                     ดูข่าวจาก Facebook ของผู้จัดงาน <ArrowRight aria-hidden className="h-4 w-4" />
                   </a>
                 ) : (
@@ -1724,6 +1793,54 @@ function EventPopup({
                 {!contactPhone && !contactEmail ? <p>ผู้จัดงานยังไม่ได้ระบุช่องทางติดต่อ</p> : null}
               </div>
             </EventPopupSection>
+
+            {atmospherePreviewUrl ? (
+              <EventPopupSection
+                icon={Camera}
+                title="บรรยากาศภายในงาน"
+                className="lg:col-span-3"
+              >
+                <button
+                  ref={atmosphereTriggerRef}
+                  type="button"
+                  onClick={() => setAtmosphereIndex(0)}
+                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
+                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                >
+                  <Image
+                    ref={(image) => {
+                      if (image?.complete && image.naturalWidth === 0) {
+                        markAtmosphereImageFailed(atmospherePreviewUrl);
+                      }
+                    }}
+                    src={atmospherePreviewUrl}
+                    alt={`บรรยากาศภายใน ${event.name}`}
+                    onError={() =>
+                      markAtmosphereImageFailed(atmospherePreviewUrl)
+                    }
+                    fill
+                    unoptimized
+                    sizes="(max-width: 1024px) 90vw, 1040px"
+                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                  />
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
+                  />
+                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
+                    <span>
+                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
+                      <span className="mt-0.5 block text-[9px] text-white/80">
+                        {galleryUrls.length} รูปจากผู้จัดงาน
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
+                      ดูภาพเต็ม
+                    </span>
+                  </span>
+                </button>
+              </EventPopupSection>
+            ) : null}
           </div>
         </div>
 
@@ -1927,6 +2044,19 @@ function EventPopupSection({
       </h2>
       {children}
     </section>
+  );
+}
+
+function FacebookBrandMark() {
+  return (
+    <span
+      aria-hidden
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#6b35df] text-white shadow-[0_6px_18px_rgba(107,53,223,.24)]"
+    >
+      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" focusable="false">
+        <path d="M13.5 22v-8.5h2.85l.43-3.33H13.5V8.04c0-.96.27-1.62 1.65-1.62h1.76V3.44a23.8 23.8 0 0 0-2.57-.13c-2.54 0-4.28 1.55-4.28 4.4v2.46H7.2v3.33h2.86V22h3.44Z" />
+      </svg>
+    </span>
   );
 }
 

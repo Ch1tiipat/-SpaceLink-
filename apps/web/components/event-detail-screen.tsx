@@ -1,6 +1,6 @@
 'use client';
 
-import Image from 'next/image';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
