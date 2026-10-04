@@ -14,6 +14,8 @@ const {
 } = require('./home-event-filters.ts') as typeof import('./home-event-filters');
 const { hasEventEndCalendarDayPassed } =
   require('./event-time.ts') as typeof import('./event-time');
+const { isEventBookable } =
+  require('./event-booking-rules.ts') as typeof import('./event-booking-rules');
 
 const isBookableForTest = (
   candidate: Pick<DiscoveryEvent, 'status' | 'endDate'>,
@@ -410,4 +412,151 @@ homeFilterTest(
     );
   },
 );
+
+homeFilterTest('filters past events by Bangkok calendar day, including early ICT hours', () => {
+  const calendarEvents = ['2026-10-03', '2026-10-04', '2026-10-05'].map(
+    (day) => makeHomeEvent({
+      id: day,
+      name: `Market ${day}`,
+      endDate: `${day}T00:00:00.000Z`,
+    }),
+  );
+
+  for (const time of ['00:00:00', '00:30:00', '06:59:59', '07:00:00', '23:59:59']) {
+    const now = new Date(`2026-10-04T${time}+07:00`);
+    homeFilterAssert.deepEqual(
+      filterHomeEvents(
+        calendarEvents,
+        { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'past' },
+        isEventBookable,
+        now,
+      ).map(({ id }) => id),
+      ['2026-10-03'],
+      time,
+    );
+    for (const eventStatus of ['all', 'bookable'] as const) {
+      homeFilterAssert.deepEqual(
+        filterHomeEvents(
+          calendarEvents,
+          { ...EMPTY_HOME_EVENT_FILTERS, eventStatus },
+          isEventBookable,
+          now,
+        ).map(({ id }) => id),
+        ['2026-10-04', '2026-10-05'],
+        `${eventStatus} at ${time}`,
+      );
+    }
+  }
+});
+
+homeFilterTest('moves the final day into past only at Bangkok midnight', () => {
+  const finalDay = makeHomeEvent({
+    id: 'final-day',
+    name: 'Final Day Market',
+    endDate: '2026-10-03T00:00:00.000Z',
+    endTime: '09:00',
+  });
+  for (const [instant, expectedPast] of [
+    ['2026-10-03T23:59:59.999+07:00', false],
+    ['2026-10-04T00:00:00.000+07:00', true],
+  ] as const) {
+    const now = new Date(instant);
+    homeFilterAssert.equal(
+      filterHomeEvents(
+        [finalDay],
+        { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'past' },
+        isEventBookable,
+        now,
+      ).length,
+      expectedPast ? 1 : 0,
+    );
+    homeFilterAssert.equal(isEventBookable(finalDay, now), !expectedPast);
+    homeFilterAssert.equal(
+      filterHomeEvents([finalDay], EMPTY_HOME_EVENT_FILTERS, isEventBookable, now).length,
+      expectedPast ? 0 : 1,
+    );
+  }
+});
+
+homeFilterTest('combines past with query, area and category filters', () => {
+  const pastEvents = [
+    makeHomeEvent({ id: 'matching', name: 'Campus Market', endDate: '2026-08-03T00:00:00.000Z' }),
+    makeHomeEvent({ id: 'other-name', name: 'City Fair', endDate: '2026-08-03T00:00:00.000Z' }),
+    makeHomeEvent({
+      id: 'other-area', name: 'Campus Market', endDate: '2026-08-03T00:00:00.000Z',
+      venue: { id: 'other-venue', name: 'Bangkok Venue', address: 'กรุงเทพมหานคร' },
+    }),
+    makeHomeEvent({
+      id: 'other-category', name: 'Campus Market', endDate: '2026-08-03T00:00:00.000Z',
+      categories: [{ id: 'fashion', name: 'แฟชั่น' }],
+    }),
+    makeHomeEvent({ id: 'future-match', name: 'Campus Market' }),
+  ];
+  const selected = {
+    query: '  CAMPUS  ',
+    area: ' นครราชสีมา ',
+    categoryId: 'food',
+    eventStatus: 'past' as const,
+  };
+  homeFilterAssert.deepEqual(
+    filterHomeEvents(pastEvents, selected, isEventBookable, NOW).map(({ id }) => id),
+    ['matching'],
+  );
+  homeFilterAssert.deepEqual(
+    filterHomeEvents(
+      pastEvents,
+      { ...selected, query: 'ลานกิจกรรมกลางเมือง' },
+      isEventBookable,
+      NOW,
+    ).map(({ id }) => id),
+    ['matching', 'other-name'],
+  );
+});
+
+homeFilterTest('sorts past events newest first with stable ties without mutating input', () => {
+  const source = [
+    makeHomeEvent({ id: 'older', name: 'Older', endDate: '2026-08-01T00:00:00.000Z' }),
+    makeHomeEvent({ id: 'latest-first', name: 'Latest First', endDate: '2026-09-20T00:00:00.000Z' }),
+    makeHomeEvent({ id: 'middle', name: 'Middle', endDate: '2026-09-01T00:00:00.000Z' }),
+    makeHomeEvent({ id: 'latest-second', name: 'Latest Second', endDate: '2026-09-20T00:00:00.000Z' }),
+  ];
+  const originalOrder = source.map(({ id }) => id);
+  homeFilterAssert.deepEqual(
+    filterHomeEvents(
+      source,
+      { ...EMPTY_HOME_EVENT_FILTERS, eventStatus: 'past' },
+      isEventBookable,
+      NOW,
+    ).map(({ id }) => id),
+    ['latest-first', 'latest-second', 'middle', 'older'],
+  );
+  homeFilterAssert.deepEqual(source.map(({ id }) => id), originalOrder);
+});
+
+homeFilterTest('keeps existing status filters unchanged and past has no bookable featured event', () => {
+  const source = [
+    makeHomeEvent({ id: 'closed', name: 'Closed', status: 'DRAFT' }),
+    makeHomeEvent({ id: 'past', name: 'Past', status: 'ONGOING', endDate: '2026-09-20T00:00:00.000Z' }),
+    makeHomeEvent({ id: 'bookable', name: 'Bookable' }),
+    makeHomeEvent({ id: 'invalid-date', name: 'Invalid Date', endDate: '' }),
+  ];
+  const expected = {
+    all: ['bookable', 'closed', 'invalid-date'],
+    bookable: ['bookable'],
+    closed: ['closed', 'invalid-date'],
+    past: ['past'],
+  };
+  for (const eventStatus of ['all', 'bookable', 'closed', 'past'] as const) {
+    const visible = filterHomeEvents(
+      source,
+      { ...EMPTY_HOME_EVENT_FILTERS, eventStatus },
+      isEventBookable,
+      NOW,
+    );
+    homeFilterAssert.deepEqual(visible.map(({ id }) => id), expected[eventStatus]);
+    if (eventStatus === 'past' || eventStatus === 'closed') {
+      homeFilterAssert.equal(visible.find((event) => isEventBookable(event, NOW)), undefined);
+    }
+  }
+});
 

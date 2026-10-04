@@ -1,7 +1,7 @@
 import type { DiscoveryEvent } from './api';
 import { hasEventEndCalendarDayPassed } from './event-time.ts';
 
-export type EventStatusFilter = 'all' | 'bookable' | 'closed';
+export type EventStatusFilter = 'all' | 'bookable' | 'closed' | 'past';
 
 export type HomeEventFilters = {
   query: string;
@@ -220,9 +220,16 @@ export function filterHomeEvents(
         )) &&
       ((filters.eventStatus === 'all' && !hasEnded) ||
         (filters.eventStatus === 'bookable' && bookable) ||
-        (filters.eventStatus === 'closed' && !hasEnded && !bookable))
+        (filters.eventStatus === 'closed' && !hasEnded && !bookable) ||
+        (filters.eventStatus === 'past' && hasEnded))
     );
   });
+
+  if (filters.eventStatus === 'past') {
+    return filtered.sort(
+      (left, right) => Date.parse(right.endDate) - Date.parse(left.endDate),
+    );
+  }
 
   if (filters.eventStatus !== 'all') return filtered;
 
