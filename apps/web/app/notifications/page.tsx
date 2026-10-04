@@ -398,6 +398,12 @@ export default function NotificationsPage() {
       return;
     }
 
+    if (auth.status === 'unavailable') {
+      setNotifications([]);
+      setAccess({ status: 'error', message: 'ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง' });
+      return;
+    }
+
     if (canUseUxPreview()) {
       setNotifications(createPreviewNotifications());
       setPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
@@ -710,7 +716,12 @@ export default function NotificationsPage() {
           ) : null}
         </header>
 
-        {auth.status === 'loading' || access.status === 'loading' ? (
+        {auth.status === 'unavailable' ? (
+          <NotificationErrorState
+            message="ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง"
+            onRetry={() => window.location.reload()}
+          />
+        ) : auth.status === 'loading' || access.status === 'loading' ? (
           <NotificationSkeleton />
         ) : auth.status === 'signed-out' || access.status === 'signed-out' ? (
           <SignedOutState />

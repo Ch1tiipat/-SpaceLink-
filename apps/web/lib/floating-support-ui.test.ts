@@ -16,7 +16,7 @@ const floatingSupportSource = readSupportSource(
 supportTest('user Web Push and floating support do not render on Admin routes', () => {
   supportAssert.match(
     floatingSupportSource,
-    /activeBroadcast && !isAdminRoute/,
+    /notificationToasts.length > 0 && !isAdminRoute/,
   );
   supportAssert.match(floatingSupportSource, /!isAdminRoute \? \(\s*<FloatingSupport/);
   supportAssert.match(

@@ -10,9 +10,11 @@ self.addEventListener('push', (event) => {
   }
 
   const title = payload.title || 'SpaceLink';
+  const notificationId = typeof payload.notificationId === 'string' ? payload.notificationId : undefined;
   const options = {
     body: payload.body || 'คุณมีการแจ้งเตือนใหม่',
-    data: { url: payload.url || '/notifications' },
+    data: { url: payload.url || '/notifications', ...(notificationId ? { notificationId } : {}) },
+    ...(notificationId ? { tag: notificationId } : {}),
     icon: '/app-icon-192.png',
   };
 
@@ -23,7 +25,7 @@ self.addEventListener('push', (event) => {
         .matchAll({ type: 'window', includeUncontrolled: true })
         .then((clients) => {
           clients.forEach((client) => {
-            client.postMessage({ type: 'SPACELINK_PUSH_RECEIVED' });
+            client.postMessage({ type: 'SPACELINK_PUSH_RECEIVED', ...(notificationId ? { notificationId } : {}) });
           });
         }),
     ]),

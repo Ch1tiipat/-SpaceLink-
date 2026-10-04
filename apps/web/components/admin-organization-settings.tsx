@@ -19,11 +19,13 @@ import {
   type CurrentUser,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { accessAfterFailure } from '@/lib/admin-access-state';
+import { AdminUnavailableState } from '@/components/admin-ui';
 import { classifyFacebookUrl } from '@/lib/facebook-embed';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 import { AdminTeamManagement } from '@/components/admin-team-management';
 
-type AccessState = 'loading' | 'allowed' | 'denied' | 'no-organization';
+type AccessState = 'unavailable' | 'loading' | 'allowed' | 'denied' | 'no-organization';
 
 const PROMPTPAY_PATTERN = /^(\d{10}|\d{13}|\d{15})$/;
 
@@ -68,11 +70,18 @@ export function AdminOrganizationSettings() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    setAccess('loading');
+    setToken('');
+    const accessTimeout = window.setTimeout(() => {
+      if (active) setAccess('unavailable');
+      controller.abort();
+    }, 15_000);
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           router.replace('/login');
@@ -99,12 +108,15 @@ export function AdminOrganizationSettings() {
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess('denied');
+        if (active) setAccess(accessAfterFailure(cause));
+      } finally {
+        window.clearTimeout(accessTimeout);
       }
     })();
 
     return () => {
       active = false;
+      window.clearTimeout(accessTimeout);
       controller.abort();
     };
   }, [router]);
@@ -290,6 +302,8 @@ export function AdminOrganizationSettings() {
       setSocialSaving(false);
     }
   }
+
+  if (access === 'unavailable') return <AdminUnavailableState />;
 
   if (access === 'loading') {
     return (

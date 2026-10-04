@@ -1326,6 +1326,9 @@ describe('BookingsService', () => {
         }) as object,
       );
       expect(createReviewEligibilityNotifications).toHaveBeenCalledTimes(1);
+      expect(createReviewEligibilityNotifications).toHaveBeenCalledWith(
+        groupForSlip.bookings.map((booking) => booking.id),
+      );
     });
 
     it('keeps every member pending when the verified total is wrong', async () => {
@@ -1557,6 +1560,9 @@ describe('BookingsService', () => {
         },
       );
       expect(createReviewEligibilityNotifications).toHaveBeenCalledTimes(1);
+      expect(createReviewEligibilityNotifications).toHaveBeenCalledWith([
+        BOOKING_ID,
+      ]);
     });
 
     it('keeps confirmation successful when notification delivery fails', async () => {
