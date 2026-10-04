@@ -83,6 +83,22 @@ homeFilterTest('extracts Thai provinces for filter options', () => {
   );
   homeFilterAssert.equal(provinceFromAddress('นครราชสีมา'), 'นครราชสีมา');
   homeFilterAssert.equal(
+    provinceFromAddress('ต.พลาง อ.เมือง นครราชสีมา'),
+    'นครราชสีมา',
+  );
+  homeFilterAssert.equal(provinceFromAddress('จ.นครราชสีมา'), 'นครราชสีมา');
+  homeFilterAssert.equal(
+    provinceFromAddress(
+      '45 ถนนนิมมานเหมินท์ อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ 50200',
+    ),
+    'เชียงใหม่',
+  );
+  homeFilterAssert.equal(provinceFromAddress('Bangkok'), 'กรุงเทพมหานคร');
+  homeFilterAssert.equal(
+    provinceFromAddress('Nakhon Ratchasima'),
+    'นครราชสีมา',
+  );
+  homeFilterAssert.equal(
     provinceFromAddress('111 ถนนมหาวิทยาลัย อำเภอเมือง'),
     '',
   );

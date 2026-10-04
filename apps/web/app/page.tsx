@@ -736,7 +736,7 @@ export default function DiscoveryPage() {
         <div className="mb-6 overflow-x-auto [scrollbar-width:none]">
           <div
             className="flex min-w-max justify-end gap-2.5 max-md:justify-start"
-            role="tablist"
+            role="group"
             aria-label="กรองอีเวนต์ตามสถานะการรับจอง"
           >
             {(
@@ -751,8 +751,7 @@ export default function DiscoveryPage() {
                 <button
                   key={option.value}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
+                  aria-pressed={active}
                   onClick={() => applyEventStatus(option.value)}
                   className={`min-h-12 rounded-full border px-6 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(109,40,217,.10)] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet ${
                     active
