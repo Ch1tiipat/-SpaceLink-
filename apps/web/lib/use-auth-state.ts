@@ -99,7 +99,9 @@ export function useAuthState(): {
         return;
       }
 
-      setAuth({ status: 'loading' });
+      // Re-verification must keep mounted pages intact while rights are checked.
+      // Failures still replace the signed-in state with unavailable/signed-out.
+      setAuth((current) => current.status === 'signed-in' ? current : { status: 'loading' });
       const timeout = window.setTimeout(() => requestController.abort(), 15_000);
       try {
         const me = await getMe(token, requestController.signal);

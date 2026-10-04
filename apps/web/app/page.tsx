@@ -283,6 +283,7 @@ export default function DiscoveryPage() {
     let controller = new AbortController();
     let active = true;
     let authEventSeen = false;
+    let readyToken: string | undefined;
     let timeout: number | undefined;
     let supabase: ReturnType<typeof getSupabaseBrowserClient>;
     const setFailure = (cause: unknown) => setSavedEvents({
@@ -297,6 +298,7 @@ export default function DiscoveryPage() {
     catch { setSavedEvents({ status: 'signed-out' }); return; }
 
     async function resolve(token: string | undefined) {
+      readyToken = undefined;
       const generation = ++savedGeneration.current;
       controller.abort();
       controller = new AbortController();
@@ -315,6 +317,7 @@ export default function DiscoveryPage() {
       try {
         const eventIds = await getSavedEventIds(token, request.signal);
         if (active && !request.signal.aborted && generation === savedGeneration.current) {
+          readyToken = token;
           setSavedEvents({ status: 'ready', token, eventIds });
         }
       } catch (cause) {
@@ -339,6 +342,9 @@ export default function DiscoveryPage() {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return;
       authEventSeen = true;
+      // Visibility recovery can emit SIGNED_IN with the same session again.
+      // Preserve ready favorites and any pending mutation for that session.
+      if (event !== 'SIGNED_OUT' && readyToken && session?.access_token === readyToken) return;
       // Do not await API work inside a Supabase auth callback.
       void resolve(session?.access_token);
     });
