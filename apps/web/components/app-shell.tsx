@@ -1260,7 +1260,7 @@ function Topbar({
           className="flex min-w-0 items-center gap-2.5"
         >
           <BrandMark />
-          <span className="hidden bg-[linear-gradient(100deg,#4c16ad,#8b3df3)] bg-clip-text text-lg font-black tracking-[-0.5px] text-transparent min-[390px]:inline sm:text-2xl">
+          <span className={`hidden bg-[linear-gradient(100deg,#4c16ad,#8b3df3)] bg-clip-text text-lg font-black tracking-[-0.5px] text-transparent ${hasSidebar ? 'sm:inline' : 'min-[390px]:inline'} sm:text-2xl`}>
             SpaceLink
           </span>
         </Link>
@@ -2901,23 +2901,19 @@ function BottomNav({
 
 function BrandMark({ lightBackground = false }: { lightBackground?: boolean }) {
   return (
-    <span
+    <Image
       aria-hidden
-      className={`grid h-[38px] w-[38px] shrink-0 place-items-center overflow-hidden rounded-xl p-0.5 ${
+      src="/brand/spacelink-mark.png"
+      alt=""
+      width={56}
+      height={56}
+      sizes="(max-width: 639px) 48px, 56px"
+      className={`h-12 w-12 shrink-0 object-contain sm:h-14 sm:w-14 ${
         lightBackground
-          ? 'bg-white shadow-[0_10px_25px_rgba(0,0,0,.2)]'
-          : 'bg-white shadow-[0_8px_18px_#7C3AED2e]'
+          ? 'drop-shadow-[0_8px_14px_rgba(0,0,0,.18)]'
+          : 'drop-shadow-[0_7px_13px_rgba(92,33,190,.2)]'
       }`}
-    >
-      <Image
-        src="/brand/spacelink-mark.png"
-        alt=""
-        width={34}
-        height={34}
-        sizes="34px"
-        className="h-[34px] w-[34px] object-contain"
-      />
-    </span>
+    />
   );
 }
 
