@@ -105,6 +105,22 @@ describe('EventBannerStorageService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('stores a map image under a distinct unique name in the existing event-image bucket', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    const url = await service.uploadForEvent(
+      { buffer: pngOf(1600, 900) },
+      EVENT_ID,
+      'map',
+    );
+
+    expect(url).toMatch(
+      new RegExp(
+        `^${SUPABASE_URL}/storage/v1/object/public/event-banners/${EVENT_ID}/map-[0-9a-f-]{36}$`,
+      ),
+    );
+  });
+
   it('deletes only URLs owned by the event banner bucket', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
     const stored = `${SUPABASE_URL}/storage/v1/object/public/event-banners/${EVENT_ID}/11111111-1111-4111-8111-111111111111`;

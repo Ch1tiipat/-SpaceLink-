@@ -84,9 +84,11 @@ export class EventBannerStorageService {
   async uploadForEvent(
     file: UploadedEventBannerFile,
     eventId: string,
+    kind: 'banner' | 'map' = 'banner',
   ): Promise<string> {
-    const contentType = this.validateImage(file);
-    const objectPath = `${eventId}/${randomUUID()}`;
+    const contentType = this.validateImage(file, kind);
+    const label = kind === 'map' ? 'รูปแผนผังพื้นที่ภายในงาน' : 'ภาพปกอีเวนต์';
+    const objectPath = `${eventId}/${kind === 'map' ? 'map-' : ''}${randomUUID()}`;
 
     let response: Response;
     try {
@@ -100,12 +102,12 @@ export class EventBannerStorageService {
       });
     } catch (error) {
       if (error instanceof StorageTimeoutError) {
-        throw new BadGatewayException('หมดเวลารอจัดเก็บภาพปกอีเวนต์');
+        throw new BadGatewayException(`หมดเวลารอจัดเก็บ${label}`);
       }
-      throw new BadGatewayException('ไม่สามารถจัดเก็บภาพปกอีเวนต์ได้');
+      throw new BadGatewayException(`ไม่สามารถจัดเก็บ${label}ได้`);
     }
     if (!response.ok) {
-      throw new BadGatewayException('ไม่สามารถจัดเก็บภาพปกอีเวนต์ได้');
+      throw new BadGatewayException(`ไม่สามารถจัดเก็บ${label}ได้`);
     }
 
     return this.publicUrl(objectPath);
@@ -136,13 +138,17 @@ export class EventBannerStorageService {
     }
   }
 
-  private validateImage(file: UploadedEventBannerFile): BannerContentType {
+  private validateImage(
+    file: UploadedEventBannerFile,
+    kind: 'banner' | 'map',
+  ): BannerContentType {
+    const label = kind === 'map' ? 'รูปแผนผัง' : 'ภาพปก';
     const size = file.buffer.byteLength;
     if (size === 0) {
-      throw new BadRequestException('ไฟล์ภาพปกว่างเปล่า');
+      throw new BadRequestException(`ไฟล์${label}ว่างเปล่า`);
     }
     if (size > MAX_EVENT_BANNER_FILE_SIZE_BYTES) {
-      throw new BadRequestException('ภาพปกต้องมีขนาดไม่เกิน 2 MB');
+      throw new BadRequestException(`${label}ต้องมีขนาดไม่เกิน 2 MB`);
     }
 
     if (
@@ -150,26 +156,31 @@ export class EventBannerStorageService {
       file.buffer[1] === 0xd8 &&
       file.buffer[2] === 0xff
     ) {
-      this.assertDimensions(readJpegDimensions(file.buffer));
+      this.assertDimensions(readJpegDimensions(file.buffer), label);
       return 'image/jpeg';
     }
     if (PNG_SIGNATURE.every((byte, index) => file.buffer[index] === byte)) {
-      this.assertDimensions(readPngDimensions(file.buffer));
+      this.assertDimensions(readPngDimensions(file.buffer), label);
       return 'image/png';
     }
     throw new BadRequestException('รองรับเฉพาะไฟล์ JPEG และ PNG');
   }
 
-  private assertDimensions(dimensions: ImageDimensions | null): void {
+  private assertDimensions(
+    dimensions: ImageDimensions | null,
+    label: string,
+  ): void {
     if (!dimensions || dimensions.width === 0 || dimensions.height === 0) {
-      throw new BadRequestException('ไฟล์ภาพปกเสียหาย ไม่สามารถอ่านขนาดภาพได้');
+      throw new BadRequestException(
+        `ไฟล์${label}เสียหาย ไม่สามารถอ่านขนาดภาพได้`,
+      );
     }
     if (
       dimensions.width > MAX_EVENT_BANNER_DIMENSION_PX ||
       dimensions.height > MAX_EVENT_BANNER_DIMENSION_PX
     ) {
       throw new BadRequestException(
-        `ภาพปกต้องมีความกว้างและความสูงไม่เกิน ${MAX_EVENT_BANNER_DIMENSION_PX} พิกเซล`,
+        `${label}ต้องมีความกว้างและความสูงไม่เกิน ${MAX_EVENT_BANNER_DIMENSION_PX} พิกเซล`,
       );
     }
   }

@@ -170,6 +170,34 @@ export class OrganizationEventsController {
     return this.eventsService.removeBanner(eventId, organizationId);
   }
 
+  @Post(':eventId/map-image')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { files: 1, fileSize: MAX_EVENT_BANNER_FILE_SIZE_BYTES },
+    }),
+  )
+  uploadMapImage(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+    @UploadedFile() file: UploadedEventBannerFile | undefined,
+  ) {
+    return this.eventsService.uploadMapImage(eventId, organizationId, file);
+  }
+
+  @Delete(':eventId/map-image')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN)
+  @OrgScoped('organizationId')
+  removeMapImage(
+    @CurrentOrgId() organizationId: string,
+    @Param('eventId', new LooseUuidPipe()) eventId: string,
+  ) {
+    return this.eventsService.removeMapImage(eventId, organizationId);
+  }
+
   @Post(':eventId/join-information')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ORG_ADMIN)

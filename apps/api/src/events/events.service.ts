@@ -865,11 +865,82 @@ export class EventsService {
     return withGalleryUrls(updated);
   }
 
+  async uploadMapImage(
+    id: string,
+    orgId: string,
+    file: UploadedEventBannerFile | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('กรุณาเลือกรูปแผนผังพื้นที่ภายในงาน');
+    }
+
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { mapImageUrl: true },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const uploadedUrl = await this.bannerStorage.uploadForEvent(
+      file,
+      id,
+      'map',
+    );
+    let updated;
+    try {
+      updated = await this.prisma.event.update({
+        where: { id, organizationId: orgId },
+        data: { mapImageUrl: uploadedUrl },
+        include: {
+          joinInformation: { orderBy: { sortOrder: 'asc' } },
+          information: { orderBy: { sortOrder: 'asc' } },
+        },
+      });
+    } catch (error) {
+      await this.cleanupMapImageUrl(uploadedUrl);
+      throw error;
+    }
+
+    await this.cleanupMapImageUrl(existing.mapImageUrl);
+    return withGalleryUrls(updated);
+  }
+
+  async removeMapImage(id: string, orgId: string) {
+    const existing = await this.prisma.event.findFirst({
+      where: { id, organizationId: orgId },
+      select: { mapImageUrl: true },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    const updated = await this.prisma.event.update({
+      where: { id, organizationId: orgId },
+      data: { mapImageUrl: null },
+      include: {
+        joinInformation: { orderBy: { sortOrder: 'asc' } },
+        information: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    await this.cleanupMapImageUrl(existing.mapImageUrl);
+    return withGalleryUrls(updated);
+  }
+
+  private async cleanupMapImageUrl(url: string | null): Promise<void> {
+    if (!url) return;
+    try {
+      const references = await this.prisma.event.count({
+        where: { OR: [{ mapImageUrl: url }, { bannerUrl: url }] },
+      });
+      if (references > 0) return;
+      await this.bannerStorage.removeByUrl(url);
+    } catch {
+      this.logger.error('Failed to clean up an event map image object');
+    }
+  }
+
   private async cleanupBannerUrl(url: string | null): Promise<void> {
     if (!url) return;
     try {
       const references = await this.prisma.event.count({
-        where: { bannerUrl: url },
+        where: { OR: [{ bannerUrl: url }, { mapImageUrl: url }] },
       });
       if (references > 0) return;
       await this.bannerStorage.removeByUrl(url);
