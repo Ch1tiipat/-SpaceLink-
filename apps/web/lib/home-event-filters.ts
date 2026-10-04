@@ -23,11 +23,134 @@ export const EMPTY_HOME_EVENT_FILTERS: HomeEventFilters = {
   eventStatus: 'all',
 };
 
+const THAI_PROVINCES = [
+  'กรุงเทพมหานคร',
+  'กระบี่',
+  'กาญจนบุรี',
+  'กาฬสินธุ์',
+  'กำแพงเพชร',
+  'ขอนแก่น',
+  'จันทบุรี',
+  'ฉะเชิงเทรา',
+  'ชลบุรี',
+  'ชัยนาท',
+  'ชัยภูมิ',
+  'ชุมพร',
+  'เชียงราย',
+  'เชียงใหม่',
+  'ตรัง',
+  'ตราด',
+  'ตาก',
+  'นครนายก',
+  'นครปฐม',
+  'นครพนม',
+  'นครราชสีมา',
+  'นครศรีธรรมราช',
+  'นครสวรรค์',
+  'นนทบุรี',
+  'นราธิวาส',
+  'น่าน',
+  'บึงกาฬ',
+  'บุรีรัมย์',
+  'ปทุมธานี',
+  'ประจวบคีรีขันธ์',
+  'ปราจีนบุรี',
+  'ปัตตานี',
+  'พระนครศรีอยุธยา',
+  'พะเยา',
+  'พังงา',
+  'พัทลุง',
+  'พิจิตร',
+  'พิษณุโลก',
+  'เพชรบุรี',
+  'เพชรบูรณ์',
+  'แพร่',
+  'ภูเก็ต',
+  'มหาสารคาม',
+  'มุกดาหาร',
+  'แม่ฮ่องสอน',
+  'ยโสธร',
+  'ยะลา',
+  'ร้อยเอ็ด',
+  'ระนอง',
+  'ระยอง',
+  'ราชบุรี',
+  'ลพบุรี',
+  'ลำปาง',
+  'ลำพูน',
+  'เลย',
+  'ศรีสะเกษ',
+  'สกลนคร',
+  'สงขลา',
+  'สตูล',
+  'สมุทรปราการ',
+  'สมุทรสงคราม',
+  'สมุทรสาคร',
+  'สระแก้ว',
+  'สระบุรี',
+  'สิงห์บุรี',
+  'สุโขทัย',
+  'สุพรรณบุรี',
+  'สุราษฎร์ธานี',
+  'สุรินทร์',
+  'หนองคาย',
+  'หนองบัวลำภู',
+  'อ่างทอง',
+  'อำนาจเจริญ',
+  'อุดรธานี',
+  'อุตรดิตถ์',
+  'อุทัยธานี',
+  'อุบลราชธานี',
+] as const;
+
+const THAI_PROVINCES_BY_LENGTH = [...THAI_PROVINCES].sort(
+  (left, right) => right.length - left.length,
+);
+
+const PREFIXED_THAI_PROVINCE_PATTERN = new RegExp(
+  `(?:จังหวัด|จ\\.)\\s*(${THAI_PROVINCES_BY_LENGTH.join('|')})(?=$|[\\s,.;:()\\-/0-9])`,
+);
+
+const AMBIGUOUS_UNPREFIXED_PROVINCES = new Set([
+  'ตาก',
+  'เลย',
+  'น่าน',
+  'ตรัง',
+  'ตราด',
+  'แพร่',
+  'ยะลา',
+  'สตูล',
+]);
+
+const ENGLISH_PROVINCE_ALIASES = [
+  { value: 'bangkok', province: 'กรุงเทพมหานคร' },
+  { value: 'nakhon ratchasima', province: 'นครราชสีมา' },
+  { value: 'chiang mai', province: 'เชียงใหม่' },
+] as const;
+
 export function provinceFromAddress(address: string): string {
-  const prefixed = /จังหวัด(\S+)/.exec(address);
-  if (prefixed) return prefixed[1];
-  if (address.includes('กรุงเทพมหานคร')) return 'กรุงเทพมหานคร';
-  return address;
+  const normalized = address.trim().replace(/\s+/g, ' ');
+  const prefixedThaiProvince = PREFIXED_THAI_PROVINCE_PATTERN.exec(normalized);
+  if (prefixedThaiProvince) return prefixedThaiProvince[1];
+
+  const exactThaiProvince = THAI_PROVINCES_BY_LENGTH.find(
+    (province) => normalized === province,
+  );
+  if (exactThaiProvince) return exactThaiProvince;
+
+  const unprefixedThaiProvince = THAI_PROVINCES_BY_LENGTH.find(
+    (province) =>
+      !AMBIGUOUS_UNPREFIXED_PROVINCES.has(province) &&
+      normalized.includes(province),
+  );
+  if (unprefixedThaiProvince) return unprefixedThaiProvince;
+
+  const normalizedEnglish = normalized.toLocaleLowerCase('en-US');
+  return (
+    ENGLISH_PROVINCE_ALIASES.find(({ value }) =>
+      normalizedEnglish.includes(value),
+    )?.province ?? ''
+  );
 }
 
 export function buildHomeEventFilterOptions(
@@ -51,13 +174,13 @@ export function buildHomeAreaFilterOptions(
   events: DiscoveryEvent[],
 ): HomeFilterOption[] {
   return uniqueHomeFilterOptions(
-    events.flatMap((event) => {
+    events.map((event) => {
       const address = event.venue.address?.trim() ?? '';
       const province = provinceFromAddress(address);
-      return [province, event.venue.name, address].map((area) => ({
-        value: area,
-        label: area,
-      }));
+      return {
+        value: province,
+        label: province,
+      };
     }),
   );
 }
@@ -75,6 +198,8 @@ export function filterHomeEvents(
   const areaKeyword = normalizeSearchText(filters.area);
 
   const filtered = events.filter((event) => {
+    const hasEnded = hasEventEndCalendarDayPassed(event.endDate, now);
+    const bookable = isBookable(event, now);
     const searchable = normalizeSearchText(
       [event.name, event.venue.name].join(' '),
     );
@@ -93,9 +218,9 @@ export function filterHomeEvents(
         event.categories.some(
           (category) => category.id === filters.categoryId,
         )) &&
-      (filters.eventStatus === 'all' ||
-        (filters.eventStatus === 'bookable' && isBookable(event, now)) ||
-        (filters.eventStatus === 'closed' && !isBookable(event, now)))
+      ((filters.eventStatus === 'all' && !hasEnded) ||
+        (filters.eventStatus === 'bookable' && bookable) ||
+        (filters.eventStatus === 'closed' && !hasEnded && !bookable))
     );
   });
 
@@ -105,11 +230,7 @@ export function filterHomeEvents(
     .map((event, sourceIndex) => ({
       event,
       sourceIndex,
-      priority: isBookable(event, now)
-        ? 0
-        : hasEventEndCalendarDayPassed(event.endDate, now)
-          ? 2
-          : 1,
+      priority: isBookable(event, now) ? 0 : 1,
     }))
     .sort(
       (left, right) =>
@@ -137,3 +258,4 @@ function uniqueHomeFilterOptions(
     return [{ ...option, value, label }];
   });
 }
+

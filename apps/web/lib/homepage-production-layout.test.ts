@@ -38,6 +38,19 @@ homepageTest('production homepage keeps the approved prototype hierarchy', () =>
   homepageAssert.doesNotMatch(homepageSource, /HomepageCallToAction/);
 });
 
+homepageTest('event status filters use toggle button semantics', () => {
+  const statusFilterSource = homepageSource.slice(
+    homepageSource.indexOf('aria-label="กรองอีเวนต์ตามสถานะการรับจอง"') - 180,
+    homepageSource.indexOf("{filteredCurrentEvents.length > 0 ?"),
+  );
+
+  homepageAssert.match(statusFilterSource, /role="group"/);
+  homepageAssert.match(statusFilterSource, /aria-pressed=\{active\}/);
+  homepageAssert.doesNotMatch(statusFilterSource, /role="tablist"/);
+  homepageAssert.doesNotMatch(statusFilterSource, /role="tab"/);
+  homepageAssert.doesNotMatch(statusFilterSource, /aria-selected/);
+});
+
 homepageTest('production homepage retains runtime announcement states without prototype data', () => {
   homepageAssert.match(homepageSource, /announcementLoadStatus === 'error'/);
   homepageAssert.match(homepageSource, /visibleAnnouncements\.length === 0/);

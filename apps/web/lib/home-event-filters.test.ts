@@ -81,6 +81,62 @@ homeFilterTest('extracts Thai provinces for filter options', () => {
     provinceFromAddress('เขตปทุมวัน กรุงเทพมหานคร'),
     'กรุงเทพมหานคร',
   );
+  homeFilterAssert.equal(provinceFromAddress('นครราชสีมา'), 'นครราชสีมา');
+  homeFilterAssert.equal(
+    provinceFromAddress('ต.พลาง อ.เมือง นครราชสีมา'),
+    'นครราชสีมา',
+  );
+  homeFilterAssert.equal(provinceFromAddress('จ.นครราชสีมา'), 'นครราชสีมา');
+  homeFilterAssert.equal(
+    provinceFromAddress(
+      '45 ถนนนิมมานเหมินท์ อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ 50200',
+    ),
+    'เชียงใหม่',
+  );
+  homeFilterAssert.equal(provinceFromAddress('Bangkok'), 'กรุงเทพมหานคร');
+  homeFilterAssert.equal(
+    provinceFromAddress('Nakhon Ratchasima'),
+    'นครราชสีมา',
+  );
+  homeFilterAssert.equal(
+    provinceFromAddress('99 ถนนสุขุมวิท จังหวัดตาก 63000'),
+    'ตาก',
+  );
+  homeFilterAssert.equal(provinceFromAddress('จ.น่าน'), 'น่าน');
+  homeFilterAssert.equal(
+    provinceFromAddress('111 ถนนมหาวิทยาลัย อำเภอเมือง'),
+    '',
+  );
+});
+
+homeFilterTest('extracts provinces from observed production venue addresses', () => {
+  homeFilterAssert.equal(
+    provinceFromAddress(
+      'บ้านสันติสุข บ้านเลขที่ 23/2 อำเภอ นาเชือก มหาสารคาม 44170',
+    ),
+    'มหาสารคาม',
+  );
+  homeFilterAssert.equal(
+    provinceFromAddress('มหาวิทยาลัยเทคโนโลยีสุรนารี นครราชสีมา'),
+    'นครราชสีมา',
+  );
+});
+
+homeFilterTest('does not infer ambiguous short provinces from larger words', () => {
+  const falsePositiveAddresses = [
+    '99 ถนนตากสิน เมือง',
+    'ต.น่านฟ้า',
+    'เดินทางเลยตลาดไปทางเหนือ',
+    'ร้านตรังใจ',
+    'ร้านแพร่ภาพชุมชน',
+    'ถนนตราดใหม่',
+    'โครงการยะลาใจ',
+    'สตูลดอกไม้',
+  ];
+
+  for (const address of falsePositiveAddresses) {
+    homeFilterAssert.equal(provinceFromAddress(address), '');
+  }
 });
 
 homeFilterTest(
@@ -120,6 +176,20 @@ homeFilterTest(
     homeFilterAssert.equal(
       areaOptions.filter(({ value }) => value === 'นครราชสีมา').length,
       1,
+    );
+    homeFilterAssert.equal(
+      areaOptions.some(({ value }) => value === 'ลานกิจกรรมกลางเมือง'),
+      false,
+    );
+    homeFilterAssert.equal(
+      areaOptions.some(
+        ({ value }) => value === 'อำเภอเมือง จังหวัดนครราชสีมา',
+      ),
+      false,
+    );
+    homeFilterAssert.deepEqual(
+      areaOptions.map(({ value }) => value),
+      ['นครราชสีมา', 'กรุงเทพมหานคร'],
     );
     homeFilterAssert.ok(areaOptions.every(({ value }) => value.length > 0));
   },
@@ -200,7 +270,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['future', 'ended'],
+      ['future'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
@@ -238,7 +308,7 @@ homeFilterTest('filters bookable and closed events independently', () => {
       isBookableForTest,
       NOW,
     ).map(({ id }) => id),
-    ['ended', 'closed'],
+    ['closed'],
   );
   homeFilterAssert.equal(
     hasEventEndCalendarDayPassed(events[2].endDate, NOW),
@@ -249,6 +319,12 @@ homeFilterTest('filters bookable and closed events independently', () => {
 homeFilterTest(
   'keeps status chips compatible with the other home discovery filters',
   () => {
+    const registrationClosed = makeHomeEvent({
+      id: 'closed',
+      name: 'Registration Closed',
+      status: 'DRAFT',
+    });
+
     homeFilterAssert.deepEqual(
       filterHomeEvents(
         events,
@@ -265,7 +341,7 @@ homeFilterTest(
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
-        events,
+        [...events, registrationClosed],
         {
           ...EMPTY_HOME_EVENT_FILTERS,
           area: 'นครราชสีมา',
@@ -275,7 +351,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ended'],
+      ['closed'],
     );
     homeFilterAssert.deepEqual(
       filterHomeEvents(
@@ -284,13 +360,13 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['future', 'ongoing', 'ended'],
+      ['future', 'ongoing'],
     );
   },
 );
 
 homeFilterTest(
-  'stably ranks bookable events before closed and ended events in all',
+  'stably ranks bookable events before closed events and excludes ended events',
   () => {
     const closed = makeHomeEvent({
       id: 'closed',
@@ -311,7 +387,7 @@ homeFilterTest(
         isBookableForTest,
         NOW,
       ).map(({ id }) => id),
-      ['ongoing', 'future', 'second-bookable', 'closed', 'ended'],
+      ['ongoing', 'future', 'second-bookable', 'closed'],
     );
   },
 );
@@ -334,3 +410,4 @@ homeFilterTest(
     );
   },
 );
+
