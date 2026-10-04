@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMe, type CurrentUser, type UserRole } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { isAuthorizationFailure } from '@/lib/network-error';
 import {
   getUxPreviewMode,
   setUxPreviewMode,
@@ -19,6 +20,7 @@ import {
 export type AuthState =
   | { status: 'loading' }
   | { status: 'signed-out' }
+  | { status: 'unavailable' }
   | {
       status: 'signed-in';
       fullName: string;
@@ -39,8 +41,11 @@ export type AuthState =
 export function useAuthState(): {
   auth: AuthState;
   signOut: () => void;
+  retry: () => void;
 } {
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
     const previewMode = getUxPreviewMode();
@@ -61,8 +66,13 @@ export function useAuthState(): {
       return subscribeToUxPreview(applyPreview);
     }
 
-    const controller = new AbortController();
+    let controller = new AbortController();
     let active = true;
+    let generation = 0;
+    let authEventSeen = false;
+    const sessionTimeout = window.setTimeout(() => {
+      if (active) setAuth({ status: 'unavailable' });
+    }, 15_000);
 
     let supabase: ReturnType<typeof getSupabaseBrowserClient>;
     try {
@@ -72,10 +82,16 @@ export function useAuthState(): {
       // the caller still has to render. Discovery is public and must not
       // depend on auth being set up.
       setAuth({ status: 'signed-out' });
+      window.clearTimeout(sessionTimeout);
       return;
     }
 
     async function resolve(token: string | undefined) {
+      const requestGeneration = ++generation;
+      controller.abort();
+      controller = new AbortController();
+      const requestController = controller;
+      window.clearTimeout(sessionTimeout);
       if (!token) {
         if (active) {
           setAuth({ status: 'signed-out' });
@@ -83,9 +99,11 @@ export function useAuthState(): {
         return;
       }
 
+      setAuth({ status: 'loading' });
+      const timeout = window.setTimeout(() => requestController.abort(), 15_000);
       try {
-        const me = await getMe(token, controller.signal);
-        if (active) {
+        const me = await getMe(token, requestController.signal);
+        if (active && requestGeneration === generation) {
           setAuth({
             status: 'signed-in',
             fullName: me.fullName,
@@ -93,27 +111,28 @@ export function useAuthState(): {
             organizations: me.organizations,
           });
         }
-      } catch {
-        // This drives presentation only; authorization is enforced server-side
-        // on every request (§14.6). If the profile cannot be read — API cold,
-        // token rejected — fall back to signed-out rather than a half-known
-        // state.
-        if (active) {
-          setAuth({ status: 'signed-out' });
+      } catch (cause) {
+        // Missing rights cannot be inferred from a failed request. No session
+        // is deleted; a retry must resolve rights from the API again.
+        if (active && requestGeneration === generation) {
+          setAuth({ status: isAuthorizationFailure(cause) ? 'signed-out' : 'unavailable' });
         }
+      } finally {
+        window.clearTimeout(timeout);
       }
     }
 
     void supabase.auth
       .getSession()
-      .then(({ data }) => resolve(data.session?.access_token))
-      .catch(() => {
-        // `getSession()` itself rejecting — corrupted session storage is the
-        // usual cause. `resolve` never runs in that case, so without this the
-        // header holds its placeholder for good and the rejection goes
-        // unhandled. Signed-out for the same reason a failed `/auth/me` is.
-        if (active) {
-          setAuth({ status: 'signed-out' });
+      .then(({ data, error }) => {
+        if (error) throw error;
+        if (!authEventSeen && active) return resolve(data.session?.access_token);
+      })
+      .catch((cause: unknown) => {
+        // A failed session lookup cannot establish that the user signed out.
+        if (active && !authEventSeen) {
+          window.clearTimeout(sessionTimeout);
+          setAuth({ status: isAuthorizationFailure(cause) ? 'signed-out' : 'unavailable' });
         }
       });
 
@@ -123,15 +142,23 @@ export function useAuthState(): {
       if (event === 'INITIAL_SESSION') {
         return;
       }
+      authEventSeen = true;
       void resolve(session?.access_token);
     });
 
     return () => {
       active = false;
+      window.clearTimeout(sessionTimeout);
       controller.abort();
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [attempt]);
+
+  useEffect(() => {
+    if (auth.status !== 'unavailable') return;
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [auth.status, retry]);
 
   const signOut = useCallback(() => {
     if (getUxPreviewMode()) {
@@ -152,5 +179,5 @@ export function useAuthState(): {
     })();
   }, []);
 
-  return { auth, signOut };
+  return { auth, signOut, retry };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import { useRouter } from 'next/navigation';
 import {
   useEffect,
@@ -92,6 +92,7 @@ import {
 import { filterUsableAtmosphereUrls } from '@/lib/home-event-atmosphere';
 import { resolveSavedEvents, withoutSavedEvent } from '@/lib/saved-events';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { connectionMessage, isNetworkFailure } from '@/lib/network-error';
 
 type PublicAnnouncement = AdminAnnouncement & { organizationName: string };
 type SavedEventsAccess =
@@ -145,6 +146,9 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const savedGeneration = useRef(0);
   const [savedEvents, setSavedEvents] = useState<SavedEventsAccess>({
     status: 'loading',
   });
@@ -167,17 +171,53 @@ export default function DiscoveryPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    setEvents([]);
+    if (navigator.onLine === false) {
+      setError(connectionMessage(false));
+      setLoading(false);
+      return;
+    }
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      setError('การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองอีกครั้ง');
+      setLoading(false);
+    }, 15_000);
     getEvents(controller.signal)
-      .then(setEvents)
+      .then((rows) => { if (!controller.signal.aborted) setEvents(rows); })
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        setError(
-          cause instanceof Error ? cause.message : 'โหลดข้อมูลไม่สำเร็จ',
-        );
+        if (controller.signal.aborted) return;
+        setError(isNetworkFailure(cause)
+          ? connectionMessage(navigator.onLine)
+          : 'โหลดข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง');
       })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!controller.signal.aborted || timedOut) setLoading(false);
+      });
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [loadAttempt]);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const offline = () => setOnline(false);
+    const online = () => {
+      setOnline(true);
+      setLoadAttempt((attempt) => attempt + 1);
+      setSavedLoadAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    return () => {
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
+    };
   }, []);
 
   useEffect(() => {
@@ -240,50 +280,74 @@ export default function DiscoveryPage() {
   }, [events]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let controller = new AbortController();
     let active = true;
+    let authEventSeen = false;
+    let timeout: number | undefined;
     let supabase: ReturnType<typeof getSupabaseBrowserClient>;
-
+    const setFailure = (cause: unknown) => setSavedEvents({
+      status: 'error',
+      message: isNetworkFailure(cause)
+        ? connectionMessage(navigator.onLine)
+        : 'โหลดรายการโปรดไม่สำเร็จ กรุณาลองอีกครั้ง',
+    });
     setSavedEvents({ status: 'loading' });
-    try {
-      supabase = getSupabaseBrowserClient();
-    } catch {
-      setSavedEvents({ status: 'signed-out' });
-      return;
+    savedGeneration.current += 1;
+    try { supabase = getSupabaseBrowserClient(); }
+    catch { setSavedEvents({ status: 'signed-out' }); return; }
+
+    async function resolve(token: string | undefined) {
+      const generation = ++savedGeneration.current;
+      controller.abort();
+      controller = new AbortController();
+      const request = controller;
+      window.clearTimeout(timeout);
+      setPendingSavedEventId(null);
+      setSavedNotice(null);
+      setSavedEvents({ status: 'loading' });
+      if (!token) { setSavedEvents({ status: 'signed-out' }); return; }
+      timeout = window.setTimeout(() => {
+        if (active && generation === savedGeneration.current) {
+          setSavedEvents({ status: 'error', message: 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองอีกครั้ง' });
+        }
+        request.abort();
+      }, 15_000);
+      try {
+        const eventIds = await getSavedEventIds(token, request.signal);
+        if (active && !request.signal.aborted && generation === savedGeneration.current) {
+          setSavedEvents({ status: 'ready', token, eventIds });
+        }
+      } catch (cause) {
+        if (active && !request.signal.aborted && generation === savedGeneration.current) setFailure(cause);
+      } finally {
+        if (generation === savedGeneration.current) window.clearTimeout(timeout);
+      }
     }
 
-    void (async () => {
-      try {
-        const { data, error: sessionError } =
-          await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        const token = data.session?.access_token;
-        if (!token) {
-          if (active) setSavedEvents({ status: 'signed-out' });
-          return;
-        }
-
-        const eventIds = await getSavedEventIds(token, controller.signal);
-        if (active) setSavedEvents({ status: 'ready', token, eventIds });
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          return;
-        }
-        if (active) {
-          setSavedEvents({
-            status: 'error',
-            message:
-              cause instanceof Error
-                ? cause.message
-                : 'โหลดรายการโปรดไม่สำเร็จ',
-          });
-        }
+    timeout = window.setTimeout(() => {
+      if (active) setSavedEvents({ status: 'error', message: 'ยังตรวจสอบบัญชีไม่ได้ กรุณาลองอีกครั้ง' });
+    }, 15_000);
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) throw error;
+      if (active && !authEventSeen) return resolve(data.session?.access_token);
+    }).catch((cause: unknown) => {
+      if (active && !authEventSeen) {
+        window.clearTimeout(timeout);
+        setFailure(cause);
       }
-    })();
-
+    });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+      authEventSeen = true;
+      // Do not await API work inside a Supabase auth callback.
+      void resolve(session?.access_token);
+    });
     return () => {
       active = false;
+      savedGeneration.current += 1;
+      window.clearTimeout(timeout);
       controller.abort();
+      data.subscription.unsubscribe();
     };
   }, [savedLoadAttempt]);
 
@@ -399,6 +463,7 @@ export default function DiscoveryPage() {
     if (savedEvents.status !== 'ready' || pendingSavedEventId) return;
 
     const previousEventIds = savedEvents.eventIds;
+    const generation = savedGeneration.current;
     const { token } = savedEvents;
     const wasSaved = previousEventIds.includes(event.id);
     setPendingSavedEventId(event.id);
@@ -417,6 +482,7 @@ export default function DiscoveryPage() {
       } else {
         await saveEvent(event.id, token);
       }
+      if (generation !== savedGeneration.current) return;
       setSavedNotice({
         kind: 'success',
         message: wasSaved
@@ -424,6 +490,7 @@ export default function DiscoveryPage() {
           : `บันทึก ${event.name} เป็นรายการโปรดแล้ว`,
       });
     } catch (cause) {
+      if (generation !== savedGeneration.current) return;
       setSavedEvents({ status: 'ready', token, eventIds: previousEventIds });
       setSavedNotice({
         kind: 'error',
@@ -433,7 +500,7 @@ export default function DiscoveryPage() {
             : 'นำ Event ออกจากรายการโปรดไม่สำเร็จ',
       });
     } finally {
-      setPendingSavedEventId(null);
+      if (generation === savedGeneration.current) setPendingSavedEventId(null);
     }
   }
 
@@ -577,7 +644,7 @@ export default function DiscoveryPage() {
         </form>
       </section>
 
-      <section
+      {online && !error ? <section
         id="announcements"
         className="shell !mt-[52px] max-sm:!mt-[38px]"
         aria-labelledby="announcements-heading"
@@ -701,7 +768,9 @@ export default function DiscoveryPage() {
         )}
       </section>
 
-      {savedEvents.status !== 'signed-out' ? (
+      : null}
+
+      {online && !loading && !error && savedEvents.status !== 'signed-out' ? (
         <SavedEventsSection
           status={savedEvents.status}
           events={favoriteEvents}
@@ -767,7 +836,7 @@ export default function DiscoveryPage() {
             })}
           </div>
         </div>
-        {!loading && !error ? (
+        {online && !loading && !error ? (
           <div className="mb-4 flex items-end justify-between gap-4 max-sm:flex-col max-sm:items-start">
             <div>
               <h3 className="text-xl font-black text-[#2d2040]">
@@ -794,7 +863,16 @@ export default function DiscoveryPage() {
             </span>
           </div>
         ) : null}
-        {loading ? (
+        {!online ? (
+          <div role="alert" className="sl-surface p-8 text-center">
+            <p>{connectionMessage(false)}</p>
+            <button type="button" onClick={() => {
+              setOnline(navigator.onLine);
+              setLoadAttempt((attempt) => attempt + 1);
+              setSavedLoadAttempt((attempt) => attempt + 1);
+            }} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button>
+          </div>
+        ) : loading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <span
@@ -805,7 +883,8 @@ export default function DiscoveryPage() {
           </div>
         ) : error ? (
           <div className="sl-surface p-8 text-center text-sm text-red-700">
-            โหลดข้อมูลไม่สำเร็จ: {error}
+            <p role="alert">{error}</p>
+            <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button>
           </div>
         ) : visibleEvents.length === 0 ? (
           <div className="sl-surface p-8 text-center">

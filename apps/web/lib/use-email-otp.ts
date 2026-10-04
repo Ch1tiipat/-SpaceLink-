@@ -8,6 +8,7 @@ import {
   BLACKLISTED_MESSAGE,
   INVALID_EMAIL_MESSAGE,
   describeProfileError,
+  describeConnectionSendError,
   describeSendError,
   describeUnexpectedSendError,
   describeVerifyError,
@@ -115,6 +116,10 @@ export function useEmailOtp({
     setError(null);
 
     try {
+      if (navigator.onLine === false) {
+        setError(describeConnectionSendError(false));
+        return false;
+      }
       // Called here, from an event handler — never during render. The client is
       // built on first call and the build has no Supabase variables at all.
       const supabase = getSupabaseBrowserClient();
@@ -125,14 +130,14 @@ export function useEmailOtp({
       });
 
       if (sendError) {
-        setError(describeSendError(sendError, mode));
+        setError(describeSendError(sendError, mode, navigator.onLine));
         return false;
       }
 
       setCooldown(RESEND_COOLDOWN_SECONDS);
       return true;
     } catch (cause) {
-      setError(describeUnexpectedSendError(cause));
+      setError(describeUnexpectedSendError(cause, navigator.onLine));
       return false;
     } finally {
       setPending(false);

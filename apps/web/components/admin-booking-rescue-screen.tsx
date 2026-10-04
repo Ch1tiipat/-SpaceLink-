@@ -25,8 +25,10 @@ import {
   type PenaltyReason,
 } from '@/lib/api';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { accessAfterFailure } from '@/lib/admin-access-state';
+import { AdminUnavailableState } from '@/components/admin-ui';
 
-type AccessState = 'loading' | 'allowed' | 'denied';
+type AccessState = 'unavailable' | 'loading' | 'allowed' | 'denied';
 
 const STATUS_LABELS: Record<BookingRecord['status'], string> = {
   PENDING_PAYMENT: 'รอชำระเงิน',
@@ -71,11 +73,18 @@ export function AdminBookingRescueScreen() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    setAccess('loading');
+    setToken('');
+    const accessTimeout = window.setTimeout(() => {
+      if (active) setAccess('unavailable');
+      controller.abort();
+    }, 15_000);
 
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
         const accessToken = data.session?.access_token;
         if (!accessToken) {
           router.replace('/login');
@@ -95,12 +104,15 @@ export function AdminBookingRescueScreen() {
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
-        if (active) setAccess('denied');
+        if (active) setAccess(accessAfterFailure(cause));
+      } finally {
+        window.clearTimeout(accessTimeout);
       }
     })();
 
     return () => {
       active = false;
+      window.clearTimeout(accessTimeout);
       controller.abort();
     };
   }, [router]);
@@ -149,6 +161,8 @@ export function AdminBookingRescueScreen() {
       setConfirming(false);
     }
   }
+
+  if (access === 'unavailable') return <AdminUnavailableState />;
 
   if (access === 'loading') {
     return <AdminPageState label="กำลังตรวจสอบสิทธิ์ผู้ดูแลระบบ" />;
