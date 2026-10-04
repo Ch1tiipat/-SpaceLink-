@@ -18,7 +18,6 @@ import {
   CalendarDays,
   CircleDollarSign,
   ImageIcon,
-  Images,
   Info,
   Pencil,
   Power,
@@ -48,6 +47,7 @@ import {
   createAdminEventJoinInformation,
   createAdminEvent,
   deleteAdminEventBanner,
+  deleteAdminEventMapImage,
   deleteAdminEventInformation,
   deleteAdminEventJoinInformation,
   deleteAdminEvent,
@@ -65,6 +65,7 @@ import {
   updateAdminEventGallery,
   uploadAdminEventBanner,
   uploadAdminEventGallery,
+  uploadAdminEventMapImage,
   type AdminVenue,
   type CreateAdminEventInput,
   type AdminOrganizationEvent,
@@ -132,8 +133,6 @@ export function AdminEventsScreen() {
   );
   const [notice, setNotice] = useState('');
   const [busyAction, setBusyAction] = useState('');
-  const [galleryEvent, setGalleryEvent] =
-    useState<AdminOrganizationEvent | null>(null);
   const [bannerEvent, setBannerEvent] = useState<AdminOrganizationEvent | null>(
     null,
   );
@@ -539,15 +538,6 @@ export function AdminEventsScreen() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setGalleryEvent(event)}
-                        disabled={Boolean(busyAction)}
-                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Images className="h-4 w-4" aria-hidden />
-                        จัดการแกลเลอรี ({event.galleryUrls.length}/10)
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setJoinInfoEvent(event)}
                         disabled={Boolean(busyAction)}
                         className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
@@ -562,7 +552,7 @@ export function AdminEventsScreen() {
                         className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ddd4e7] bg-white px-4 text-xs font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Info className="h-4 w-4" aria-hidden />
-                        รายละเอียดภายในงาน ({event.information.length})
+                        รายละเอียดภายในงานและรูปภาพ
                       </button>
                       <button
                         type="button"
@@ -608,25 +598,6 @@ export function AdminEventsScreen() {
               setRepeatEvent(null);
               setNotice('สร้างอีเวนต์รอบใหม่และค่าบริการสถานะร่างแล้ว');
               setReloadKey((value) => value + 1);
-            }}
-          />
-        ) : null}
-
-        {galleryEvent && token && organizationId ? (
-          <EventGalleryDialog
-            key={galleryEvent.id}
-            event={galleryEvent}
-            organizationId={organizationId}
-            token={token}
-            onClose={() => setGalleryEvent(null)}
-            onUpdated={(updated, message) => {
-              setEvents((current) =>
-                current.map((item) =>
-                  item.id === updated.id ? updated : item,
-                ),
-              );
-              setGalleryEvent(updated);
-              setNotice(message);
             }}
           />
         ) : null}
@@ -695,6 +666,17 @@ export function AdminEventsScreen() {
               );
               setNotice(message);
             }}
+            onEventUpdated={(updated, message) => {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === updated.id ? { ...item, ...updated } : item,
+                ),
+              );
+              setInformationEvent((current) =>
+                current ? { ...current, ...updated } : current,
+              );
+              setNotice(message);
+            }}
           />
         ) : null}
       </AdminPage>
@@ -714,13 +696,17 @@ function EventInformationDialog({
   token,
   onClose,
   onUpdated,
+  onEventUpdated,
 }: {
   event: AdminOrganizationEvent;
   organizationId: string;
   token: string;
   onClose: () => void;
   onUpdated: (items: EventInformation[], message: string) => void;
+  onEventUpdated: (updated: AdminOrganizationEvent, message: string) => void;
 }) {
+  const [tab, setTab] = useState<'details' | 'gallery' | 'map'>('details');
+  const [mediaBusy, setMediaBusy] = useState(false);
   const [items, setItems] = useState(event.information);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -874,7 +860,7 @@ function EventInformationDialog({
           <button
             type="button"
             onClick={onClose}
-            disabled={busy}
+            disabled={busy || mediaBusy}
             aria-label="ปิดหน้าต่างรายละเอียดภายในงาน"
             className="grid h-10 w-10 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
           >
@@ -882,144 +868,197 @@ function EventInformationDialog({
           </button>
         </div>
 
-        {error ? <AdminError message={error} /> : null}
-
-        <div className="mt-5 grid gap-3">
-          {items.length === 0 ? (
-            <AdminEmpty
-              icon={Info}
-              title="ยังไม่มีรายละเอียดภายในงาน"
-              description="เพิ่มข้อมูลบรรยากาศ กิจกรรม หรือสิ่งอำนวยความสะดวก"
-            />
-          ) : (
-            items.map((item, index) => (
-              <article
-                key={item.id}
-                className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="inline-flex rounded-full bg-[#eee8ff] px-2.5 py-1 text-xs font-bold text-violet">
-                      {EVENT_INFORMATION_TYPE_LABELS[item.type]}
-                    </span>
-                    <h3 className="mt-2 break-words font-extrabold text-ink">
-                      {item.title}
-                    </h3>
-                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">
-                      {item.description}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => void move(index, -1)}
-                      disabled={busy || index === 0}
-                      aria-label={`เลื่อน ${item.title} ขึ้น`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void move(index, 1)}
-                      disabled={busy || index === items.length - 1}
-                      aria-label={`เลื่อน ${item.title} ลง`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => edit(item)}
-                      disabled={busy}
-                      aria-label={`แก้ไข ${item.title}`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void remove(item)}
-                      disabled={busy}
-                      aria-label={`ลบ ${item.title}`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))
-          )}
+        <div
+          role="group"
+          aria-label="ส่วนของรายละเอียดภายในงาน"
+          className="mt-5 flex flex-wrap gap-2 border-b border-[#eee9f3] pb-3"
+        >
+          {(
+            [
+              ['details', 'ข้อมูลภายในงาน'],
+              ['gallery', `รูปบรรยากาศ (${event.galleryUrls.length}/10)`],
+              ['map', 'รูปแผนผังพื้นที่'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+                aria-pressed={tab === value}
+                onClick={() => setTab(value)}
+                disabled={busy || mediaBusy}
+              className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === value ? 'bg-violet text-white' : 'bg-[#f5f0fb] text-violet'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <form
-          onSubmit={(formEvent) => void save(formEvent)}
-          className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4"
-        >
-          <h3 className="font-extrabold text-ink">
-            {editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}
-          </h3>
-          <label className="mt-3 block text-sm font-bold text-ink">
-            หมวด
-            <select
-              value={type}
-              onChange={(inputEvent) =>
-                setType(inputEvent.target.value as EventInformationType)
-              }
-              disabled={busy}
-              className={`${INPUT_CLASS} mt-2`}
-            >
-              {Object.entries(EVENT_INFORMATION_TYPE_LABELS).map(
-                ([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ),
+        {tab === 'details' ? (
+          <>
+            {error ? <AdminError message={error} /> : null}
+
+            <div className="mt-5 grid gap-3">
+              {items.length === 0 ? (
+                <AdminEmpty
+                  icon={Info}
+                  title="ยังไม่มีรายละเอียดภายในงาน"
+                  description="เพิ่มข้อมูลบรรยากาศ กิจกรรม หรือสิ่งอำนวยความสะดวก"
+                />
+              ) : (
+                items.map((item, index) => (
+                  <article
+                    key={item.id}
+                    className="rounded-[16px] border border-[#e8e1ee] bg-[#fcfbff] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="inline-flex rounded-full bg-[#eee8ff] px-2.5 py-1 text-xs font-bold text-violet">
+                          {EVENT_INFORMATION_TYPE_LABELS[item.type]}
+                        </span>
+                        <h3 className="mt-2 break-words font-extrabold text-ink">
+                          {item.title}
+                        </h3>
+                        <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-muted">
+                          {item.description}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void move(index, -1)}
+                          disabled={busy || index === 0}
+                          aria-label={`เลื่อน ${item.title} ขึ้น`}
+                          className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void move(index, 1)}
+                          disabled={busy || index === items.length - 1}
+                          aria-label={`เลื่อน ${item.title} ลง`}
+                          className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => edit(item)}
+                          disabled={busy}
+                          aria-label={`แก้ไข ${item.title}`}
+                          className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void remove(item)}
+                          disabled={busy}
+                          aria-label={`ลบ ${item.title}`}
+                          className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))
               )}
-            </select>
-          </label>
-          <label className="mt-3 block text-sm font-bold text-ink">
-            หัวข้อ
-            <input
-              value={title}
-              onChange={(inputEvent) => setTitle(inputEvent.target.value)}
-              maxLength={200}
-              disabled={busy}
-              className={`${INPUT_CLASS} mt-2`}
-            />
-          </label>
-          <label className="mt-3 block text-sm font-bold text-ink">
-            รายละเอียด
-            <textarea
-              value={description}
-              onChange={(inputEvent) => setDescription(inputEvent.target.value)}
-              maxLength={5000}
-              rows={4}
-              disabled={busy}
-              className={`${INPUT_CLASS} mt-2 py-3`}
-            />
-          </label>
-          <div className="mt-4 flex justify-end gap-2">
-            {editingId ? (
-              <button
-                type="button"
-                onClick={resetForm}
-                disabled={busy}
-                className="sl-action-secondary"
-              >
-                ยกเลิกแก้ไข
-              </button>
-            ) : null}
-            <button type="submit" disabled={busy} className="sl-action-primary">
-              {busy
-                ? 'กำลังบันทึก...'
-                : editingId
-                  ? 'บันทึกการแก้ไข'
-                  : 'เพิ่มรายละเอียด'}
-            </button>
-          </div>
-        </form>
+            </div>
+
+            <form
+              onSubmit={(formEvent) => void save(formEvent)}
+              className="mt-6 rounded-[18px] border border-[#e8e1ee] p-4"
+            >
+              <h3 className="font-extrabold text-ink">
+                {editingId ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}
+              </h3>
+              <label className="mt-3 block text-sm font-bold text-ink">
+                หมวด
+                <select
+                  value={type}
+                  onChange={(inputEvent) =>
+                    setType(inputEvent.target.value as EventInformationType)
+                  }
+                  disabled={busy}
+                  className={`${INPUT_CLASS} mt-2`}
+                >
+                  {Object.entries(EVENT_INFORMATION_TYPE_LABELS).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="mt-3 block text-sm font-bold text-ink">
+                หัวข้อ
+                <input
+                  value={title}
+                  onChange={(inputEvent) => setTitle(inputEvent.target.value)}
+                  maxLength={200}
+                  disabled={busy}
+                  className={`${INPUT_CLASS} mt-2`}
+                />
+              </label>
+              <label className="mt-3 block text-sm font-bold text-ink">
+                รายละเอียด
+                <textarea
+                  value={description}
+                  onChange={(inputEvent) =>
+                    setDescription(inputEvent.target.value)
+                  }
+                  maxLength={5000}
+                  rows={4}
+                  disabled={busy}
+                  className={`${INPUT_CLASS} mt-2 py-3`}
+                />
+              </label>
+              <div className="mt-4 flex justify-end gap-2">
+                {editingId ? (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    disabled={busy}
+                    className="sl-action-secondary"
+                  >
+                    ยกเลิกแก้ไข
+                  </button>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="sl-action-primary"
+                >
+                  {busy
+                    ? 'กำลังบันทึก...'
+                    : editingId
+                      ? 'บันทึกการแก้ไข'
+                      : 'เพิ่มรายละเอียด'}
+                </button>
+              </div>
+            </form>
+          </>
+        ) : null}
+        {tab === 'gallery' ? (
+          <EventGallerySection
+            event={event}
+            organizationId={organizationId}
+            token={token}
+            onUpdated={onEventUpdated}
+            onBusyChange={setMediaBusy}
+          />
+        ) : null}
+        {tab === 'map' ? (
+          <EventMapImageSection
+            event={event}
+            organizationId={organizationId}
+            token={token}
+            onUpdated={onEventUpdated}
+            onBusyChange={setMediaBusy}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -1504,18 +1543,18 @@ type PendingGalleryFile = {
   previewUrl: string;
 };
 
-function EventGalleryDialog({
+function EventGallerySection({
   event,
   organizationId,
   token,
-  onClose,
   onUpdated,
+  onBusyChange,
 }: {
   event: AdminOrganizationEvent;
   organizationId: string;
   token: string;
-  onClose: () => void;
   onUpdated: (updated: AdminOrganizationEvent, message: string) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [urls, setUrls] = useState(event.galleryUrls);
   const [savedUrls, setSavedUrls] = useState(event.galleryUrls);
@@ -1523,6 +1562,8 @@ function EventGalleryDialog({
   const [busy, setBusy] = useState<'upload' | 'save' | ''>('');
   const [error, setError] = useState('');
   const pendingRef = useRef(pending);
+
+  useEffect(() => onBusyChange(Boolean(busy)), [busy, onBusyChange]);
 
   useEffect(() => {
     pendingRef.current = pending;
@@ -1632,185 +1673,345 @@ function EventGalleryDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#24172f]/45 p-4">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="event-gallery-title"
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl sm:p-7"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
-              Event gallery
-            </span>
-            <h2
-              id="event-gallery-title"
-              className="mt-1 text-xl font-black text-ink"
-            >
-              รูปบรรยากาศ · {event.name}
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              มี {urls.length + pending.length}/10 รูป · เพิ่มได้อีก {remaining}{' '}
-              รูป
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={Boolean(busy)}
-            aria-label="ปิดหน้าต่างจัดการแกลเลอรี"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#ddd4e7] text-muted disabled:opacity-50"
+    <section aria-labelledby="event-gallery-title" className="pt-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet">
+            Event gallery
+          </span>
+          <h2
+            id="event-gallery-title"
+            className="mt-1 text-xl font-black text-ink"
           >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
+            รูปบรรยากาศ · {event.name}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            มี {urls.length + pending.length}/10 รูป · เพิ่มได้อีก {remaining}{' '}
+            รูป
+          </p>
         </div>
+      </div>
 
-        {error ? <AdminError message={error} /> : null}
+      {error ? <AdminError message={error} /> : null}
 
-        {urls.length > 0 ? (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {urls.map((url, index) => (
+      {urls.length > 0 ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {urls.map((url, index) => (
+            <article
+              key={url}
+              className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
+            >
+              <div
+                role="img"
+                aria-label={`รูปบรรยากาศลำดับ ${index + 1}`}
+                className="aspect-[4/3] bg-[#f3eef7] bg-cover bg-center"
+                style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
+              />
+              <div className="flex items-center justify-between gap-2 p-2">
+                <span className="pl-1 text-xs font-extrabold text-muted">
+                  ลำดับ {index + 1}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveUrl(index, -1)}
+                    disabled={Boolean(busy) || index === 0}
+                    aria-label={`เลื่อนรูปที่ ${index + 1} ขึ้น`}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveUrl(index, 1)}
+                    disabled={Boolean(busy) || index === urls.length - 1}
+                    aria-label={`เลื่อนรูปที่ ${index + 1} ลง`}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setUrls((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                    disabled={Boolean(busy)}
+                    aria-label={`ลบรูปที่ ${index + 1}`}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <div className="mt-5">
+          <h3 className="text-sm font-extrabold text-ink">
+            ตัวอย่างก่อนอัปโหลด
+          </h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pending.map((item, index) => (
               <article
-                key={url}
-                className="overflow-hidden rounded-[18px] border border-[#e8e1ee] bg-[#fcfbff]"
+                key={item.previewUrl}
+                className="overflow-hidden rounded-[18px] border border-dashed border-violet bg-[#faf7ff]"
               >
                 <div
                   role="img"
-                  aria-label={`รูปบรรยากาศลำดับ ${index + 1}`}
-                  className="aspect-[4/3] bg-[#f3eef7] bg-cover bg-center"
-                  style={{ backgroundImage: `url(${JSON.stringify(url)})` }}
+                  aria-label={`ตัวอย่าง ${item.file.name}`}
+                  className="aspect-[4/3] bg-cover bg-center"
+                  style={{
+                    backgroundImage: `url(${JSON.stringify(item.previewUrl)})`,
+                  }}
                 />
                 <div className="flex items-center justify-between gap-2 p-2">
-                  <span className="pl-1 text-xs font-extrabold text-muted">
-                    ลำดับ {index + 1}
+                  <span className="min-w-0 truncate pl-1 text-xs font-bold text-muted">
+                    {item.file.name}
                   </span>
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveUrl(index, -1)}
-                      disabled={Boolean(busy) || index === 0}
-                      aria-label={`เลื่อนรูปที่ ${index + 1} ขึ้น`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveUrl(index, 1)}
-                      disabled={Boolean(busy) || index === urls.length - 1}
-                      aria-label={`เลื่อนรูปที่ ${index + 1} ลง`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#ddd4e7] text-violet disabled:opacity-30"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setUrls((current) =>
-                          current.filter((_, itemIndex) => itemIndex !== index),
-                        )
-                      }
-                      disabled={Boolean(busy)}
-                      aria-label={`ลบรูปที่ ${index + 1}`}
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removePending(index)}
+                    disabled={Boolean(busy)}
+                    aria-label={`ยกเลิก ${item.file.name}`}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </button>
                 </div>
               </article>
             ))}
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {pending.length > 0 ? (
-          <div className="mt-5">
-            <h3 className="text-sm font-extrabold text-ink">
-              ตัวอย่างก่อนอัปโหลด
-            </h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {pending.map((item, index) => (
-                <article
-                  key={item.previewUrl}
-                  className="overflow-hidden rounded-[18px] border border-dashed border-violet bg-[#faf7ff]"
-                >
-                  <div
-                    role="img"
-                    aria-label={`ตัวอย่าง ${item.file.name}`}
-                    className="aspect-[4/3] bg-cover bg-center"
-                    style={{
-                      backgroundImage: `url(${JSON.stringify(item.previewUrl)})`,
-                    }}
-                  />
-                  <div className="flex items-center justify-between gap-2 p-2">
-                    <span className="min-w-0 truncate pl-1 text-xs font-bold text-muted">
-                      {item.file.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removePending(index)}
-                      disabled={Boolean(busy)}
-                      aria-label={`ยกเลิก ${item.file.name}`}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#f0c7c3] text-[#b42318] disabled:opacity-30"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-6 flex flex-col gap-3 border-t border-[#eee9f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <label
-            className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${remaining === 0 || busy ? 'pointer-events-none opacity-40' : ''}`}
+      <div className="mt-6 flex flex-col gap-3 border-t border-[#eee9f3] pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <label
+          className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${remaining === 0 || busy ? 'pointer-events-none opacity-40' : ''}`}
+        >
+          <UploadCloud className="h-4 w-4" aria-hidden />
+          เลือกรูปหลายไฟล์
+          <input
+            type="file"
+            multiple
+            accept="image/jpeg,image/png"
+            disabled={remaining === 0 || Boolean(busy)}
+            onChange={(changeEvent) => {
+              selectFiles(changeEvent.target.files);
+              changeEvent.target.value = '';
+            }}
+            className="sr-only"
+          />
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void upload()}
+            disabled={pending.length === 0 || Boolean(busy) || hasChanges}
+            title={
+              hasChanges ? 'บันทึกลำดับหรือลบรูปก่อนอัปโหลดรูปใหม่' : undefined
+            }
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-40"
           >
             <UploadCloud className="h-4 w-4" aria-hidden />
-            เลือกรูปหลายไฟล์
-            <input
-              type="file"
-              multiple
-              accept="image/jpeg,image/png"
-              disabled={remaining === 0 || Boolean(busy)}
-              onChange={(changeEvent) => {
-                selectFiles(changeEvent.target.files);
-                changeEvent.target.value = '';
-              }}
-              className="sr-only"
-            />
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => void upload()}
-              disabled={pending.length === 0 || Boolean(busy) || hasChanges}
-              title={
-                hasChanges
-                  ? 'บันทึกลำดับหรือลบรูปก่อนอัปโหลดรูปใหม่'
-                  : undefined
-              }
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <UploadCloud className="h-4 w-4" aria-hidden />
-              {busy === 'upload'
-                ? 'กำลังอัปโหลด…'
-                : `อัปโหลด ${pending.length} รูป`}
-            </button>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={!hasChanges || Boolean(busy)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Save className="h-4 w-4" aria-hidden />
-              {busy === 'save' ? 'กำลังบันทึก…' : 'บันทึกลำดับ/การลบ'}
-            </button>
-          </div>
+            {busy === 'upload'
+              ? 'กำลังอัปโหลด…'
+              : `อัปโหลด ${pending.length} รูป`}
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!hasChanges || Boolean(busy)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Save className="h-4 w-4" aria-hidden />
+            {busy === 'save' ? 'กำลังบันทึก…' : 'บันทึกลำดับ/การลบ'}
+          </button>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
+  );
+}
+
+function EventMapImageSection({
+  event,
+  organizationId,
+  token,
+  onUpdated,
+  onBusyChange,
+}: {
+  event: AdminOrganizationEvent;
+  organizationId: string;
+  token: string;
+  onUpdated: (updated: AdminOrganizationEvent, message: string) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const [pending, setPending] = useState<PendingBannerFile | null>(null);
+  const [busy, setBusy] = useState<'upload' | 'remove' | ''>('');
+  const [error, setError] = useState('');
+  const pendingRef = useRef(pending);
+
+  useEffect(() => onBusyChange(Boolean(busy)), [busy, onBusyChange]);
+
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  useEffect(
+    () => () => {
+      if (pendingRef.current)
+        URL.revokeObjectURL(pendingRef.current.previewUrl);
+    },
+    [],
+  );
+
+  function selectFile(file: File | undefined) {
+    if (!file) return;
+    const validationError = validateMapImageFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (pending) URL.revokeObjectURL(pending.previewUrl);
+    setPending({ file, previewUrl: URL.createObjectURL(file) });
+    setError('');
+  }
+
+  async function upload() {
+    if (!pending) return;
+    setBusy('upload');
+    setError('');
+    try {
+      const updated = await uploadAdminEventMapImage(
+        organizationId,
+        event.id,
+        pending.file,
+        token,
+      );
+      URL.revokeObjectURL(pending.previewUrl);
+      setPending(null);
+      onUpdated(updated, 'บันทึกรูปแผนผังพื้นที่ภายในงานแล้ว');
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'อัปโหลดรูปแผนผังไม่สำเร็จ',
+      );
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function remove() {
+    if (!event.mapImageUrl) return;
+    if (!window.confirm('ลบรูปแผนผังพื้นที่ภายในงานหรือไม่?')) return;
+    setBusy('remove');
+    setError('');
+    try {
+      const updated = await deleteAdminEventMapImage(
+        organizationId,
+        event.id,
+        token,
+      );
+      onUpdated(updated, 'ลบรูปแผนผังแล้ว ผู้ใช้จะเห็นผังโซนแบบเดิม');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'ลบรูปแผนผังไม่สำเร็จ');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <section aria-labelledby="event-map-image-title" className="pt-5">
+      <h3
+        id="event-map-image-title"
+        className="text-lg font-extrabold text-ink"
+      >
+        รูปแผนผังพื้นที่ภายในงาน
+      </h3>
+      <p className="mt-1 text-sm leading-6 text-muted">
+        อัปโหลดภาพที่แสดงตำแหน่งโซนและบูธให้ผู้ใช้ดูในรายละเอียดอีเวนต์
+        รูปนี้ไม่ใช่ภาพปกหรือแผนที่เดินทาง
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        ใช้ไฟล์ JPEG หรือ PNG 1 รูป ขนาดไม่เกิน 2 MB และไม่เกิน 2000 × 2000
+        พิกเซล
+      </p>
+      {error ? <AdminError message={error} /> : null}
+      {pending || event.mapImageUrl ? (
+        <div
+          role="img"
+          aria-label={
+            pending
+              ? `ตัวอย่างรูปแผนผัง ${pending.file.name}`
+              : `รูปแผนผังของ ${event.name}`
+          }
+          className="mt-4 h-64 rounded-[18px] border border-[#e8e1ee] bg-[#f7f4fc] bg-center bg-no-repeat sm:h-80"
+          style={{
+            backgroundImage: `url(${JSON.stringify(pending?.previewUrl ?? event.mapImageUrl)})`,
+            backgroundSize: 'contain',
+          }}
+        />
+      ) : (
+        <p className="mt-4 rounded-[18px] border border-dashed border-[#ddd4e7] bg-[#fcfbff] p-5 text-sm text-muted">
+          ยังไม่มีรูปแผนผัง ผู้ใช้จะเห็นผังโซนแบบเดิม
+        </p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <label
+          className={`inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-violet px-4 text-sm font-extrabold text-violet ${busy ? 'pointer-events-none opacity-40' : ''}`}
+        >
+          <UploadCloud className="h-4 w-4" aria-hidden />
+          {event.mapImageUrl ? 'เลือกรูปใหม่' : 'เลือกรูปแผนผัง'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            disabled={Boolean(busy)}
+            onChange={(changeEvent) => {
+              selectFile(changeEvent.target.files?.[0]);
+              changeEvent.target.value = '';
+            }}
+            className="sr-only"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => void upload()}
+          disabled={!pending || Boolean(busy)}
+          className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet px-4 text-sm font-extrabold text-white disabled:opacity-40"
+        >
+          <Save className="h-4 w-4" aria-hidden />
+          {busy === 'upload' ? 'กำลังบันทึก…' : 'บันทึกรูปแผนผัง'}
+        </button>
+        {pending ? (
+          <button
+            type="button"
+            onClick={() => {
+              URL.revokeObjectURL(pending.previewUrl);
+              setPending(null);
+              setError('');
+            }}
+            disabled={Boolean(busy)}
+            className="inline-flex h-11 items-center rounded-xl border border-[#ddd4e7] px-4 text-sm font-bold text-muted disabled:opacity-40"
+          >
+            ยกเลิกรูปที่เลือก
+          </button>
+        ) : null}
+        {event.mapImageUrl ? (
+          <button
+            type="button"
+            onClick={() => void remove()}
+            disabled={Boolean(busy) || Boolean(pending)}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#f0c7c3] px-4 text-sm font-extrabold text-[#b42318] disabled:opacity-40"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+            {busy === 'remove' ? 'กำลังลบ…' : 'ลบรูปแผนผัง'}
+          </button>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -2474,6 +2675,17 @@ function validateBannerFile(file: File): string | null {
   if (file.size === 0) return 'ไฟล์ภาพปกว่างเปล่า';
   if (file.size > 2 * 1024 * 1024) {
     return 'ภาพปกต้องมีขนาดไม่เกิน 2 MB';
+  }
+  return null;
+}
+
+function validateMapImageFile(file: File): string | null {
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    return 'รูปแผนผังต้องเป็นไฟล์ JPEG หรือ PNG';
+  }
+  if (file.size === 0) return 'ไฟล์รูปแผนผังว่างเปล่า';
+  if (file.size > 2 * 1024 * 1024) {
+    return 'รูปแผนผังต้องมีขนาดไม่เกิน 2 MB';
   }
   return null;
 }

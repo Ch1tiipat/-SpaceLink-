@@ -1302,8 +1302,87 @@ describe('EventsService', () => {
 
     await service.removeBanner(eventId, orgId);
 
-    expect(eventCount).toHaveBeenCalledWith({ where: { bannerUrl: shared } });
+    expect(eventCount).toHaveBeenCalledWith({
+      where: { OR: [{ bannerUrl: shared }, { mapImageUrl: shared }] },
+    });
     expect(removeBannerByUrl).not.toHaveBeenCalled();
+  });
+
+  it('checks organization ownership before uploading a map image', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.uploadMapImage(eventId, orgId, { buffer: Buffer.from('image') }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(uploadBannerForEvent).not.toHaveBeenCalled();
+  });
+
+  it('stores the event map URL after upload and cleans the old unreferenced image', async () => {
+    const previous = 'https://example.com/previous-map.png';
+    const uploaded =
+      'https://project.supabase.co/storage/v1/object/public/event-banners/event/map-new';
+    const file = { buffer: Buffer.from('image') };
+    findFirst.mockResolvedValue({ mapImageUrl: previous });
+    uploadBannerForEvent.mockResolvedValue(uploaded);
+    eventUpdate.mockResolvedValue({ id: eventId, mapImageUrl: uploaded });
+
+    await expect(service.uploadMapImage(eventId, orgId, file)).resolves.toEqual(
+      {
+        id: eventId,
+        mapImageUrl: uploaded,
+        galleryUrls: [],
+      },
+    );
+    expect(uploadBannerForEvent).toHaveBeenCalledWith(file, eventId, 'map');
+    expect(eventUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: eventId, organizationId: orgId },
+        data: { mapImageUrl: uploaded },
+      }),
+    );
+    expect(removeBannerByUrl).toHaveBeenCalledWith(previous);
+  });
+
+  it('removes a new map object when saving its URL fails without changing the old URL', async () => {
+    const uploaded =
+      'https://project.supabase.co/storage/v1/object/public/event-banners/event/map-new';
+    findFirst.mockResolvedValue({
+      mapImageUrl: 'https://example.com/old-map.png',
+    });
+    uploadBannerForEvent.mockResolvedValue(uploaded);
+    const failure = new Error('database unavailable');
+    eventUpdate.mockRejectedValue(failure);
+
+    await expect(
+      service.uploadMapImage(eventId, orgId, { buffer: Buffer.from('image') }),
+    ).rejects.toBe(failure);
+    expect(removeBannerByUrl).toHaveBeenCalledWith(uploaded);
+    expect(removeBannerByUrl).not.toHaveBeenCalledWith(
+      'https://example.com/old-map.png',
+    );
+  });
+
+  it('keeps a map object while a repeated event still references it', async () => {
+    const shared = 'https://example.com/shared-map.png';
+    findFirst.mockResolvedValue({ mapImageUrl: shared });
+    eventUpdate.mockResolvedValue({ id: eventId, mapImageUrl: null });
+    eventCount.mockResolvedValue(1);
+
+    await service.removeMapImage(eventId, orgId);
+
+    expect(eventCount).toHaveBeenCalledWith({
+      where: { OR: [{ mapImageUrl: shared }, { bannerUrl: shared }] },
+    });
+    expect(removeBannerByUrl).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 when removing another organization event map image', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(service.removeMapImage(eventId, orgId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(eventUpdate).not.toHaveBeenCalled();
   });
 
   it('enforces the total ten-image gallery limit before storage upload', async () => {

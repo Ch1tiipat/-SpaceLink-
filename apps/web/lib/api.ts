@@ -174,9 +174,7 @@ export type SupportAssistantResponse = {
 };
 
 export type SupportAssistantAction =
-  | 'OPEN_EVENTS'
-  | 'OPEN_BOOKINGS'
-  | 'OPEN_PROFILE';
+  'OPEN_EVENTS' | 'OPEN_BOOKINGS' | 'OPEN_PROFILE';
 
 export type SupportAssistantHistoryMessage = {
   role: 'user' | 'assistant';
@@ -184,11 +182,7 @@ export type SupportAssistantHistoryMessage = {
 };
 
 export type BookingStatus =
-  | 'PENDING_PAYMENT'
-  | 'CONFIRMED'
-  | 'CANCELLED'
-  | 'NO_SHOW'
-  | 'COMPLETED';
+  'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
 
 export type BookingRecord = {
   id: string;
@@ -385,11 +379,7 @@ export type AdminReviewsPage = {
 };
 
 export type PenaltyReason =
-  | 'NO_SHOW'
-  | 'RULE_VIOLATION'
-  | 'CONTRACT_BREACH'
-  | 'BAD_REVIEW'
-  | 'OTHER';
+  'NO_SHOW' | 'RULE_VIOLATION' | 'CONTRACT_BREACH' | 'BAD_REVIEW' | 'OTHER';
 
 export type PenaltyRecord = {
   id: string;
@@ -508,10 +498,7 @@ export type QuotaExceptionDecision = {
 };
 
 export type SlipVerificationStatus =
-  | 'VERIFIED'
-  | 'INVALID'
-  | 'DUPLICATE'
-  | 'ERROR';
+  'VERIFIED' | 'INVALID' | 'DUPLICATE' | 'ERROR';
 
 export type SlipUploadResponse = {
   booking: {
@@ -814,21 +801,11 @@ export type UpdatePlatformBillingConfigInput = Omit<
 >;
 
 export type AdminTransactionView =
-  | 'BOOKINGS'
-  | 'PAYMENTS'
-  | 'REFUNDS'
-  | 'VENDORS';
+  'BOOKINGS' | 'PAYMENTS' | 'REFUNDS' | 'VENDORS';
 export type AdminPaymentStatus =
-  | 'EXEMPT'
-  | 'AWAITING_SLIP'
-  | 'VERIFIED'
-  | 'FAILED';
+  'EXEMPT' | 'AWAITING_SLIP' | 'VERIFIED' | 'FAILED';
 export type AdminRefundStatus =
-  | 'NONE'
-  | 'PENDING'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'PROCESSED';
+  'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
 
 export type AdminTransactionBooking = {
   id: string;
@@ -1131,9 +1108,7 @@ export type SuperAdminAuditAction =
   | 'PLATFORM_CONFIG_UPDATED';
 
 export type SuperAdminAuditTargetType =
-  | 'ORGANIZATION'
-  | 'USER'
-  | 'PLATFORM_CONFIG';
+  'ORGANIZATION' | 'USER' | 'PLATFORM_CONFIG';
 
 export type SuperAdminAuditLogFilter = {
   action?: SuperAdminAuditAction;
@@ -1224,10 +1199,7 @@ export type AdminZone = {
 };
 
 export type AdminBoothStatus =
-  | 'AVAILABLE'
-  | 'BOOKED'
-  | 'MAINTENANCE'
-  | 'INACTIVE';
+  'AVAILABLE' | 'BOOKED' | 'MAINTENANCE' | 'INACTIVE';
 
 export type AdminBooth = {
   id: string;
@@ -2151,6 +2123,18 @@ export function deleteAdminEventBanner(
   );
 }
 
+export function deleteAdminEventMapImage(
+  organizationId: string,
+  eventId: string,
+  token: string,
+): Promise<AdminOrganizationEvent> {
+  return deleteJson<AdminOrganizationEvent>(
+    `/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/map-image`,
+    { token },
+    'ลบรูปแผนผังพื้นที่ภายในงานไม่สำเร็จ',
+  );
+}
+
 export function createAdminEventJoinInformation(
   organizationId: string,
   eventId: string,
@@ -2382,6 +2366,70 @@ export async function uploadAdminEventBanner(
     };
     throw new ApiError(
       detail || fallbackByStatus[response.status] || 'อัปโหลดภาพปกไม่สำเร็จ',
+      response.status,
+    );
+  }
+
+  return (await response.json()) as AdminOrganizationEvent;
+}
+
+export async function uploadAdminEventMapImage(
+  organizationId: string,
+  eventId: string,
+  file: File,
+  token: string,
+  signal?: AbortSignal,
+): Promise<AdminOrganizationEvent> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      'ยังไม่ได้ตั้งค่า NEXT_PUBLIC_API_URL สำหรับ SpaceLink Web',
+      0,
+    );
+  }
+
+  const form = new FormData();
+  form.append('file', file);
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/organizations/${encodeURIComponent(organizationId)}/events/${encodeURIComponent(eventId)}/map-image`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      },
+    );
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') {
+      throw cause;
+    }
+    throw new ApiError(
+      'เชื่อมต่อระบบเพื่ออัปโหลดรูปแผนผังไม่สำเร็จ กรุณาลองใหม่',
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const detail = Array.isArray(payload?.message)
+      ? payload.message.join(', ')
+      : payload?.message;
+    const fallbackByStatus: Record<number, string> = {
+      400: 'รูปแผนผังไม่ถูกต้อง กรุณาใช้ JPEG หรือ PNG',
+      404: 'ไม่พบอีเวนต์ในองค์กรนี้',
+      413: 'รูปแผนผังมีขนาดเกิน 2 MB',
+      502: 'บริการจัดเก็บรูปยังไม่พร้อม กรุณาลองใหม่ภายหลัง',
+    };
+    throw new ApiError(
+      detail ||
+        fallbackByStatus[response.status] ||
+        'อัปโหลดรูปแผนผังไม่สำเร็จ',
       response.status,
     );
   }

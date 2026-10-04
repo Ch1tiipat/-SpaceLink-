@@ -47,6 +47,8 @@ const update = jest.fn();
 const uploadGallery = jest.fn();
 const uploadBanner = jest.fn();
 const removeBanner = jest.fn();
+const uploadMapImage = jest.fn();
+const removeMapImage = jest.fn();
 const createJoinInformation = jest.fn();
 const updateJoinInformation = jest.fn();
 const removeJoinInformation = jest.fn();
@@ -70,6 +72,8 @@ const service = {
   uploadGallery,
   uploadBanner,
   removeBanner,
+  uploadMapImage,
+  removeMapImage,
 } as unknown as EventsService;
 const joinInformationService = {
   create: createJoinInformation,
@@ -99,6 +103,8 @@ function handler(
     | 'uploadGallery'
     | 'uploadBanner'
     | 'removeBanner'
+    | 'uploadMapImage'
+    | 'removeMapImage'
     | 'createJoinInformation'
     | 'updateJoinInformation'
     | 'removeJoinInformation'
@@ -152,6 +158,8 @@ describe('OrganizationEventsController', () => {
       'uploadGallery',
       'uploadBanner',
       'removeBanner',
+      'uploadMapImage',
+      'removeMapImage',
     ] as const) {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toEqual([
         SupabaseAuthGuard,
@@ -338,6 +346,8 @@ describe('OrganizationEventsController', () => {
     'uploadGallery',
     'uploadBanner',
     'removeBanner',
+    'uploadMapImage',
+    'removeMapImage',
     'createJoinInformation',
     'updateJoinInformation',
     'removeJoinInformation',
@@ -506,6 +516,8 @@ describe('OrganizationEventsController', () => {
     'uploadGallery',
     'uploadBanner',
     'removeBanner',
+    'uploadMapImage',
+    'removeMapImage',
     'createJoinInformation',
     'updateJoinInformation',
     'removeJoinInformation',
@@ -630,6 +642,33 @@ describe('OrganizationEventsController', () => {
       file,
     );
     expect(removeBanner).toHaveBeenCalledWith(LEGACY_EVENT_ID, ORGANIZATION_ID);
+  });
+
+  it('uses a single-file interceptor and passes scoped map-image mutations to the service', async () => {
+    const interceptors = Reflect.getMetadata(
+      INTERCEPTORS_METADATA,
+      handler('uploadMapImage'),
+    ) as unknown[];
+    expect(interceptors).toHaveLength(1);
+    const file = { buffer: Buffer.from('map') };
+    uploadMapImage.mockResolvedValue({ id: LEGACY_EVENT_ID });
+    removeMapImage.mockResolvedValue({
+      id: LEGACY_EVENT_ID,
+      mapImageUrl: null,
+    });
+
+    await controller.uploadMapImage(ORGANIZATION_ID, LEGACY_EVENT_ID, file);
+    await controller.removeMapImage(ORGANIZATION_ID, LEGACY_EVENT_ID);
+
+    expect(uploadMapImage).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+      file,
+    );
+    expect(removeMapImage).toHaveBeenCalledWith(
+      LEGACY_EVENT_ID,
+      ORGANIZATION_ID,
+    );
   });
 
   it('rejects vendors on the update handler', () => {
