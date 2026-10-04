@@ -260,3 +260,32 @@ pushWorkerTest('service worker executes notification and fan-out for every open 
     ]),
   );
 });
+
+pushWorkerTest('worker forwards identity only, preserves PNG icon and opens the review destination', async () => {
+  const listeners = new Map<string, (event: Record<string, unknown>) => void>();
+  const messages: unknown[] = [];
+  let shown: { data: { url: string; notificationId: string }; icon: string; tag: string } | undefined;
+  let opened = '';
+  let closed = false;
+  let work: Promise<unknown> | undefined;
+  runInNewContext(readPushWorkerFile(joinPushWorkerPath(process.cwd(), 'public', 'push-sw.js'), 'utf8'), {
+    URL, self: {
+      addEventListener: (type: string, listener: (event: Record<string, unknown>) => void) => listeners.set(type, listener),
+      location: { origin: 'https://space-link.example' },
+      registration: { showNotification: async (_title: string, options: typeof shown) => { shown = options; } },
+      clients: { matchAll: async () => [{ url: 'https://space-link.example/', postMessage: (message: unknown) => messages.push(message) }],
+        openWindow: async (url: string) => { opened = url; } },
+    },
+  });
+  listeners.get('push')?.({ data: { json: () => ({ notificationId: 'new-review', title: 'รีวิว', body: 'รายละเอียด', url: '/bookings/booking-1/review' }) },
+    waitUntil: (promise: Promise<unknown>) => { work = promise; } });
+  await work;
+  pushWorkerAssert.equal(shown?.icon, '/app-icon-192.png');
+  pushWorkerAssert.equal(shown?.tag, 'new-review');
+  pushWorkerAssert.equal(JSON.stringify(messages), JSON.stringify([{ type: SYSTEM_BROADCAST_PUSH_MESSAGE, notificationId: 'new-review' }]));
+  listeners.get('notificationclick')?.({ notification: { data: shown?.data, close: () => { closed = true; } },
+    waitUntil: (promise: Promise<unknown>) => { work = promise; } });
+  await work;
+  pushWorkerAssert.equal(closed, true);
+  pushWorkerAssert.equal(opened, 'https://space-link.example/bookings/booking-1/review');
+});

@@ -7,6 +7,7 @@ export interface PushPayload {
   title: string;
   body: string;
   url?: string;
+  notificationId?: string;
 }
 
 @Injectable()

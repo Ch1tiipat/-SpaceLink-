@@ -506,14 +506,18 @@ export class SupportTicketsService {
   ): Promise<SupportTicketStatusResponse> {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: supportTicketStatusSelect,
+      select: { ...supportTicketStatusSelect, userId: true },
     });
 
     if (!ticket) {
       throw new NotFoundException('ไม่พบคำร้อง');
     }
     if (ticket.status === targetStatus) {
-      return ticket;
+      return {
+        id: ticket.id,
+        status: ticket.status,
+        updatedAt: ticket.updatedAt,
+      };
     }
     if (NEXT_TICKET_STATUS[ticket.status] !== targetStatus) {
       throw new BadRequestException(
@@ -538,6 +542,21 @@ export class SupportTicketsService {
     if (!updated) {
       throw new NotFoundException('ไม่พบคำร้อง');
     }
+
+    // Only the CAS winner notifies. Never expose the subject/message in push,
+    // and never turn an already-committed status update into a failed request.
+    await this.notifications
+      .createForUser(ticket.userId, {
+        type: NotificationType.SUPPORT_TICKET,
+        title:
+          targetStatus === TicketStatus.PROCESSING
+            ? 'คำร้องของคุณกำลังดำเนินการ'
+            : 'คำร้องของคุณปิดแล้ว',
+        body: 'ผู้ดูแลอัปเดตสถานะคำร้องแล้ว กรุณาดูรายละเอียดในหน้าคำร้องของคุณ',
+        relatedEntityType: 'SUPPORT_TICKET',
+        relatedEntityId: ticketId,
+      })
+      .catch(() => null);
 
     return updated;
   }

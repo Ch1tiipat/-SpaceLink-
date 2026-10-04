@@ -16,10 +16,15 @@ const assistantLayoutSource = readAssistantLayoutSource(
 
 appShellTest('web push uses runtime broadcast data in a compact notification card', () => {
   appShellAssert.match(assistantLayoutSource, /aria-label="Web Push จาก SpaceLink"/);
-  appShellAssert.match(assistantLayoutSource, /Web Push · ประกาศสำคัญ/);
-  appShellAssert.match(assistantLayoutSource, /href="\/notifications"/);
+  appShellAssert.match(assistantLayoutSource, /Web Push · \{toast.label\}/);
+  appShellAssert.match(assistantLayoutSource, /href=\{toast.href\}/);
   appShellAssert.match(assistantLayoutSource, /fixed right-3 top-\[78px\]/);
-  appShellAssert.match(assistantLayoutSource, /max-h-\[min\(280px,calc\(100dvh-96px\)\)\]/);
+  appShellAssert.match(assistantLayoutSource, /top-\[78px\] z-\[25\]/);
+  appShellAssert.match(assistantLayoutSource, /<header className="sticky top-0 z-30/);
+  appShellAssert.match(assistantLayoutSource, /max-h-\[calc\(100dvh-220px\)\]/);
+  appShellAssert.match(assistantLayoutSource, /w-\[min\(380px,calc\(100%-24px\)\)\]/);
+  appShellAssert.match(assistantLayoutSource, /flex-col gap-3 overflow-y-auto/);
+  appShellAssert.match(assistantLayoutSource, /flex shrink-0 items-start/);
   appShellAssert.match(assistantLayoutSource, /line-clamp-3/);
   appShellAssert.doesNotMatch(assistantLayoutSource, /prototype-web-push/);
 });

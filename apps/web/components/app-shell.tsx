@@ -52,6 +52,7 @@ import {
   getEventMap,
   getEvents,
   getActiveSystemBroadcast,
+  getMyNotifications,
   getMe,
   getSuperAdminOrganizations,
   getUnreadNotificationCount,
@@ -62,7 +63,6 @@ import {
   type SupportAssistantAction,
   type SupportAssistantHistoryMessage,
   type SupportAssistantResponse,
-  type SystemBroadcast,
   type CurrentUser,
   type VendorShop,
   type ZoneRecommendation,
@@ -73,7 +73,7 @@ import {
   type AdminOrganization,
 } from '@/lib/admin-organization-access';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
-import { createSystemBroadcastRefreshController } from '@/lib/push-registration';
+import { createNotificationToastController, type NotificationToast } from '@/lib/notification-toast-controller';
 import { isEventBookable } from '@/lib/event-booking-rules';
 import {
   canUseUxPreview,
@@ -360,8 +360,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<
     number | null
   >(null);
-  const [activeBroadcast, setActiveBroadcast] =
-    useState<SystemBroadcast | null>(null);
+  const [notificationToasts, setNotificationToasts] = useState<NotificationToast[]>([]);
+  const toastControllerRef = useRef<ReturnType<typeof createNotificationToastController> | null>(null);
 
   const isAdmin =
     auth.status === 'signed-in' &&
@@ -567,31 +567,76 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [auth.status, pathname]);
 
   useEffect(() => {
-    setActiveBroadcast(null);
-    if (auth.status !== 'signed-in') return;
-
-    const broadcastRefresh =
-      createSystemBroadcastRefreshController<SystemBroadcast>({
-      clearInterval: window.clearInterval.bind(window),
-      documentEvents: document,
-      async fetchBroadcast(signal) {
-        const supabase = getSupabaseBrowserClient();
+    setNotificationToasts([]);
+    if (auth.status !== 'signed-in' || isAdminRoute || isSuperAdminRoute) return;
+    let supabase: ReturnType<typeof getSupabaseBrowserClient>;
+    try { supabase = getSupabaseBrowserClient(); } catch { return; }
+    let active = true;
+    let sessionRevision = 0;
+    let authRefreshTimer: number | undefined;
+    const toastController = createNotificationToastController({
+      async fetchSnapshot(accountId, signal) {
         const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) return null;
-        return getActiveSystemBroadcast(token, signal);
+        const session = data.session;
+        if (!active || signal.aborted || session?.user.id !== accountId) {
+          throw new Error('Notification session unavailable');
+        }
+        const [notifications, broadcast] = await Promise.all([
+          getMyNotifications(session.access_token, signal),
+          getActiveSystemBroadcast(session.access_token, signal),
+        ]);
+        return { notifications, broadcast };
       },
-      getDismissedBroadcastId: () =>
-        sessionStorage.getItem(DISMISSED_BROADCAST_KEY),
-      isVisible: () => document.visibilityState === 'visible',
-      onBroadcast: setActiveBroadcast,
-      serviceWorkerEvents: navigator.serviceWorker,
-      setInterval: window.setInterval.bind(window),
-      windowEvents: window,
-      });
-
-    return broadcastRefresh.dispose;
-  }, [auth.status]);
+      getDismissedBroadcastId() {
+        try { return sessionStorage.getItem(DISMISSED_BROADCAST_KEY); } catch { return null; }
+      },
+      onChange: (toasts) => { if (active) setNotificationToasts(toasts); },
+      setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimeout: (handle) => window.clearTimeout(handle as number),
+    });
+    toastControllerRef.current = toastController;
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      sessionRevision += 1;
+      // Reset immediately, even when /auth/me is still resolving the new user.
+      toastController.setAccount(session?.user.id ?? null);
+      // Supabase auth callbacks must not await/re-enter getSession while its
+      // auth lock is held. Fetch only after this callback has returned.
+      window.clearTimeout(authRefreshTimer);
+      authRefreshTimer = window.setTimeout(() => {
+        if (active) void toastController.refresh();
+      }, 0);
+    });
+    const initialRevision = sessionRevision;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active && sessionRevision === initialRevision) {
+        toastController.setAccount(data.session?.user.id ?? null);
+        void toastController.refresh();
+      }
+    }).catch(() => { if (active) toastController.setAccount(null); });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void toastController.refresh();
+    };
+    const onPush = (event: MessageEvent) => {
+      if (event.data?.type === 'SPACELINK_PUSH_RECEIVED') {
+        toastController.push(typeof event.data.notificationId === 'string' ? event.data.notificationId : undefined);
+      }
+    };
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    navigator.serviceWorker?.addEventListener('message', onPush);
+    return () => {
+      active = false;
+      toastController.dispose();
+      toastControllerRef.current = null;
+      listener.subscription.unsubscribe();
+      window.clearTimeout(authRefreshTimer);
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      navigator.serviceWorker?.removeEventListener('message', onPush);
+    };
+  }, [auth.status, isAdminRoute, isSuperAdminRoute]);
 
   function selectOrganization(organizationId: string) {
     if (
@@ -624,6 +669,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   function confirmSignOut() {
     setSignOutConfirmOpen(false);
+    toastControllerRef.current?.setAccount(null);
     signOut();
     router.replace('/');
   }
@@ -633,10 +679,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     setSignOutConfirmOpen(true);
   }
 
-  function dismissBroadcast() {
-    if (!activeBroadcast) return;
-    sessionStorage.setItem(DISMISSED_BROADCAST_KEY, activeBroadcast.id);
-    setActiveBroadcast(null);
+  function dismissNotification(toast: NotificationToast) {
+    if (toast.broadcastId) {
+      try { sessionStorage.setItem(DISMISSED_BROADCAST_KEY, toast.broadcastId); } catch { /* Optional storage. */ }
+    }
+    toastControllerRef.current?.dismiss(toast.id);
   }
 
   if (isSuperAdminRoute) {
@@ -743,11 +790,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
 
         <div className="sl-app-background min-w-0">
-          {activeBroadcast && !isAdminRoute ? (
-            <SystemBroadcastBanner
-              broadcast={activeBroadcast}
-              onDismiss={dismissBroadcast}
-            />
+          {auth.status === 'signed-in' && notificationToasts.length > 0 && !isAdminRoute ? (
+            <section aria-label="Web Push จาก SpaceLink" aria-live="polite" aria-relevant="additions"
+              className="fixed right-3 top-[78px] z-[25] flex max-h-[calc(100dvh-220px)] w-[min(380px,calc(100%-24px))] flex-col gap-3 overflow-y-auto overscroll-contain p-1 sm:right-5 sm:top-[86px]">
+              {notificationToasts.map((toast) => (
+                <NotificationToastCard key={toast.id} toast={toast} onDismiss={() => dismissNotification(toast)} />
+              ))}
+            </section>
           ) : null}
           {/* The viewport minus the topbar, so a short page still fills the
               screen without overflowing it — the pages themselves no longer
@@ -845,42 +894,42 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function SystemBroadcastBanner({
-  broadcast,
+function NotificationToastCard({
+  toast,
   onDismiss,
 }: {
-  broadcast: SystemBroadcast;
+  toast: NotificationToast;
   onDismiss: () => void;
 }) {
   return (
     <aside
-      aria-label="Web Push จาก SpaceLink"
-      className="fixed right-3 top-[78px] z-[70] flex max-h-[min(280px,calc(100dvh-96px))] w-[min(380px,calc(100vw-24px))] items-start gap-3 overflow-hidden rounded-[20px] border border-[#ded8ff] bg-white p-3.5 text-ink shadow-[0_22px_60px_rgba(45,27,82,.22)] sm:right-5 sm:top-[86px] sm:p-4"
+      aria-label={toast.title}
+      className="flex shrink-0 items-start gap-3 overflow-hidden rounded-[20px] border border-[#ded8ff] bg-white p-3.5 text-ink shadow-[0_8px_24px_rgba(45,27,82,.16)] sm:p-4"
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_8px_20px_rgba(109,40,217,.24)]">
         <Megaphone className="h-5 w-5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
         <span className="block text-[10px] font-black uppercase tracking-[0.15em] text-violet">
-          Web Push · ประกาศสำคัญ
+          Web Push · {toast.label}
         </span>
         <strong className="mt-1 line-clamp-2 break-words text-sm font-extrabold">
-          {broadcast.title}
+          {toast.title}
         </strong>
         <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-muted">
-          {broadcast.body}
+          {toast.body}
         </p>
         <Link
-          href="/notifications"
+          href={toast.href}
           className="mt-2 inline-flex items-center gap-1 text-xs font-extrabold text-violet hover:underline"
         >
-          ดูการแจ้งเตือน <span aria-hidden>→</span>
+          {toast.label === 'เขียนรีวิว' ? 'เขียนรีวิวเลย' : 'ดูการแจ้งเตือน'} <span aria-hidden>→</span>
         </Link>
       </div>
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="ปิดประกาศนี้สำหรับเซสชันปัจจุบัน"
+        aria-label={`ปิดการแจ้งเตือน ${toast.title}`}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f4f3ff] text-[#6b65a0] transition hover:bg-violet-tint hover:text-violet"
       >
         <X className="h-4 w-4" aria-hidden />
