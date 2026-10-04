@@ -13,7 +13,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || 'คุณมีการแจ้งเตือนใหม่',
     data: { url: payload.url || '/notifications' },
-    icon: '/icon.svg',
+    icon: '/app-icon-192.png',
   };
 
   event.waitUntil(
