@@ -164,6 +164,8 @@ describe('NotificationsService', () => {
     expect(sendToUser).toHaveBeenCalledWith(USER_ID, {
       title: INPUT.title,
       body: INPUT.body,
+      notificationId: NOTIFICATION_ID,
+      url: '/notifications',
     });
     expect(userFindUnique).toHaveBeenCalledWith({
       where: { id: USER_ID },
@@ -452,6 +454,10 @@ describe('NotificationsService', () => {
     expect(bookingFindMany).toHaveBeenCalledWith({
       where: {
         status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
+        OR: [
+          { confirmedAt: null },
+          { confirmedAt: { lt: new Date('2026-08-18T17:29:00.000Z') } },
+        ],
       },
       select: {
         id: true,
@@ -472,11 +478,135 @@ describe('NotificationsService', () => {
           userId: USER_ID,
           type: NotificationType.SYSTEM,
           title: 'ยืนยันการจองแล้ว เขียนรีวิวได้เลย',
+          id: expect.any(String) as string,
           body: 'งานเกษตร มทส. 2569 · บูธ A05 พร้อมให้คุณเขียนรีวิวแล้ว',
           relatedEntityType: 'BOOKING_REVIEW',
           relatedEntityId: REVIEW_BOOKING_ID,
         },
       ],
+    });
+    expect(sendToUser).not.toHaveBeenCalled();
+    expect(sendToUsers).not.toHaveBeenCalled();
+  });
+
+  it('pushes newly created invitations only after the scoped transaction commits', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
+        event: { name: 'งานทดสอบ' },
+        booth: { code: 'A01' },
+      },
+    ]);
+    notificationFindMany.mockResolvedValue([]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+    let committed = false;
+    prismaTransaction.mockImplementation(
+      async (
+        operation: (client: Prisma.TransactionClient) => Promise<unknown>,
+      ) => {
+        const result = await operation(
+          transactionClient as unknown as Prisma.TransactionClient,
+        );
+        expect(sendToUser).not.toHaveBeenCalled();
+        committed = true;
+        return result;
+      },
+    );
+    sendToUser.mockImplementation(() => {
+      expect(committed).toBe(true);
+      return Promise.resolve();
+    });
+    await expect(
+      service.createReviewEligibilityNotifications([REVIEW_BOOKING_ID]),
+    ).resolves.toBe(1);
+    expect(bookingFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { in: [REVIEW_BOOKING_ID] },
+          status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
+        },
+      }),
+    );
+    expect(sendToUser).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({
+        notificationId: expect.any(String) as string,
+        url: `/bookings/${REVIEW_BOOKING_ID}/review`,
+      }),
+    );
+    expect(sendToUser).toHaveBeenCalledTimes(1);
+    // A retry/direct trigger arriving after cron/direct created the row skips it.
+    notificationFindMany.mockResolvedValue([
+      { userId: USER_ID, relatedEntityId: REVIEW_BOOKING_ID },
+    ]);
+    prismaTransaction.mockImplementation(
+      (operation: (client: Prisma.TransactionClient) => Promise<unknown>) =>
+        operation(transactionClient as unknown as Prisma.TransactionClient),
+    );
+    await expect(
+      service.createReviewEligibilityNotifications([REVIEW_BOOKING_ID]),
+    ).resolves.toBe(0);
+    expect(sendToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('never pushes a rolled-back invitation, including a serializable retry', async () => {
+    bookingFindMany.mockResolvedValue([
+      {
+        id: REVIEW_BOOKING_ID,
+        vendorUserId: USER_ID,
+        vendor: { notificationPreferences: null },
+        event: { name: 'งานทดสอบ' },
+        booth: { code: 'A01' },
+      },
+    ]);
+    notificationFindMany.mockResolvedValue([]);
+    notificationCreateMany.mockResolvedValue({ count: 1 });
+    let attempts = 0;
+    prismaTransaction.mockImplementation(
+      async (
+        operation: (client: Prisma.TransactionClient) => Promise<unknown>,
+      ) => {
+        const result = await operation(
+          transactionClient as unknown as Prisma.TransactionClient,
+        );
+        expect(sendToUser).not.toHaveBeenCalled();
+        if (++attempts === 1)
+          throw new Prisma.PrismaClientKnownRequestError('conflict', {
+            code: 'P2034',
+            clientVersion: 'test',
+          });
+        return result;
+      },
+    );
+    sendToUser.mockRejectedValue(new Error('push unavailable'));
+    await expect(
+      service.createReviewEligibilityNotifications([REVIEW_BOOKING_ID]),
+    ).resolves.toBe(1);
+    expect(sendToUser).toHaveBeenCalledTimes(1);
+    expect(attempts).toBe(2);
+  });
+
+  it('redacts request details from push while preserving in-app details and routing', async () => {
+    await service.createForUser(USER_ID, {
+      type: NotificationType.SUPPORT_TICKET,
+      title: 'คำร้องอัปเดต',
+      body: 'private issue detail',
+    });
+    expect(notificationCreate).toHaveBeenCalledWith({
+      data: {
+        userId: USER_ID,
+        type: NotificationType.SUPPORT_TICKET,
+        title: 'คำร้องอัปเดต',
+        body: 'private issue detail',
+      },
+    });
+    expect(sendToUser).toHaveBeenCalledWith(USER_ID, {
+      title: 'คำร้องอัปเดต',
+      body: 'สถานะคำร้องของคุณได้รับการอัปเดต เปิดดูรายละเอียดในระบบ',
+      notificationId: NOTIFICATION_ID,
+      url: '/support',
     });
   });
 

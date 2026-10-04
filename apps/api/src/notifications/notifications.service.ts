@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { randomUUID } from 'node:crypto';
 import {
   BookingStatus,
   MembershipRole,
@@ -41,7 +42,10 @@ export class NotificationsService {
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE, { waitForCompletion: true })
-  async createReviewEligibilityNotifications(): Promise<number> {
+  async createReviewEligibilityNotifications(
+    bookingIds?: string[],
+  ): Promise<number> {
+    if (bookingIds?.length === 0) return 0;
     try {
       for (
         let attempt = 1;
@@ -49,13 +53,29 @@ export class NotificationsService {
         attempt += 1
       ) {
         try {
-          return await this.prisma.$transaction(
+          const result = await this.prisma.$transaction(
             (transaction) =>
               this.createReviewEligibilityNotificationsWithinTransaction(
                 transaction,
+                bookingIds,
               ),
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
+          // The cron backfills in-app only. Direct payment triggers push only
+          // rows this committed transaction created, never historical rows.
+          if (bookingIds) {
+            await Promise.allSettled(
+              result.invitations.map((invitation) =>
+                this.pushSender.sendToUser(invitation.userId, {
+                  title: invitation.title,
+                  body: invitation.body,
+                  notificationId: invitation.id,
+                  url: `/bookings/${invitation.relatedEntityId}/review`,
+                }),
+              ),
+            );
+          }
+          return result.count;
         } catch (error) {
           if (
             error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -102,7 +122,12 @@ export class NotificationsService {
       void this.pushSender
         .sendToUser(userId, {
           title: input.title,
-          body: input.body ?? '',
+          body:
+            input.type === NotificationType.SUPPORT_TICKET
+              ? 'สถานะคำร้องของคุณได้รับการอัปเดต เปิดดูรายละเอียดในระบบ'
+              : (input.body ?? ''),
+          notificationId: notification.id,
+          url: this.notificationUrl(input),
         })
         .catch(() => undefined);
       return notification;
@@ -388,10 +413,21 @@ export class NotificationsService {
 
   private async createReviewEligibilityNotificationsWithinTransaction(
     transaction: Prisma.TransactionClient,
-  ): Promise<number> {
+    bookingIds?: string[],
+  ) {
     const eligibleBookings = await transaction.booking.findMany({
       where: {
         status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
+        ...(bookingIds
+          ? { id: { in: bookingIds } }
+          : {
+              // Let the direct post-payment trigger claim recent confirmations
+              // first. Historical backfill still includes every older booking.
+              OR: [
+                { confirmedAt: null },
+                { confirmedAt: { lt: new Date(Date.now() - 60_000) } },
+              ],
+            }),
       },
       select: {
         id: true,
@@ -403,23 +439,23 @@ export class NotificationsService {
       orderBy: [{ bookingEndDate: 'desc' }, { createdAt: 'desc' }],
     });
 
-    if (eligibleBookings.length === 0) return 0;
+    if (eligibleBookings.length === 0) return { count: 0, invitations: [] };
 
     const userIds = [
       ...new Set(eligibleBookings.map(({ vendorUserId }) => vendorUserId)),
     ];
-    const bookingIds = eligibleBookings.map(({ id }) => id);
+    const eligibleBookingIds = eligibleBookings.map(({ id }) => id);
 
     const [reviews, existingNotifications] = await Promise.all([
       transaction.review.findMany({
-        where: { bookingId: { in: bookingIds } },
+        where: { bookingId: { in: eligibleBookingIds } },
         select: { bookingId: true },
       }),
       transaction.notification.findMany({
         where: {
           userId: { in: userIds },
           relatedEntityType: REVIEW_NOTIFICATION_ENTITY_TYPE,
-          relatedEntityId: { in: bookingIds },
+          relatedEntityId: { in: eligibleBookingIds },
         },
         select: { userId: true, relatedEntityId: true },
       }),
@@ -457,6 +493,7 @@ export class NotificationsService {
       selectedKeys.add(key);
       return [
         {
+          id: randomUUID(),
           userId: booking.vendorUserId,
           type: NotificationType.SYSTEM,
           title: 'ยืนยันการจองแล้ว เขียนรีวิวได้เลย',
@@ -467,12 +504,23 @@ export class NotificationsService {
       ];
     });
 
-    if (invitations.length === 0) return 0;
+    if (invitations.length === 0) return { count: 0, invitations: [] };
 
     const created = await transaction.notification.createMany({
       data: invitations,
     });
-    return created.count;
+    return { count: created.count, invitations };
+  }
+
+  private notificationUrl(input: CreateNotificationInput): string {
+    const id = input.relatedEntityId;
+    if (input.relatedEntityType === REVIEW_NOTIFICATION_ENTITY_TYPE && id) {
+      return `/bookings/${id}/review`;
+    }
+    if (input.type === NotificationType.SUPPORT_TICKET) return '/support';
+    if (input.relatedEntityType === 'BOOKING' && id) return `/bookings/${id}`;
+    if (input.relatedEntityType === 'REFUND_REQUEST') return '/refunds';
+    return '/notifications';
   }
 
   /**

@@ -157,6 +157,7 @@ describe('SupportTicketsService', () => {
     });
     supportTicketFindUnique.mockResolvedValue({
       id: TICKET_ID,
+      userId: VENDOR_ID,
       status: TicketStatus.OPEN,
       updatedAt: NOW,
     });
@@ -311,6 +312,7 @@ describe('SupportTicketsService', () => {
       supportTicketFindUnique
         .mockResolvedValueOnce({
           id: TICKET_ID,
+          userId: VENDOR_ID,
           status: TicketStatus.OPEN,
           updatedAt: NOW,
         })
@@ -324,12 +326,22 @@ describe('SupportTicketsService', () => {
         where: { id: TICKET_ID, status: TicketStatus.OPEN },
         data: { status: TicketStatus.PROCESSING },
       });
+      expect(createForUser).toHaveBeenCalledWith(
+        VENDOR_ID,
+        expect.objectContaining({
+          type: NotificationType.SUPPORT_TICKET,
+          title: 'คำร้องของคุณกำลังดำเนินการ',
+          relatedEntityType: 'SUPPORT_TICKET',
+          relatedEntityId: TICKET_ID,
+        }),
+      );
     });
 
     it('moves a processing ticket to closed', async () => {
       supportTicketFindUnique
         .mockResolvedValueOnce({
           id: TICKET_ID,
+          userId: VENDOR_ID,
           status: TicketStatus.PROCESSING,
           updatedAt: NOW,
         })
@@ -342,6 +354,10 @@ describe('SupportTicketsService', () => {
       await expect(
         service.updateStatus(TICKET_ID, TicketStatus.CLOSED),
       ).resolves.toMatchObject({ status: TicketStatus.CLOSED });
+      expect(createForUser).toHaveBeenCalledWith(
+        VENDOR_ID,
+        expect.objectContaining({ title: 'คำร้องของคุณปิดแล้ว' }),
+      );
     });
 
     it('keeps an idempotent status request unchanged', async () => {
@@ -356,6 +372,7 @@ describe('SupportTicketsService', () => {
         service.updateStatus(TICKET_ID, TicketStatus.OPEN),
       ).resolves.toEqual(current);
       expect(supportTicketUpdateMany).not.toHaveBeenCalled();
+      expect(createForUser).not.toHaveBeenCalled();
     });
 
     it('rejects skipping or reversing the workflow', async () => {
@@ -386,6 +403,30 @@ describe('SupportTicketsService', () => {
       await expect(
         service.updateStatus(TICKET_ID, TicketStatus.PROCESSING),
       ).rejects.toBeInstanceOf(ConflictException);
+      expect(createForUser).not.toHaveBeenCalled();
+    });
+
+    it('keeps the changed status successful if notification delivery rejects', async () => {
+      createForUser.mockRejectedValueOnce(new Error('unavailable'));
+      supportTicketFindUnique
+        .mockResolvedValueOnce({
+          id: TICKET_ID,
+          userId: VENDOR_ID,
+          status: TicketStatus.OPEN,
+          updatedAt: NOW,
+        })
+        .mockResolvedValueOnce({
+          id: TICKET_ID,
+          status: TicketStatus.PROCESSING,
+          updatedAt: NOW,
+        });
+      await expect(
+        service.updateStatus(TICKET_ID, TicketStatus.PROCESSING),
+      ).resolves.toEqual({
+        id: TICKET_ID,
+        status: TicketStatus.PROCESSING,
+        updatedAt: NOW,
+      });
     });
   });
 

@@ -871,7 +871,9 @@ export class BookingsService {
           relatedEntityId: booking.id,
         })
         .catch(() => 0);
-      await this.notifications.createReviewEligibilityNotifications();
+      await this.notifications.createReviewEligibilityNotifications([
+        booking.id,
+      ]);
     }
 
     return response;
@@ -1083,7 +1085,9 @@ export class BookingsService {
           relatedEntityId: group.id,
         })
         .catch(() => 0);
-      await this.notifications.createReviewEligibilityNotifications();
+      await this.notifications.createReviewEligibilityNotifications(
+        group.bookings.map((booking) => booking.id),
+      );
     }
 
     return response;
