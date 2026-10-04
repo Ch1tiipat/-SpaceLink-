@@ -565,6 +565,7 @@ export default function DiscoveryPage() {
               { value: 'all', label: 'ทุกสถานะ' },
               { value: 'bookable', label: 'เปิดจอง' },
               { value: 'closed', label: 'ปิดจอง' },
+              { value: 'past', label: 'งานที่ผ่านมา' },
             ]}
           />
           <button
@@ -729,13 +730,13 @@ export default function DiscoveryPage() {
               ค้นหาอีเวนต์สำหรับร้านคุณ
             </h2>
             <p className="mt-1.5 text-sm text-muted">
-              เลือกดูงานทั้งหมด หรือตามสถานะเปิดจองและปิดจอง
+              เลือกดูงานทั้งหมด งานที่เปิดจอง ปิดจอง หรืองานที่ผ่านมา
             </p>
           </div>
         </div>
-        <div className="mb-6 overflow-x-auto [scrollbar-width:none]">
+        <div className="mb-6">
           <div
-            className="flex min-w-max justify-end gap-2.5 max-md:justify-start"
+            className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:justify-end"
             role="group"
             aria-label="กรองอีเวนต์ตามสถานะการรับจอง"
           >
@@ -744,6 +745,7 @@ export default function DiscoveryPage() {
                 { value: 'all', label: 'ทั้งหมด' },
                 { value: 'bookable', label: 'เปิดจอง' },
                 { value: 'closed', label: 'ปิดจอง' },
+                { value: 'past', label: 'งานที่ผ่านมา' },
               ] as const
             ).map((option) => {
               const active = appliedFilters.eventStatus === option.value;
@@ -773,14 +775,18 @@ export default function DiscoveryPage() {
                   ? 'อีเวนต์ทั้งหมด'
                   : appliedFilters.eventStatus === 'bookable'
                     ? 'อีเวนต์ที่เปิดรับจอง'
-                    : 'อีเวนต์ที่ปิดรับจอง'}
+                    : appliedFilters.eventStatus === 'past'
+                      ? 'อีเวนต์ที่ผ่านมา'
+                      : 'อีเวนต์ที่ปิดรับจอง'}
               </h3>
               <p className="mt-1 text-sm text-muted">
                 {appliedFilters.eventStatus === 'all'
                   ? 'รวมงานที่เปิดและปิดรับจอง โดยไม่รวมงานที่สิ้นสุดแล้ว'
                   : appliedFilters.eventStatus === 'bookable'
                     ? 'เลือกดูรายละเอียดและจองพื้นที่ได้ทันที'
-                    : 'งานยังไม่สิ้นสุด แต่ไม่มีบูธเปิดรับจองเพิ่ม'}
+                    : appliedFilters.eventStatus === 'past'
+                      ? 'งานที่สิ้นสุดแล้ว เปิดดูรายละเอียดได้ แต่จองไม่ได้'
+                      : 'งานยังไม่สิ้นสุด แต่ไม่มีบูธเปิดรับจองเพิ่ม'}
               </p>
             </div>
             <span className="rounded-full border border-[#ded2f4] bg-white/80 px-3 py-1.5 text-xs font-bold text-[#6f627f]">
@@ -808,10 +814,14 @@ export default function DiscoveryPage() {
               className="mx-auto h-9 w-9 text-violet"
             />
             <h3 className="mt-3 text-lg font-extrabold">
-              ไม่พบ Event ตามเงื่อนไขที่เลือก
+              {appliedFilters.eventStatus === 'past'
+                ? 'ไม่พบอีเวนต์ที่ผ่านมา ตามเงื่อนไขที่เลือก'
+                : 'ไม่พบ Event ตามเงื่อนไขที่เลือก'}
             </h3>
             <p className="mt-1 text-sm text-muted">
-              ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง
+              {appliedFilters.eventStatus === 'past'
+                ? 'ลองเปลี่ยนงาน พื้นที่ หรือหมวดสินค้า หรือเลือกสถานะอื่นเพื่อดูงานที่ยังไม่สิ้นสุด'
+                : 'ลองเปลี่ยนงาน พื้นที่ หมวดสินค้า หรือสถานะ แล้วค้นหาอีกครั้ง'}
             </p>
             <button
               type="button"
