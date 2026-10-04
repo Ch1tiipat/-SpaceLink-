@@ -99,9 +99,44 @@ homeFilterTest('extracts Thai provinces for filter options', () => {
     'นครราชสีมา',
   );
   homeFilterAssert.equal(
+    provinceFromAddress('99 ถนนสุขุมวิท จังหวัดตาก 63000'),
+    'ตาก',
+  );
+  homeFilterAssert.equal(provinceFromAddress('จ.น่าน'), 'น่าน');
+  homeFilterAssert.equal(
     provinceFromAddress('111 ถนนมหาวิทยาลัย อำเภอเมือง'),
     '',
   );
+});
+
+homeFilterTest('extracts provinces from observed production venue addresses', () => {
+  homeFilterAssert.equal(
+    provinceFromAddress(
+      'บ้านสันติสุข บ้านเลขที่ 23/2 อำเภอ นาเชือก มหาสารคาม 44170',
+    ),
+    'มหาสารคาม',
+  );
+  homeFilterAssert.equal(
+    provinceFromAddress('มหาวิทยาลัยเทคโนโลยีสุรนารี นครราชสีมา'),
+    'นครราชสีมา',
+  );
+});
+
+homeFilterTest('does not infer ambiguous short provinces from larger words', () => {
+  const falsePositiveAddresses = [
+    '99 ถนนตากสิน เมือง',
+    'ต.น่านฟ้า',
+    'เดินทางเลยตลาดไปทางเหนือ',
+    'ร้านตรังใจ',
+    'ร้านแพร่ภาพชุมชน',
+    'ถนนตราดใหม่',
+    'โครงการยะลาใจ',
+    'สตูลดอกไม้',
+  ];
+
+  for (const address of falsePositiveAddresses) {
+    homeFilterAssert.equal(provinceFromAddress(address), '');
+  }
 });
 
 homeFilterTest(
@@ -375,3 +410,4 @@ homeFilterTest(
     );
   },
 );
+

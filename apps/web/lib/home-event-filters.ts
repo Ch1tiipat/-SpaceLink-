@@ -107,6 +107,21 @@ const THAI_PROVINCES_BY_LENGTH = [...THAI_PROVINCES].sort(
   (left, right) => right.length - left.length,
 );
 
+const PREFIXED_THAI_PROVINCE_PATTERN = new RegExp(
+  `(?:จังหวัด|จ\\.)\\s*(${THAI_PROVINCES_BY_LENGTH.join('|')})(?=$|[\\s,.;:()\\-/0-9])`,
+);
+
+const AMBIGUOUS_UNPREFIXED_PROVINCES = new Set([
+  'ตาก',
+  'เลย',
+  'น่าน',
+  'ตรัง',
+  'ตราด',
+  'แพร่',
+  'ยะลา',
+  'สตูล',
+]);
+
 const ENGLISH_PROVINCE_ALIASES = [
   { value: 'bangkok', province: 'กรุงเทพมหานคร' },
   { value: 'nakhon ratchasima', province: 'นครราชสีมา' },
@@ -115,10 +130,20 @@ const ENGLISH_PROVINCE_ALIASES = [
 
 export function provinceFromAddress(address: string): string {
   const normalized = address.trim().replace(/\s+/g, ' ');
-  const thaiProvince = THAI_PROVINCES_BY_LENGTH.find((province) =>
-    normalized.includes(province),
+  const prefixedThaiProvince = PREFIXED_THAI_PROVINCE_PATTERN.exec(normalized);
+  if (prefixedThaiProvince) return prefixedThaiProvince[1];
+
+  const exactThaiProvince = THAI_PROVINCES_BY_LENGTH.find(
+    (province) => normalized === province,
   );
-  if (thaiProvince) return thaiProvince;
+  if (exactThaiProvince) return exactThaiProvince;
+
+  const unprefixedThaiProvince = THAI_PROVINCES_BY_LENGTH.find(
+    (province) =>
+      !AMBIGUOUS_UNPREFIXED_PROVINCES.has(province) &&
+      normalized.includes(province),
+  );
+  if (unprefixedThaiProvince) return unprefixedThaiProvince;
 
   const normalizedEnglish = normalized.toLocaleLowerCase('en-US');
   return (
@@ -233,3 +258,4 @@ function uniqueHomeFilterOptions(
     return [{ ...option, value, label }];
   });
 }
+
