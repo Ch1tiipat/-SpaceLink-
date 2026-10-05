@@ -36,6 +36,19 @@ supportTest('launcher opens the contact menu before the AI dialog', () => {
   supportAssert.match(floatingSupportSource, /โทรหาเจ้าหน้าที่ SpaceLink/);
 });
 
+supportTest('Facebook contact opens the supplied SpaceLink profile in a new tab', () => {
+  const facebookLink = floatingSupportSource.match(
+    /<a\s+[^>]*aria-label="ติดต่อผ่าน Facebook"[^>]*>/,
+  )?.[0];
+  supportAssert.ok(facebookLink, 'Facebook contact link must exist');
+  supportAssert.match(
+    facebookLink,
+    /href="https:\/\/www\.facebook\.com\/profile\.php\?id=61594183376080&sk=about"/,
+  );
+  supportAssert.match(facebookLink, /target="_blank"/);
+  supportAssert.match(facebookLink, /rel="noreferrer"/);
+});
+
 supportTest('AI panel exposes dialog semantics, Escape close, and focus restoration', () => {
   supportAssert.match(floatingSupportSource, /role="dialog"/);
   supportAssert.match(floatingSupportSource, /aria-labelledby="sl-ai-dialog-title"/);
