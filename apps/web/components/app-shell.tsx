@@ -36,7 +36,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Sparkles,
   Star,
   ThumbsDown,
   ThumbsUp,
@@ -2021,7 +2020,14 @@ function FloatingSupport({
               </small>
             </span>
             <span className="grid h-[54px] w-[54px] place-items-center rounded-[15px] bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white">
-              <Sparkles className="h-5 w-5" aria-hidden />
+              <Image
+                src="/ai-support-logo.webp?v=2"
+                alt=""
+                aria-hidden
+                width={54}
+                height={54}
+                className="pointer-events-none h-[54px] w-[54px] rounded-[15px] object-contain"
+              />
             </span>
           </button>
           <a
@@ -2179,7 +2185,14 @@ function FloatingSupport({
                 ) : null}
                 <div className="flex items-end gap-2 pr-8">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]">
-                    <Sparkles className="h-4 w-4" aria-hidden />
+                    <Image
+                      src="/ai-support-logo.webp?v=2"
+                      alt=""
+                      aria-hidden
+                      width={32}
+                      height={32}
+                      className="pointer-events-none h-8 w-8 rounded-full object-contain"
+                    />
                   </span>
                   <div className="max-w-[84%]">
                     <strong className="mb-1 block text-[11px] font-extrabold text-violet">
@@ -2233,7 +2246,14 @@ function FloatingSupport({
             ) : null}
             <div className="flex items-end gap-2 pr-8" aria-live="polite">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#8b5cf6,#6d28d9)] text-white shadow-[0_6px_16px_rgba(109,40,217,.2)]">
-                <Sparkles className="h-4 w-4" aria-hidden />
+                <Image
+                  src="/ai-support-logo.webp?v=2"
+                  alt=""
+                  aria-hidden
+                  width={32}
+                  height={32}
+                  className="pointer-events-none h-8 w-8 rounded-full object-contain"
+                />
               </span>
               <div className="max-w-[84%]">
                 <strong className="mb-1 block text-[11px] font-extrabold text-violet">
@@ -2555,7 +2575,14 @@ function FloatingSupport({
           {expanded ? (
             <X className="h-5 w-5" aria-hidden />
           ) : (
-            <Sparkles className="h-5 w-5" aria-hidden />
+            <Image
+              src="/ai-support-logo.webp?v=2"
+              alt=""
+              aria-hidden
+              width={56}
+              height={56}
+              className="pointer-events-none h-14 w-14 rounded-[18px] object-contain"
+            />
           )}
         </button>
       ) : null}
