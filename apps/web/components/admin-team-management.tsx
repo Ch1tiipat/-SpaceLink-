@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import { useAdminPageAccess } from '@/components/admin-ui';
 import {
@@ -13,48 +13,84 @@ import {
 
 export function AdminTeamManagement() {
   const { access, token, organizationId, organization } = useAdminPageAccess();
-  const [members, setMembers] = useState<OrganizationTeamMember[]>([]);
+  // A new scope identity also distinguishes A -> B -> A from the first A.
+  const scope = useMemo(
+    () => ({ access, token, organizationId }),
+    [access, token, organizationId],
+  );
+  const activeScope = useRef<typeof scope | null>(null);
+  const refreshGeneration = useRef(0);
+  const [team, setTeam] = useState<{
+    scope: typeof scope;
+    members: OrganizationTeamMember[];
+  } | null>(null);
+  const members = team?.scope === scope ? team.members : [];
   const [email, setEmail] = useState('');
   const [busyId, setBusyId] = useState('');
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ scope: typeof scope; message: string } | null>(null);
+  const error = failure?.scope === scope ? failure.message : '';
+  const setError = useCallback((message: string) => {
+    setFailure(message ? { scope, message } : null);
+  }, [scope]);
   const isOwner = organization?.membershipRole === 'OWNER';
+  const isCurrent = useCallback(() => activeScope.current === scope, [scope]);
 
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
-      if (!token || !organizationId) return;
-      setMembers(await getOrganizationTeam(organizationId, token, signal));
+      if (!isCurrent() || !token || !organizationId) return;
+      const generation = ++refreshGeneration.current;
+      try {
+        const nextMembers = await getOrganizationTeam(organizationId, token, signal);
+        if (isCurrent() && !signal?.aborted && generation === refreshGeneration.current) {
+          setTeam({ scope, members: nextMembers });
+        }
+      } catch (cause) {
+        if (isCurrent() && !signal?.aborted && generation === refreshGeneration.current) {
+          throw cause;
+        }
+      }
     },
-    [organizationId, token],
+    [isCurrent, organizationId, scope, token],
   );
 
   useEffect(() => {
+    activeScope.current = scope;
+    setTeam(null);
+    setEmail('');
+    setBusyId('');
+    setError('');
     if (access !== 'allowed' || !token || !organizationId) return;
     const controller = new AbortController();
-    setError('');
     void refresh(controller.signal).catch((cause: unknown) => {
+      if (!isCurrent()) return;
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       setError(
         cause instanceof Error ? cause.message : 'โหลดรายชื่อทีมไม่สำเร็จ',
       );
     });
-    return () => controller.abort();
-  }, [access, organizationId, refresh, token]);
+    return () => {
+      activeScope.current = null;
+      controller.abort();
+    };
+  }, [access, isCurrent, organizationId, refresh, scope, setError, token]);
 
   async function handleAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim()) return;
+    if (!isOwner || !isCurrent() || !email.trim()) return;
     setBusyId('add');
     setError('');
     try {
       await addOrganizationAdmin(organizationId, email.trim(), token);
+      if (!isCurrent()) return;
       setEmail('');
       await refresh();
     } catch (cause) {
+      if (!isCurrent()) return;
       setError(
         cause instanceof Error ? cause.message : 'เพิ่มผู้ดูแลไม่สำเร็จ',
       );
     } finally {
-      setBusyId('');
+      if (isCurrent()) setBusyId('');
     }
   }
 
@@ -62,6 +98,7 @@ export function AdminTeamManagement() {
     member: OrganizationTeamMember,
     key: 'canManagePayments' | 'canManageZones',
   ) {
+    if (!isOwner || !isCurrent()) return;
     setBusyId(member.id);
     setError('');
     try {
@@ -80,32 +117,41 @@ export function AdminTeamManagement() {
         },
         token,
       );
-      setMembers((current) =>
-        current.map((item) =>
+      if (!isCurrent()) return;
+      setTeam((current) => current?.scope === scope ? {
+        scope,
+        members: current.members.map((item) =>
           item.id === member.id ? { ...item, ...updated } : item,
         ),
-      );
+      } : current);
     } catch (cause) {
+      if (!isCurrent()) return;
       setError(
         cause instanceof Error ? cause.message : 'เปลี่ยนสิทธิ์ไม่สำเร็จ',
       );
     } finally {
-      setBusyId('');
+      if (isCurrent()) setBusyId('');
     }
   }
 
   async function removeAdmin(member: OrganizationTeamMember) {
+    if (!isOwner || !isCurrent()) return;
     if (!window.confirm(`ถอด ${member.user.fullName} ออกจากทีมผู้ดูแลหรือไม่`))
       return;
     setBusyId(member.id);
     setError('');
     try {
       await removeOrganizationAdmin(organizationId, member.user.id, token);
-      setMembers((current) => current.filter((item) => item.id !== member.id));
+      if (!isCurrent()) return;
+      setTeam((current) => current?.scope === scope ? {
+        scope,
+        members: current.members.filter((item) => item.id !== member.id),
+      } : current);
     } catch (cause) {
+      if (!isCurrent()) return;
       setError(cause instanceof Error ? cause.message : 'ถอดผู้ดูแลไม่สำเร็จ');
     } finally {
-      setBusyId('');
+      if (isCurrent()) setBusyId('');
     }
   }
 
