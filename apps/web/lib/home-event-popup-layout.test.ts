@@ -8,13 +8,20 @@ const { join: joinPopupPath }: typeof import('node:path') =
   require('node:path');
 const { test: popupTest }: typeof import('node:test') = require('node:test');
 
-const popupSource = readPopupSource(
+const homePopupPageSource = readPopupSource(
   joinPopupPath(process.cwd(), 'app', 'page.tsx'),
   'utf8',
 );
 
+const popupSource = readPopupSource(
+  joinPopupPath(process.cwd(), 'components', 'event-details-popup.tsx'),
+  'utf8',
+);
+
 popupTest('homepage Event cards open the runtime Event popup', () => {
-  popupAssert.match(popupSource, /onOpen=\{openEventPopup\}/);
+  popupAssert.match(homePopupPageSource, /onOpen=\{openEventPopup\}/);
+  popupAssert.match(homePopupPageSource, /import \{ EventPopup \} from '@\/components\/event-details-popup'/);
+  popupAssert.doesNotMatch(homePopupPageSource, /function EventPopup\(/);
   popupAssert.match(popupSource, /getEventMap\(event\.id, controller\.signal\)/);
   popupAssert.match(popupSource, /summarizeEventZones\(eventMap\.zones\)/);
   popupAssert.doesNotMatch(popupSource, /PROTOTYPE_EVENT_(NEWS|ZONES|RULES)/);
@@ -22,16 +29,16 @@ popupTest('homepage Event cards open the runtime Event popup', () => {
 
 popupTest('homepage Event popup can be restored from URL state', () => {
   popupAssert.match(
-    popupSource,
+    homePopupPageSource,
     /url\.searchParams\.set\('event', slug\)/,
   );
   popupAssert.match(
-    popupSource,
+    homePopupPageSource,
     /new URLSearchParams\(window\.location\.search\)\.get\([\s\S]*?'event',[\s\S]*?\)/,
   );
-  popupAssert.match(popupSource, /event\.slug === requestedSlug/);
-  popupAssert.match(popupSource, /replaceEventPopupUrl\(event\.slug\)/);
-  popupAssert.match(popupSource, /replaceEventPopupUrl\(null\)/);
+  popupAssert.match(homePopupPageSource, /event\.slug === requestedSlug/);
+  popupAssert.match(homePopupPageSource, /replaceEventPopupUrl\(event\.slug\)/);
+  popupAssert.match(homePopupPageSource, /replaceEventPopupUrl\(null\)/);
 });
 
 popupTest('Event map preview is zoomable and links to the real map route', () => {
