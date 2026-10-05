@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ResilientImage as Image } from '@/components/resilient-image';
 import { useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -225,8 +226,17 @@ export default function HelpPage() {
         <section className="relative isolate overflow-hidden rounded-[30px] border border-[#e4daf7] bg-[#f7f2ff] shadow-[0_22px_60px_rgba(77,49,126,0.10)]">
           <div
             aria-hidden
-            className="absolute inset-y-0 right-0 -z-10 w-full bg-[url('/home-hero.jpg')] bg-cover bg-[center_42%] opacity-35 sm:w-[62%]"
-          />
+            className="absolute inset-y-0 right-0 -z-10 w-full opacity-70 sm:w-[62%]"
+          >
+            <Image
+              src="/home-hero-market-photo.jpg"
+              alt=""
+              fill
+              priority
+              sizes="(min-width: 640px) 62vw, 100vw"
+              className="object-cover object-center"
+            />
+          </div>
           <div
             aria-hidden
             className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#fbf9ff_0%,#f8f3ff_43%,rgba(247,242,255,0.88)_61%,rgba(247,242,255,0.45)_100%)]"

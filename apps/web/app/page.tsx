@@ -553,21 +553,21 @@ export default function DiscoveryPage() {
       <section className="relative">
         <section className="relative flex min-h-[470px] items-center overflow-hidden sm:min-h-[520px]">
           <Image
-            src="/home-hero-spacelink-market.png"
-            alt="ร้านค้าและบูธภายในงาน SpaceLink"
+            src="/home-hero-market-photo.jpg"
+            alt="ภาพบรรยากาศงาน SpaceLink และทีมงานต้อนรับร้านค้า"
             fill
             priority
             sizes="100vw"
-            className="object-cover object-center"
+            className="object-cover object-[65%_center] md:object-center"
           />
           <div
             aria-hidden
             className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,.96)_0%,rgba(252,248,255,.88)_34%,rgba(246,232,255,.56)_57%,rgba(139,83,218,.18)_78%,rgba(92,39,167,.06)_100%)] max-md:bg-[linear-gradient(180deg,rgba(255,255,255,.96)_0%,rgba(252,246,255,.90)_55%,rgba(224,200,255,.32)_100%)]"
           />
-          <div className="relative z-[1] flex min-h-[470px] w-full max-w-[760px] flex-col justify-center px-7 pb-28 pt-10 sm:min-h-[520px] sm:px-14 lg:px-[clamp(64px,7vw,110px)]">
-            <h1 className="max-w-[660px] text-[clamp(40px,5.4vw,76px)] font-black leading-[.98] tracking-[-.055em] text-[#1c1427]">
-              ค้นหาพื้นที่ขาย
-              <span className="mt-1 block bg-[linear-gradient(90deg,#5724c8,#7d3ff2,#a765ff)] bg-clip-text text-transparent">
+          <div className="relative z-[1] flex min-h-[470px] w-full max-w-[900px] flex-col justify-center px-7 pb-28 pt-10 sm:min-h-[520px] sm:px-14 lg:px-[clamp(64px,7vw,110px)]">
+            <h1 className="max-w-[720px] py-2 text-[clamp(34px,5vw,76px)] font-bold leading-[1.45] tracking-[.008em] text-[#242032]">
+              <span className="block">ค้นหาพื้นที่ขาย</span>
+              <span className="mt-1 block text-[#7138d6]">
                 ที่เหมาะกับร้านคุณ
               </span>
             </h1>
