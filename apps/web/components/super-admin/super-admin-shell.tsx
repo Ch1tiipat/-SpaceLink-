@@ -363,11 +363,12 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
               <Image
                 src="/brand/spacelink-mark.png"
                 alt=""
-                width={38}
-                height={38}
-                className="h-[38px] w-[38px] object-contain"
+                width={56}
+                height={56}
+                sizes="(max-width: 639px) 48px, 56px"
+                className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_7px_13px_rgba(92,33,190,.2)] sm:h-14 sm:w-14"
               />
-              <span className="hidden bg-[linear-gradient(100deg,#4c16ad,#8b3df3)] bg-clip-text text-lg font-black tracking-[-.5px] text-transparent min-[390px]:inline sm:text-2xl">
+              <span className="hidden bg-[linear-gradient(100deg,#4c16ad,#8b3df3)] bg-clip-text text-lg font-black tracking-[-.5px] text-transparent sm:inline sm:text-2xl">
                 SpaceLink
               </span>
             </Link>
