@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: 'SpaceLink — ค้นหาและจองบูธ',
   description: 'ค้นหา Event เลือกโซน และจองบูธที่เหมาะกับร้านของคุณ',
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/app-icon-192.png',
+    apple: '/app-icon-192.png',
+  },
 };
 
 export const viewport: Viewport = {
