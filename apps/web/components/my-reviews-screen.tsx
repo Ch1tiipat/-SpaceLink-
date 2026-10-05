@@ -1,9 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { createPortal } from 'react-dom';
 import {
-  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -29,8 +27,14 @@ import {
   type SavedReviewDraft,
 } from '@/components/booking-review-screen';
 import { getPreviewBookings } from '@/components/booking-detail-screen';
-import { EventDetailContent } from '@/components/event-detail-screen';
+import { EventPopup } from '@/components/event-details-popup';
+import { isUuid } from '@/lib/route-identifier';
 import {
+  getEventMap,
+  getEventMapBySlug,
+  getPublicAnnouncements,
+  type AdminAnnouncement,
+  type DiscoveryEvent,
   getMyBookings,
   getMyReviews,
   type EventMap,
@@ -686,113 +690,129 @@ function ReviewEventPopup({
   eventName: string;
   onClose: () => void;
 }) {
-  const [isMounted, setIsMounted] = useState(false);
-  const [resolvedEvent, setResolvedEvent] = useState<EventMap['event'] | null>(
-    null,
-  );
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => setIsMounted(true), []);
+  const [loadState, setLoadState] = useState<
+    | { status: 'loading' }
+    | { status: 'ready'; map: EventMap }
+    | { status: 'error'; message: string }
+  >({ status: 'loading' });
+  const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    if (!isMounted) return;
+    const controller = new AbortController();
+    setLoadState({ status: 'loading' });
+    setAnnouncements([]);
+    const request = isUuid(eventId) ? getEventMap : getEventMapBySlug;
+    request(eventId, controller.signal)
+      .then((map) => {
+        if (controller.signal.aborted) return;
+        setLoadState({ status: 'ready', map });
+        // News is optional: its failure must not hide the Event details.
+        return getPublicAnnouncements(map.event.organization.id, controller.signal)
+          .then((items) => {
+            if (!controller.signal.aborted) setAnnouncements(items);
+          })
+          .catch(() => undefined);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setLoadState({
+          status: 'error',
+          message: cause instanceof Error ? cause.message : 'โหลดรายละเอียดงานไม่สำเร็จ',
+        });
+      });
+    return () => controller.abort();
+  }, [eventId, loadAttempt]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, [loadState.status]);
+
+  useEffect(() => {
+    if (loadState.status === 'ready') return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeButtonRef.current?.focus();
-
-    function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
-    }
-
-    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isMounted, onClose]);
+  }, [loadState.status]);
 
-  const handleEventResolved = useCallback(
-    ({ event }: { eventId: string; event: EventMap['event'] }) => {
-      setResolvedEvent(event);
-    },
-    [],
-  );
-
-  function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Tab') return;
-    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    if (!focusable?.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  function requestClose() {
+    dialogRef.current?.close();
   }
 
-  if (!isMounted) return null;
+  if (loadState.status === 'ready') {
+    const { map } = loadState;
+    const event: DiscoveryEvent = {
+      ...map.event,
+      categories: Array.from(
+        new Map(
+          map.zones
+            .flatMap((zone) => zone.categories)
+            .map((category) => [category.id, category]),
+        ).values(),
+      ),
+    };
+    return (
+      <EventPopup
+        dialogRef={dialogRef}
+        event={event}
+        initialMap={map}
+        announcements={announcements}
+        onRequestClose={requestClose}
+        onClosed={onClose}
+      />
+    );
+  }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto bg-[#171022]/60 px-3 py-3 backdrop-blur-[2px] sm:px-5 sm:py-6"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-modal="true"
+      aria-labelledby="review-event-loading-title"
+      onClose={onClose}
+      onKeyDown={(event) => {
+        if (event.key !== 'Tab') return;
+        const controls = dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])');
+        if (!controls?.length) return;
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) requestClose();
+      }}
+      className="w-[min(1120px,calc(100%-24px))] max-h-[calc(100dvh-24px)] overflow-hidden rounded-[24px] border border-white/70 bg-[#faf9ff] p-0 text-[#1e1638] shadow-[0_36px_120px_rgba(24,17,54,.4)] backdrop:bg-[#201b3b]/55 backdrop:backdrop-blur-[5px] sm:w-[min(1120px,calc(100%-64px))] sm:max-h-[calc(100dvh-48px)]"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-event-popup-title"
-        onKeyDown={trapFocus}
-        className="flex max-h-[calc(100dvh-24px)] w-full max-w-[1120px] flex-col overflow-hidden rounded-[26px] border border-[#ded2f3] bg-white text-ink shadow-[0_30px_100px_rgba(28,15,58,.32)] sm:max-h-[calc(100dvh-48px)]"
-      >
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-white px-5 py-4 sm:px-8">
-          <div className="min-w-0">
-            <p className="sl-kicker">Event preview</p>
-            <h2
-              id="review-event-popup-title"
-              className="mt-1 truncate text-lg font-black"
-            >
-              {resolvedEvent?.name ?? eventName}
-            </h2>
-          </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            aria-label="ปิดรายละเอียด Event"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-white text-muted transition hover:border-violet hover:text-violet"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <EventDetailContent
-            eventId={eventId}
-            onClose={onClose}
-            onEventResolved={handleEventResolved}
-            syncCanonicalRoute={false}
-          />
-        </div>
-        <footer className="flex shrink-0 justify-end border-t border-line bg-white px-5 py-4 sm:px-8">
-          <button
-            type="button"
-            onClick={onClose}
-            className="sl-action-secondary min-w-32 text-violet"
-          >
-            ปิด
-          </button>
-        </footer>
+      <header className="flex min-h-16 items-center justify-between border-b border-[#e9e3f6] bg-[linear-gradient(90deg,#ffffff,#f4f0ff)] px-4 sm:px-6">
+        <span className="text-lg font-black text-[#5d27db]">SpaceLink</span>
+        <button type="button" autoFocus onClick={requestClose} aria-label="ปิดรายละเอียด Event" className="grid h-10 w-10 place-items-center rounded-full text-[#5f5875] hover:bg-[#eee7fb]">
+          <X aria-hidden className="h-5 w-5" />
+        </button>
+      </header>
+      <div className="p-6">
+        <h2 id="review-event-loading-title" className="text-xl font-black">{eventName}</h2>
+        {loadState.status === 'loading' ? (
+          <p role="status" className="mt-4 text-sm text-muted">กำลังโหลดรายละเอียดงาน…</p>
+        ) : (
+          <>
+            <p role="alert" className="mt-4 text-sm text-[#a5263d]">{loadState.message}</p>
+            <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="mt-4 font-bold text-violet">ลองโหลดอีกครั้ง</button>
+          </>
+        )}
       </div>
-    </div>,
-    document.body,
+      <footer className="flex justify-center border-t border-[#e6dff1] bg-white px-4 py-3">
+        <button type="button" onClick={requestClose} className="min-h-11 min-w-32 rounded-[14px] border-2 border-[#7440e7] px-5 text-sm font-extrabold text-[#6330c6]">ปิด</button>
+      </footer>
+    </dialog>
   );
 }
 
