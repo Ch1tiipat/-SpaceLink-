@@ -112,10 +112,21 @@ backgroundTest('AppShell canvas does not trap dialogs in a stacking context', ()
   backgroundAssert.equal(appCanvas.has('z-index'), false);
 });
 
-backgroundTest('shared user, auth, and super admin layouts use transparent route canvases', () => {
+backgroundTest('shared user and super admin layouts use transparent route canvases', () => {
   backgroundAssert.match(appShell, /sl-app-background min-w-0/);
-  backgroundAssert.match(authLayout, /sl-app-background flex/);
   backgroundAssert.match(superAdminShell, /sl-app-background min-h-screen/);
+});
+
+backgroundTest('approved auth layout owns a locally scoped rounded frame without changing global canvases', () => {
+  const authStyles = readBackgroundSource(
+    joinBackgroundPath(appRoot, 'components', 'auth-layout.module.css'),
+    'utf8',
+  );
+  backgroundAssert.match(authLayout, /className=\{styles\.root\}/);
+  backgroundAssert.match(authLayout, /auth-layout\.module\.css/);
+  backgroundAssert.match(authStyles, /\.root \{[^}]*background: #eee8ff/);
+  backgroundAssert.match(authStyles, /\.root \.layout \{[^}]*border-radius: 28px/);
+  backgroundAssert.doesNotMatch(authStyles, /body|\.sl-app-background/);
 });
 
 backgroundTest('the live Admin dashboard keeps the global canvas visible', () => {
