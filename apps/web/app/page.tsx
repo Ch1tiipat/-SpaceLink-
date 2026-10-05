@@ -1397,7 +1397,8 @@ function EventPopup({
     ReadonlySet<string>
   >(() => new Set());
   const [zoom, setZoom] = useState(1);
-  const atmosphereTriggerRef = useRef<HTMLButtonElement>(null);
+  const atmosphereTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const atmosphereRailRef = useRef<HTMLDivElement>(null);
   const eventPopupCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -1506,6 +1507,13 @@ function EventPopup({
       const index = (current ?? 0) % galleryUrls.length;
       return (index + delta + galleryUrls.length) % galleryUrls.length;
     });
+  }
+
+  function scrollAtmosphereRail(direction: -1 | 1) {
+    const rail = atmosphereRailRef.current;
+    const card = rail?.firstElementChild as HTMLElement | null;
+    if (!rail || !card) return;
+    rail.scrollBy({ left: direction * (card.offsetWidth + 12), behavior: 'smooth' });
   }
 
   return (
@@ -1800,62 +1808,50 @@ function EventPopup({
                 title="บรรยากาศภายในงาน"
                 className="lg:col-span-3"
               >
-                <button
-                  ref={atmosphereTriggerRef}
-                  type="button"
-                  onClick={() => setAtmosphereIndex(0)}
-                  aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
-                  className="group block w-full overflow-hidden rounded-2xl border border-[#e1d7ec] bg-[#f7f3ff] text-left shadow-[0_8px_20px_rgba(78,55,121,.06)] transition hover:border-[#c8b4ef] hover:shadow-[0_12px_28px_rgba(78,55,121,.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
-                >
-                  <span className={`grid h-[200px] gap-1.5 p-1.5 sm:h-[248px] ${galleryUrls.length > 1 ? 'sm:grid-cols-[2fr_1fr]' : ''}`}>
-                    <span className="relative min-h-0 overflow-hidden rounded-xl bg-[#e9e0f8]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-[#766c86]">ภาพจากผู้จัดงาน · {galleryUrls.length} ภาพ</p>
+                  {galleryUrls.length > 1 ? (
+                    <div className="flex shrink-0 gap-2">
+                      <button type="button" onClick={() => scrollAtmosphereRail(-1)} aria-label="เลื่อนภาพบรรยากาศไปทางซ้าย" className="grid h-10 w-10 place-items-center rounded-full border border-[#ddd1ef] bg-white text-[#6330c6] transition hover:bg-[#f2ebff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet">
+                        <ChevronLeft aria-hidden className="h-5 w-5" />
+                      </button>
+                      <button type="button" onClick={() => scrollAtmosphereRail(1)} aria-label="เลื่อนภาพบรรยากาศไปทางขวา" className="grid h-10 w-10 place-items-center rounded-full border border-[#ddd1ef] bg-white text-[#6330c6] transition hover:bg-[#f2ebff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet">
+                        <ChevronRight aria-hidden className="h-5 w-5" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <div ref={atmosphereRailRef} aria-label="ภาพบรรยากาศภายในงาน เลื่อนดูภาพเพิ่มเติมได้" className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-3 touch-pan-x">
+                  {galleryUrls.map((url, index) => (
+                    <button
+                      key={url}
+                      ref={index === 0 ? atmosphereTriggerRef : undefined}
+                      type="button"
+                      onClick={(clickEvent) => {
+                        atmosphereTriggerRef.current = clickEvent.currentTarget;
+                        setAtmosphereIndex(index);
+                      }}
+                      aria-label={`ดูภาพบรรยากาศภายใน ${event.name} ลำดับ ${index + 1} แบบเต็ม`}
+                      className="group relative aspect-[4/3] w-[220px] shrink-0 snap-start overflow-hidden rounded-2xl border border-[#e1d7ec] bg-[#eee8f8] shadow-[0_8px_20px_rgba(78,55,121,.08)] transition hover:border-[#c8b4ef] hover:shadow-[0_12px_28px_rgba(78,55,121,.15)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet sm:w-[260px]"
+                    >
                       <Image
                         ref={(image) => {
                           if (image?.complete && image.naturalWidth === 0) {
-                            markAtmosphereImageFailed(atmospherePreviewUrl);
+                            markAtmosphereImageFailed(url);
                           }
                         }}
-                        src={atmospherePreviewUrl}
-                        alt={`บรรยากาศภายใน ${event.name}`}
-                        onError={() =>
-                          markAtmosphereImageFailed(atmospherePreviewUrl)
-                        }
+                        src={url}
+                        alt=""
+                        onError={() => markAtmosphereImageFailed(url)}
                         fill
                         unoptimized
-                        sizes="(max-width: 640px) 90vw, (max-width: 1024px) 60vw, 680px"
-                        className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                        sizes="(max-width: 640px) 220px, 260px"
+                        className="object-cover transition duration-300 group-hover:scale-[1.04]"
                       />
-                    </span>
-                    {galleryUrls.length > 1 ? (
-                      <span className={`hidden min-h-0 gap-1.5 sm:grid ${galleryUrls.length > 2 ? 'grid-rows-2' : ''}`} aria-hidden="true">
-                        {galleryUrls.slice(1, 3).map((url) => (
-                          <span key={url} className="relative min-h-0 overflow-hidden rounded-xl bg-[#e9e0f8]">
-                            <Image
-                              src={url}
-                              alt=""
-                              onError={() => markAtmosphereImageFailed(url)}
-                              fill
-                              unoptimized
-                              sizes="(max-width: 1024px) 30vw, 340px"
-                              className="object-cover transition duration-300 group-hover:scale-[1.025]"
-                            />
-                          </span>
-                        ))}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="flex items-center justify-between gap-3 border-t border-[#e8e1f4] bg-[#fcfbff] px-3.5 py-3 sm:px-4">
-                    <span className="min-w-0">
-                      <strong className="block text-sm font-bold text-[#2b2040]">ภาพจากผู้จัดงาน</strong>
-                      <span className="mt-0.5 block text-xs text-[#766c86]">
-                        {galleryUrls.length} ภาพ · เปิดดูภาพทั้งหมด
-                      </span>
-                    </span>
-                    <span className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#d8c8f7] bg-white px-3 text-xs font-bold text-[#6330c6] transition group-hover:bg-[#f0e9ff]">
-                      ดูภาพ <ArrowRight aria-hidden className="h-3.5 w-3.5" />
-                    </span>
-                  </span>
-                </button>
+                      <span className="absolute bottom-2 right-2 rounded-full bg-[#21172f]/75 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">{index + 1} / {galleryUrls.length}</span>
+                    </button>
+                  ))}
+                </div>
               </EventPopupSection>
             ) : null}
           </div>

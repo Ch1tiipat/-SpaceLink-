@@ -83,15 +83,20 @@ popupTest('Event popup renders runtime atmosphere images in the approved compact
   popupAssert.match(popup, /image\?\.complete && image\.naturalWidth === 0/);
   popupAssert.match(
     popup,
-    /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(atmospherePreviewUrl\)/,
+    /onError=\{\(\) => markAtmosphereImageFailed\(url\)\}/,
   );
   popupAssert.match(
     popup,
     /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(activeAtmosphereUrl\)/,
   );
   popupAssert.match(popup, /title="บรรยากาศภายในงาน"/);
-  popupAssert.match(popup, /h-\[200px\][\s\S]*?sm:h-\[248px\]/);
-  popupAssert.match(popup, /galleryUrls\.slice\(1, 3\)\.map/);
+  popupAssert.match(popup, /galleryUrls\.map\(\(url, index\) =>/);
+  popupAssert.match(popup, /aspect-\[4\/3\] w-\[220px\][\s\S]*?sm:w-\[260px\]/);
+  popupAssert.match(popup, /object-cover/);
+  popupAssert.match(popup, /overflow-x-auto[\s\S]*?touch-pan-x/);
+  popupAssert.match(popup, /rail\.scrollBy\(\{ left: direction \* \(card\.offsetWidth \+ 12\)/);
+  popupAssert.match(popup, /เลื่อนภาพบรรยากาศไปทางซ้าย/);
+  popupAssert.match(popup, /เลื่อนภาพบรรยากาศไปทางขวา/);
   popupAssert.match(popup, /ภาพจากผู้จัดงาน/);
   popupAssert.doesNotMatch(popup, /h-\[126px\]/);
   popupAssert.match(popup, /ดูภาพบรรยากาศภายใน/);
