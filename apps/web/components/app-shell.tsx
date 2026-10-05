@@ -2031,7 +2031,7 @@ function FloatingSupport({
             </span>
           </button>
           <a
-            href="https://www.facebook.com/"
+            href="https://www.facebook.com/profile.php?id=61594183376080&sk=about"
             target="_blank"
             rel="noreferrer"
             aria-label="ติดต่อผ่าน Facebook"
