@@ -1,0 +1,114 @@
+.root { padding: 16px; background: #eee8ff; color: #10102b; }
+.root * { box-sizing: border-box; }
+.root .layout { display: grid; grid-template-columns: 46% 54%; max-width: 1600px; min-height: calc(100svh - 32px); margin: auto; overflow: hidden; border: 2px solid white; border-radius: 28px; background: white; box-shadow: 0 16px 65px #4b22a315; }
+.root .left { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: clamp(28px, 3.6vw, 60px); }
+.root .brand { display: inline-flex; align-items: center; gap: 14px; width: fit-content; margin-bottom: 22px; color: #4713bb; font-size: clamp(26px, 2.8vw, 42px); font-weight: 700; line-height: 1.3; letter-spacing: -.035em; }
+.root .brand span span { color: #9560ff; }
+.root .logo { position: relative; display: block; flex: none; width: 64px; height: 64px; overflow: hidden; }
+.root .logo img { position: absolute; width: 102px; height: 102px; max-width: none; left: -18px; top: -20px; }
+.root .badge { display: flex; align-items: center; gap: 9px; width: fit-content; padding: 7px 16px; border-radius: 30px; background: #f3e9ff; color: #8a4af5; font-size: 15px; font-weight: 600; }
+.root .badge svg { width: 19px; height: 19px; }
+.root h1 { margin: 8px 0 0; font-size: clamp(36px, 3.9vw, 62px); font-weight: 700; line-height: 1.42; letter-spacing: -.015em; }
+.root[data-auth-screen='register'] h1 { color: #3e089e; }
+.root .description { margin: 2px 0 22px; color: #747b99; font-size: clamp(15px, 1.4vw, 20px); line-height: 1.65; }
+.root .email { display: block; color: #9255fc; overflow-wrap: anywhere; font-weight: 600; }
+.root .mobileTitle, .root .mobileDescription, .root .mobilePhoto, .root .mobileBack, .root .sticker, .root .mobileFooter, .root .security { display: none; }
+.root .label { display: block; margin-bottom: 7px; font-size: 17px; font-weight: 600; }
+.root .field { display: flex; align-items: center; gap: 14px; height: 56px; padding: 0 18px; border: 1.5px solid #d1d2e6; border-radius: 13px; }
+.root .field:focus-within { border-color: #965bff; box-shadow: 0 0 0 3px #9255fc18; }
+.root .field svg { width: 23px; height: 23px; flex: none; color: #8285a3; }
+.root .field input { width: 100%; min-width: 0; height: 100%; border: 0; background: transparent; outline: none; font-size: 17px; color: #242039; }
+.root .field input::placeholder { color: #9b9ebb; }
+.root .consent { display: flex; gap: 11px; align-items: flex-start; margin-top: 17px; color: #747b99; font-size: 14px; line-height: 1.8; }
+.root .consent input { width: 19px; height: 19px; margin-top: 3px; flex: none; accent-color: #7633f2; }
+.root a:not(.brand), .root .changeEmail { color: #7622f5; font-weight: 600; text-underline-offset: 4px; }
+.root .consent a, .root .changeEmail { text-decoration: underline; }
+.root .action { display: flex; align-items: center; justify-content: center; gap: 15px; width: 100%; min-height: 56px; margin-top: 20px; border: 0; border-radius: 17px; background: linear-gradient(105deg, #6631db, #9453ff 75%, #b17aff); box-shadow: 0 8px 22px #6b36d71a; color: white; font-size: 20px; font-weight: 500; }
+.root .action svg { width: 25px; height: 25px; }
+.root .action:hover:not(:disabled) { filter: brightness(1.05); }
+.root .action:disabled { opacity: .55; cursor: not-allowed; }
+.root button:focus-visible, .root a:focus-visible, .root input[type='checkbox']:focus-visible { outline: 3px solid #b48aff; outline-offset: 4px; }
+.root .divider { display: flex; align-items: center; gap: 16px; margin: 23px 0 13px; color: #747b99; font-size: 15px; }
+.root .divider::before, .root .divider::after { content: ''; height: 1px; flex: 1; background: #d6d9e8; }
+.root .account { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: #747b99; font-size: 15px; }
+.root .account a { display: inline-flex; align-items: center; gap: 8px; }
+.root .account svg { width: 18px; height: 18px; }
+.root .benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 28px; gap: 12px; }
+.root .benefit { text-align: center; color: #5f688b; }
+.root .benefitIcon { display: grid; place-items: center; width: 47px; height: 47px; margin: 0 auto 9px; border-radius: 50%; background: #f5efff; color: #6620d8; }
+.root .benefit svg { width: 25px; height: 25px; }
+.root .benefit strong { display: block; font-size: 12px; font-weight: 600; line-height: 1.65; }
+.root .benefit p { margin: 3px 0 0; font-size: 11px; line-height: 1.7; }
+.root .photo { position: relative; overflow: hidden; background: #e9dbff; }
+.root .desktopPhoto { border-radius: 20px; min-height: 620px; }
+/* Unmodified reference asset: clip only its photographic right-hand panel. */
+.root .photo img { position: absolute; top: 0; right: 0; width: 182.2%; height: 100%; max-width: none; object-fit: cover; object-position: right center; }
+.root .otp > div { gap: 10px; }
+.root .otp input { height: 62px; min-width: 0; border-radius: 12px; border-color: #d8dbea; background: white; font-size: 27px; }
+.root .otpTime { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; color: #7b83a3; font-size: 14px; }
+.root .otpTime svg { width: 19px; height: 19px; }
+.root .secondary { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 18px; font-size: 14px; }
+.root .secondary button { background: transparent; border: 0; }
+.root .resend, .root .secondary > span { color: #7b83a3; }
+.root .resend:not(:disabled) { color: #7622f5; }
+.root .helper { margin: 0; text-align: center; color: #7b83a3; font-size: 13px; line-height: 1.8; }
+.root .error { color: #b42342; }
+@media (max-width: 1023px) {
+  .root { padding: 10px; }
+  .root .layout { display: block; max-width: 480px; min-height: 0; border-radius: 34px; }
+  .root .left { padding: 0; display: block; }
+  .root .intro { position: relative; height: clamp(430px, 115vw, 520px); padding: 29px 18px 0; text-align: center; overflow: hidden; background: white; }
+  .root .brand { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 0; margin: 0 auto 20px; font-size: 28px; }
+  .root .logo { width: 82px; height: 82px; }
+  .root .logo img { width: 132px; height: 132px; left: -23px; top: -28px; }
+  .root .desktopPhoto, .root .badge, .root .desktopTitle, .root .desktopDescription { display: none; }
+  .root .mobileTitle, .root .mobileDescription { display: block; }
+  .root h1 { position: relative; z-index: 1; margin: 0; color: #3e089e; font-size: clamp(27px, 8.1vw, 38px); line-height: 1.5; letter-spacing: -.02em; }
+  .root .description { position: relative; z-index: 1; margin: 0 auto; color: #67637a; font-size: clamp(13px, 3.8vw, 16px); line-height: 1.65; }
+  .root .email { color: #4713bb; font-size: .95em; }
+  .root .mobilePhoto { display: block; position: absolute; bottom: 0; left: 0; width: 100%; height: 310px; }
+  .root .mobilePhoto::after { position: absolute; inset: 0; content: ''; background: linear-gradient(white 0%, white 25%, #ffffffcc 38%, transparent 65%); }
+  .root .sticker { display: block; position: absolute; z-index: 2; right: 13px; top: 85px; padding: 9px 12px; border-radius: 60% 45%; background: #f5efff; color: #8150eb; font-size: 10px; line-height: 1.6; transform: rotate(-13deg); }
+  .root .mobileBack { display: grid; place-items: center; position: absolute; z-index: 3; top: 31px; left: 17px; width: 36px; height: 36px; background: transparent; border: 0; color: #7131e6; }
+  .root .card { position: relative; z-index: 2; margin-top: -22px; padding: 22px 22px 0; border-radius: 28px 28px 0 0; background: white; }
+  .root .label { font-size: 15px; margin-bottom: 7px; }
+  .root .field { height: 49px; padding: 0 13px; gap: 10px; border-radius: 12px; }
+  .root .field input { font-size: 14px; }
+  .root .field svg { width: 20px; height: 20px; }
+  .root .consent { gap: 9px; margin-top: 14px; font-size: 11px; line-height: 1.85; }
+  .root .consent input { width: 18px; height: 18px; }
+  .root .action { min-height: 52px; margin-top: 20px; font-size: 19px; border-radius: 17px; }
+  .root .divider, .root .benefits { display: none; }
+  .root .account { margin-top: 22px; font-size: 13px; }
+  .root .otp > div { gap: 6px; }
+  .root .otp input { height: 48px; font-size: 23px; border-radius: 11px; }
+  .root .otpTime { font-size: 11px; margin-top: 12px; }
+  .root .secondary { flex-wrap: wrap; gap: 12px; margin-top: 19px; font-size: 12px; }
+  .root .helper { margin-top: 15px; font-size: 11px; }
+  .root .security { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; font-size: 12px; color: #7b83a3; }
+  .root .security svg { width: 18px; height: 18px; color: #8742ed; }
+  .root .mobileFooter { display: block; position: relative; min-height: 108px; padding: 16px 20px 65px; overflow: hidden; background: linear-gradient(white, #f5f0ff); }
+  .root .tagline { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; color: #9460ef; font-size: 9px; font-style: italic; letter-spacing: .1em; white-space: nowrap; }
+  .root .tagline::before, .root .tagline::after { content: ''; height: 1px; width: 25px; background: #c5b3f5; }
+  .root .skyline { position: absolute; bottom: 0; left: 0; width: 100%; height: 80px; color: #c8b4f5; }
+}
+@media (prefers-reduced-motion: reduce) { .root * { transition: none !important; } }
+/* Preserve touch targets, readable errors and browser autofill on real forms. */
+.nextField { margin-top: 17px; }
+.root .desktopDescription, .root .mobileDescription { margin: 5px 0 26px; color: #747b99; font-size: clamp(15px, 1.45vw, 21px); line-height: 1.65; }
+.root .mobileDescription { display: none; }
+.root .error { margin: 10px 0; color: #b42342; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.root .purpleTitle { color: #3e089e; }
+.root .field:has(input[aria-invalid='true']) { border-color: #b42342; }
+.root .field:has(input:disabled) { background: #faf8fe; opacity: .7; }
+.root .secondary button { min-height: 44px; }
+.root .secondary button:disabled, .root .mobileBack:disabled { cursor: not-allowed; opacity: .65; }
+.root .account { flex-wrap: wrap; }
+.root .otp input[aria-invalid='true'] { border-color: #b42342; }
+.root .otp input:focus-visible { outline: 3px solid #b48aff; outline-offset: 2px; border-color: #7633f2; }
+@media (max-width: 1023px) {
+  .root .desktopDescription { display: none; }
+  .root .mobileDescription { display: block; position: relative; z-index: 1; margin: 0 auto; color: #67637a; font-size: clamp(13px, 3.8vw, 16px); line-height: 1.65; }
+  .root .field input { font-size: 16px; } /* Avoid iOS auto-zoom on focus. */
+  .root .mobileBack { width: 44px; height: 44px; }
+}

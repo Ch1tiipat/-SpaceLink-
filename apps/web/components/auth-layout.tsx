@@ -1,171 +1,140 @@
+'use client';
+
 import type { ReactNode } from 'react';
-import { CalendarCheck2, MapPinned, ShieldCheck } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
+import { ArrowLeft, ArrowRight, ChartNoAxesColumnIncreasing, Clock3, Hand, LockKeyhole, Mail, Search, Settings, ShieldCheck, Sparkles, Store, Zap } from 'lucide-react';
+import { OTP_LENGTH, OtpInput } from './otp-input';
+import type { AuthErrorMessage } from '@/lib/auth-errors';
+import type { UseEmailOtp } from '@/lib/use-email-otp';
+import styles from './auth-layout.module.css';
 
 type AuthLayoutProps = {
-  /** Small pill above the headline. */
-  eyebrow: string;
-  headline: string;
-  description: string;
-  step: 'details' | 'verify';
-  children: ReactNode;
+  mode: 'login' | 'register';
+  step: 'email' | 'code';
+  email: string;
+  pending: boolean;
+  onEditEmail: () => void;
+  children?: ReactNode;
 };
 
-/**
- * The two-column shell shared by every authentication screen: a decorative
- * form column on the left, the brand panel on the right. The shared AppShell
- * header remains visible at every breakpoint, including authentication pages.
- *
- * The panel's structure is fixed and its copy is not — signing in and signing
- * up are different promises, and each page states its own.
- *
- * Nothing here fetches. The login screen has to render completely while the
- * API is still cold-starting, so the most critical page in the product is not
- * coupled to decoration.
- */
-export function AuthLayout({
-  eyebrow,
-  headline,
-  description,
-  step,
-  children,
-}: AuthLayoutProps) {
+/** Presentation only. Real verification and redirects remain in useEmailOtp. */
+export function AuthLayout({ mode, step, email, pending, onEditEmail, children }: AuthLayoutProps) {
+  const isOtp = step === 'code';
+  const isRegister = mode === 'register';
+  const title = isOtp ? 'กรอกรหัส OTP' : isRegister ? 'สร้างบัญชี' : 'เข้าสู่ระบบ';
+  const BadgeIcon = isOtp ? ShieldCheck : isRegister ? Sparkles : Hand;
+  const benefits = isOtp ? [
+    { Icon: ShieldCheck, title: 'ปลอดภัย', detail: 'ปกป้องข้อมูลของคุณ' },
+    { Icon: Settings, title: 'ใช้งานง่าย', detail: 'ไม่ยุ่งยาก ซับซ้อน' },
+    { Icon: Zap, title: 'ยืนยันรวดเร็ว', detail: 'เข้าใช้งานได้ทันที' },
+  ] : [
+    { Icon: Search, title: 'ค้นหางานและจองบูธ', detail: 'เจอพื้นที่ที่ใช่สำหรับคุณ' },
+    { Icon: Store, title: 'จัดการบูธได้ง่าย', detail: 'ทุกอย่างในที่เดียว' },
+    { Icon: ChartNoAxesColumnIncreasing, title: 'ติดตามสถานะแบบเรียลไทม์', detail: 'อัปเดตทุกความเคลื่อนไหว' },
+  ];
   return (
-    <div className="sl-app-background flex min-h-[calc(100vh-63px)] flex-col lg:grid lg:min-h-[calc(100vh-72px)] lg:grid-cols-[minmax(500px,0.96fr)_minmax(500px,1.04fr)]">
-      <main className="relative flex flex-1 items-start justify-center overflow-hidden px-4 py-8 lg:items-center lg:bg-white/30 lg:px-10 lg:py-12 lg:backdrop-blur-[2px]">
-        <span className="pointer-events-none absolute -bottom-40 -left-40 hidden h-96 w-96 rounded-full bg-violet-tint blur-3xl lg:block" />
-        <div className="relative flex w-full max-w-[460px] flex-col gap-4 lg:max-w-[480px]">
-          <Link
-            href="/"
-            className="inline-flex min-h-11 w-fit items-center rounded-full border border-[#e8e2f1] bg-white/90 px-4 py-2 text-sm font-bold text-[#655d70] shadow-sm transition hover:border-[#d3c6e8] hover:text-violet focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet/20"
-          >
-            ← กลับหน้าแรก
-          </Link>
-          <div className="w-full rounded-[26px] border border-[#e9def8] bg-white p-5 shadow-[0_18px_50px_rgba(67,34,139,0.1)] sm:rounded-[28px] sm:p-8 lg:rounded-[32px] lg:p-10 lg:shadow-[0_26px_80px_rgba(67,34,139,0.12)]">
-            <div aria-label="ขั้นตอนการเข้าสู่ระบบ" className="mb-7 flex items-center gap-3 border-b border-line pb-6">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet text-sm font-extrabold text-white">1</span>
-              <span className="text-xs font-bold text-ink sm:text-sm">กรอกข้อมูล</span>
-              <span aria-hidden className="h-px min-w-4 flex-1 bg-line" />
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-extrabold ${step === 'verify' ? 'bg-violet text-white' : 'bg-violet-tint text-violet'}`}>2</span>
-              <span className={`text-xs font-bold sm:text-sm ${step === 'verify' ? 'text-ink' : 'text-muted'}`}>ยืนยันรหัส</span>
-            </div>
+    <main className={styles.root} data-auth-screen={isOtp ? 'otp' : mode}>
+      <div className={styles.layout}>
+        <div className={styles.left}>
+          <div className={styles.intro}>
+            <ReferencePhoto mobile />
+            {isOtp ? <button type="button" className={styles.mobileBack} disabled={pending} aria-label="กลับไปแก้ไขอีเมล" onClick={onEditEmail}><ArrowLeft aria-hidden /></button>
+              : <span className={styles.sticker} aria-hidden>พื้นที่ดี<br />เริ่มได้ที่นี่</span>}
+            <Link href="/" className={styles.brand} aria-label="SpaceLink กลับหน้าแรก">
+              <span className={styles.logo}><Image src="/brand/spacelink-mark.png" alt="" width={132} height={132} sizes="132px" priority /></span>
+              <span>Space<span>Link</span></span>
+            </Link>
+            <span className={styles.badge}><BadgeIcon aria-hidden />{isOtp ? 'ยืนยันอีเมล' : isRegister ? 'เริ่มต้นใช้งานกับเรา' : 'ยินดีต้อนรับกลับ'}</span>
+            <h1 className={isRegister || isOtp ? styles.purpleTitle : undefined}>
+              <span className={styles.desktopTitle}>{title}</span>
+              <span className={styles.mobileTitle}>{isOtp ? title : isRegister ? 'สมัครสมาชิก' : 'ยินดีต้อนรับกลับ'}</span>
+            </h1>
+            <p className={styles.desktopDescription}>
+              {isOtp ? <>เราได้ส่งรหัสยืนยัน {OTP_LENGTH} หลัก ไปยังอีเมลของคุณแล้ว<span className={styles.email}>{email}</span></>
+                : isRegister ? 'สมัครสมาชิกเพื่อเริ่มจองบูธ และเข้าถึงทุกโอกาสในงานอีเวนต์และตลาดต่าง ๆ'
+                  : 'เข้าสู่ SpaceLink เพื่อจัดการการจองบูธและใช้งานทุกฟีเจอร์ได้อย่างครบถ้วน'}
+            </p>
+            <p className={styles.mobileDescription}>
+              {isOtp ? <>เราได้ส่งรหัสยืนยัน {OTP_LENGTH} หลักไปยังอีเมลของคุณ<span className={styles.email}>{email}</span></>
+                : isRegister ? 'เริ่มต้นจองพื้นที่ร้านค้าไปกับ SpaceLink'
+                  : <>จัดการการจองพื้นที่ร้านของคุณ<br />ได้ง่ายขึ้น ที่ SpaceLink</>}
+            </p>
+          </div>
+          <div className={styles.card}>
             {children}
-            <div className="mt-8 flex items-start gap-3 border-t border-line pt-5 text-xs leading-5 text-muted">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#edf9f4] text-[#13795b]">
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-              </span>
-              <p>
-                เข้าสู่ระบบด้วย Email OTP อย่างปลอดภัย SpaceLink
-                ไม่ขอให้คุณตั้งหรือจดจำรหัสผ่าน
-              </p>
+            <div className={styles.benefits}>
+              {benefits.map(({ Icon, title: benefitTitle, detail }) => <div className={styles.benefit} key={benefitTitle}>
+                <span className={styles.benefitIcon}><Icon aria-hidden /></span><strong>{benefitTitle}</strong><p>{detail}</p>
+              </div>)}
             </div>
           </div>
+          <MobileFooter />
         </div>
-      </main>
-
-      <aside className="relative hidden overflow-hidden bg-[#2f116f] bg-[linear-gradient(90deg,rgba(45,15,106,.98)_0%,rgba(68,25,142,.86)_42%,rgba(68,25,142,.35)_100%),url('/home-hero.jpg')] bg-cover bg-center px-[clamp(40px,5vw,76px)] py-12 text-white lg:flex lg:flex-col">
-        <span className="absolute -left-24 -top-24 h-80 w-80 rounded-full border-[55px] border-white/[0.055]" />
-        <span className="absolute -bottom-36 right-1/3 h-96 w-96 rounded-full bg-[#b44de7]/20 blur-3xl" />
-        <span className="relative inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold tracking-wide text-white/90">
-          <span className="h-2 w-2 rounded-full bg-[#d6b3ff]" />
-          บัญชี SpaceLink
-        </span>
-
-        <div className="mt-auto pt-6">
-          <span className="inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/90">
-            {eyebrow}
-          </span>
-
-          <h2 className="sl-thai-heading mt-6 max-w-[19ch] text-[clamp(36px,3.4vw,52px)] font-black leading-[1.18] tracking-[-0.028em] drop-shadow-sm">
-            {headline}
-          </h2>
-
-          <p className="mt-5 max-w-[44ch] text-[16px] leading-8 text-white/85">
-            {description}
-          </p>
-
-          <AuthBenefits />
-        </div>
-
-        <div className="mt-5">
-          <BoothGrid />
-        </div>
-      </aside>
-    </div>
+        <ReferencePhoto />
+      </div>
+    </main>
   );
 }
 
-function AuthBenefits() {
-  const benefits = [
-    { icon: MapPinned, label: 'เลือกโซนและดูตำแหน่งบูธจากแผนผังจริง' },
-    { icon: CalendarCheck2, label: 'ติดตามการจองและกำหนดชำระเงินในที่เดียว' },
-    { icon: ShieldCheck, label: 'เข้าสู่ระบบด้วยรหัสยืนยัน ไม่ต้องจำรหัสผ่าน' },
-  ];
+export function AuthEmailField({ value, disabled, invalid, describedBy, onChange }: {
+  value: string; disabled: boolean; invalid?: boolean; describedBy?: string; onChange: (value: string) => void;
+}) {
+  return <>
+    <label className={styles.label} htmlFor="email">อีเมล</label>
+    <div className={styles.field}><Mail aria-hidden /><input id="email" name="email" type="email" autoComplete="email" inputMode="email"
+      placeholder="name@example.com" value={value} disabled={disabled} aria-invalid={invalid || undefined}
+      aria-describedby={describedBy} onChange={(event) => onChange(event.target.value)} /></div>
+  </>;
+}
 
+export function AuthErrorBox({ error, id }: { error: AuthErrorMessage | null; id: string }) {
+  return error ? <p id={id} role="alert" className={styles.error}>{error.text}
+    {error.link ? <> <Link href={error.link.href}>{error.link.label}</Link></> : null}
+  </p> : null;
+}
+
+export function AuthOtpForm({ flow, errorId }: { flow: UseEmailOtp; errorId: string }) {
   return (
-    <div className="mt-7 grid gap-2.5">
-      {benefits.map(({ icon: Icon, label }) => (
-        <div
-          key={label}
-          className="flex max-w-[520px] items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white/88 backdrop-blur-sm"
-        >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/12">
-            <Icon className="h-4 w-4" aria-hidden />
-          </span>
-          <span className="leading-6">{label}</span>
-        </div>
-      ))}
-    </div>
+    <form onSubmit={(event) => { event.preventDefault(); void flow.verify(); }} noValidate aria-busy={flow.pending}>
+      <div className={styles.otp}>
+        <OtpInput value={flow.code} onChange={flow.setCode} disabled={flow.pending} invalid={Boolean(flow.error)}
+          describedBy={flow.error ? errorId : 'auth-otp-help'} autoFocus />
+      </div>
+      {/* Supabase owns expiry; no simulated five-minute deadline in production. */}
+      <p id="auth-otp-help" className={styles.otpTime}><Clock3 aria-hidden />กรอกรหัสยืนยัน {OTP_LENGTH} หลักจากอีเมล</p>
+      <AuthErrorBox error={flow.error} id={errorId} />
+      <button type="submit" className={styles.action} disabled={flow.pending || flow.code.length !== OTP_LENGTH}>
+        {flow.pending ? 'กำลังตรวจสอบ…' : 'ยืนยันรหัส'}<ArrowRight aria-hidden />
+      </button>
+      <div className={styles.secondary}>
+        <button className={styles.resend} type="button" disabled={flow.pending || flow.cooldown > 0} onClick={flow.resend}>
+          {flow.cooldown > 0 ? `ส่งรหัสอีกครั้ง (${flow.cooldown}s)` : 'ส่งรหัสอีกครั้ง'}
+        </button>
+        <span aria-hidden>|</span><button type="button" className={styles.changeEmail} disabled={flow.pending} onClick={flow.editEmail}>เปลี่ยนอีเมล</button>
+      </div>
+      <div className={styles.divider}>หรือ</div>
+      <p className={styles.helper}>หากไม่ได้รับรหัส โปรดตรวจสอบอีเมลขยะหรือรอสักครู่</p>
+      <p className={styles.security}><LockKeyhole aria-hidden />ข้อมูลของคุณปลอดภัย</p>
+    </form>
   );
 }
 
-const BOOTH_COUNT = 96;
+function ReferencePhoto({ mobile = false }: { mobile?: boolean }) {
+  return <div className={`${styles.photo} ${mobile ? styles.mobilePhoto : styles.desktopPhoto}`} aria-hidden="true">
+    <Image src="/auth-market-photo.jpg" alt="" width={1701} height={925} unoptimized priority />
+  </div>;
+}
 
-/**
- * Which squares read as taken. A fixed list, not `Math.random()`: a random
- * pattern would differ between the server render and hydration, and React would
- * warn about it on a page that has no business being dynamic at all.
- */
-const BOOKED_BOOTHS = new Set([
-  0, 1, 4, 9, 12, 13, 18, 22, 25, 26, 31, 33, 37, 40, 41, 44, 49, 52, 55, 58,
-  60, 63, 66, 69, 70, 74, 77, 81, 84, 85, 88, 92,
-]);
-
-/**
- * Decorative only — `aria-hidden`, no data behind it. It deliberately shows no
- * count, ratio or event name: an invented number that looks real is worse than
- * no number, and there is nothing here to source a real one from.
- */
-function BoothGrid() {
-  return (
-    <div aria-hidden="true">
-      {/* 16 columns, written out because Tailwind's grid-cols scale stops at 12. */}
-      <div className="grid max-w-[360px] grid-cols-[repeat(16,minmax(0,1fr))] gap-1.5">
-        {Array.from({ length: BOOTH_COUNT }, (_, index) =>
-          BOOKED_BOOTHS.has(index) ? (
-            <span
-              key={index}
-              className="aspect-square rounded-[4px] bg-gradient-to-br from-[#a442e8] to-violet"
-            />
-          ) : (
-            <span
-              key={index}
-              className="aspect-square rounded-[4px] border border-white/25"
-            />
-          ),
-        )}
-      </div>
-
-      <div className="mt-5 flex items-center gap-5 text-[13px] font-semibold text-white/70">
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-[3px] bg-gradient-to-br from-[#a442e8] to-violet" />
-          จองแล้ว
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-[3px] border border-white/35" />
-          ว่าง
-        </span>
-      </div>
-    </div>
-  );
+function MobileFooter() {
+  return <div className={styles.mobileFooter} aria-hidden="true">
+    <span className={styles.tagline}>More Space More Opportunities</span>
+    <svg className={styles.skyline} viewBox="0 0 480 100" preserveAspectRatio="none">
+      <path fill="currentColor" opacity=".38" d="M0 74h18V48h18v26h14V60h30v14h15V38h21v36h18V51h18v23h17V31h20v43h16V61h25v13h20V44h23v30h23V57h15v17h20V36h24v38h16V49h23v25h21V62h25v12h40v26H0z" />
+      <path fill="currentColor" opacity=".6" d="M0 49c12-22 28-18 32-3 16-4 29 11 23 24l16 30H0zm480-9c-18-18-34-10-35 7-18-3-27 10-23 24l-15 29h73zM87 74l42-26 42 26zm202 9l38-25 38 25z" />
+      <path fill="currentColor" opacity=".45" d="M97 75h64v25H97zm201 9h59v16h-59z" />
+      <path stroke="currentColor" fill="none" strokeWidth="2" d="M31 69Q240 104 449 61M93 75v25m72-25v25m130-16v16m67-16v16" />
+      <path fill="#fff1bd" d="M70 78h4v4h-4zm47 7h4v4h-4zm52 5h4v4h-4zm52 0h4v4h-4zm54-2h4v4h-4zm51-5h4v4h-4zm52-7h4v4h-4zm43-6h4v4h-4z" />
+    </svg>
+  </div>;
 }

@@ -2,267 +2,70 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import { AuthLayout } from '@/components/auth-layout';
-import { OTP_LENGTH, OtpInput } from '@/components/otp-input';
+import { ArrowRight, UserRound } from 'lucide-react';
+import { AuthLayout, AuthEmailField, AuthErrorBox, AuthOtpForm } from '@/components/auth-layout';
+import styles from '@/components/auth-layout.module.css';
 import { INVALID_EMAIL_MESSAGE, MISSING_NAME_MESSAGE } from '@/lib/auth-errors';
 import { useEmailOtp } from '@/lib/use-email-otp';
 
 export default function RegisterPage() {
-  // Stays on the page: this screen is the only one that collects a name, and
-  // the flow itself has no use for it beyond handing it to Supabase below.
   const [fullName, setFullName] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
-
-  const {
-    step,
-    email,
-    setEmail,
-    code,
-    setCode,
-    pending,
-    error,
-    setError,
-    cooldown,
-    submitEmail,
-    verify,
-    resend,
-    editEmail,
-  } = useEmailOtp({
+  const flow = useEmailOtp({
     mode: 'register',
     signInOptions: {
+      // Applied at account creation, never used for authorization.
       data: { full_name: fullName.trim() },
-      // Account creation happens here and nowhere else. Supabase applies
-      // `data` only when it creates the user, so /login sends
-      // shouldCreateUser: false to keep this the only door in (§A3.4).
       shouldCreateUser: true,
     },
   });
-
+  const errorId = 'register-error';
   async function handleDetailsSubmit(event: FormEvent) {
     event.preventDefault();
-
-    // Checked before the address, so the first thing missing is the first thing
-    // reported. The hook validates the address itself.
     const name = fullName.trim();
-    if (name.length === 0) {
-      setError(MISSING_NAME_MESSAGE);
-      return;
-    }
-
-    if (!acceptedTerms) {
-      setTermsError(true);
-      setError(null);
-      return;
-    }
-
+    if (!name) { flow.setError(MISSING_NAME_MESSAGE); return; }
+    if (!acceptedTerms) { setTermsError(true); flow.setError(null); return; }
     setTermsError(false);
-
-    // Normalising the name is deferred to the hook's callback so that it, like
-    // the address, happens only once the address is known to be valid.
-    await submitEmail(() => setFullName(name));
+    await flow.submitEmail(() => setFullName(name));
   }
-
-  const errorId = 'register-error';
-  const errorBox = error ? (
-    <p
-      id={errorId}
-      role="alert"
-      className="mt-4 rounded-2xl bg-danger/[0.06] px-4 py-3 text-sm font-semibold leading-6 text-danger"
-    >
-      {error.text}
-      {error.link ? (
-        <>
-          {' '}
-          <Link
-            href={error.link.href}
-            className="font-bold underline underline-offset-2"
-          >
-            {error.link.label}
-          </Link>
-        </>
-      ) : null}
-    </p>
-  ) : null;
-
   return (
-    <AuthLayout
-      eyebrow="สมัครใช้งานฟรี"
-      headline="เปิดร้านในงานถัดไป เริ่มจากบัญชีเดียว"
-      description="สร้างบัญชีด้วยอีเมล ไม่ต้องตั้งรหัสผ่าน แล้วเริ่มมองหาบูธที่ใช่ได้ทันที"
-      step={step === 'email' ? 'details' : 'verify'}
-    >
-      {step === 'email' ? (
-        <form onSubmit={handleDetailsSubmit} noValidate>
-          <span className="sl-kicker">เริ่มต้นใช้งาน</span>
-          <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
-            สร้างบัญชีใหม่
-          </h1>
-          <p className="mt-3 leading-7 text-muted">
-            กรอกชื่อและอีเมล เราจะส่งรหัสยืนยัน {OTP_LENGTH} หลักไปให้
-          </p>
-
-          <label
-            htmlFor="fullName"
-            className="mt-8 block text-sm font-bold text-ink"
-          >
-            ชื่อ-นามสกุล
-          </label>
-          <input
-            id="fullName"
-            type="text"
-            name="fullName"
-            autoComplete="name"
-            placeholder="เช่น สมชาย ใจดี"
-            value={fullName}
-            disabled={pending}
-            aria-invalid={error?.text === MISSING_NAME_MESSAGE.text || undefined}
-            aria-describedby={error?.text === MISSING_NAME_MESSAGE.text ? errorId : undefined}
-            onChange={(event) => {
-              setFullName(event.target.value);
-              setError(null);
-            }}
-            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
-          />
-
-          <label
-            htmlFor="email"
-            className="mt-5 block text-sm font-bold text-ink"
-          >
-            อีเมล
-          </label>
-          <input
-            id="email"
-            type="email"
-            name="email"
-            autoComplete="email"
-            inputMode="email"
-            placeholder="name@example.com"
-            value={email}
-            disabled={pending}
-            aria-invalid={error?.text === INVALID_EMAIL_MESSAGE.text || undefined}
-            aria-describedby={error?.text === INVALID_EMAIL_MESSAGE.text ? errorId : undefined}
-            onChange={(event) => {
-              setEmail(event.target.value);
-              setError(null);
-            }}
-            className="mt-2 h-[54px] w-full rounded-2xl border border-line bg-[#fcfbfe] px-4 text-base text-ink transition-colors placeholder:text-muted/70 focus:border-violet focus:bg-white disabled:bg-mist disabled:text-muted"
-          />
-
-          {errorBox}
-
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#eee7f8] bg-[#faf7ff] px-4 py-3.5 text-sm leading-6 text-[#554b5e]">
-            <input
-              id="register-accept-terms"
-              type="checkbox"
-              checked={acceptedTerms}
-              disabled={pending}
-              aria-invalid={termsError || undefined}
-              aria-describedby={termsError ? 'register-terms-error' : undefined}
-              onChange={(event) => {
-                setAcceptedTerms(event.target.checked);
-                if (event.target.checked) setTermsError(false);
-              }}
-              className="mt-1 h-4 w-4 shrink-0 accent-violet"
-            />
-            <span>
-              <label htmlFor="register-accept-terms" className="cursor-pointer">ฉันอ่านและยอมรับ</label>{' '}
-              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-violet underline underline-offset-2">
-                เงื่อนไขการใช้งาน
-              </Link>{' '}
-              และ{' '}
-              <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-violet underline underline-offset-2">
-                นโยบายความเป็นส่วนตัว
-              </Link>
+    <AuthLayout mode="register" step={flow.step} email={flow.email} pending={flow.pending} onEditEmail={flow.editEmail}>
+      {flow.step === 'email' ? (
+        <form onSubmit={handleDetailsSubmit} noValidate aria-busy={flow.pending}>
+          <label htmlFor="fullName" className={styles.label}>ชื่อ-นามสกุล</label>
+          <div className={styles.field}>
+            <UserRound aria-hidden />
+            <input id="fullName" name="fullName" type="text" autoComplete="name" placeholder="เช่น สมชาย ใจดี"
+              value={fullName} disabled={flow.pending}
+              aria-invalid={flow.error?.text === MISSING_NAME_MESSAGE.text || undefined}
+              aria-describedby={flow.error?.text === MISSING_NAME_MESSAGE.text ? errorId : undefined}
+              onChange={(event) => { setFullName(event.target.value); flow.setError(null); }} />
+          </div>
+          <div className={styles.nextField}>
+            <AuthEmailField value={flow.email} disabled={flow.pending}
+              invalid={flow.error?.text === INVALID_EMAIL_MESSAGE.text}
+              describedBy={flow.error?.text === INVALID_EMAIL_MESSAGE.text ? errorId : undefined}
+              onChange={(value) => { flow.setEmail(value); flow.setError(null); }} />
+          </div>
+          <AuthErrorBox error={flow.error} id={errorId} />
+          <div className={styles.consent}>
+            <input id="register-accept-terms" type="checkbox" checked={acceptedTerms} disabled={flow.pending}
+              aria-invalid={termsError || undefined} aria-describedby={termsError ? 'register-terms-error' : undefined}
+              onChange={(event) => { setAcceptedTerms(event.target.checked); if (event.target.checked) setTermsError(false); }} />
+            <span><label htmlFor="register-accept-terms">ฉันยอมรับ</label>{' '}
+              <Link href="/terms" target="_blank" rel="noopener noreferrer">ข้อกำหนดการใช้งาน</Link>{' '}และ{' '}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer">นโยบายความเป็นส่วนตัว</Link>
             </span>
           </div>
-          {termsError ? (
-            <p id="register-terms-error" role="alert" className="mt-2 text-sm font-semibold text-danger">
-              กรุณายอมรับเงื่อนไขการใช้งานก่อนสมัครสมาชิก
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={pending}
-            className="sl-action-primary mt-7 h-[52px] w-full text-base disabled:opacity-55"
-          >
-            {pending ? 'กำลังส่งรหัส…' : 'ส่งรหัสยืนยัน'}
+          {termsError ? <p id="register-terms-error" role="alert" className={styles.error}>กรุณายอมรับเงื่อนไขการใช้งานก่อนสมัครสมาชิก</p> : null}
+          <button type="submit" disabled={flow.pending} className={styles.action}>
+            {flow.pending ? 'กำลังส่งรหัส…' : 'สร้างบัญชี'}<ArrowRight aria-hidden />
           </button>
-
-          <p className="mt-7 text-center text-sm text-muted">
-            มีบัญชีอยู่แล้ว?{' '}
-            <Link
-              href="/login"
-              className="font-bold text-violet underline-offset-4 hover:underline"
-            >
-              เข้าสู่ระบบ
-            </Link>
-          </p>
+          <div className={styles.divider}>หรือ</div>
+          <p className={styles.account}>มีบัญชีอยู่แล้ว? <Link href="/login">เข้าสู่ระบบ<ArrowRight aria-hidden /></Link></p>
         </form>
-      ) : (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void verify();
-          }}
-          noValidate
-        >
-          <span className="sl-kicker">ยืนยันตัวตน</span>
-          <h1 className="mt-2 text-[32px] font-black tracking-[-0.04em]">
-            กรอกรหัสยืนยัน
-          </h1>
-          <p className="mt-3 leading-7 text-muted">
-            เราส่งรหัส {OTP_LENGTH} หลักไปที่{' '}
-            <span className="font-bold text-ink">{email}</span> แล้ว
-            กรอกรหัสเพื่อสร้างบัญชี
-          </p>
-
-          <div className="mt-8">
-            <OtpInput
-              value={code}
-              onChange={setCode}
-              disabled={pending}
-              invalid={Boolean(error)}
-              describedBy={error ? errorId : undefined}
-              autoFocus
-            />
-          </div>
-
-          {errorBox}
-
-          <button
-            type="submit"
-            disabled={pending || code.length !== OTP_LENGTH}
-            className="sl-action-primary mt-7 h-[52px] w-full text-base disabled:opacity-55"
-          >
-            {pending ? 'กำลังสร้างบัญชี…' : 'สร้างบัญชี'}
-          </button>
-
-          <div className="mt-7 flex flex-col items-center gap-3 text-sm">
-            <button
-              type="button"
-              disabled={pending || cooldown > 0}
-              onClick={resend}
-              className="font-bold text-violet underline-offset-4 hover:underline disabled:text-muted disabled:no-underline"
-            >
-              {cooldown > 0
-                ? `ขอรหัสใหม่ได้ในอีก ${cooldown} วินาที`
-                : 'ส่งรหัสอีกครั้ง'}
-            </button>
-
-            <button
-              type="button"
-              disabled={pending}
-              // Name and email are kept, so coming back is not a retype.
-              onClick={editEmail}
-              className="text-muted underline-offset-4 hover:underline"
-            >
-              แก้ไขชื่อหรืออีเมล
-            </button>
-          </div>
-        </form>
-      )}
+      ) : <AuthOtpForm flow={flow} errorId={errorId} />}
     </AuthLayout>
   );
 }

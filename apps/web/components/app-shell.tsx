@@ -733,7 +733,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     />
   );
 
-  if (isBareRoute) return <>{header}{children}</>;
+  // Auth screens provide their own brand navigation and responsive frame.
+  if (isBareRoute) return <>{children}</>;
 
   if (isAdminRoute && (auth.status === 'unavailable' || catalogUnavailable)) {
     return <>{header}<main className="sl-page grid min-h-[60vh] place-items-center p-6"><section role="alert" className="sl-surface p-8 text-center"><p>ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง</p><button type="button" onClick={() => window.location.reload()} className="sl-action-primary mt-4 px-5 py-3">ลองอีกครั้ง</button></section></main></>;
