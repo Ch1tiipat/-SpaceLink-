@@ -90,7 +90,10 @@ popupTest('Event popup renders runtime atmosphere images in the approved compact
     /onError=\{\(\) =>[\s\S]*?markAtmosphereImageFailed\(activeAtmosphereUrl\)/,
   );
   popupAssert.match(popup, /title="บรรยากาศภายในงาน"/);
-  popupAssert.match(popup, /h-\[126px\]/);
+  popupAssert.match(popup, /h-\[200px\][\s\S]*?sm:h-\[248px\]/);
+  popupAssert.match(popup, /galleryUrls\.slice\(1, 3\)\.map/);
+  popupAssert.match(popup, /ภาพจากผู้จัดงาน/);
+  popupAssert.doesNotMatch(popup, /h-\[126px\]/);
   popupAssert.match(popup, /ดูภาพบรรยากาศภายใน/);
   popupAssert.match(popup, /aria-label="ปิดภาพบรรยากาศแบบเต็ม"/);
   popupAssert.match(popup, /ดูภาพบรรยากาศก่อนหน้า/);
