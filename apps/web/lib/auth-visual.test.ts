@@ -107,8 +107,8 @@ test('layout covers both modes and OTP without exposing any fake success or expi
     }, 'form'));
     assert.match(html, new RegExp('data-auth-screen="' + (step === 'code' ? 'otp' : mode) + '"'));
     assert.match(html, /href="\/"/);
-    assert.match(html, /src="\/auth-market-photo.png"/);
-    assert.match(html, /src="\/brand\/auth-mark.png"/);
+    assert.match(html, /src="\/auth-market-photo\.jpg"/);
+    assert.match(html, /src="\/brand\/spacelink-mark\.png"[^>]*width="132" height="132"/);
     assert.doesNotMatch(html, /prototype|ทดลองยืนยัน|ภายใน 5 นาที/);
   }
 });
@@ -120,8 +120,11 @@ test('responsive styles stay local, wrap long emails and avoid iOS form auto-zoo
   assert.match(css, /\.root \.field input \{ font-size: 16px;/);
   assert.match(css, /prefers-reduced-motion/);
   assert.doesNotMatch(css, /body:has|header\.sticky|100vw.*min-width/);
-  assert.ok(fs.statSync('public/auth-market-photo.png').size > 1000);
-  assert.ok(fs.statSync('public/brand/auth-mark.png').size > 1000);
+  const photoBytes = fs.statSync('public/auth-market-photo.jpg').size;
+  assert.ok(photoBytes > 1000 && photoBytes <= 300_000, 'auth photo stays within the precache budget');
+  assert.ok(fs.statSync('public/brand/spacelink-mark.png').size > 1000);
+  assert.equal(fs.existsSync('public/auth-market-photo.png'), false, 'uncompressed auth photo is not precached');
+  assert.equal(fs.existsSync('public/brand/auth-mark.png'), false, 'auth uses the shared logo without a duplicate');
 });
 
 /** Isolated hook tests exercise production code, not the prototype or real accounts. */

@@ -42,7 +42,7 @@ export function AuthLayout({ mode, step, email, pending, onEditEmail, children }
             {isOtp ? <button type="button" className={styles.mobileBack} disabled={pending} aria-label="กลับไปแก้ไขอีเมล" onClick={onEditEmail}><ArrowLeft aria-hidden /></button>
               : <span className={styles.sticker} aria-hidden>พื้นที่ดี<br />เริ่มได้ที่นี่</span>}
             <Link href="/" className={styles.brand} aria-label="SpaceLink กลับหน้าแรก">
-              <span className={styles.logo}><Image src="/brand/auth-mark.png" alt="" width={132} height={132} sizes="132px" priority /></span>
+              <span className={styles.logo}><Image src="/brand/spacelink-mark.png" alt="" width={132} height={132} sizes="132px" priority /></span>
               <span>Space<span>Link</span></span>
             </Link>
             <span className={styles.badge}><BadgeIcon aria-hidden />{isOtp ? 'ยืนยันอีเมล' : isRegister ? 'เริ่มต้นใช้งานกับเรา' : 'ยินดีต้อนรับกลับ'}</span>
@@ -122,7 +122,7 @@ export function AuthOtpForm({ flow, errorId }: { flow: UseEmailOtp; errorId: str
 
 function ReferencePhoto({ mobile = false }: { mobile?: boolean }) {
   return <div className={`${styles.photo} ${mobile ? styles.mobilePhoto : styles.desktopPhoto}`} aria-hidden="true">
-    <Image src="/auth-market-photo.png" alt="" width={1701} height={925} unoptimized priority />
+    <Image src="/auth-market-photo.jpg" alt="" width={1701} height={925} unoptimized priority />
   </div>;
 }
 
