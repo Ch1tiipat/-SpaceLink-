@@ -136,6 +136,7 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
 
 function SuperAdminShellContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const ContentContainer = pathname === '/super-admin/profile' ? 'div' : 'main';
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
@@ -438,7 +439,7 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
                     บัญชีผู้ดูแลแพลตฟอร์ม
                   </p>
                   <Link
-                    href="/profile"
+                    href="/super-admin/profile"
                     role="menuitem"
                     onClick={() => setAccountOpen(false)}
                     className="mt-1 flex min-h-11 items-center rounded-xl px-3 text-sm font-bold text-[#554b5e] hover:bg-[#f5efff]"
@@ -477,9 +478,9 @@ function SuperAdminShellContent({ children }: { children: ReactNode }) {
         ) : null}
 
         <div className="relative min-w-0 overflow-hidden bg-[radial-gradient(circle_at_91%_12%,rgba(169,120,255,.16),transparent_26%),linear-gradient(180deg,rgba(250,247,255,.86),rgba(255,255,255,.22)_44%,rgba(245,240,255,.55))]">
-          <main className="sl-super-main min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]">
+          <ContentContainer className="sl-super-main min-h-[calc(100vh-63px)] lg:min-h-[calc(100vh-72px)]">
           {children}
-          </main>
+          </ContentContainer>
         </div>
       </div>
 
