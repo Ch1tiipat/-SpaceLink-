@@ -1805,37 +1805,54 @@ function EventPopup({
                   type="button"
                   onClick={() => setAtmosphereIndex(0)}
                   aria-label={`ดูภาพบรรยากาศภายใน ${event.name} แบบเต็ม`}
-                  className="group relative block h-[126px] w-full overflow-hidden rounded-xl border border-[#e1d7ec] bg-[#eee8f8] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+                  className="group block w-full overflow-hidden rounded-2xl border border-[#e1d7ec] bg-[#f7f3ff] text-left shadow-[0_8px_20px_rgba(78,55,121,.06)] transition hover:border-[#c8b4ef] hover:shadow-[0_12px_28px_rgba(78,55,121,.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
                 >
-                  <Image
-                    ref={(image) => {
-                      if (image?.complete && image.naturalWidth === 0) {
-                        markAtmosphereImageFailed(atmospherePreviewUrl);
-                      }
-                    }}
-                    src={atmospherePreviewUrl}
-                    alt={`บรรยากาศภายใน ${event.name}`}
-                    onError={() =>
-                      markAtmosphereImageFailed(atmospherePreviewUrl)
-                    }
-                    fill
-                    unoptimized
-                    sizes="(max-width: 1024px) 90vw, 1040px"
-                    className="object-cover transition duration-300 group-hover:scale-[1.025]"
-                  />
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(29,17,52,.72))]"
-                  />
-                  <span className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between gap-3 text-white">
-                    <span>
-                      <strong className="block text-xs">ภาพรวมบรรยากาศ</strong>
-                      <span className="mt-0.5 block text-[9px] text-white/80">
-                        {galleryUrls.length} รูปจากผู้จัดงาน
+                  <span className={`grid h-[200px] gap-1.5 p-1.5 sm:h-[248px] ${galleryUrls.length > 1 ? 'sm:grid-cols-[2fr_1fr]' : ''}`}>
+                    <span className="relative min-h-0 overflow-hidden rounded-xl bg-[#e9e0f8]">
+                      <Image
+                        ref={(image) => {
+                          if (image?.complete && image.naturalWidth === 0) {
+                            markAtmosphereImageFailed(atmospherePreviewUrl);
+                          }
+                        }}
+                        src={atmospherePreviewUrl}
+                        alt={`บรรยากาศภายใน ${event.name}`}
+                        onError={() =>
+                          markAtmosphereImageFailed(atmospherePreviewUrl)
+                        }
+                        fill
+                        unoptimized
+                        sizes="(max-width: 640px) 90vw, (max-width: 1024px) 60vw, 680px"
+                        className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                      />
+                    </span>
+                    {galleryUrls.length > 1 ? (
+                      <span className={`hidden min-h-0 gap-1.5 sm:grid ${galleryUrls.length > 2 ? 'grid-rows-2' : ''}`} aria-hidden="true">
+                        {galleryUrls.slice(1, 3).map((url) => (
+                          <span key={url} className="relative min-h-0 overflow-hidden rounded-xl bg-[#e9e0f8]">
+                            <Image
+                              src={url}
+                              alt=""
+                              onError={() => markAtmosphereImageFailed(url)}
+                              fill
+                              unoptimized
+                              sizes="(max-width: 1024px) 30vw, 340px"
+                              className="object-cover transition duration-300 group-hover:scale-[1.025]"
+                            />
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="flex items-center justify-between gap-3 border-t border-[#e8e1f4] bg-[#fcfbff] px-3.5 py-3 sm:px-4">
+                    <span className="min-w-0">
+                      <strong className="block text-sm font-bold text-[#2b2040]">ภาพจากผู้จัดงาน</strong>
+                      <span className="mt-0.5 block text-xs text-[#766c86]">
+                        {galleryUrls.length} ภาพ · เปิดดูภาพทั้งหมด
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold text-[#6330c6] shadow-sm backdrop-blur">
-                      ดูภาพเต็ม
+                    <span className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#d8c8f7] bg-white px-3 text-xs font-bold text-[#6330c6] transition group-hover:bg-[#f0e9ff]">
+                      ดูภาพ <ArrowRight aria-hidden className="h-3.5 w-3.5" />
                     </span>
                   </span>
                 </button>
