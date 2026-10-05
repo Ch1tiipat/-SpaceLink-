@@ -18,106 +18,40 @@ import {
 } from 'lucide-react';
 import {
   getAdminDashboardSummary,
-  getMe,
   type AdminDashboardSummary,
-  type CurrentUser,
 } from '@/lib/api';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
-import { accessAfterFailure } from '@/lib/admin-access-state';
-import { AdminUnavailableState } from '@/components/admin-ui';
+import { AdminUnavailableState, useAdminPageAccess } from '@/components/admin-ui';
 import { useAdminOrganizationSelection } from '@/components/app-shell';
 
-type AccessState = 'unavailable' | 'loading' | 'allowed' | 'denied' | 'no-organization';
-type OrganizationOption = CurrentUser['organizations'][number];
 type ChartRange = 'day' | 'week' | 'month' | 'year';
 
 export function AdminDashboard() {
   const router = useRouter();
-  const {
-    selectedOrganizationId,
-    selectOrganization: selectGlobalOrganization,
-  } = useAdminOrganizationSelection();
-  const [access, setAccess] = useState<AccessState>('loading');
-  const [token, setToken] = useState('');
-  const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
-  const [organizationId, setOrganizationId] = useState('');
+  const { organizations, selectOrganization } = useAdminOrganizationSelection();
+  const { access, token, organizationId } = useAdminPageAccess();
   const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [summaryOrganizationId, setSummaryOrganizationId] = useState('');
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartRange, setChartRange] = useState<ChartRange>('week');
 
   useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    setAccess('loading');
-    setToken('');
-    const accessTimeout = window.setTimeout(() => {
-      if (active) setAccess('unavailable');
-      controller.abort();
-    }, 15_000);
-
-    void (async () => {
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        const accessToken = data.session?.access_token;
-        if (!accessToken) {
-          router.replace('/login');
-          return;
-        }
-
-        const me = await getMe(accessToken, controller.signal);
-        if (!active) return;
-        if (me.role !== 'ORG_ADMIN' && me.role !== 'SUPER_ADMIN') {
-          setAccess('denied');
-          return;
-        }
-        if (me.organizations.length === 0) {
-          setAccess('no-organization');
-          return;
-        }
-
-        setToken(accessToken);
-        setOrganizations(me.organizations);
-        setAccess('allowed');
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError')
-          return;
-        if (active) setAccess(accessAfterFailure(cause));
-      } finally {
-        window.clearTimeout(accessTimeout);
-      }
-    })();
-
-    return () => {
-      active = false;
-      window.clearTimeout(accessTimeout);
-      controller.abort();
-    };
-  }, [router]);
-
-  useEffect(() => {
-    if (
-      access !== 'allowed' ||
-      !organizations.some(
-        (organization) => organization.id === selectedOrganizationId,
-      )
-    ) {
+    setSummary(null);
+    if (access !== 'allowed' || !token || !organizationId) {
+      setSummaryOrganizationId('');
       return;
     }
-    setOrganizationId(selectedOrganizationId);
-  }, [access, organizations, selectedOrganizationId]);
-
-  useEffect(() => {
-    if (access !== 'allowed' || !token || !organizationId) return;
+    setSummaryOrganizationId(organizationId);
     const controller = new AbortController();
     setLoadingSummary(true);
     setError(null);
 
     void getAdminDashboardSummary(organizationId, token, controller.signal)
-      .then(setSummary)
+      .then((nextSummary) => {
+        if (!controller.signal.aborted) setSummary(nextSummary);
+      })
       .catch((cause) => {
+        if (controller.signal.aborted) return;
         if (cause instanceof DOMException && cause.name === 'AbortError')
           return;
         setSummary(null);
@@ -139,14 +73,6 @@ export function AdminDashboard() {
 
     return () => controller.abort();
   }, [access, organizationId, token]);
-
-  function selectOrganization(nextId: string) {
-    if (!organizations.some((organization) => organization.id === nextId)) {
-      return;
-    }
-    setOrganizationId(nextId);
-    selectGlobalOrganization(nextId);
-  }
 
   if (access === 'unavailable') return <AdminUnavailableState />;
 
@@ -227,7 +153,9 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        {loadingSummary ? (
+        {summaryOrganizationId !== organizationId ||
+        loadingSummary ||
+        (summary !== null && summary.organizationId !== organizationId) ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 8 }, (_, index) => (
               <div key={index} className="skeleton h-28 rounded-[20px]" />
