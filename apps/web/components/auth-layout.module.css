@@ -97,6 +97,21 @@
 .nextField { margin-top: 17px; }
 .root .desktopDescription, .root .mobileDescription { margin: 5px 0 26px; color: #747b99; font-size: clamp(15px, 1.45vw, 21px); line-height: 1.65; }
 .root .mobileDescription { display: none; }
+@media (min-width: 1024px) {
+  .root[data-auth-screen='register'] .left { padding-block: 28px; }
+  .root[data-auth-screen='register'] .brand { margin-bottom: 12px; font-size: clamp(26px, 2.5vw, 38px); }
+  .root[data-auth-screen='register'] .logo { width: 56px; height: 56px; }
+  .root[data-auth-screen='register'] .logo img { width: 90px; height: 90px; left: -16px; top: -18px; }
+  .root[data-auth-screen='register'] h1 { font-size: clamp(36px, 3.2vw, 52px); line-height: 1.2; }
+  .root[data-auth-screen='register'] .desktopDescription { margin-bottom: 16px; font-size: clamp(15px, 1.15vw, 18px); line-height: 1.5; }
+  .root[data-auth-screen='register'] .field { height: 50px; }
+  .root[data-auth-screen='register'] .nextField { margin-top: 12px; }
+  .root[data-auth-screen='register'] .consent { margin-top: 12px; }
+  .root[data-auth-screen='register'] .action { margin-top: 14px; }
+  .root[data-auth-screen='register'] .divider { margin: 16px 0 10px; }
+  .root[data-auth-screen='register'] .benefits { margin-top: 16px; }
+  .root[data-auth-screen='register'] .benefitIcon { width: 40px; height: 40px; margin-bottom: 5px; }
+}
 .root .error { margin: 10px 0; color: #b42342; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
 .root .purpleTitle { color: #3e089e; }
 .root .field:has(input[aria-invalid='true']) { border-color: #b42342; }
