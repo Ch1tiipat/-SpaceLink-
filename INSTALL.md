@@ -24,6 +24,8 @@ git --version
 
 ทำแล้วควรเห็นเลขเวอร์ชัน Node ตั้งแต่ 20 ขึ้นไป และเลขเวอร์ชัน npm/git ถ้าเจอ command not found หรือ not recognized ให้ติดตั้งโปรแกรมนั้น แล้วปิดเปิด terminal ใหม่ ไม่ต้องรัน npm ที่ราก repo
 
+Node.js 20+ เป็นข้อกำหนดสำหรับ build/runtime; สำหรับ `npm test` ของเว็บต้องใช้ Node.js 22.6+ ที่รองรับ `--experimental-strip-types` ซึ่ง [เอกสาร Node.js ระบุว่าเพิ่มใน v22.6.0](https://nodejs.org/download/release/v22.17.0/docs/api/cli.html#--experimental-strip-types) รอบตรวจนี้ใช้ Node.js 24.11.1
+
 2. สมัครบัญชี [Supabase](https://supabase.com/dashboard) แบบ Free สำหรับฐานข้อมูลส่วนตัว และติดตั้ง psql ซึ่งเป็นโปรแกรมส่ง SQL ไป PostgreSQL จาก [ตัวติดตั้ง PostgreSQL](https://www.postgresql.org/download/) เลือก command line tools แล้วตรวจ:
 
 ~~~sh
@@ -442,9 +444,12 @@ npm test
 npm run build
 npx tsc --noEmit
 npx next lint
+npm test
 ~~~
 
 ทำแล้วทุกคำสั่งต้อง exit 0 สำหรับ build ต้องหยุด dev server ก่อนเพื่อไม่ให้เขียน .next ชนกัน Gates เหล่านี้ไม่ใช่การทดสอบ OTP/จอง/อัปโหลดไฟล์กับ Supabase จริง และไม่ต้องรัน db:seed เพื่อให้ gates ผ่าน
+
+`npm test` ของเว็บเป็น unit tests เพิ่มเติมสำหรับรันในเครื่อง และต้องใช้ Node.js ตาม §2; CI ของเว็บยังรันสาม gates คือ build, tsc และ next lint
 
 ## 12. เจอปัญหาบ่อย
 
