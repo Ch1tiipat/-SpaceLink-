@@ -18,7 +18,7 @@ spacelink/
 │  ├─ prisma/
 │  │  ├─ schema.prisma          v4 + ข้อยกเว้นที่ PO อนุมัติ (AGENTS.md §2.1.1) — 34 โมเดล 22 enum ห้ามแก้โดยไม่ผ่านทีม
 │  │  ├─ seed.ts                ข้อมูลเดโมหลายองค์กร เรียงตามลำดับ FK — รันในเครื่องตัวเองเท่านั้น
-│  │  ├─ migrations/            20 migrations
+│  │  ├─ migrations/            21 migrations
 │  │  └─ sql/                   3 ไฟล์ apply ด้วยคน + 1 review-only (§4)
 │  └─ src/                      28 โฟลเดอร์
 │     ├─ auth/                  guard + JIT provisioning + decorator `@OrgScoped` + `OrgPermissionGuard`
@@ -243,7 +243,7 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 | `booking_active_event_booth_unique.sql` | partial unique index กัน double-booking (`@@unique` เงื่อนไขตามสถานะไม่ได้) |
 | `remove_authenticated_slips_upload_policy.sql` | ถอน policy ที่ยอมให้ client ที่ล็อกอินอัปโหลดเข้าบัคเก็ต `slips` ตรงๆ |
 | `enable_rls_saved_event.sql` | เปิด RLS แบบ deny-by-default ให้ `saved_event` เหมือนตารางใหม่อื่นๆ |
-| `scrum-144-refund-payout-review.sql` | **ไว้รีวิวเท่านั้น** — SQL ของ SCRUM-144 ที่ gen จาก `migrate diff` ห้ามรันรวมกับไฟล์อื่น (Book เป็นคน apply) |
+| `scrum-144-refund-payout-review.sql` | **เก็บเป็นหลักฐานรีวิวเดิมเท่านั้น** — SQL ของ SCRUM-144 ที่ gen จาก `migrate diff`; ใช้ migration `20261010082205_scrum_144_refund_payout_columns` เพื่อสร้างคอลัมน์ ไม่ต้องรันไฟล์นี้แยกและห้ามรันรวมกับไฟล์อื่น |
 
 ทั้งสามไฟล์แรก apply บนฐานข้อมูลทีมแล้ว (ตรวจจาก `pg_indexes` / `pg_class` เมื่อ 27 ก.ย. 2569) — ฐานข้อมูลใหม่ของใครก็ตามยังต้อง apply เองหลัง migrate
 
@@ -725,7 +725,7 @@ npm run dev   # :3000
 
 ## 12. ข้อจำกัดที่รู้อยู่
 
-- ไฟล์ใน `prisma/sql/` ไม่มีอะไรรันให้ — สามไฟล์แรกใน §4 apply บนฐานข้อมูลทีมแล้ว แต่ฐานข้อมูลใหม่ต้อง apply สามไฟล์นี้เองหลัง migrate ไม่งั้น double-booking ถูกกันด้วย service code อย่างเดียว; `scrum-144-refund-payout-review.sql` ไว้รีวิวเท่านั้น และข้อจำกัด migration ของ payout ยังเป็นไปตาม `INSTALL.md`
+- ไฟล์ใน `prisma/sql/` ไม่มีอะไรรันให้ — สามไฟล์แรกใน §4 apply บนฐานข้อมูลทีมแล้ว แต่ฐานข้อมูลใหม่ต้อง apply สามไฟล์นี้เองหลัง migrate ไม่งั้น double-booking ถูกกันด้วย service code อย่างเดียว; `scrum-144-refund-payout-review.sql` ไว้รีวิวเท่านั้น คอลัมน์ payout สร้างด้วย migration SCRUM-144 และตรวจหลัง migration ตาม `INSTALL.md`
 - fan-out ของประกาศระดับองค์กร (`fanOutToOrganizationBookers`) ส่งแค่ in-app ไม่ส่ง push
 - ยังไม่เขียน audit log: การจองยกเว้นค่าเช่า · แต้มโทษ · คืนเงิน · ประกาศ
 - เทสต์ที่ต้องใช้ token จริงหรือข้อมูล seed ถูกเลื่อนไว้

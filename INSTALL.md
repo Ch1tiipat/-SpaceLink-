@@ -10,7 +10,7 @@ Supabase คือบริการฐานข้อมูล PostgreSQL, ร�
 
 คู่มือนี้ใช้ฐานข้อมูล Supabase ของคุณเอง ห้ามใช้ฐานข้อมูลทีมเพื่อทดลอง migration, SQL หรือ seed ไม่มีคำสั่งติดตั้งที่ราก repo เพราะสอง app มี dependencies แยกกัน
 
-> **ข้อจำกัดของโค้ดปัจจุบัน:** migrations ยังไม่สร้างคอลัมน์ refund payout ครบตาม schema แม้ติดตั้งตามนี้ได้ก็ยังยืนยันไม่ได้ว่าทุกฟีเจอร์จะใช้ได้ครบ ดูจุดหยุดในข้อ 8 ห้ามแก้ด้วย reset, db push หรือรัน SQL review-only
+> **ตรวจ refund payout หลัง migration:** ชุด migrations มี SCRUM-144 สำหรับสร้างคอลัมน์ payout ทั้ง 5 แบบ nullable แล้ว หลังผู้ดูแลรัน migrations ครบ 21 ไฟล์ให้ตรวจตามข้อ 8 การ build หรือ health ผ่านยังไม่ยืนยันว่าทุกฟีเจอร์ใช้ได้ครบ ห้ามแก้ด้วย reset, db push หรือรัน SQL review-only
 
 ## 2. ต้องมีอะไรก่อน
 
@@ -269,7 +269,7 @@ npx prisma generate
 npx prisma migrate deploy
 ~~~
 
-ทำแล้วควรเห็น migrations ถูก apply สำเร็จ main ที่ตรวจมี 20 migration.sql ไม่ใช้ migrate dev, migrate reset, db push หรือ db pull ในคู่มือนี้ ถ้าเจอ P1001 ให้ตรวจ DIRECT_URL, network และ IPv6 ตามข้อ 4 ถ้าเป็นฐานข้อมูลที่มีตารางอยู่ก่อนแล้ว ให้หยุดตรวจประวัติก่อน ห้าม reset เพื่อให้คำสั่งผ่าน
+ทำแล้วควรเห็น migrations ถูก apply สำเร็จ ชุดนี้มี 21 migration.sql ไม่ใช้ migrate dev, migrate reset, db push หรือ db pull ในคู่มือนี้ ถ้าเจอ P1001 ให้ตรวจ DIRECT_URL, network และ IPv6 ตามข้อ 4 ถ้าเป็นฐานข้อมูลที่มีตารางอยู่ก่อนแล้ว ให้หยุดตรวจประวัติก่อน ห้าม reset เพื่อให้คำสั่งผ่าน
 
 3. Apply SQL ต่อไปนี้ทีละไฟล์จาก apps/api ด้วย psql ชื่อ USER/HOST/port ต้องตรงกับ DIRECT_URL ที่คัดลอกมา ละ password ออกจากคำสั่งเพื่อให้ -W ถามในเครื่อง ตัวอย่างใช้ port 5432 และ database postgres:
 
@@ -283,7 +283,7 @@ psql -h HOST -p 5432 -U USER -d postgres -W -v ON_ERROR_STOP=1 -f prisma/sql/rem
 
 **ห้ามรัน scrum-144-refund-payout-review.sql** และห้ามรัน *.sql แบบเหมาทั้งโฟลเดอร์ ไฟล์นี้เป็นเอกสารรีวิว ไม่ใช่ขั้นติดตั้งที่อนุมัติ
 
-4. **จุดหยุดเรื่อง refund payout:** schema ใช้ payout_method, payout_prompt_pay_id, payout_bank_name, payout_account_number, payout_account_name แต่ migrations ทั้ง 20 ไฟล์ไม่สร้างคอลัมน์เหล่านี้ ตรวจแบบอ่านอย่างเดียวใน SQL Editor:
+4. **ตรวจ refund payout หลัง migration:** schema ใช้ payout_method, payout_prompt_pay_id, payout_bank_name, payout_account_number, payout_account_name และ migrations ทั้ง 21 ไฟล์มี `20261010082205_scrum_144_refund_payout_columns` สำหรับเพิ่มคอลัมน์เหล่านี้ด้วย ADD COLUMN IF NOT EXISTS ตรวจแบบอ่านอย่างเดียวใน SQL Editor:
 
 ~~~sql
 SELECT column_name
@@ -297,9 +297,9 @@ WHERE table_schema = 'public'
 ORDER BY column_name;
 ~~~
 
-ฐานข้อมูลที่รองรับ schema ครบควรเห็น 5 แถว แต่ฐานข้อมูลใหม่จาก migrations ชุดนี้จะยังขาด **หยุดและติดต่อผู้ดูแล repo เพื่อขอ migration ที่อนุมัติ** ห้ามรันไฟล์ review-only เอง เรื่องนี้อาจทำให้ query ที่เลือก refund fields ล้มได้ คู่มือนี้ไม่รับรองว่าทุกฟีเจอร์พร้อมใช้จากฐานข้อมูลใหม่
+หลัง apply migrations ควรเห็น 5 แถว หากน้อยกว่า 5 ให้ **หยุดตรวจ migration history และฐานข้อมูลปลายทาง แล้วติดต่อผู้ดูแล** ห้าม reset, db push หรือรันไฟล์ review-only เอง IF NOT EXISTS ข้ามคอลัมน์ที่มีชื่ออยู่แล้ว ไม่ตรวจหรือแก้ type/nullability จึงต้องให้ผู้ดูแลตรวจว่าทั้ง 5 คอลัมน์เป็น TEXT และ nullable ด้วย คู่มือนี้ไม่รับรองว่าทุกฟีเจอร์พร้อมใช้เพียงเพราะตรวจพบคอลัมน์ครบ
 
-ขั้นต่อไปอธิบายคำสั่งสำหรับเมื่อผู้ดูแลแก้ข้อจำกัดนี้แล้ว หรือคุณตรวจฐานข้อมูลส่วนตัวแล้วว่ารองรับครบ คุณยังทดลอง boot/build แบบไม่มี DB ได้ตามข้อ 10
+ไปขั้น seed ได้เฉพาะฐานข้อมูลส่วนตัวที่มนุษย์ตรวจ migration และคอลัมน์พร้อมแล้ว คุณยังทดลอง boot/build แบบไม่มี DB ได้ตามข้อ 10
 
 5. เติมข้อมูลเดโมเมื่อฐานข้อมูลพร้อม:
 
@@ -478,7 +478,7 @@ npm run start:dev
 curl -i http://localhost:3001/api/health/db
 ~~~
 
-ทำแล้ว 200 คือเชื่อมได้ 503 คือยังไม่ได้ ห้าม reset/db push เพื่อแก้ network ถ้าเป็น error column does not exist ให้ตรวจ migration และจุดหยุด refund payout ในข้อ 8
+ทำแล้ว 200 คือเชื่อมได้ 503 คือยังไม่ได้ ห้าม reset/db push เพื่อแก้ network ถ้าเป็น error column does not exist ให้ตรวจ migration history และ refund payout หลัง migration ในข้อ 8
 
 4. **CORS / เว็บเรียก API ไม่ได้** CORS คือกติกาที่ browser ใช้ตัดสินว่าเว็บเรียก server อีก origin ได้หรือไม่ ตั้ง URL เว็บให้ตรงใน CORS_ORIGIN แล้ว restart API ทดสอบ:
 
@@ -500,7 +500,7 @@ curl -I http://localhost:3000/login
 
 ## 13. (ย่อ) ถ้าจะ deploy เอง
 
-API ใช้ Render Web Service เลือก root directory apps/api, build command `npm ci --include=dev && npx prisma generate && npm run build`, start command `npm run start:prod` และ health path /api/health; web ใช้ Vercel เลือก root directory apps/web และ Next.js ตั้ง env ในหน้าตั้งค่าของแต่ละบริการ ไม่ใส่ในโค้ด ตั้ง NEXT_PUBLIC_API_URL เป็น URL ของ Render ที่ลงท้าย /api และ CORS_ORIGIN เป็น origin ของเว็บจริง ตั้ง Supabase URL Configuration ให้ตรงเว็บด้วย ใช้ NODE_ENV=production กับ provider ที่ตั้งชัดเจน ไม่ใช้ mock เพื่อรับเงินจริง แก้ข้อจำกัด migrations สำหรับ DB ใหม่กับผู้ดูแลก่อนเปิดฟีเจอร์ที่เกี่ยวข้อง ดู [Render/NestJS](https://render.com/docs/deploy-nestjs-app) และ [Vercel/Next.js](https://vercel.com/docs/frameworks/full-stack/nextjs) ตัวอย่างตรวจหลัง deploy:
+API ใช้ Render Web Service เลือก root directory apps/api, build command `npm ci --include=dev && npx prisma generate && npm run build`, start command `npm run start:prod` และ health path /api/health; web ใช้ Vercel เลือก root directory apps/web และ Next.js ตั้ง env ในหน้าตั้งค่าของแต่ละบริการ ไม่ใส่ในโค้ด ตั้ง NEXT_PUBLIC_API_URL เป็น URL ของ Render ที่ลงท้าย /api และ CORS_ORIGIN เป็น origin ของเว็บจริง ตั้ง Supabase URL Configuration ให้ตรงเว็บด้วย ใช้ NODE_ENV=production กับ provider ที่ตั้งชัดเจน ไม่ใช้ mock เพื่อรับเงินจริง ให้มนุษย์ตรวจ migration history, รัน migrations และตรวจ refund payout ตามข้อ 8 ก่อนใช้ฟีเจอร์ที่เกี่ยวข้อง ไม่เพิ่ม migrate deploy ลง build/start ดู [Render/NestJS](https://render.com/docs/deploy-nestjs-app) และ [Vercel/Next.js](https://vercel.com/docs/frameworks/full-stack/nextjs) ตัวอย่างตรวจหลัง deploy:
 
 ~~~sh
 # แทนด้วย URL API ของคุณเอง; Windows ใช้ curl.exe
