@@ -221,9 +221,8 @@ Budget ceiling is ~1,000–1,500 THB/month. Do not introduce paid services.
 **Roles.** `UserRole` on `app_user` is `SUPER_ADMIN | ORG_ADMIN | VENDOR` (platform-level).
 `OrgMembership.role` is `OWNER | ADMIN` and defines **which organizations** an ORG_ADMIN may act on. Both live in our database, **never in the JWT**.
 
-**Schema size:** 28 models, 18 enums. The annotated source and the rationale for every design
-decision are held outside this repository by the team. `apps/api/prisma/schema.prisma` is the only
-in-repo source of truth for structure.
+**Schema structure:** `apps/api/prisma/schema.prisma` is the only in-repo source of truth for
+structure. The annotated source and design rationale are held outside this repository by the team.
 
 ---
 
@@ -252,7 +251,7 @@ Prisma and foreign keys cannot express these. Every one must be enforced in a se
 
 1. **Venue match** — `booking.booth.zone.venue` must equal `booking.event.venue`
 2. **Date range** — booking start/end must fall inside event start/end
-3. **No double-booking** — one active booking per `(event, booth)`, active = `PENDING_PAYMENT` or `CONFIRMED`. Schema has a full `@@unique`, which also blocks a *cancelled* booking from being re-made; the **partial unique index** that replaces it is raw SQL and is not applied yet, so this invariant holds only in service code until someone applies it (§12, "Raw SQL")
+3. **No double-booking** — one active booking per `(event, booth)`, active = `PENDING_PAYMENT` or `CONFIRMED`. Schema has a full `@@unique`, which also blocks a *cancelled* booking from being re-made. The **partial unique index** that replaces it is raw SQL and must be applied manually to each database (§12, "Raw SQL"). Until it is applied to the database in use, service checks remain essential and the full unique index also blocks rebooking a cancelled booth.
 4. **Config authority** — `platform_config` writable by SUPER_ADMIN only; `org_config` by that org's ORG_ADMIN only
 5. **Blacklist** — `app_user.trust_score` starts at 100 and each `penalty.points` value is a
    deduction. The penalty transaction clamps the score at 0 and sets `is_blacklisted` when the
@@ -276,7 +275,7 @@ Prisma and foreign keys cannot express these. Every one must be enforced in a se
 **Derived, never stored as authoritative:** booth tier (S/A/B/C), shop badges, average rating.
 
 ### 6.4 `PrismaService` must connect lazily
-Do **not** call `$connect()` inside `onModuleInit()`. Prisma opens a connection on the first query by itself. Eager connecting makes the whole application fail to boot whenever the database is unreachable — which is the current state of this project, and will also be true on any teammate's machine before they finish Supabase setup.
+Do **not** call `$connect()` inside `onModuleInit()`. Prisma opens a connection on the first query by itself. Eager connecting makes the whole application fail to boot whenever the database is unreachable, including on a teammate's machine before they finish Supabase setup.
 
 Implement `onModuleDestroy()` with `$disconnect()` only. The server must start successfully with an unreachable database; a query then fails with a clear error at request time, which is the correct behaviour.
 
@@ -293,7 +292,7 @@ Do **not** build any of the following. They were considered and rejected:
 - `@nestjs/jwt` signing, `JWT_SECRET` as a signing key
 
 **How it works:**
-1. The browser calls Supabase Auth directly (`signInWithOtp({ email })`) and receives a Supabase JWT
+1. The browser calls Supabase Auth directly (`signInWithOtp({ email })`), then verifies the email OTP with `verifyOtp` to receive a session containing a Supabase JWT.
 2. Every API request carries `Authorization: Bearer <supabase_jwt>`
 3. `SupabaseAuthGuard` verifies the signature and extracts `sub` — this is `app_user.auth_user_id`
 4. **Just-in-time provisioning:** if no `app_user` row matches that `auth_user_id`, create one (role defaults to `VENDOR`)
@@ -335,11 +334,9 @@ What neither file can tell you is why some of them behave the way they do:
 
 **`SLIP_VERIFIER` has no default when `NODE_ENV=production`** — it must be set explicitly there, and so must `SLIP_VERIFIER_MODE` when the verifier is `mock`. The mock verifier approves *every* slip, and an approved slip auto-confirms its booking with no human in the loop (§8 step 3), so a deploy that simply forgot the variable would hand out free bookings while looking completely healthy. Refusing to boot is the only failure mode anyone would notice. Outside production both default (`mock` / `always-verified`), which is what local dev and CI want.
 
-`slipok` and `gemini` are accepted by validation but have no implementation yet: their modules throw at boot, so the error names the missing ticket rather than an unknown env value.
-
 **Copy real values from the Supabase dashboard. Never hand-write them.** The pooled and direct URLs use different ports and different usernames; a typed-from-memory string will fail in ways that look like application bugs.
 
-**Placeholder values are expected right now.** Until a teammate finishes Supabase setup, `.env` holds deliberately fake values (`postgresql://placeholder:placeholder@localhost:5432/placeholder`, `SUPABASE_JWT_SECRET="placeholder"`, and so on). This is intentional and correct — it lets the project build, boot, and be committed before the database exists. **Do not "fix" these values, do not try to guess real ones, and do not treat them as a misconfiguration.**
+**Placeholder values are valid for offline development and CI.** When a local environment has not been configured with a real Supabase project, deliberate fake values (such as `postgresql://placeholder:placeholder@localhost:5432/placeholder` and `SUPABASE_JWT_SECRET="placeholder"`) let the project build and boot without a database. Do not treat these placeholders as a misconfiguration, replace them with guessed credentials, or "fix" them. Configure real environments from the Supabase dashboard as described above.
 
 Validate env at boot and fail fast with a clear message if a variable is **missing**. A missing variable must never surface as a runtime `undefined`. Validation checks presence, not whether the credentials actually work.
 
@@ -399,9 +396,9 @@ All four run in CI on every pull request (`.github/workflows/ci.yml`), and `main
 
 ### `prisma/seed.ts`
 
-It is a **typed stub**: it declares the foreign-key-safe insert order and inserts nothing. `npm run db:seed` **must never run in CI** — it opens a real database connection, and nothing in CI may be able to reach the real database. CI covers the file through `tsc --noEmit` and `eslint` only.
+It contains typed demo data and optional fixtures, inserted in foreign-key-safe order. `npm run db:seed` **must never run in CI** — it opens a real database connection, and nothing in CI may be able to reach the real database. CI covers the file through `tsc --noEmit` and `eslint` only.
 
-**SCRUM-22** is the ticket that fills it in. Whoever takes it runs `db:seed` locally, against their own database.
+Run it locally only against your own database.
 
 ---
 
@@ -556,8 +553,8 @@ not suggestions. If a task cannot be completed without breaking one of them, sto
   cheap; a leaked service role key is total database access.
 
 ### 14.4 Input and query safety
-- `ValidationPipe` runs with `whitelist: true`, so undeclared fields are stripped. Every request body
-  therefore needs a DTO — an endpoint without one accepts nothing useful.
+- `ValidationPipe` runs with `whitelist: true` and `forbidNonWhitelisted: true`, so undeclared
+  request-body fields are rejected. Every request body therefore needs a DTO.
 - Use Prisma's query builder. If raw SQL is unavoidable, use the tagged-template `$queryRaw`.
   **`$queryRawUnsafe` and `$executeRawUnsafe` are forbidden in this project.**
 - Validate uploaded slip images by MIME type and size on the **server**. Never trust the filename or

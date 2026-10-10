@@ -1,13 +1,13 @@
 name: Keep Render API Awake
 
-# Stopgap for Render Free tier's 15-minute idle sleep (SCRUM-39, upgrading to
-# Starter deferred due to budget). Pings /api/health often enough that
-# spacelink-api never idles long enough to sleep.
+# Periodic health ping for the SpaceLink API (SCRUM-39).
+# The API runs on Render Starter (confirmed by the PO on 2026-10-10).
+# Pings /api/health on the existing schedule and retries failed responses.
 #
 # Known limitation: GitHub's scheduled-workflow cron is best-effort, not
 # guaranteed to the minute — under load it can slip by several minutes.
 # Less reliable than a dedicated uptime pinger, but free and needs no
-# third-party account. Revisit once Render moves to a paid tier.
+# third-party account.
 #
 # Also: GitHub auto-disables scheduled workflows after 60 days with no
 # repo activity. If pings silently stop, check Actions tab → re-enable.

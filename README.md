@@ -19,7 +19,7 @@ spacelink/
 │  │  ├─ schema.prisma          v4 + ข้อยกเว้นที่ PO อนุมัติ (AGENTS.md §2.1.1) — 34 โมเดล 22 enum ห้ามแก้โดยไม่ผ่านทีม
 │  │  ├─ seed.ts                ข้อมูลเดโมหลายองค์กร เรียงตามลำดับ FK — รันในเครื่องตัวเองเท่านั้น
 │  │  ├─ migrations/            20 migrations
-│  │  └─ sql/                   4 ไฟล์ที่ Prisma ไม่รันให้ ต้อง apply เองด้วย psql (§4)
+│  │  └─ sql/                   3 ไฟล์ apply ด้วยคน + 1 review-only (§4)
 │  └─ src/                      28 โฟลเดอร์
 │     ├─ auth/                  guard + JIT provisioning + decorator `@OrgScoped` + `OrgPermissionGuard`
 │     ├─ users/                 ผู้ใช้ทั้งระบบ (SUPER_ADMIN) + แก้โปรไฟล์ตัวเอง + ตั้งค่าการแจ้งเตือน
@@ -27,7 +27,7 @@ spacelink/
 │     ├─ venues/                ผังสถานที่ — อ่าน / แก้ / ลบ + สร้างโซนใต้ venue
 │     ├─ zones/                 โซนในผัง
 │     ├─ booths/                บูธในโซน
-│     ├─ events/                อีเวนต์ · lifecycle · ใบเสนอราคา · slug · แบนเนอร์/แกลเลอรี · ข้อมูลอีเวนต์ · บันทึกอีเวนต์
+│     ├─ events/                อีเวนต์ · lifecycle · ใบเสนอราคา · slug · แบนเนอร์/แกลเลอรี · ข้อมูลอีเวนต์ · บันทึกอีเวนต์ · ทำอีเวนต์ซ้ำ / รูปผังอ้างอิง
 │     ├─ categories/            หมวดสินค้า อ่านอย่างเดียว
 │     ├─ bookings/              จอง (เดี่ยว / หลายบูธ) · กลุ่มชำระเงิน · สลิป · ยกเลิก · ยกเว้นค่าเช่า · cron หมดเวลา
 │     ├─ transactions/          ธุรกรรมขององค์กร + timeline รายการจอง
@@ -70,7 +70,7 @@ spacelink/
 │  │  ├─ offline/               หน้าสำรองของ PWA ตอนไม่มีเน็ต
 │  │  ├─ admin/                 ORG_ADMIN — 13 หน้า
 │  │  │  ├─ dashboard/          ตัวเลขภาพรวมองค์กร
-│  │  │  ├─ events/             สร้าง / แก้ / เผยแพร่ / ปิด / ลบ + ใบเสนอราคา + ข้อมูลอีเวนต์
+│  │  │  ├─ events/             สร้าง / แก้ / เผยแพร่ / ปิด / ลบ + ใบเสนอราคา + ข้อมูลอีเวนต์ + ทำอีเวนต์ซ้ำ / รูปผังอ้างอิง
 │  │  │  ├─ bookings/           รายการจองขององค์กร
 │  │  │  ├─ booking-rescue/     ค้นจากรหัสจอง → ยืนยันยกเว้นค่าเช่า / ออกแต้มโทษ
 │  │  │  ├─ transactions/       ธุรกรรม + `bookings/[bookingId]/` timeline รายการจอง
@@ -82,7 +82,7 @@ spacelink/
 │  │  │  ├─ reviews/            รีวิว + ซ่อน / คืน / ลบ
 │  │  │  ├─ announcements/      ประกาศถึงผู้ขาย
 │  │  │  └─ organization/       โควตา · PromptPay · ทีมแอดมินและสิทธิ์ย่อย
-│  │  └─ super-admin/           SUPER_ADMIN — 10 หน้า · shell แยกทั้งชุด
+│  │  └─ super-admin/           SUPER_ADMIN — 11 หน้า (รวมโปรไฟล์) · shell แยกทั้งชุด
 │  │     ├─ layout.tsx          ครอบด้วย `SuperAdminShell` + guard ของตัวเอง
 │  │     ├─ page.tsx            ภาพรวมข้ามองค์กร + ส่งประกาศกลาง
 │  │     ├─ notifications/      แจ้งเตือนของ Super Admin
@@ -93,13 +93,14 @@ spacelink/
 │  │     ├─ support/            เคสช่วยเหลือ / moderation (`?tab=tickets|moderation`)
 │  │     ├─ announcements/      ประกาศข้ามองค์กร + ลบ
 │  │     ├─ audit-logs/         audit log + ตัวกรอง
+│  │     ├─ profile/            โปรไฟล์ ใช้ `ProfileShopScreen` ร่วมกัน
 │  │     └─ settings/           สูตรราคาค่าบริการของแพลตฟอร์ม
-│  ├─ components/               41 ไฟล์ + `super-admin/` อีก 10 (§6)
-│  ├─ lib/                      32 ไฟล์ + เทสต์ `*.test.ts` คู่กัน (§6)
+│  ├─ components/               44 ไฟล์ (42 .tsx + 1 .ts + 1 .css) + `super-admin/` อีก 10 (§6)
+│  ├─ lib/                      38 ไฟล์ที่ไม่ใช่เทสต์ + `*.test.ts` 51 ไฟล์ (§6)
 │  └─ public/                   icon.svg · manifest.webmanifest · push-sw.js · `brand/` · รูปหน้าแรกและอีเวนต์
 ├─ prototype/                   prototype เดิม ใช้อ้างอิงเท่านั้น ห้ามแก้ ห้าม import
 ├─ .github/                     ci.yml · keep-alive.yml · CODEOWNERS · PR template
-└─ AGENTS.md · CLAUDE.md · README.md
+└─ AGENTS.md · CLAUDE.md · README.md · INSTALL.md
 ```
 
 สอง app แยกกันสมบูรณ์ ไม่ใช่ npm workspaces — `cd` เข้าโฟลเดอร์ก่อนรัน npm ทุกครั้ง ห้ามมี `package.json` ที่ราก
@@ -123,7 +124,7 @@ spacelink/
 | `organizations` | `GET /organizations` · `/:id` | public |
 | | `POST /organizations` · `GET /export` · `PATCH /:id/status` · `PATCH /:id/owner` | SUPER_ADMIN |
 | | `GET /:organizationId/admins` | ORG_ADMIN+ |
-| | `POST`/`DELETE /:organizationId/admins` · `PATCH .../admins/:membershipId/permissions` | ORG_ADMIN (OWNER มอบสิทธิ์ย่อย) |
+| | `POST /:organizationId/admins` · `DELETE /:organizationId/admins/:userId` · `PATCH .../admins/:membershipId/permissions` | ORG_ADMIN (OWNER มอบสิทธิ์ย่อย) |
 | | `PATCH /:organizationId` `[P]` · `PATCH /:organizationId/quota` | ORG_ADMIN+ · quota ต้องมี `canEditQuota` |
 | | `POST /organizations/:organizationId/venues` `[Z]` | ORG_ADMIN+ |
 | | `GET /admins` · `PATCH /admins/:membershipId/quota-permission` | SUPER_ADMIN |
@@ -138,6 +139,8 @@ spacelink/
 | | `POST /organizations/:organizationId/events` · `POST .../events/quote` · `GET` · `PATCH :eventId` | ORG_ADMIN+ |
 | | `PATCH :eventId/publish` · `/open` · `/close` · `DELETE :eventId` | ORG_ADMIN+ |
 | | `POST :eventId/gallery` · `POST`/`DELETE :eventId/banner` | ORG_ADMIN+ |
+| | `POST /organizations/:organizationId/events/:eventId/repeat/quote` · `POST /organizations/:organizationId/events/:eventId/repeat` | ORG_ADMIN |
+| | `POST`/`DELETE /organizations/:organizationId/events/:eventId/map-image` | ORG_ADMIN+ |
 | | `POST`/`PATCH`/`DELETE :eventId/join-information` · `:eventId/information` + `/reorder` | ORG_ADMIN |
 | | `PATCH :eventId/subscription/activate` | SUPER_ADMIN |
 | `categories` | `GET /categories` | public |
@@ -199,7 +202,7 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 | hold 5 นาที หมดแล้วยกเลิกด้วย `cancelledByRole = SYSTEM` | cron ทุกนาทีใน `bookings/` |
 | ยอดคืนเงินที่อนุมัติ ≤ ราคาบูธ และ ≤ ยอดที่ขอ · ถ้าจ่ายแบบกลุ่ม ยอดคืนรวมทั้งกลุ่ม ≤ `totalAmount` ของกลุ่ม | `refunds.service` |
 | คืนเงินได้เฉพาะ booking ที่ยกเลิกแล้ว ไม่ใช่ exempt และมีสลิป verified ยอดตรง | `refunds.service` |
-| คำขอคืนเงินใหม่ต้องมี PromptPay ID ที่ถูกต้อง · ไม่ใส่ชื่อบัญชี = ขึ้นคำเตือนให้แอดมิน ไม่ถือว่าชื่อตรง · สลิปโอนคืนต้องตรงยอดที่อนุมัติ | `refunds.service` |
+| คำขอคืนเงินใหม่ต้องมี PromptPay ID ที่ถูกต้อง · ระบบใช้ชื่อผู้โอนจากสลิปชำระเงิน VERIFIED เป็นชื่อผู้รับเงินคืน; หากไม่พบชื่อจะปฏิเสธคำขอ และชื่อที่ client ส่งมาต้องตรงกับชื่อจากสลิป · ข้อมูลเก่าที่ไม่มีชื่อยังอ่านได้ · สลิปโอนคืนต้องตรงยอดที่อนุมัติ และผลชื่อไม่ตรง/ตรวจชื่อไม่ได้แสดงเป็นคำเตือน | `refunds.service` · `refund-slip-verification.service` |
 | รีวิวได้เมื่ออีเวนต์จบแล้ว (เวลาไทย ไม่ระบุเวลาจบ = 23:59) · 1 รีวิวต่อ 1 booking · รีวิวที่ถูกลบส่งใหม่ไม่ได้ | `reviews.service` |
 | ซ่อน / คืน / ลบรีวิว เดินตามสถานะ `PUBLISHED` ↔ `HIDDEN` → `DELETED` + บันทึก audit log | `reviews.service` |
 | เปลี่ยนโลโก้ร้านได้ **1 ครั้งต่อ 168 ชั่วโมง** | `shops.service` ล็อกแถวด้วย `SELECT … FOR UPDATE` |
@@ -233,7 +236,7 @@ Prisma กับ foreign key แสดงกฎพวกนี้ไม่ได
 - migration รันโดยคน ไม่ใช่ agent · **ห้าม** `migrate reset` / `db push` / `db pull` / `DROP` / `TRUNCATE`
 - `npx prisma generate` และ `npx prisma validate` ปลอดภัยเสมอ
 
-**`prisma/sql/` — ไม่มีอะไรรันให้อัตโนมัติ ต้อง `psql` เองหลัง migrate**
+**`prisma/sql/` — Prisma ไม่รันไฟล์เหล่านี้: apply เฉพาะสามไฟล์แรกด้วย `psql` หลัง migrate; ไฟล์ SCRUM-144 ไว้รีวิวเท่านั้น**
 
 | ไฟล์ | ทำอะไร |
 |---|---|
@@ -488,7 +491,7 @@ erDiagram
 
 Supabase Auth เป็นผู้ออก token · NestJS แค่ verify ไม่ได้ออกเอง · ไม่มี `/auth/register`, `/auth/login`, ไม่มี bcrypt, ไม่มี `passwordHash`
 
-1. เบราว์เซอร์เรียก `signInWithOtp({ email })` กับ Supabase โดยตรง ได้ JWT กลับมา
+1. เบราว์เซอร์เรียก `signInWithOtp({ email })` กับ Supabase โดยตรงเพื่อส่ง OTP แล้วเรียก `verifyOtp({ email, token, type: 'email' })` เพื่อรับ session ที่มี JWT
 2. ทุก request แนบ `Authorization: Bearer <supabase_jwt>`
 3. `SupabaseAuthGuard` verify ลายเซ็นแล้วดึง `sub` = `app_user.auth_user_id`
 4. ถ้ายังไม่มีแถว `app_user` → **JIT-provision** ให้ (role เริ่มต้น VENDOR เสมอ)
@@ -533,8 +536,14 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `admin-transaction-filters.ts` · `admin-booking-timeline.ts` | ตัวกรองหน้าธุรกรรม (sync กับ URL) · ข้อความ timeline รายการจอง |
 | `super-admin-notifications.ts` | ลิงก์ปลายทางของแจ้งเตือน Super Admin |
 | `route-identifier.ts` | เช็คว่า path param เป็น UUID ไหม |
+| `admin-access-state.ts` | แยกสถานะกำลังโหลด / อนุญาต / ไม่มีสิทธิ์ / ไม่มีองค์กร / ติดต่อระบบไม่ได้ |
+| `event-detail-view-model.ts` | สรุปโซน ปุ่มหลัก และลิงก์/พิกัดแผนที่สำหรับรายละเอียดอีเวนต์ |
+| `home-event-atmosphere.ts` | กรอง URL รูปบรรยากาศที่ใช้ได้บนหน้าแรก |
+| `network-error.ts` | แยกปัญหาเครือข่ายจากคำตอบที่ไม่อนุญาต และเลือกข้อความการเชื่อมต่อ |
+| `notification-toast-controller.ts` | คิว toast ของบัญชีที่ล็อกอินพร้อมอายุการแสดงผล |
+| `repeat-event-dialog-keyboard.ts` | การใช้แป้นพิมพ์ใน dialog ทำอีเวนต์ซ้ำและคืน focus |
 
-ไฟล์ตรรกะส่วนใหญ่มี `*.test.ts` คู่กัน (21 ไฟล์)
+มีไฟล์ทดสอบ `*.test.ts` ใน `lib/` 51 ไฟล์
 
 ### `components/` — ส่วนกลาง
 
@@ -543,6 +552,9 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 | `app-shell.tsx` | shell ของผู้ขาย/ORG_ADMIN — sidebar · bottom nav · แบนเนอร์ประกาศกลาง · วิดเจ็ต AI |
 | `admin-ui.tsx` | ชิ้นส่วนร่วมของหน้า admin + `useAdminPageAccess` (เลือกองค์กร + เช็คสิทธิ์) |
 | `auth-layout.tsx` | เลย์เอาต์เต็มจอของหน้า login / register |
+| `auth-layout.module.css` | สไตล์เฉพาะของหน้า login/register |
+| `event-details-popup.tsx` | popup รายละเอียดอีเวนต์จากหน้าแรก |
+| `resilient-image.tsx` | คงเลย์เอาต์และภาพพื้นหลังสำรองเมื่อรูปโหลดไม่ได้ |
 | `otp-input.tsx` · `otp-input-logic.ts` | ช่องกรอกรหัส 6 หลัก + ตรรกะ normalize / โฟกัส |
 | `select-menu.tsx` · `multi-select-menu.tsx` | dropdown เดี่ยว / หลายค่า ใช้ร่วมทั้งแอป |
 | `zone-map.tsx` | ผังโซนและบูธเป็น inline SVG — โซนต่างกันด้วยน้ำหนักสีม่วง ไม่ใช่คนละสี |
@@ -651,9 +663,18 @@ Supabase Auth เป็นผู้ออก token · NestJS แค่ verify �
 
 ต้องมี Node.js 20+ และ npm
 
+สำหรับ `npm test` ของเว็บ ต้องใช้ Node.js 22.6+ ที่รองรับ `--experimental-strip-types` (รอบตรวจนี้ใช้ 24.11.1) ดูข้อกำหนดใน `INSTALL.md` §2
+
+เตรียม dependencies และ env ตาม `INSTALL.md` ก่อนรัน: API ใช้ `PORT=3001` และเว็บใช้ `NEXT_PUBLIC_API_URL=http://localhost:3001/api` เพื่อไม่ชนพอร์ตเว็บ 3000 หากพัฒนาแบบไม่มีฐานข้อมูล ให้ใช้ placeholders ตาม `INSTALL.md` §10 โดยไม่เขียนทับ env ที่ตั้งค่าไว้แล้ว
+
 ```bash
-cd apps/api && npm install && cp .env.example .env && npx prisma generate && npm run start:dev
-cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :3000
+# Terminal 1 — เริ่มจากราก repo
+cd apps/api
+npm run start:dev
+
+# Terminal 2 — เริ่มจากราก repo
+cd apps/web
+npm run dev   # :3000
 ```
 
 **ไม่มีฐานข้อมูลก็ต้อง boot ขึ้นได้** — `PrismaService` ต่อแบบ lazy ดังนั้น endpoint ที่ query จริงจะ error แต่เซิร์ฟเวอร์ต้องไม่ล้ม ถามสถานะได้ที่ `GET /api/health/db` (503 = ยังไม่มี DB, 200 = มีแล้ว connection error กลายเป็นบั๊กจริง)
@@ -664,6 +685,8 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 |---|---|
 | `apps/api` | `npm run build` · `npx tsc --noEmit` · `npx eslint src prisma` · `npm test` |
 | `apps/web` | `npm run build` · `npx tsc --noEmit` · `npx next lint` |
+
+เว็บมี unit tests เพิ่มเติมสำหรับรันในเครื่องด้วย `npm test` (Node.js 22.6+ ตามข้อกำหนดข้างต้น); คำสั่งนี้ยังไม่อยู่ในสาม gates ของเว็บใน CI
 
 `tsc --noEmit` ไม่ซ้ำกับ `npm run build` — `tsconfig.build.json` ตัด `prisma/` ออกเพื่อให้ output เป็น `dist/main.js` ผลคือ `prisma/seed.ts` ไม่ถูกคอมไพล์ที่ไหนเลย ต้องอาศัยขั้นนี้ · ใช้ `npx eslint` ไม่ใช่ `npm run lint` เพราะสคริปต์นั้นมี `--fix` (CI ตรวจ ไม่แก้)
 
@@ -681,7 +704,7 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 - **provider เป็น adapter ล้วน** — แปลงรูปแบบข้อมูลแล้ว return หรือ throw · ไม่เขียน DB ไม่ fallback เอง ไม่กลืน error
 - **การบันทึกและ fallback อยู่ที่ wrapper** — `SlipVerificationService`, `ZoneRecommendationService`
 - **inject wrapper ไม่ใช่ DI token** — inject token ตรงๆ จะข้าม fallback และข้ามการบันทึก log ซึ่งเป็นความพังที่ไม่มีใครสังเกตเห็น
-- อ่าน `src/slips/README.md` และ `src/ai/README.md` ก่อนเขียน provider
+- อ่าน `apps/api/src/slips/README.md` และ `apps/api/src/ai/README.md` ก่อนเขียน provider
 
 ---
 
@@ -691,8 +714,8 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 - **จองหลายบูธ** ในครั้งเดียว จ่ายรวมด้วยสลิปเดียวผ่าน `BookingPaymentGroup` · ดาวน์โหลดรูปสรุปการจองได้
 - **โควตา** ผู้ขายขอจองเกินโควตาได้ → ORG_ADMIN อนุมัติเป็น `BoothQuotaGrant` ใช้ได้ 1 ครั้ง
 - **คืนเงิน** ผู้ขายกรอก PromptPay รับเงินคืน → แอดมินอนุมัติ / ปฏิเสธ → แนบสลิปโอนคืน → ผู้ขายดูสลิปได้
-- **อีเวนต์** DRAFT พร้อมใบเสนอราคาที่คิดจาก `platform_config` → แก้ / เผยแพร่ / ปิด / เปิดใหม่ / ลบ · มี slug สาธารณะสำหรับแชร์ผัง · แบนเนอร์ + แกลเลอรี · ข้อมูลก่อนเข้าร่วมและรายละเอียดเรียงลำดับเองได้ · ผู้ใช้บันทึกอีเวนต์ไว้ดูทีหลังได้
-- **Admin** 13 หน้า · **Super admin** 10 หน้า ต่อ API จริงครบ ไม่มีเมนู placeholder เหลือแล้ว
+- **อีเวนต์** DRAFT พร้อมใบเสนอราคาที่คิดจาก `platform_config` → แก้ / เผยแพร่ / ปิด / เปิดใหม่ / ลบ · มี slug สาธารณะสำหรับแชร์ผัง · แบนเนอร์ + แกลเลอรี · ข้อมูลก่อนเข้าร่วมและรายละเอียดเรียงลำดับเองได้ · ผู้ใช้บันทึกอีเวนต์ไว้ดูทีหลังได้ · ทำอีเวนต์ซ้ำ / รูปผังอ้างอิง
+- **Admin** 13 หน้า · **Super admin** 11 หน้า (รวมโปรไฟล์) ต่อ API จริงครบ ไม่มีเมนู placeholder เหลือแล้ว
 - **ทีมแอดมินองค์กร** OWNER / ADMIN · OWNER มอบสิทธิ์การเงินและโซนให้ ADMIN รายคน · SUPER_ADMIN แต่งตั้ง OWNER
 - **รีวิว** ผูกกับการจอง · แอดมินซ่อน / คืน / ลบได้ พร้อม audit log
 - **แจ้งเตือน** in-app + **web push จริง** ผ่าน `web-push` + VAPID ทั้งฝั่ง backend และ service worker · ผู้ใช้เปิด/ปิดได้รายหมวด (บันทึกใน `app_user.notification_preferences`) · SUPER_ADMIN ส่งประกาศกลางถึงทุกคนได้
@@ -702,7 +725,7 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev   # :300
 
 ## 12. ข้อจำกัดที่รู้อยู่
 
-- ไฟล์ใน `prisma/sql/` ไม่มีอะไรรันให้ — ฐานข้อมูลทีม apply แล้ว แต่ฐานข้อมูลใหม่ต้อง apply เองทุกครั้ง ไม่งั้น double-booking ถูกกันด้วย service code อย่างเดียว
+- ไฟล์ใน `prisma/sql/` ไม่มีอะไรรันให้ — สามไฟล์แรกใน §4 apply บนฐานข้อมูลทีมแล้ว แต่ฐานข้อมูลใหม่ต้อง apply สามไฟล์นี้เองหลัง migrate ไม่งั้น double-booking ถูกกันด้วย service code อย่างเดียว; `scrum-144-refund-payout-review.sql` ไว้รีวิวเท่านั้น และข้อจำกัด migration ของ payout ยังเป็นไปตาม `INSTALL.md`
 - fan-out ของประกาศระดับองค์กร (`fanOutToOrganizationBookers`) ส่งแค่ in-app ไม่ส่ง push
 - ยังไม่เขียน audit log: การจองยกเว้นค่าเช่า · แต้มโทษ · คืนเงิน · ประกาศ
 - เทสต์ที่ต้องใช้ token จริงหรือข้อมูล seed ถูกเลื่อนไว้
